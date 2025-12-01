@@ -9,7 +9,7 @@ from numpy import zeros
 def get_expval_and_grad_civector(
     angles, hamiltonian, n_qubits, n_elec_s,total_variables,
     params,ex_ops: Tuple, mode: str = "fermion", init_state=None,
-    params_bra=None,ex_ops_bra:Tuple|None=None,init_state_bra=None):
+    params_bra=None,ex_ops_bra:Union[Tuple,None]=None,init_state_bra=None):
     #Fist check bra
     if ex_ops_bra is None: ex_ops_bra = ex_ops
     if params_bra is None: params_bra = params

@@ -7,7 +7,7 @@ from tequila import assign_variable
 from copy import deepcopy
 
 class FGateImpl:
-    def __init__(self,indices:typing.Union[list,tuple]|None=None,variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]=None,reordered:bool=False):
+    def __init__(self,indices:typing.Union[list,tuple],variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]=None,reordered:bool=False):
         self.reordered:bool=reordered
         self._indices:list = indices
         self.variables=variables
@@ -135,12 +135,12 @@ class FGateImpl:
         return True
 
 class FermionicExcitationImpl(FGateImpl):
-    def __init__(self, indices:typing.Union[list,tuple]|None=None, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]|None=None, reordered:bool=False):
+    def __init__(self, indices:typing.Union[list,tuple], variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable,None]=None, reordered:bool=False):
         super().__init__(indices, variables, reordered)
         self._name = 'FermionicExcitation'
 
 class URImpl(FGateImpl):
-    def __init__(self, i:int,j:int, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]|None=None):
+    def __init__(self, i:int,j:int, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable,None]=None):
         super().__init__([[(2*i,2*j)],[(2*i+1,2*j+1)]], variables, False)
         self._name = 'UR'
     def verify(self):
@@ -157,12 +157,12 @@ class URImpl(FGateImpl):
             assert 2*len(self._variables) == len(self._indices)
 
 class UCImpl(FGateImpl):
-    def __init__(self,i,j, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]|None=None):
+    def __init__(self,i,j, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]=None):
         super().__init__([[(2*i,2*j),(2*i+1,2*j+1)]], variables, False)
         self._name = 'UC'
     
 class PhaseImpl(FGateImpl):
-    def __init__(self,i, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]|None=None, reordered:bool=False):
+    def __init__(self,i, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]=None, reordered:bool=False):
         super().__init__([[(i,i)]], variables, reordered)
         self._name = 'Ph'
 

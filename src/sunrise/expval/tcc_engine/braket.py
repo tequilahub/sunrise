@@ -895,7 +895,7 @@ class EXPVAL(UCC):
         return len(Objective(self.variables_ket).extract_variables())
 
     @property
-    def variables_ket(self) -> List[Variable]:# dict|None:
+    def variables_ket(self) -> List[Variable]:
         return self._variables_ket
 
     @property
@@ -950,7 +950,7 @@ class EXPVAL(UCC):
         else: return self.var_to_param_bra.update(self.var_to_param_ket)
 
     @property
-    def total_variables(self) -> list[Variable] | None   :
+    def total_variables(self) -> Union[list[Variable] , None]   :
         if self.variables_bra is not None and  self.variables_bra is not None:
             return Objective(self.variables_bra+self.variables_ket).extract_variables()
         elif self.variables_bra is None:
@@ -971,7 +971,7 @@ class EXPVAL(UCC):
     def init_guess(self,init_guess):
         self._init_guess = init_guess
 
-def map_variables(x:Variable|Objective,dvariables:dict):
+def map_variables(x:Union[Variable,Objective],dvariables:dict):
     if isinstance(x,Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x,Objective):

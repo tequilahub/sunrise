@@ -45,7 +45,7 @@ class FCircuit:
 
     """
 
-    def __init__(self, gates:list|None=None, initial_state:Union[QCircuit,QubitWaveFunction,str,int]|None=None, parameter_map=None):
+    def __init__(self, gates:list=None, initial_state:Union[QCircuit,QubitWaveFunction,str,int]=None, parameter_map=None):
         """
         init
         Parameters
@@ -456,7 +456,7 @@ class FCircuit:
         return cls(gates=operations._gates,initial_state=reference)
 
     @classmethod
-    def from_edges(cls,edges:Union[list,tuple],label=None,n_orb:int|None=None, use_units_of_pi=False,ladder=True):
+    def from_edges(cls,edges:Union[list,tuple],label=None,n_orb:int=0, use_units_of_pi=False,ladder=True):
         operations = FCircuit()
         if n_orb is not None:
             include_reference = True

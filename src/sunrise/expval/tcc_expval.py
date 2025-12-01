@@ -22,7 +22,7 @@ from openfermion.transforms.opconversions.term_reordering import reorder
 from openfermion.utils.indexing import up_then_down
 
 class TCCBraket:
-    def __init__(self,bra:FCircuit|None=None,ket:FCircuit|None=None,operator:Union[str,FermionOperator,List[FermionOperator]]=None,backend_kwargs:dict|None={},*args,**kwargs):
+    def __init__(self,bra:Union[FCircuit,None]=None,ket:Union[FCircuit,None]=None,operator:Union[str,FermionOperator,List[FermionOperator]]=None,backend_kwargs:dict={},*args,**kwargs):
         self.operator = None
         if 'engine' in backend_kwargs:
             engine = backend_kwargs['engine']
@@ -680,7 +680,7 @@ def init_state_from_array(wvf:QubitWaveFunction,tol=1e-6):
             init_state.append([vec,idx.real]) #tcc automatically does this, but with an anoying message everytime
     return init_state
 
-def indices_tq_to_tcc(indices:List[List[Tuple[int]]]|None=None):
+def indices_tq_to_tcc(indices:List[List[Tuple[int]]]=None):
     '''
     Expected indices like [[(0,1),(n_mo+0,n_mo+1),...],[(a,b),(c,d),...],...] (in upthendown)
     Returned [(...,n_mo+1,1,0,n_mo+0,...),(...,d,b,a,c,...)]
@@ -703,7 +703,7 @@ def indices_tq_to_tcc(indices:List[List[Tuple[int]]]|None=None):
         ex_ops.append(tuple(exc))
     return ex_ops,params,param_ids
 
-def indices_tcc_to_tq(indices:List[List[Tuple[int]]]|None=None)->List[List[Tuple[int]]]:
+def indices_tcc_to_tq(indices:List[List[Tuple[int]]]=None)->List[List[Tuple[int]]]:
     '''
     Expected indices like [(...,n_mo+1,1,0,n_mo+0,...),(...,d,b,a,c,...)]
     Returned [[(0,1),(n_mo+0,n_mo+1),...],[(a,b),(c,d),...],...] (in upthendown)

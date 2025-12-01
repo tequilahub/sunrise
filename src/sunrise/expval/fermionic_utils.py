@@ -6,6 +6,7 @@ import typing
 import numpy as np
 from sunrise.fermionic_operations.gates import *
 from sunrise.fermionic_operations.circuit import FCircuit
+from typing import Union
 
 def make_fermionic_hamiltonian(one_body_integrals, two_body_integrals, constant, *args, **kwargs):
 
@@ -118,7 +119,7 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
     return op
 
 
-def rotate_molecule(U:FCircuit,mol:QuantumChemistryBase,angles:dict|None=None)->QuantumChemistryBase:
+def rotate_molecule(U:FCircuit,mol:QuantumChemistryBase,angles:Union[dict,None]=None)->QuantumChemistryBase:
     """
     U: a FCircuit with ONLY UR gates
     mol: Tequila Molecule you want to rotate

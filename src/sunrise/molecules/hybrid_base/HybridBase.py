@@ -20,6 +20,7 @@ from sunrise.molecules.hybrid_base.FermionicGateImpl import FermionicGateImpl
 from openfermion import FermionOperator
 import copy
 from sunrise.hybridization.hybridization import Graph
+from typing import Union
 class HybridBase(qc_base):
     def __init__(self, parameters: ParametersQC,select: typing.Union[str,dict]={},transformation: typing.Union[str, typing.Callable] = None, active_orbitals: list = None,
                  frozen_orbitals: list = None, orbital_type: str = None,reference_orbitals: list = None, orbitals: list = None, *args, **kwargs):
@@ -489,7 +490,7 @@ class HybridBase(qc_base):
         return transformation
     
     def _new_transformation(self, transformation=None,n_electrons:int|None=None,
-                            n_orbitals:int|None=None,select:typing.Union[str,dict,list,tuple]={},
+                            n_orbitals:Union[int,None]=None,select:typing.Union[str,dict,list,tuple]={},
                             condense:bool=True,two_qubit:bool=False, *args, **kwargs)->EncodingBase:
         """
         Helper Function to initialize the Fermion-to-Qubit Transformation
