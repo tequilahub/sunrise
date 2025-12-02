@@ -23,7 +23,7 @@ HAS_FQE = "fqe" in INSTALLED_FERMIONIC_BACKENDS
 def test_spa(geom,backend):
     mol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     edges = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='hybrid').get_spa_edges()
-    U = mol.make_ansatz("SPA",edges=edges,optimize=(backend=='fqe'))
+    U = mol.make_ansatz("SPA",edges=edges,optimize=False)
     circuit = sn.FCircuit.from_edges(edges=edges,n_orb=mol.n_orbitals)
     expval = tq.ExpectationValue(H=mol.make_hamiltonian(),U=U)
     sunval = Braket(molecule=mol,ket=circuit,backend=backend)

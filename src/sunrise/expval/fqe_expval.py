@@ -315,7 +315,7 @@ class FQEBraKet:
 
 
         for argument in zip_ket:
-            ket_t = ket_t.time_evolve(0.5 * argument[0], argument[1])
+            ket_t = ket_t.time_evolve(-0.5 * argument[0], argument[1])
 
 
         #bra time evolution
@@ -332,7 +332,7 @@ class FQEBraKet:
             zip_bra = zip(parameters_bra, self.bra_generator.values())
             bra_t = self.bra
             for argument in zip_bra:
-                bra_t = bra_t.time_evolve(0.5 * argument[0], argument[1])
+                bra_t = bra_t.time_evolve(-0.5 * argument[0], argument[1])
 
         self.ket_time_evolved = ket_t
         self.bra_time_evolved = bra_t
