@@ -1,5 +1,5 @@
 from optparse import Option
-from typing import List, Union, Optional
+from typing import List, Union, Optional,Dict
 
 from .color import ColorRange, Colors, Color
 
@@ -21,12 +21,13 @@ class CircuitStyle:
                  color_range: Optional[ColorRange] = ColorRange(Color("blue"), Color("red")),
                  primary: Colors = Colors(Color("white"), Color("tq")),
                  secondary: Colors = Colors(Color("white"), Color("fai")),
-                 ):
+                 personalized:Dict['str',Colors]={}):
         self.group_together = group_together
         self.parametrized_marking = parametrized_marking
         self.color_range = color_range
         self.primary = primary
         self.secondary = secondary
+        self.personalized = personalized
 
 
 class CircuitState:
