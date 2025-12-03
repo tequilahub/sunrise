@@ -1,12 +1,7 @@
-
 import numpy as np
-import scipy.optimize
-from matplotlib import pyplot as plt
-from scipy.optimize import minimize
 import tequila as tq
 import pytest
 import sunrise as sn
-import sunrise.expval
 from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS,Braket
 from numpy import isclose
 import random
@@ -17,7 +12,6 @@ from datetime import datetime
 HAS_TCC = "tcc" in INSTALLED_FERMIONIC_BACKENDS
 HAS_FQE = "fqe" in INSTALLED_FERMIONIC_BACKENDS
 
-#todo: Fix tequila backend to be consistent with the others
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_spa(geom,backend):
@@ -116,3 +110,19 @@ def test_optimize_orbitals(geom,backend):
 #     snS = sn.minimize(sn.Braket(molecule=mol, ket=ket, bra=bra,backend=backend),silent=True)
 #     assert isclose(tqS.energy, snS.energy, atol=1.e-3)
 
+@pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
+@pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
+def test_gradient(geom,backend):
+    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a').use_native_orbitals()
+    snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
+    random.seed(datetime.now().timestamp())
+    tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=backend=='fqe')
+    snU = snmol.make_ansatz('UpCCSD')
+    tqval = tq.ExpectationValue(H=tqmol.make_hamiltonian(),U=tqU)
+    snval = sn.Braket(molecule=snmol,ket=snU,backend=backend)
+    n = random.sample(range(0, len(tqval.extract_variables())), 5)
+    variables = [tqval.extract_variables()[i] for i in n]
+    values = {d:random.random()*np.pi for d in tqval.extract_variables()}
+    tqg = [tq.simulate(tq.grad(tqval,v),variables=values) for v in variables]
+    sng = [sn.simulate(sn.grad(snval,v),variables=values) for v in variables]
+    assert np.allclose(tqg,sng)
