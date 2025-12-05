@@ -472,10 +472,7 @@ class FCircuit:
                 v = Variable(((previous,i),'D',label))
                 if use_units_of_pi:
                     angle = angle * pi
-                if include_reference:
-                    operations += sunrise.gates.FermionicExcitation(indices=[(previous,i),(previous+n_orb,i+n_orb)],variables=v,reordered=True)
-                else:
-                    operations += sunrise.gates.FermionicExcitation(indices=[(2*previous,2*i),(2*previous+1,2*i+1)],variables=v,reordered=False)
+                operations += sunrise.gates.UC(i=previous,j=i,variables=v)
                 if ladder:
                     previous = i
         return cls(gates=operations._gates,initial_state=reference)
