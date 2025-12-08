@@ -33,7 +33,7 @@ class FGateImpl:
         return self
     
     def __str__(self):
-        return f'{self.name}(Indices = {self.indices} Variable = {repr(self.variables)})'
+        return f'{self.name}(indices = {self.indices} ,variables = {repr(self.variables)})'
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -167,4 +167,4 @@ class PhaseImpl(FGateImpl):
         self._name = 'Ph'
 
     def __str__(self):
-        return f'{self.name}(Target = {(self.indices[0][0][0],)} Variable = {repr(self.variables)})'
+        return f'{self.name}(target = {(self.indices[0][0][0],)}, variable = {repr(self.variables)})'
