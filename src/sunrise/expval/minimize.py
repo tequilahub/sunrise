@@ -49,8 +49,16 @@ def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_com
 
         if len(variables) == 0:
             raise TequilaException("Error in gradient: Objective has no variables")
-
         for k in variables:
+            assert k is not None
+            result[k] = grad(objective, k, no_compile=no_compile)
+        return result
+    elif isinstance(variable,list):
+        result = {}
+        if len(variable) == 0:
+            raise TequilaException("Error in gradient: Objective has no variables")
+
+        for k in variable:
             assert k is not None
             result[k] = grad(objective, k, no_compile=no_compile)
         return result

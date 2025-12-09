@@ -687,6 +687,8 @@ def indices_tq_to_tcc(indices:List[List[Tuple[int]]]=None):
     '''
     if indices is None:
         return None,None,None
+    if not len(indices):
+        return [],[],[]
     assert isinstance(indices,(list,tuple))
     if isinstance(indices[0],Number):
         indices = [indices]
@@ -711,6 +713,8 @@ def indices_tcc_to_tq(indices:List[List[Tuple[int]]]=None)->List[List[Tuple[int]
     if indices is None:
         return None
     assert isinstance(indices,(list,tuple))
+    if not len(indices):
+        return []
     if isinstance(indices[0],Number):
         indices = [indices]
     ex_ops = []
