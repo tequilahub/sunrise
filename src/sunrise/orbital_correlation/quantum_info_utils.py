@@ -7,7 +7,7 @@ from scipy.linalg import logm, eigh
 import itertools
 import math
 from typing import List,Tuple,Union
-from sunrise.orbital_correlation.density_matrix_utils import compute_one_orb_rdm, compute_two_orb_rdm
+from sunrise.orbital_correlation.density_matrix_utils import *
 
 # Quantum entropy S(rho)
 def quantum_entropy(rho:np.ndarray)->float:
@@ -174,6 +174,16 @@ def pure_state_entanglement(mol:tqMolecule, circuit:QCircuit=None, variables:Var
 
 
 
+
+def func(x, d, rho):
+    y = []
+    x = x.reshape(2*d, 4)
+    for i in range(0, len(x), 2):
+        y.append((1/d, x[i], x[i+1]))
+
+    sigma = create_separable_mixed_state(y)
+    sigma = change
+    return quantum_relative_entropy(rho=rho, sigma=sigma)
 
 
 
