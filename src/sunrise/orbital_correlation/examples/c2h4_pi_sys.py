@@ -41,9 +41,9 @@ U = U.map_variables(result.variables)
 print("localized orbitals")
 print(tq.simulate(U))
 
-print("I_01:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=1))
-print("E_0:", pure_state_entanglement(mol, U, orb_a=0))
-print("E_1:", pure_state_entanglement(mol, U, orb_a=1))
+print("I_01:", mutual_info_simple(mol, U, orb_a=0, orb_b=1))
+print("E_0:", one_orb_entanglement(mol, U, orb_a=0))
+print("E_1:", one_orb_entanglement(mol, U, orb_a=1))
 
 # I_01: 2.523046605642772
 # E_0: 1.261523302821387

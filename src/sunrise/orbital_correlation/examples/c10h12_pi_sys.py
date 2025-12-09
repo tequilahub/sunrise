@@ -74,4 +74,4 @@ mol = sun.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[30,32
 U = U.to_qcircuit(mol)
 pairs = [(i, j) for i in range(mol.n_orbitals) for j in range(i + 1, mol.n_orbitals)]
 for pair in pairs:
-    print(f"I({pair[0],pair[1]}) = {mutual_info_2ordm(mol, U, orb_a=pair[0], orb_b=pair[1])}")
+    print(f"I({pair[0],pair[1]}) = {mutual_info_simple(mol, U, orb_a=pair[0], orb_b=pair[1])}")
