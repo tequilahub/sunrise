@@ -175,15 +175,15 @@ def pure_state_entanglement(mol:tqMolecule, circuit:QCircuit=None, variables:Var
 
 
 
-def func(x, d, rho):
-    y = []
-    x = x.reshape(2*d, 4)
-    for i in range(0, len(x), 2):
-        y.append((1/d, x[i], x[i+1]))
+# def func(x, d, rho):
+#     y = []
+#     x = x.reshape(2*d, 4)
+#     for i in range(0, len(x), 2):
+#         y.append((1/d, x[i], x[i+1]))
 
-    sigma = create_separable_mixed_state(y)
-    sigma = change
-    return quantum_relative_entropy(rho=rho, sigma=sigma)
+#     sigma = create_separable_mixed_state(y)
+#     sigma = change
+#     return quantum_relative_entropy(rho=rho, sigma=sigma)
 
 
 
