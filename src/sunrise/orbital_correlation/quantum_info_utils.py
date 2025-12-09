@@ -105,9 +105,8 @@ def mutual_info_simple(mol:tqMolecule, circuit:QCircuit=None, variables:Variable
 
     return S_a + S_b - S_ab # there might be a 0.5 depending to convention
 
-def one_orb_mutual_info(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, orb_b:int=1, PSSR:bool=False, NSSR:bool=False): # TODO: orb_b is not necessary because I'm using only orb_a
+def one_orb_mutual_info(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, PSSR:bool=False, NSSR:bool=False):
     rho_a = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_a)
-    rho_b = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_b)
     if PSSR:
         rho_a_evals, rho_a_evecs = eigh(rho_a)
         I = (rho_a_evals[0]+rho_a_evals[3])*np.log(rho_a_evals[0]+rho_a_evals[3]) + \
@@ -122,7 +121,7 @@ def one_orb_mutual_info(mol:tqMolecule, circuit:QCircuit=None, variables:Variabl
             2*(rho_a_evals[0]*np.log(rho_a_evals[0])+rho_a_evals[1]*np.log(rho_a_evals[1])+\
                rho_a_evals[2]*np.log(rho_a_evals[2])+rho_a_evals[3]*np.log(rho_a_evals[3]))
     else:
-        I = 2*one_orb_entanglement(mol, circuit, variables, initial_state, orb_a=orb_a, orb_b=orb_b)
+        I = 2*one_orb_entanglement(mol, circuit, variables, initial_state, orb_a=orb_a)
 
     return I
 
@@ -146,9 +145,8 @@ def total_mutual_info(mol, circuit=None, variables=None, initial_state=0, orbs=N
 
     return one_entropy - system_entropy
 
-def one_orb_entanglement(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, orb_b:int=1, PSSR:bool=False, NSSR:bool=False)->float:
+def one_orb_entanglement(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, PSSR:bool=False, NSSR:bool=False)->float:
     rho_a = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_a)
-    rho_b = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_b)
     if PSSR==True:
         rho_a_evals, rho_a_evecs = eigh(rho_a)
         # Eq.(29) https://doi.org/10.1021/acs.jctc.0c00559
@@ -163,7 +161,6 @@ def one_orb_entanglement(mol:tqMolecule, circuit:QCircuit=None, variables:Variab
         E -= (xlnx[1] + xlnx[2])
     else:
         S_a = quantum_entropy(rho_a)
-        S_b = quantum_entropy(rho_b)
         # assert np.isclose(S_a,S_b)
         E = S_a
 
@@ -479,17 +476,20 @@ def two_orbs_classical_correlation(mol:tqMolecule, circuit:QCircuit=None, variab
     
     rho_ab = compute_two_orb_rdm(mol, circuit, variables, initial_state, p_orb=orb_a, q_orb=orb_b, PSSR=PSSR, NSSR=NSSR)
     chi = np.diag(np.diag(rho_ab))
-    o1 = compute_one_orb_rdm(mol, circuit, one_orb=0)
-    o2 = compute_one_orb_rdm(mol, circuit, one_orb=1)
+
+    o1 = compute_one_orb_rdm(mol, circuit, one_orb=orb_a)
+    o2 = compute_one_orb_rdm(mol, circuit, one_orb=orb_b)
     pi = np.kron(o1,o2)
+    pi = change_basis(pi, 'to_molecular')
         
     return quantum_relative_entropy(chi, pi)
 
 def two_orbs_mutual_info(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, orb_b:int=1, PSSR:bool=False, NSSR:bool=False)->float:
     
     rho_ab = compute_two_orb_rdm(mol, circuit, variables, initial_state, p_orb=orb_a, q_orb=orb_b, PSSR=PSSR, NSSR=NSSR)
-    o1 = compute_one_orb_rdm(mol, circuit, one_orb=0)
-    o2 = compute_one_orb_rdm(mol, circuit, one_orb=1)
+    o1 = compute_one_orb_rdm(mol, circuit, one_orb=orb_a)
+    o2 = compute_one_orb_rdm(mol, circuit, one_orb=orb_b)
     pi = np.kron(o1,o2)
+    pi = change_basis(pi, 'to_molecular')
         
     return quantum_relative_entropy(rho_ab, pi)
