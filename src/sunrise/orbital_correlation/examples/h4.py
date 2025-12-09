@@ -1,6 +1,7 @@
 import tequila as tq
 import numpy as np
-from sunrise.orbital_correlation.entropy_utils_qubit import *
+from sunrise.orbital_correlation.density_matrix_utils import *
+from sunrise.orbital_correlation.quantum_info_utils import *
 
 # canonical orbitals
 mol = tq.Molecule("H 0 0 0\nH 0 0 1.5\nH 0 0 3\nH 0 0 4.5", "sto-3g")
