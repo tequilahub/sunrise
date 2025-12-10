@@ -66,7 +66,7 @@ def transform(original:QuantumChemistryBase,modified:QuantumChemistryBase)->Quan
     lam_sqrt_inv = numpy.sqrt(numpy.linalg.inv(lam_s))
     symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
     jcoef = symm_orthog.dot(c).T
-    integral_manager = janpa.initialize_integral_manager(one_body_integrals=original.integral_manager.one_body_integrals,
+    integral_manager = modified.initialize_integral_manager(one_body_integrals=original.integral_manager.one_body_integrals,
                     two_body_integrals=original.integral_manager.two_body_integrals,constant_term=original.integral_manager.constant_term,
                     active_orbitals= [i for i in range(n_basis) if  i not in co.keys()],frozen_orbitals=[*co.keys()],orbital_coefficients=jcoef,
                     overlap_integrals=original.integral_manager.overlap_integrals,reference_orbitals=reference_orbitals,orbital_type='CLPO')
