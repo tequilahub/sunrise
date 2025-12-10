@@ -4,6 +4,7 @@ import pyscf
 from pyscf.gto import Mole
 from numpy import ndarray
 from typing import Callable
+from typing import Union
 
 def from_tequila(molecule:QuantumChemistryBase,**kwargs)->pyscf.gto.Mole: #TODO: Change to something like MoleFromTequila
     geometry = molecule.parameters.get_geometry()
@@ -48,7 +49,7 @@ def from_tequila(molecule:QuantumChemistryBase,**kwargs)->pyscf.gto.Mole: #TODO:
     return mf
 
 
-def MoleculeFromPyscf(molecule:Mole,mo_coeff:ndarray|None=None,transformation:str|Callable=None,active_orbitals:list=None,frozen_orbitals:list=None,*args,**kwargs)->QuantumChemistryBase:
+def MoleculeFromPyscf(molecule:Mole,mo_coeff:Union[ndarray,None]=None,transformation:Union[str,Callable,None]=None,active_orbitals:list=None,frozen_orbitals:list=None,*args,**kwargs)->QuantumChemistryBase:
     
     geo = ''
     for i in  range(len(molecule.atom_coords())):

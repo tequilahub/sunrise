@@ -922,11 +922,7 @@ class FermionicBase(QuantumChemistryBase):
             idx = idx[0]
             angle = (tuple([idx]), "D", label)
             if include_doubles:
-                U += self.make_excitation_gate(
-                    angle=angle,
-                    indices=((2 * idx[0], 2 * idx[1]), (2 * idx[0] + 1, 2 * idx[1] + 1)),
-                    **kwargs,
-                )
+                U += self.UC(i=idx[0],j=idx[1],angle=angle,**kwargs)
             if include_singles and mix_sd:
                 U += self.make_upccgsd_singles(
                     indices=[(idx,)],
@@ -964,12 +960,7 @@ class FermionicBase(QuantumChemistryBase):
                 angle = (idx, "S", label)
                 if angle_transform is not None:
                     angle = angle_transform(angle)
-                U += self.make_excitation_gate(
-                    angle=angle, indices=[(2 * idx[0], 2 * idx[1])], **kwargs
-                )
-                U += self.make_excitation_gate(
-                    angle=angle, indices=[(2 * idx[0] + 1, 2 * idx[1] + 1)],**kwargs
-                )
+                U += self.UR(i=idx[0],j=idx[1],angle=angle)
             else:
                 angle1 = (idx, "SU", label)
                 angle2 = (idx, "SD", label)

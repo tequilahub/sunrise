@@ -7,7 +7,7 @@ from tequila import assign_variable
 from copy import deepcopy
 
 class FGateImpl:
-    def __init__(self,indices:typing.Union[list,tuple]|None=None,variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]=None,reordered:bool=False):
+    def __init__(self,indices:typing.Union[list,tuple],variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]=None,reordered:bool=False):
         self.reordered:bool=reordered
         self._indices:list = indices
         self.variables=variables
@@ -33,7 +33,7 @@ class FGateImpl:
         return self
     
     def __str__(self):
-        return f'{self.name}(Indices = {self.indices} Variable = {repr(self.variables)})'
+        return f'{self.name}(indices = {self.indices} ,variables = {repr(self.variables)})'
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -135,12 +135,12 @@ class FGateImpl:
         return True
 
 class FermionicExcitationImpl(FGateImpl):
-    def __init__(self, indices:typing.Union[list,tuple]|None=None, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]|None=None, reordered:bool=False):
+    def __init__(self, indices:typing.Union[list,tuple], variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable,None]=None, reordered:bool=False):
         super().__init__(indices, variables, reordered)
         self._name = 'FermionicExcitation'
 
 class URImpl(FGateImpl):
-    def __init__(self, i:int,j:int, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]|None=None):
+    def __init__(self, i:int,j:int, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable,None]=None):
         super().__init__([[(2*i,2*j)],[(2*i+1,2*j+1)]], variables, False)
         self._name = 'UR'
     def verify(self):
@@ -157,14 +157,14 @@ class URImpl(FGateImpl):
             assert 2*len(self._variables) == len(self._indices)
 
 class UCImpl(FGateImpl):
-    def __init__(self,i,j, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]|None=None):
+    def __init__(self,i,j, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]=None):
         super().__init__([[(2*i,2*j),(2*i+1,2*j+1)]], variables, False)
         self._name = 'UC'
     
 class PhaseImpl(FGateImpl):
-    def __init__(self,i, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]|None=None, reordered:bool=False):
+    def __init__(self,i, variables:typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable]=None, reordered:bool=False):
         super().__init__([[(i,i)]], variables, reordered)
         self._name = 'Ph'
 
     def __str__(self):
-        return f'{self.name}(Target = {(self.indices[0][0][0],)} Variable = {repr(self.variables)})'
+        return f'{self.name}(target = {(self.indices[0][0][0],)}, variable = {repr(self.variables)})'

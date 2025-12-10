@@ -2,7 +2,8 @@
 import sunrise as sun
 import tequila as tq
 import numpy as np
-from sunrise.orbital_correlation.entropy_utils_qubit import *
+from sunrise.orbital_correlation.density_matrix_utils import *
+from sunrise.orbital_correlation.quantum_info_utils import *
 from sunrise.fermionic_operations.givens_rotations import get_givens_circuit
 
 geometry = """
@@ -50,27 +51,27 @@ E = tq.ExpectationValue(U,H)
 result = tq.minimize(E, silent=True)
 U = U.map_variables(result.variables)
 print(tq.simulate(U))
-print("I_01:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=1))
-print("I_02:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=2))
-print("I_03:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=3))
-print("I_04:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=4))
-print("I_05:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=5))
-print("I_12:", mutual_info_2ordm(mol, U, orb_a=1, orb_b=2))
-print("I_13:", mutual_info_2ordm(mol, U, orb_a=1, orb_b=3))
-print("I_14:", mutual_info_2ordm(mol, U, orb_a=1, orb_b=4))
-print("I_15:", mutual_info_2ordm(mol, U, orb_a=1, orb_b=5))
-print("I_23:", mutual_info_2ordm(mol, U, orb_a=2, orb_b=3))
-print("I_24:", mutual_info_2ordm(mol, U, orb_a=2, orb_b=4))
-print("I_25:", mutual_info_2ordm(mol, U, orb_a=2, orb_b=5))
-print("I_34:", mutual_info_2ordm(mol, U, orb_a=3, orb_b=4))
-print("I_35:", mutual_info_2ordm(mol, U, orb_a=3, orb_b=5))
-print("I_45:", mutual_info_2ordm(mol, U, orb_a=4, orb_b=5))
-print("E_0:", pure_state_entanglement(mol, U, orb_a=0))
-print("E_1:", pure_state_entanglement(mol, U, orb_a=1))
-print("E_2:", pure_state_entanglement(mol, U, orb_a=2))
-print("E_3:", pure_state_entanglement(mol, U, orb_a=3))
-print("E_4:", pure_state_entanglement(mol, U, orb_a=4))
-print("E_5:", pure_state_entanglement(mol, U, orb_a=5))
+print("I_01:", mutual_info_simple(mol, U, orb_a=0, orb_b=1))
+print("I_02:", mutual_info_simple(mol, U, orb_a=0, orb_b=2))
+print("I_03:", mutual_info_simple(mol, U, orb_a=0, orb_b=3))
+print("I_04:", mutual_info_simple(mol, U, orb_a=0, orb_b=4))
+print("I_05:", mutual_info_simple(mol, U, orb_a=0, orb_b=5))
+print("I_12:", mutual_info_simple(mol, U, orb_a=1, orb_b=2))
+print("I_13:", mutual_info_simple(mol, U, orb_a=1, orb_b=3))
+print("I_14:", mutual_info_simple(mol, U, orb_a=1, orb_b=4))
+print("I_15:", mutual_info_simple(mol, U, orb_a=1, orb_b=5))
+print("I_23:", mutual_info_simple(mol, U, orb_a=2, orb_b=3))
+print("I_24:", mutual_info_simple(mol, U, orb_a=2, orb_b=4))
+print("I_25:", mutual_info_simple(mol, U, orb_a=2, orb_b=5))
+print("I_34:", mutual_info_simple(mol, U, orb_a=3, orb_b=4))
+print("I_35:", mutual_info_simple(mol, U, orb_a=3, orb_b=5))
+print("I_45:", mutual_info_simple(mol, U, orb_a=4, orb_b=5))
+print("E_0:", one_orb_entanglement(mol, U, orb_a=0))
+print("E_1:", one_orb_entanglement(mol, U, orb_a=1))
+print("E_2:", one_orb_entanglement(mol, U, orb_a=2))
+print("E_3:", one_orb_entanglement(mol, U, orb_a=3))
+print("E_4:", one_orb_entanglement(mol, U, orb_a=4))
+print("E_5:", one_orb_entanglement(mol, U, orb_a=5))
 
 # I_01: 0.021645242081348437
 # I_02: 0.16757141451466895

@@ -13,7 +13,7 @@ from typing import Union,List
 from openfermion import FermionOperator
 
 class TequilaBraket:
-    def __init__(self,bra:FCircuit|None=None,ket:FCircuit|None=None,operator:Union[str,QubitHamiltonian,FermionOperator,List[FermionOperator]]=None,backend_kwargs:dict={},*args,**kwargs):
+    def __init__(self,bra:Union[FCircuit,None]=None,ket:Union[FCircuit,None]=None,operator:Union[str,QubitHamiltonian,FermionOperator,List[FermionOperator]]=None,backend_kwargs:dict={},*args,**kwargs):
         if 'circuit' in kwargs:
             circuit = kwargs['circuit']
             kwargs.pop('circuit')

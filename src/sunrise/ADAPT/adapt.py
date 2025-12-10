@@ -1,0 +1,490 @@
+# Generalized Adaptive Solvers
+# as described in Kottmann, Anand, Aspuru-Guzik: https://doi.org/10.1039/D0SC06627C
+
+from tequila import (
+    TequilaWarning,
+    TequilaException,
+)
+import numpy
+import dataclasses
+import warnings
+from itertools import combinations
+from tequila.apps.adapt.adapt import AdaptParameters
+from sunrise.expval import Braket as ExpectationValue
+from openfermion.ops.operators.fermion_operator import FermionOperator
+from sunrise import (
+    grad,
+    minimize,
+    simulate,
+    FCircuit,
+)
+
+
+class AdaptPoolBase:
+    """
+    Standard class for operator pools in Adapt
+    The pool is a list of generators (Excitation Indices [(i,j),(k,l),...])
+    """
+
+    generators: list = None
+
+    __n: int = 0  # for iterator, don't touch
+
+    def __init__(self, generators):
+        self.generators = generators
+
+    def make_unitary(self, k, label) -> FCircuit:
+        return 
+
+    def __iter__(self):
+        self.__n = 0
+        return self
+
+    def __next__(self):
+        if self.__n < len(self.generators):
+            result = self.__n
+            self.__n += 1
+            return result
+        else:
+            raise StopIteration
+
+    def __str__(self):
+        return "{} with {} Generators".format(type(self).__name__, len(self.generators))
+
+
+class ObjectiveFactoryBase:
+    """
+    Default class to create the objective in the Adapt solver
+    This just creates the single ExpectationValue <H>_{Upre + U + Upost}
+    and U will be the circuit that is adaptively constructed
+    """
+
+    Upre: FCircuit = FCircuit()
+    Upost: FCircuit = FCircuit()
+    H: FermionOperator = None
+
+    def __init__(self, H=None, Upre=None, Upost=None,backend=None,molecule=None,*args, **kwargs):
+        if molecule is None:
+            raise TequilaException("No Molecule was given to Adapt!")
+
+        self.H = H
+        if Upre is not None:
+            self.Upre = Upre
+        else:
+            self.Upre = molecule.prepare_reference()
+        if Upost is not None:
+            self.Upost = Upost
+        else:
+            self.Upost = FCircuit()
+        self.backend=backend
+        self.molecule = molecule
+
+    def __call__(self, U, screening=False, *args, **kwargs):
+        return ExpectationValue(H=self.H, U=self.Upre + U + self.Upost,backend=self.backend,molecule=self.molecule,*args, **kwargs)
+
+    def grad_objective(self, *args, **kwargs):
+        return self(*args, **kwargs)
+
+    def __str__(self):
+        return "{}".format(type(self).__name__)
+
+
+class Adapt:
+    operator_pool: AdaptPoolBase = None
+    objective_factory = None
+    parameters: AdaptParameters = AdaptParameters()
+
+    def make_objective(self, U, variables=None, *args, **kwargs):
+        return self.objective_factory(U=U, variables=variables, *args, **{**self.parameters.compile_args, **kwargs})
+
+    def __init__(self, operator_pool, H=None, objective_factory=None,backend=None, *args, **kwargs):
+        """
+        For the Default Adaptive Solver kwargs can contain Upre and Upost as described in:
+        See out online tutorial for more information: https://github.com/tequilahub/tequila-tutorials #TODO: Not exactly tequila since fermionic
+        """
+        self.operator_pool = operator_pool
+        self.backend = backend
+        if objective_factory is None:
+            self.objective_factory = ObjectiveFactoryBase(H,backend=self.backend, *args, **kwargs)
+        else:
+            self.objective_factory = objective_factory
+        filtered = {k: v for k, v in kwargs.items() if k in self.parameters.__dict__}
+        self.parameters = AdaptParameters(*args, **filtered)
+        if (
+            self.parameters.silent
+            and self.parameters.optimizer_args is not None
+            and "silent" not in self.parameters.optimizer_args
+        ):
+            self.parameters.optimizer_args["silent"] = True
+
+    def __call__(self, static_variables=None, mp_pool=None, label=None, variables=None, *args, **kwargs):
+        if not self.parameters.silent:
+            print("Starting Adaptive Solver")
+            print(self)
+
+        # count resources
+        screening_cycles = 0
+        objective_expval_evaluations = 0
+        gradient_expval_evaluations = 0
+        histories = []
+
+        if static_variables is None:
+            static_variables = {}
+
+        if variables is None:
+            variables = {**static_variables}
+        else:
+            variables = {**variables, **static_variables}
+
+        U = FCircuit()
+        if "U" in kwargs:
+            U = kwargs["U"]
+            kwargs.pop('U')
+        elif 'initial_state' in kwargs:
+            U.initial_state = kwargs['initial_state']
+            kwargs.pop('initial_state')
+        elif hasattr(self.operator_pool, "initialize_circuit"):
+            U = self.operator_pool.initialize_circuit()
+        initial_objective = self.make_objective(U, variables=variables)
+        for k in initial_objective.extract_variables():
+            if k not in variables:
+                warnings.warn(
+                    "variable {} of initial objective not given, setting to 0.0 and activate optimization".format(k),
+                    TequilaWarning,
+                )
+                variables[k] = 0.0
+
+        if len(initial_objective.extract_variables()) > 0:
+            active_variables = [k for k in variables if k not in static_variables]
+            if len(active_variables) > 0:
+                if not self.parameters.silent:
+                    print("initial optimization")
+                margs = {"initial_values": variables}
+                margs = {**margs, **self.parameters.compile_args, **self.parameters.optimizer_args}
+                result = minimize(objective=initial_objective, variables=active_variables, **margs)
+
+                variables = result.variables
+        energy = simulate(initial_objective, variables=variables)
+        for iter in range(self.parameters.maxiter):
+            current_label = (iter, 0)
+            if label is not None:
+                current_label = (iter, label)
+
+            gradients = self.screen_gradients(U=U, variables=variables, mp_pool=mp_pool)
+            grad_values = numpy.asarray(list(gradients.values()))
+            max_grad = max(grad_values)
+            grad_norm = numpy.linalg.norm(grad_values)
+
+            if grad_norm < self.parameters.gradient_convergence:
+                if not self.parameters.silent:
+                    print("pool gradient norm is {:+2.8f}, convergence criterion met".format(grad_norm))
+                break
+            if numpy.abs(max_grad) < self.parameters.max_gradient_convergence:
+                if not self.parameters.silent:
+                    print(
+                        "max pool gradient is {:+2.8f}, convergence criterion |max(grad)|<{} met".format(
+                            max_grad, self.parameters.max_gradient_convergence
+                        )
+                    )
+                break
+
+            batch_size = self.parameters.batch_size
+
+            # detect degeneracies
+            degeneracies = [
+                k
+                for k in range(batch_size, len(grad_values))
+                if numpy.isclose(grad_values[batch_size - 1], grad_values[k], rtol=self.parameters.degeneracy_threshold)
+            ]
+
+            if len(degeneracies) > 0:
+                batch_size += len(degeneracies)
+                if not self.parameters.silent:
+                    print(
+                        "detected degeneracies: increasing batch size temporarily from {} to {}".format(
+                            self.parameters.batch_size, batch_size
+                        )
+                    )
+
+            count = 0
+
+            op_names = []
+            for k, v in gradients.items():
+                Ux = self.operator_pool.make_unitary(k, label=current_label)
+                U += Ux
+                op_names.append(Ux.extract_variables())
+                count += 1
+                if count >= batch_size:
+                    break
+            variables = {**variables, **{k: 0.0 for k in U.extract_variables() if k not in variables}}
+            active_variables = [k for k in variables if k not in static_variables]
+
+            objective = self.make_objective(U, variables=variables)
+            margs = {"initial_values": variables}
+            margs = {**margs, **self.parameters.compile_args, **self.parameters.optimizer_args}
+            result = minimize(objective=objective, variables=active_variables, **margs)
+            niter = len(result.history.energies)
+            diff = energy - result.energy
+            energy = result.energy
+            variables = result.variables
+            
+            if not self.parameters.silent:
+                print("-------------------------------------")
+                print("Finished iteration {}".format(iter))
+                print("added ", op_names)
+                print("current energy : {:+2.8f}".format(energy))
+                print("difference     : {:+2.8f}".format(diff))
+                print("grad_norm      : {:+2.8f}".format(grad_norm))
+                print("max_grad       : {:+2.8f}".format(max_grad))
+                print("ops in circuis : {}".format(len(U.gates)))
+                print("optimizer      : {}".format(self.parameters.optimizer_args["method"]))
+                print("opt-iterations : {}".format(niter))
+
+            screening_cycles += 1
+            mini_iter = len(result.history.extract_energies())
+            gradient_expval = sum([v.count_expectationvalues() for k, v in grad(objective).items()])
+            # objective_expval_evaluations += mini_iter * objective.count_expectationvalues() 
+            gradient_expval_evaluations += mini_iter * gradient_expval
+            histories.append(result.history)
+
+            if self.parameters.energy_convergence is not None and numpy.abs(diff) < self.parameters.energy_convergence:
+                if not self.parameters.silent:
+                    print("energy difference is {:+2.8f}, convergence criterion met".format(diff))
+                break
+
+            if iter == self.parameters.maxiter - 1:
+                if not self.parameters.silent:
+                    print("reached maximum number of iterations")
+                break
+
+        @dataclasses.dataclass
+        class AdaptReturn:
+            U: FCircuit = None
+            objective_factory: ObjectiveFactoryBase = None
+            variables: dict = None
+            energy: float = None
+            histories: list = None
+            screening_cycles: int = None
+            objective_expval_evaluations: int = None
+            gradient_expval_evaluations: int = None
+
+        return AdaptReturn(
+            U=U,
+            variables=variables,
+            objective_factory=self.objective_factory,
+            energy=energy,
+            histories=histories,
+            screening_cycles=screening_cycles,
+            objective_expval_evaluations=objective_expval_evaluations,
+            gradient_expval_evaluations=gradient_expval_evaluations,
+        )
+
+    def screen_gradients(self, U, variables, mp_pool=None):
+        args = []
+        for k in self.operator_pool:
+            arg = {}
+            arg["k"] = k
+            arg["variables"] = variables
+            arg["U"] = U
+            args.append(arg)
+
+        if mp_pool is None:
+            dEs = [self.do_screening(arg) for arg in args]
+        else:
+            if not self.parameters.silent:
+                print("screen with {} workers".format(mp_pool._processes))
+            dEs = mp_pool.map(self.do_screening, args)
+        dEs = dict(sorted(dEs, reverse=True, key=lambda x: numpy.fabs(x[1])))
+        return dEs
+
+    def do_screening(self, arg):
+        Ux = self.operator_pool.make_unitary(k=arg["k"], label="tmp")
+        Utmp = arg["U"] + Ux
+        variables = {**arg["variables"]}
+        objective = self.make_objective(Utmp, screening=True, variables=variables)
+
+        dEs = []
+        for k in Ux.extract_variables():
+            variables[k] = 0.0
+            dEs.append(grad(objective, k))
+        gradients = [
+            numpy.abs(simulate(objective=dE, variables=variables, **self.parameters.compile_args)) for dE in dEs
+        ]
+        return arg["k"], sum(gradients)
+
+    def __str__(self):
+        result = str(self.parameters)
+        result += str("{:30} : {}\n".format("operator pool: ", self.operator_pool))
+        result += str("{:30} : {}\n".format("objective factory : ", self.objective_factory))
+        return result
+
+
+class MolecularPool(AdaptPoolBase):
+    def __init__(self, molecule, indices: str):
+        """
+
+        Parameters
+        ----------
+        molecule:
+            a sunrise fermionic molecule object
+        indices
+            a list of indices defining UCC operations
+            indices refer to spin-orbitals
+            e.g. indices = [[(0,2),(1,3)], [(0,2)], [(1,3)]]
+            can be a string for predefined pools supported are UpCCD, UpCCSD, UpCCGD, and UpCCGSD
+        """
+        self.molecule = molecule
+
+        if isinstance(indices, str):
+            if "CC" not in indices.upper():
+                raise TequilaException(
+                    "Pool of type {} not yet supported.\nCreate your own by passing the initialized indices".format(
+                        indices
+                    )
+                )
+
+            generalized = True if "G" in indices.upper() else False
+            paired = True if "P" in indices.upper() else False
+            singles = True if "S" in indices.upper() else False
+            doubles = True if "D" in indices.upper() else False
+
+            indices = []
+            if doubles:
+                indices += self.make_indices_doubles(generalized=generalized, paired=paired)
+            if singles:
+                indices += self.make_indices_singles(generalized=generalized)
+
+        indices = [tuple(k) for k in indices]
+        super().__init__(generators=indices)
+
+    def make_indices_singles(self, generalized=False):
+        indices = []
+        for p in range(self.molecule.n_electrons // 2):
+            for q in range(self.molecule.n_electrons // 2, self.molecule.n_orbitals):
+                indices.append([(2 * p, 2 * q)])
+                indices.append([(2 * p + 1, 2 * q + 1)])
+        if not generalized:
+            return indices
+
+        for p in range(self.molecule.n_orbitals):
+            for q in range(p + 1, self.molecule.n_orbitals):
+                if [(2 * p, 2 * q)] in indices:
+                    continue
+                indices.append([(2 * p, 2 * q)])
+                indices.append([(2 * p + 1, 2 * q + 1)])
+        return self.sort_and_filter_unique_indices(indices)
+
+    def make_indices_doubles(self, generalized=False, paired=True):
+        indices = []
+        for p in range(self.molecule.n_electrons // 2):
+            for q in range(self.molecule.n_electrons // 2, self.molecule.n_orbitals):
+                indices.append([(2 * p, 2 * q), (2 * p + 1, 2 * q + 1)])
+
+        if not generalized:
+            return indices
+
+        for p in range(self.molecule.n_orbitals):
+            for q in range(p + 1, self.molecule.n_orbitals):
+                idx = [(2 * p, 2 * q), (2 * p + 1, 2 * q + 1)]
+                if idx in indices:
+                    continue
+                indices.append(idx)
+
+        if not paired:
+            indices += self.make_indices_doubles_all(generalized=generalized)
+
+        return self.sort_and_filter_unique_indices(indices)
+
+    def make_indices_doubles_all(self, generalized=False):
+        singles = self.make_indices_singles(generalized=generalized)
+        unwrapped = [x[0] for x in singles]
+        # now make all combinations of singles
+        indices = [x for x in combinations(unwrapped, 2)]
+        return self.sort_and_filter_unique_indices(indices)
+
+    def sort_and_filter_unique_indices(self, indices):
+        # sort as: [[(a,b),(c,d),(e,f)...],...]with a<c, a<b, c<d
+        sorted_indices = []
+        for idx in indices:
+            idx = tuple([tuple(sorted(pair)) for pair in idx])  # sort internal pairs (a<b, c<d, etc)
+            # avoid having orbitals show up multiple times in excitatin strings
+            idx = tuple(
+                [pair for pair in idx if sum([1 for pair2 in idx if pair[0] in pair2 or pair[1] in pair2]) == 1]
+            )
+            if len(idx) == 0:
+                continue
+            idx = tuple(list(set(idx)))  # avoid repetitions (like ((0,2),(0,2)))
+            idx = tuple(sorted(idx, key=lambda x: x[0]))  # sort pairs by first entry (a<c)
+            sorted_indices.append(idx)
+        return list(set(sorted_indices))
+
+    def make_unitary(self, k, label):
+        return self.molecule.make_excitation_gate(
+            indices=self.generators[k], angle=(self.generators[k], label),
+        )
+    def initialize_circuit(self):
+        return self.molecule.prepare_reference()
+
+class PseudoSingletMolecularPool(MolecularPool):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        indices = []
+        for idx in self.generators:
+            if len(idx) == 1:
+                combined = (
+                    ((idx[0][0] // 2 * 2, idx[0][1] // 2 * 2)),
+                    ((idx[0][0] // 2 * 2 + 1, idx[0][1] // 2 * 2 + 1)),
+                )
+                if combined not in indices:
+                    indices.append(combined)
+            else:
+                indices.append(tuple([idx]))
+
+        self.generators = list(set(indices))
+    def make_unitary(self, k, label):
+        U = FCircuit()
+        for idx in self.generators[k]:
+            combined_variable = self.generators[k][0]
+            U += self.molecule.make_excitation_gate(indices=idx, angle=(combined_variable, label))
+        return U
+    def initialize_circuit(self):
+        return self.molecule.prepare_reference()
+
+class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
+    def __init__(self, H, circuits: list, factors: list, *args, **kwargs):
+        self.circuits = circuits
+        self.factors = factors
+        super().__init__(H=H, *args, **kwargs)
+
+    def __call__(self, U, *args, **kwargs):
+        circuit = self.Upre + U + self.Upost
+        objective = ExpectationValue(H=self.H, U=circuit)
+        Qp = FermionOperator(' '.join('{p} {p}^'.format(p=p) for p in U.qubits))
+        # get all overlaps  
+        for i, Ux in enumerate(self.circuits):
+            S2 = ExpectationValue(H=Qp, U=circuit + Ux.dagger())
+            objective += numpy.abs(self.factors[i]) * S2
+        return objective
+    def initialize_circuit(self):
+        return self.molecule.prepare_reference()
+
+def run_molecular_adapt(molecule, operator_pool: str = None, Upre=None, Upost=None,backend=None, *args, **kwargs):
+    if operator_pool is None:
+        operator_pool = "UCCGSD"
+
+    # auto-detect if we have an molecular pool
+    # initialized by keyword
+    # e.g. U(p)CC(G)(S)(D)
+    ucc_signals = ["u", "cc", "s", "d", "g"]
+    if hasattr(operator_pool, "lower"):
+        if any([s in operator_pool.lower() for s in ucc_signals]):
+            operator_pool = MolecularPool(molecule=molecule, indices=operator_pool)
+
+    if Upre is None:
+        Upre = molecule.prepare_reference()
+
+    solver = Adapt(operator_pool=operator_pool, Upre=Upre, Upost=Upost,backend=backend, *args, **kwargs)
+
+    result = solver()
+
+    return result

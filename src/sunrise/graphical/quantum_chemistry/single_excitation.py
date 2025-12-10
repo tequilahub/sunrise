@@ -28,7 +28,9 @@ class SingleExcitation(PairCorrelatorGate):
 
         # angle
         gcol, tcol = self.render_angle(style, gcol, tcol)
-
+        if 'single' in style.personalized:
+            gcol = style.personalized['single'].gate_color
+            tcol = style.personalized['single'].text_color
         # TODO: param is not used again in the original??
         param = self.angle
         if isinstance(param, numbers.Number):

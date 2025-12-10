@@ -1,7 +1,8 @@
 import sunrise as sun
 import tequila as tq
 import numpy as np
-from sunrise.orbital_correlation.entropy_utils_qubit import *
+from sunrise.orbital_correlation.density_matrix_utils import *
+from sunrise.orbital_correlation.quantum_info_utils import *
 from sunrise.fermionic_operations.givens_rotations import get_givens_circuit
 # import sys
 # sys.path.insert(1,'spafastprototype')
@@ -73,4 +74,4 @@ mol = sun.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[30,32
 U = U.to_qcircuit(mol)
 pairs = [(i, j) for i in range(mol.n_orbitals) for j in range(i + 1, mol.n_orbitals)]
 for pair in pairs:
-    print(f"I({pair[0],pair[1]}) = {mutual_info_2ordm(mol, U, orb_a=pair[0], orb_b=pair[1])}")
+    print(f"I({pair[0],pair[1]}) = {mutual_info_simple(mol, U, orb_a=pair[0], orb_b=pair[1])}")

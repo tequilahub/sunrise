@@ -39,7 +39,7 @@ def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_com
     return: dictionary of Objectives, if called on gate, circuit, exp.value, or objective; if Variable or Transform, returns number.
     """
     if type(objective).__name__ in  ['TCCBraket','FQEBraKet']:
-        objective = Objective([objective])
+        objective = Objective([objective],transformation=identity)
     elif type(objective).__name__ == 'TequilaBraket':
         objective = objective.build()
     if variable is None:
@@ -49,8 +49,16 @@ def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_com
 
         if len(variables) == 0:
             raise TequilaException("Error in gradient: Objective has no variables")
-
         for k in variables:
+            assert k is not None
+            result[k] = grad(objective, k, no_compile=no_compile)
+        return result
+    elif isinstance(variable,list):
+        result = {}
+        if len(variable) == 0:
+            raise TequilaException("Error in gradient: Objective has no variables")
+
+        for k in variable:
             assert k is not None
             result[k] = grad(objective, k, no_compile=no_compile)
         return result
