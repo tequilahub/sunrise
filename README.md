@@ -39,10 +39,9 @@ pip install fqe
 ### [TenCirChem - Next Generation](https://github.com/tensorcircuit/tensorcircuit-ng) (TCC-NG)
 The package's specified installation command is erroneous and deploys the prior version (plain TCC). However, the implementation on sunrise has been built over the existing ng package, waiting to be fixed. In the mean time, we recomend to install it as:
 ```bash
-pip install git+https://github.com/tensorcircuit/TenCirChem-NG.git
+pip install git+https://github.com/davibinco/TenCirChem-NG.git
 ```
-It works for a regular usage. However, if you are going to use a more complex initial states than just HF, we recommend fixing [this bug](https://github.com/tensorcircuit/TenCirChem-NG/pull/4) until implemented on the code. 
-
+Note that the link above is not the original repo but our own fork, fixing [this bug](https://github.com/tensorcircuit/TenCirChem-NG/pull/4) until implemented on the code.
 
 # Fermionic Circuit
 The FCircuit has been developed in order to preserve abstract fermionic layers. This circuit consists of two main parts, the `initial_state` and the circuit itself. The `initial_state` relies on a tequila `QubitWaveFunction`, whose states are checked to be particle conserving. It can be set through any way of creating a `tq.QubitWaveFunction`, either with a `FCircuit` or `QCircuit` with already mapped variables, or the options available in `QubitWaveFunction.convert_from()`. **It is important to take into account that both fqe and tcc work with initial_states in upthendown, therefore we are keeping here that as mandatory**. In order to create the circuit itself, some gates have been already defined at sunrise.gates. 

@@ -50,7 +50,9 @@ class DoubleExcitation(PairCorrelatorGate):
 
         # angle
         gcol, tcol = self.render_angle(style, gcol, tcol)
-
+        if 'double' in style.personalized:
+            gcol = style.personalized['double'].gate_color
+            tcol = style.personalized['double'].text_color
         # TODO: param is not used again in the original??
         param = self.angle
         if isinstance(param, numbers.Number):

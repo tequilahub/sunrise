@@ -1,7 +1,8 @@
 import sunrise as sun
 import tequila as tq
 import numpy as np
-from sunrise.orbital_correlation.entropy_utils_qubit import *
+from sunrise.orbital_correlation.density_matrix_utils import *
+from sunrise.orbital_correlation.quantum_info_utils import *
 from sunrise.fermionic_operations.givens_rotations import get_givens_circuit
 
 geometry = """
@@ -40,16 +41,16 @@ E = tq.ExpectationValue(U,H)
 result = tq.minimize(E, silent=True)
 U = U.map_variables(result.variables)
 print(tq.simulate(U))
-print("I_01:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=1))
-print("I_02:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=2))
-print("I_03:", mutual_info_2ordm(mol, U, orb_a=0, orb_b=3))
-print("I_12:", mutual_info_2ordm(mol, U, orb_a=1, orb_b=2))
-print("I_13:", mutual_info_2ordm(mol, U, orb_a=1, orb_b=3))
-print("I_23:", mutual_info_2ordm(mol, U, orb_a=2, orb_b=3))
-print("E_0:", pure_state_entanglement(mol, U, orb_a=0))
-print("E_1:", pure_state_entanglement(mol, U, orb_a=1))
-print("E_2:", pure_state_entanglement(mol, U, orb_a=2))
-print("E_3:", pure_state_entanglement(mol, U, orb_a=3))
+print("I_01:", mutual_info_simple(mol, U, orb_a=0, orb_b=1))
+print("I_02:", mutual_info_simple(mol, U, orb_a=0, orb_b=2))
+print("I_03:", mutual_info_simple(mol, U, orb_a=0, orb_b=3))
+print("I_12:", mutual_info_simple(mol, U, orb_a=1, orb_b=2))
+print("I_13:", mutual_info_simple(mol, U, orb_a=1, orb_b=3))
+print("I_23:", mutual_info_simple(mol, U, orb_a=2, orb_b=3))
+print("E_0:", one_orb_entanglement(mol, U, orb_a=0))
+print("E_1:", one_orb_entanglement(mol, U, orb_a=1))
+print("E_2:", one_orb_entanglement(mol, U, orb_a=2))
+print("E_3:", one_orb_entanglement(mol, U, orb_a=3))
 
 #            standard              reordered           reordered transpose
 # I_01: 1.4857069199214674     2.4092481765539833      2.489804417842751

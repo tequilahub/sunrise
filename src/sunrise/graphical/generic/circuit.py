@@ -145,11 +145,11 @@ class GraphicalCircuit(Gate):
                 for so in pair:
                     index += (so,)
             if gate._name == 'FermionicExcitation':
-                if len(index) == 2:
+                if len(index) == 1:
                     res.append(SingleExcitation(index[0][0], index[0][1], angle=gate.variables,n_qubits_is_double=n_qubits_is_double, *args, **kwargs))
-                elif len(index) == 4:
-                    res.append(DoubleExcitation(index[0][0], index[0][1], index[1][0], index[1][0], angle=gate.variables, n_qubits_is_double=n_qubits_is_double, *args,**kwargs))
-                else: res.append(GenericExcitation(indices=index,angle=gate.variables[0], n_qubits_is_double=n_qubits_is_double, *args,**kwargs))
+                elif len(index) == 2:
+                    res.append(DoubleExcitation(index[0][0], index[0][1], index[1][0], index[1][1], angle=gate.variables, n_qubits_is_double=n_qubits_is_double, *args,**kwargs))
+                else: res.append(GenericExcitation(indices=index,angle=gate.variables, n_qubits_is_double=n_qubits_is_double, *args,**kwargs))
             elif gate._name == 'UR':
                 if not n_qubits_is_double:
                     res.append(OrbitalRotatorGate(index[0][0] // 2, index[0][1] // 2, angle=gate.variables, *args, **kwargs))

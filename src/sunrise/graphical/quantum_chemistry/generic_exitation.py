@@ -96,7 +96,9 @@ class GenericExcitation(Gate, ABC):
 
         # angle
         gcol, tcol = self.render_angle(style, gcol, tcol)
-
+        if 'generic' in style.personalized:
+            gcol = style.personalized['generic'].gate_color
+            tcol = style.personalized['generic'].text_color
         param = self.angle
         if isinstance(param, numbers.Number):
             param = "{:1.2f}".format(param)

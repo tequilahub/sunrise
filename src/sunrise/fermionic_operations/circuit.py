@@ -45,7 +45,7 @@ class FCircuit:
 
     """
 
-    def __init__(self, gates:list|None=None, initial_state:Union[QCircuit,QubitWaveFunction,str,int]|None=None, parameter_map=None):
+    def __init__(self, gates:list=None, initial_state:Union[QCircuit,QubitWaveFunction,str,int]=None, parameter_map=None):
         """
         init
         Parameters
@@ -456,7 +456,7 @@ class FCircuit:
         return cls(gates=operations._gates,initial_state=reference)
 
     @classmethod
-    def from_edges(cls,edges:Union[list,tuple],label=None,n_orb:int|None=None, use_units_of_pi=False,ladder=True):
+    def from_edges(cls,edges:Union[list,tuple],label=None,n_orb:int=0, use_units_of_pi=False,ladder=True):
         operations = FCircuit()
         if n_orb is not None:
             include_reference = True
@@ -472,10 +472,7 @@ class FCircuit:
                 v = Variable(((previous,i),'D',label))
                 if use_units_of_pi:
                     angle = angle * pi
-                if include_reference:
-                    operations += sunrise.gates.FermionicExcitation(indices=[(previous,i),(previous+n_orb,i+n_orb)],variables=v,reordered=True)
-                else:
-                    operations += sunrise.gates.FermionicExcitation(indices=[(2*previous,2*i),(2*previous+1,2*i+1)],variables=v,reordered=False)
+                operations += sunrise.gates.UC(i=previous,j=i,variables=v)
                 if ladder:
                     previous = i
         return cls(gates=operations._gates,initial_state=reference)

@@ -95,7 +95,9 @@ class PairCorrelatorGate(Gate, ABC):
 
         # angle
         gcol, tcol = self.render_angle(style, gcol, tcol)
-
+        if 'UC' in style.personalized:
+            gcol = style.personalized['UC'].gate_color
+            tcol = style.personalized['UC'].text_color
         # TODO: param is not used again in the original??
         param = self.angle
         if isinstance(param, numbers.Number):

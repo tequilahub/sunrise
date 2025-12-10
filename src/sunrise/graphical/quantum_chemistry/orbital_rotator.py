@@ -22,7 +22,9 @@ class OrbitalRotatorGate(PairCorrelatorGate):
 
         # angle
         gcol, tcol = self.render_angle(style, gcol, tcol)
-
+        if 'UR' in style.personalized:
+            gcol = style.personalized['UR'].gate_color
+            tcol = style.personalized['UR'].text_color
         # TODO: param is not used again in the original??
         param = self.angle
         if isinstance(param, numbers.Number):
