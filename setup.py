@@ -29,9 +29,10 @@ except Exception:
 
 setup(
     name='project-sunrise',
-    version="0.1.0",
-    author="Chair of Quantum Algorithmics at Augsburg University (Germany)",
+    version=info["__version__"],
+    author=info["__author__"],
     url="https://github.com/tequilahub/sunrise",
+    description="Package for fermionic state preparation and simulation on quantum computers",
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=read_requirements(),
