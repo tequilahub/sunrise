@@ -8,6 +8,12 @@ It holds no qubits, but only physical information, making it efficient for stora
 Sunrise is compatible with macOS and Linux operating systems. PySCF is not supported on Windows.
 Please, install the package along with all required dependencies:
 
+1. Install the master branch from PyPi as
+```bash
+pip install project-sunrise
+```
+
+2. Clone the repository and install in developer mode
 ```bash
 conda create -n myenv python=3.10
 conda activate myenv
@@ -16,11 +22,11 @@ cd project-sunrise
 pip install -e .
 ```
 
-You can install `sunrise` directly with pip over:
+3. Install `sunrise` directly with pip over:
 ```bash
 pip install git+https://github.com/tequilahub/sunrise.git
 ```
-Install from devel branch (most recent updates):
+Or install from devel branch (most recent updates):
 ```bash
 pip install git+https://github.com/tequilahub/sunrise.git@devel
 ```
