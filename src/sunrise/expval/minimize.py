@@ -343,7 +343,7 @@ def simulate(
             else: transformation = 'Jordan-Wigner'
             h = zeros((nmo,nmo))
             g = zeros((nmo,nmo,nmo,nmo))
-            mol = Molecule(geometry= "\n".join(f"H 0.0 0.0 {i}" for i in range(nmo)),basis_set='sto-3g',one_body_integrals=h,two_body_integrals=g,transformation=transformation,units='Angstrom',nature='f',backend='pyscf')
+            mol = Molecule(geometry= "\n".join(f"H 0.0 0.0 {i}" for i in range(nmo)),basis_set='sto-3g',one_body_integrals=h,two_body_integrals=g,transformation=transformation,units='Angstrom',nature='t',backend='pyscf')
             if avisa and not all([ not g.reordered for g in objective.gates]):
                 warnings.warn("Some indices were provided in reordered, the output may not be correct",TequilaWarning)
         mol.transformation.up_then_down = True

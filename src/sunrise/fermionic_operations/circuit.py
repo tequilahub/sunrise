@@ -14,7 +14,7 @@ import warnings
 import numbers
 from copy import deepcopy
 import sunrise
-from tequila.circuit.gates import X
+from tequila.circuit.gates import X,I
 
 class FCircuit:
     """
@@ -458,7 +458,7 @@ class FCircuit:
     @classmethod
     def from_edges(cls,edges:Union[list,tuple],label=None,n_orb:int=0, use_units_of_pi=False,ladder=True):
         operations = FCircuit()
-        if n_orb is not None:
+        if n_orb:
             include_reference = True
             reference = QCircuit()
         else: 
@@ -475,6 +475,7 @@ class FCircuit:
                 operations += sunrise.gates.UC(i=previous,j=i,variables=v)
                 if ladder:
                     previous = i
+        reference += I(target=[i for i in range(n_orb*2) if i not in reference.qubits])  # to set n_qubits
         return cls(gates=operations._gates,initial_state=reference)
 
     @staticmethod
@@ -533,7 +534,7 @@ class FCircuit:
         new_gates = [gate.map_qubits(qubit_map) for gate in self.gates]
         # could speed up by applying qubit_map to parameter_map here
         # currently its recreated in the init function
-        return FCircuit(gates=new_gates)
+        return FCircuit(gates=new_gates) #TODO: initial state?
 
     def map_variables(self, variables: dict, *args, **kwargs):
         """
