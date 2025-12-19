@@ -603,7 +603,7 @@ class TCCBraket:
         else:
             return len(self.BK.civector(params=[.0 for _ in range(self.BK.n_variables_ket)]))
 
-    def build_operator(self,operator:Union[str,FermionOperator,QubitHamiltonian]=None)->Union[None,Callable]:
+    def build_operator(self,operator:Union[str,FermionOperator,QubitHamiltonian,Number]=None)->Union[None,Callable]:
         '''
         Build the expectation value operator. 
         Even if it is accepted a QubitHamiltonian, we disencorage its use here since TCC works on fermionic states.
@@ -638,6 +638,9 @@ class TCCBraket:
             self.BK.e_core = 0
         elif isinstance(operator,QubitHamiltonian):
             self.BK.e_core = 0
+        elif isinstance(operator,Number):
+            from_string('I')
+            return operator
         else:
             raise TequilaException(f"No operator {type(operator).__name__} supported")
         ci_vec = get_ci_strings(n_elec_s=self.BK.n_elec,n_qubits=2*len(self.BK.aslst),mode='fermion')

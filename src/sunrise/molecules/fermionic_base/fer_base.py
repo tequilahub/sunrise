@@ -18,6 +18,7 @@ from tequila.quantumchemistry.chemistry_tools import (
     NBodyTensor,
 )
 import typing
+from numbers import Number
 import numpy
 from itertools import product
 from sunrise.fermionic_operations.givens_rotations import get_givens_circuit as __get_givens_circuit
@@ -1181,6 +1182,8 @@ class FermionicBase(QuantumChemistryBase):
             if true, the tequila expectation values are evaluated directly via the tq.simulate command.
             the protocol is optimized to avoid repetation of wavefunction simulation
             if false, the rdms are returned as tq.QTensors
+        use_hcb :
+            hcb on the sense the wvf is restricted to double Spatial Orbital occupations only, the operatros will remain Fermiomic
         Returns
         -------
         """
@@ -1191,13 +1194,7 @@ class FermionicBase(QuantumChemistryBase):
         # Set up number of spin-orbitals and molecular orbitals respectively
         n_SOs = 2 * self.n_orbitals
         n_MOs = self.n_orbitals
-
-        # Check whether unitary circuit is not 0
-        if U is None:
-            raise TequilaException("Need to specify a Quantum Circuit.")
-        def _get_hcb_op(op_tuple):
-            raise TequilaException('No HCB operations in Fermionic Backends')
-        
+              
         def _get_of_op(operator_tuple):
             """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
             op = openfermion.FermionOperator(operator_tuple)
@@ -1205,6 +1202,8 @@ class FermionicBase(QuantumChemistryBase):
 
         def _get_qop_hermitian(of_operator):
             """Returns Hermitian"""
+            if isinstance(of_operator,Number):
+                return of_operator
             return 0.5*(of_operator + hermitian_conjugated(of_operator))
 
         def _build_1bdy_operators_spinful() -> list:
@@ -1347,15 +1346,107 @@ class FermionicBase(QuantumChemistryBase):
                     rdm2[q, p, s, r] = rdm2[p, q, r, s]
 
             return rdm2
+        
+        def _build_1bdy_hcb_operators_spinfree() -> list:
+            """Returns spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            # Exploit symmetry pq = qp (not changed by spin-summation)
+            ops = []
+            for p in range(n_MOs):
+                for q in range(p + 1):
+                    if p == q:
+                        # Spin aa
+                        op_tuple = ((2 * p, 1), (2 * p, 0))
+                        op = _get_of_op(op_tuple)
+                        # Spin bb
+                        op_tuple = ((2 * p + 1, 1), (2 * p + 1, 0))
+                        op += _get_of_op(op_tuple)
+                        ops += [op]
+                    else:
+                        ops += [0.]
+            return ops
+
+        def _build_1bdy_hcb_operators_spinful() -> list:
+            """Returns spinful one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            # Exploit symmetry pq = qp
+            ops = []
+            for p in range(n_SOs):
+                for q in range(p + 1):
+                    if p==q:
+                        op_tuple = ((p, 1), (q, 0))
+                        op = _get_of_op(op_tuple)
+                        ops += [op]
+                    else:
+                        ops += [0.]
+            return ops
+        
+        def _build_2bdy_hcb_operators_spinful() -> list:
+            """Returns spinful two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
+            #                and      =  rspq
+            ops = []
+            for p in range(n_SOs):
+                for q in range(p):
+                    for r in range(n_SOs):
+                        for s in range(r):
+                            if p * n_SOs + q >= r * n_SOs + s:
+                                if (p//2 == q//2 and s == r) or (p != q and r != s and p == r and s == q) or (p != q and r != s and p == s and q == r):
+                                    op_tuple = ((p, 1), (q, 1), (s, 0), (r, 0)) if ((p == r and q == s and p%2==q%2==r%2==s%2) or  # Spin aaaa and bbbb
+                                                                                    p%2==s%2 and r%2==q%2 and p%2!=q%2 and r%2!=s%2 and p//2==q//2 and r//2==s//2 # Spin abba and baab
+                                                                                    )else "0.0 []"
+                                    op = _get_of_op(op_tuple)
+                                    ops += [op]
+            return ops
+
+        def _build_2bdy_hcb_operators_spinfree() -> list:
+            """Returns spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
+            #                and      = rspq
+            ops = []
+            for p, q, r, s in product(range(n_MOs), repeat=4):
+                if p * n_MOs + q >= r * n_MOs + s and (p >= q or r >= s):
+                    # Spin aaaa
+                    op_tuple = ((2 * p, 1), (2 * q, 1), (2 * s, 0), (2 * r, 0)) if (p == r and q == s) else "0.0 []"
+                    op = _get_of_op(op_tuple)
+                    # Spin abba
+                    op_tuple = (
+                        ((2 * p, 1), (2 * q + 1, 1), (2 * s + 1, 0), (2 * r, 0))
+                        if (p==q and r==s)
+                        else "0.0 []"
+                    )
+                    op += _get_of_op(op_tuple)
+                    # Spin baab
+                    op_tuple = (
+                        ((2 * p + 1, 1), (2 * q, 1), (2 * s, 0), (2 * r + 1, 0))
+                        if (p==q and r==s)
+                        else "0.0 []"
+                    )
+                    op += _get_of_op(op_tuple)
+                    # Spin bbbb
+                    op_tuple = (
+                        ((2 * p + 1, 1), (2 * q + 1, 1), (2 * s + 1, 0), (2 * r + 1, 0))
+                        if (p == r and q == s)
+                        else "0.0 []"
+                    )
+                    op += _get_of_op(op_tuple)
+                    ops += [op]
+            return ops
 
         # Build operator lists
         qops = []
         if spin_free:
-            qops += _build_1bdy_operators_spinfree() if get_rdm1 else []
-            qops += _build_2bdy_operators_spinfree() if get_rdm2 else []
+            if use_hcb:
+                qops += _build_1bdy_hcb_operators_spinfree() if get_rdm1 else []
+                qops += _build_2bdy_hcb_operators_spinfree() if get_rdm2 else []
+            else:
+                qops += _build_1bdy_operators_spinfree() if get_rdm1 else []
+                qops += _build_2bdy_operators_spinfree() if get_rdm2 else []
         else:
-            qops += _build_1bdy_operators_spinful() if get_rdm1 else []
-            qops += _build_2bdy_operators_spinful() if get_rdm2 else []
+            if use_hcb:
+                qops += _build_1bdy_hcb_operators_spinful() if get_rdm1 else []
+                qops += _build_2bdy_hcb_operators_spinful() if get_rdm2 else []
+            else:
+                qops += _build_1bdy_operators_spinful() if get_rdm1 else []
+                qops += _build_2bdy_operators_spinful() if get_rdm2 else []
 
         # Transform operator lists to QubitHamiltonians
         qops = [_get_qop_hermitian(op) for op in qops]

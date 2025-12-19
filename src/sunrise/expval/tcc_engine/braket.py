@@ -249,6 +249,16 @@ class EXPVAL(UCC):
         angles  = self._check_params_argument(angles)
         if hamiltonian is None:
             hamiltonian, _, engine = self._get_hamiltonian_and_core(engine)
+        elif isinstance(hamiltonian,Number):
+            if np.isclose(hamiltonian,0.0):
+                    return 0.0
+            else:
+                hamiltonian = lambda ket: ket
+                e , s = get_expval(angles=angles,hamiltonian=hamiltonian, n_qubits=self.n_qubits, n_elec_s=self.n_elec_s,total_variables=self.total_variables,
+                       engine= engine,mode=self.mode,ex_ops=self.ex_ops_ket , ex_ops_bra=self.ex_ops_bra, 
+                       params=self.variables_ket ,params_bra=self.variables_bra,
+                       init_state=self.init_state_ket , init_state_bra=self.init_state_bra)
+                return hamiltonian*(float(e) + self.e_core*s) 
         e , s = get_expval(angles=angles,hamiltonian=hamiltonian, n_qubits=self.n_qubits, n_elec_s=self.n_elec_s,total_variables=self.total_variables,
                        engine= engine,mode=self.mode,ex_ops=self.ex_ops_ket , ex_ops_bra=self.ex_ops_bra, 
                        params=self.variables_ket ,params_bra=self.variables_bra,
@@ -296,6 +306,14 @@ class EXPVAL(UCC):
         angles  = self._check_params_argument(angles)
         if hamiltonian is None:
             hamiltonian, _, engine = self._get_hamiltonian_and_core(engine)
+        elif isinstance(hamiltonian,Number):
+            if np.isclose(hamiltonian,0.0):
+                    return 0.0
+            else:
+                hamiltonian = lambda ket: ket
+                e = get_energy(angles=angles,hamiltonian=hamiltonian, n_qubits=self.n_qubits, n_elec_s=self.n_elec_s,total_variables=self.total_variables,
+                       engine= engine,mode=self.mode,ex_ops=self.ex_ops_ket,params=self.variables_ket,init_state=self.init_state_ket)
+                return hamiltonian*(float(e) + self.e_core)
         e = get_energy(angles=angles,hamiltonian=hamiltonian, n_qubits=self.n_qubits, n_elec_s=self.n_elec_s,total_variables=self.total_variables,
                        engine= engine,mode=self.mode,ex_ops=self.ex_ops_ket,params=self.variables_ket,init_state=self.init_state_ket)
         return float(e) + self.e_core
