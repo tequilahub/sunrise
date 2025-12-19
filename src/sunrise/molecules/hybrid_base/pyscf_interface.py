@@ -1,7 +1,8 @@
-from tequila import TequilaException
+from tequila import TequilaException, QubitWaveFunction
 from .HybridBase import HybridBase
 from tequila.quantumchemistry import ParametersQC, NBodyTensor
 import pyscf
+from pyscf import fci
 
 import numpy, typing
 
@@ -9,7 +10,29 @@ import numpy, typing
 class OpenVQEEPySCFException(TequilaException):
     pass
 
+def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
+    """
+    Merge alpha and beta bitstrings into a single string and compute the resulting phase.
 
+    Args:
+        alpha_str (int): Bitstring representing alpha electrons.
+        beta_str (int): Bitstring representing beta electrons.
+        norb (int): Number of orbitals.
+
+    Returns:
+        tuple:
+            merged_str (int): Interleaved bitstring.
+            phase (int): Phase factor (+1 or -1) from fermionic antisymmetry.
+    """
+    # Interleave the alpha and beta strings
+    alpha_str_b = bin(alpha_str)[2:].zfill(norb)
+    beta_str_b = bin(beta_str)[2:].zfill(norb)
+    merged_str = "".join([alpha_str_b[i] + beta_str_b[i] for i in range(norb)])[::-1]
+
+    # Position of filled orbitals
+    set_bits_beta = [i for i in range(norb) if (beta_str >> i) & 1]
+    phase = (-1) ** sum([(alpha_str & 2**i - 1).bit_count() for i in set_bits_beta])
+    return int(merged_str, 2), phase
 
 class PySCF(HybridBase):
     def __init__(self, parameters: ParametersQC,select: typing.Union[str,dict]={},
@@ -81,12 +104,46 @@ class PySCF(HybridBase):
             if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()
         super().__init__(parameters=parameters, transformation=transformation,select=select, *args, **kwargs)
-    def compute_fci(self, *args, **kwargs):
-        from pyscf import fci
+    
+    def compute_fci(self, get_wfn=False, ci0=None, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="chem")
         norb = self.n_orbitals
         nelec = self.n_electrons
-        e, fcivec = fci.direct_spin1.kernel(h1, h2.elems, norb, nelec, **kwargs)
+
+        if ci0 is not None:
+            ci0 = self.create_ci_vector(ci0)
+
+        e, fcivecs = fci.direct_spin1.kernel(
+            h1, h2.elems, norb, nelec, max_cycle=2000, max_space=100, ci0=ci0, **kwargs
+        )
+
+        if get_wfn:
+            if not ("nroots" in kwargs and kwargs["nroots"] > 1):
+                fcivecs = [fcivecs]
+                e = [e]
+            wfns = []
+            energies = [x + c for x in e]
+            for fcivec in fcivecs:
+                alpha_strs = fci.cistring.make_strings(range(norb), nelec // 2)
+                beta_strs = alpha_strs.copy()
+                wfn_dim = 2 ** (2 * norb)
+                wfn = numpy.zeros(wfn_dim)
+                for i, alpha_str in enumerate(alpha_strs):
+                    for j, beta_str in enumerate(beta_strs):
+                        if not self.transformation.up_then_down:
+                            merged_str, phase = _merge_alpha_beta_strs(alpha_str, beta_str, norb)
+                            wfn[merged_str] = phase * fcivec[i, j]
+                        else:
+                            alpha_str_b = bin(alpha_str)[2:].zfill(norb)
+                            beta_str_b = bin(beta_str)[2:].zfill(norb)
+                            merged_str_b = (alpha_str_b + beta_str_b)[::-1]
+                            merged_str = int(merged_str_b,2)
+                            wfn[merged_str] = fcivec[i, j]
+                wfns.append(QubitWaveFunction.from_array(wfn))
+            if not ("nroots" in kwargs and kwargs["nroots"] > 1):
+                return energies[0], wfns[0]
+            return energies, wfns
+
         return e + c
 
     def compute_energy(self, method: str, *args, **kwargs) -> float:
