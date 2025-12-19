@@ -663,35 +663,11 @@ class FermionicBase(QuantumChemistryBase):
         fop = openfermion.transforms.get_fermion_operator(fop)
         return fop
 
-    def make_hardcore_boson_hamiltonian(self, condensed=False)->OFFermionOperator:
-        """
-        Returns
-        -------
-        Hamiltonian in Hardcore-Boson approximation (electrons are forced into spin-pairs)
-        Indepdent of Fermion-to-Qubit mapping
-        condensed: always give Hamiltonian back from qubit 0 to N where N is the number of orbitals
-        if condensed=False then JordanWigner would give back the Hamiltonian defined on even qubits between 0 to 2N
-        """
-
-        # integrate with QubitEncoding at some point
-        n_orbitals = self.n_orbitals
-        c, obt, tbt = self.get_integrals()
-        h = numpy.zeros(shape=[n_orbitals] * 2)
-        g = numpy.zeros(shape=[n_orbitals] * 2)
-        for p in range(n_orbitals):
-            h[p, p] += 2 * obt[p, p]
-            for q in range(n_orbitals):
-                h[p, q] += +tbt.elems[p, p, q, q]
-                if p != q:
-                    g[p, q] += 2 * tbt.elems[p, q, q, p] - tbt.elems[p, q, p, q]
-
-        H = OFFermionOperator(term=c)
-        for p in range(n_orbitals):
-            for q in range(n_orbitals):
-                up = p
-                uq = q
-                H += h[p, q] * self.make_creation_op(up) * self.make_annihilation_op(uq) + g[p, q] * self.make_number_op(up) * self.make_number_op(uq)
-        return H
+    def make_hardcore_boson_hamiltonian(self)->OFFermionOperator:
+        '''
+        Only expected to be used when HCB orbital optimization, where it is faster to use the default fermionic hamiltonian with pseudo-'HCB' states/circuits
+        '''
+        return 'H'
 
     def prepare_reference(self, state=None, *args, **kwargs)->FCircuit:
         """
