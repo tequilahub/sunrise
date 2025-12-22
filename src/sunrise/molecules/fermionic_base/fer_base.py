@@ -1176,6 +1176,31 @@ class FermionicBase(QuantumChemistryBase):
             op = openfermion.FermionOperator(operator_tuple)
             return op
 
+        def _get_of_hcb_op(op_tuple):
+            """Build the hardcore boson operators: b^\dagger_ib_j + h.c. in qubit encoding"""
+            if len(op_tuple) == 2:
+                return openfermion.FermionOperator(op_tuple,2)
+            elif len(op_tuple) == 4:
+                if (op_tuple[0][0] == op_tuple[1][0] and op_tuple[2][0] == op_tuple[3][0]):  # iijj uddu+duud
+                    return openfermion.FermionOperator(op_tuple,0.5)
+                elif (
+                    (op_tuple[0][0] == op_tuple[2][0])
+                    and (op_tuple[1][0] == op_tuple[3][0])
+                    and (op_tuple[0][0] != op_tuple[1][0])
+                    and (op_tuple[2][0] != op_tuple[3][0])
+                ):  # ijij uuuu+dddd
+                    return openfermion.FermionOperator(op_tuple,2)
+                elif (
+                    (op_tuple[0][0] == op_tuple[3][0])
+                    and (op_tuple[1][0] == op_tuple[2][0])
+                    and (op_tuple[0][0] != op_tuple[1][0])
+                    and (op_tuple[2][0] != op_tuple[3][0])
+                ):  # ijji abba
+                    return openfermion.FermionOperator(op_tuple)
+                else: return 0
+            else:
+                return 0
+
         def _get_qop_hermitian(of_operator):
             """Returns Hermitian"""
             if isinstance(of_operator,Number):
@@ -1366,8 +1391,8 @@ class FermionicBase(QuantumChemistryBase):
                         for s in range(r):
                             if p * n_SOs + q >= r * n_SOs + s:
                                 if (p//2 == q//2 and s == r) or (p != q and r != s and p == r and s == q) or (p != q and r != s and p == s and q == r):
-                                    op_tuple = ((p, 1), (q, 1), (s, 0), (r, 0)) if ((p == r and q == s and p%2==q%2==r%2==s%2) or  # Spin aaaa and bbbb
-                                                                                    p%2==s%2 and r%2==q%2 and p%2!=q%2 and r%2!=s%2 and p//2==q//2 and r//2==s//2 # Spin abba and baab
+                                    op_tuple = ((p, 1), (q, 1), (s, 0), (r, 0)) if ((((p == r and q == s) or (p==s and q==r)) and p%2==q%2==r%2==s%2) or  # Spin aaaa and bbbb
+                                                                                   ( (p%2==s%2 and r%2==q%2 and p%2!=q%2 and r%2!=s%2) and ((p//2==q//2 and r//2==s//2) or (q//2==s//2 and p//2==p//2))) # Spin abba and baab
                                                                                     )else "0.0 []"
                                     op = _get_of_op(op_tuple)
                                     ops += [op]
@@ -1381,26 +1406,26 @@ class FermionicBase(QuantumChemistryBase):
             for p, q, r, s in product(range(n_MOs), repeat=4):
                 if p * n_MOs + q >= r * n_MOs + s and (p >= q or r >= s):
                     # Spin aaaa
-                    op_tuple = ((2 * p, 1), (2 * q, 1), (2 * s, 0), (2 * r, 0)) if (p == r and q == s) else "0.0 []"
+                    op_tuple = ((2 * p, 1), (2 * q, 1), (2 * s, 0), (2 * r, 0)) if (p == r and q == s) or (p==s and q==r) else "0.0 []"
                     op = _get_of_op(op_tuple)
                     # Spin abba
                     op_tuple = (
                         ((2 * p, 1), (2 * q + 1, 1), (2 * s + 1, 0), (2 * r, 0))
-                        if (p==q and r==s)
+                        if (p==q and r==s) or (q==s and p==r)
                         else "0.0 []"
                     )
                     op += _get_of_op(op_tuple)
                     # Spin baab
                     op_tuple = (
                         ((2 * p + 1, 1), (2 * q, 1), (2 * s, 0), (2 * r + 1, 0))
-                        if (p==q and r==s)
+                        if (p==q and r==s) or (q==s and p==r)
                         else "0.0 []"
                     )
                     op += _get_of_op(op_tuple)
                     # Spin bbbb
                     op_tuple = (
                         ((2 * p + 1, 1), (2 * q + 1, 1), (2 * s + 1, 0), (2 * r + 1, 0))
-                        if (p == r and q == s)
+                        if (p == r and q == s)  or (p==s and q==r)
                         else "0.0 []"
                     )
                     op += _get_of_op(op_tuple)

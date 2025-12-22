@@ -79,8 +79,9 @@ def test_maped_variables(geom,backend):
 
 
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
+@pytest.mark.parametrize("use_hcb",[True,False])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
-def test_optimize_orbitals(geom,backend):
+def test_optimize_orbitals(geom,backend,use_hcb):
     if backend == "tequila":
         pytest.skip("Tequila backend requires a Qubit-based molecule")
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
@@ -89,7 +90,7 @@ def test_optimize_orbitals(geom,backend):
     tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
-    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,initial_guess=initial_guess)
+    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,initial_guess=initial_guess,use_hcb=use_hcb)
     tqopt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True,initial_guess=initial_guess)
     assert isclose(snopt.energy,tqopt.energy)
 
