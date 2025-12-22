@@ -149,7 +149,9 @@ class FQEBraKet:
 
             elif isinstance(operator,openfermion.ops.operators.fermion_operator.FermionOperator):
                 operator_flag_custom = True
-
+            elif isinstance(operator, float):
+                operator = openfermion.ops.FermionOperator(term=None, coefficient=operator)
+                operator_flag_custom = True
             else:
                 raise TequilaException("Not recognized format {}".format(operator))
 
