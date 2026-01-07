@@ -149,8 +149,9 @@ class JordanWigner(EB):
         return QCircuit()
 
     def map_state(self, state: list, *args, **kwargs):
-        state = state + [0] * (self.n_orbitals - len(state)-[*self.select.values()].count("B")*self.condense)
-        result = [0] * len(state)
+        state = state + [0] * (2 * self.n_orbitals - len(state))
+        if not all([state[2*i] == state[2*i+1] for i in range(self.n_orbitals) if self.select[i]=='B']):
+            raise TequilaException("Incompatible state and encoding selection")
         for i in range(len(state)//2):
             if self.select[i] == 'B':
                 if self.two_qubit: pass

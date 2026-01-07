@@ -1403,36 +1403,40 @@ class HybridBase(qc_base):
         ladder: if true the excitation pattern will be local. E.g. in the pair from orbitals (1,2,3) we will have the excitations 1->2 and 2->3, if set to false we will have standard coupled-cluster style excitations - in this case this would be 1->2 and 1->3
         """
         if edges is None:
-            # raise TequilaException(
-            #     "SPA ansatz within a standard orbital basis needs edges. Please provide with the keyword edges.\nExample: edges=[(0,1,2),(3,4)] would correspond to two edges created from orbitals (0,1,2) and (3,4), note that orbitals can only be assigned to a single edge")
             edges = self.get_spa_edges()
         # sanity checks
         # current SPA implementation needs even number of electrons
         if self.n_electrons % 2 != 0:
             raise TequilaException(
-                "need even number of electrons for SPA ansatz.\n{} active electrons".format(self.n_electrons))
+                "need even number of electrons for SPA ansatz.\n{} active electrons".format(self.n_electrons)
+            )
         # making sure that enough edges are assigned
+        n_edges = len(edges)
         if len(edges) != self.n_electrons // 2:
             raise TequilaException(
                 "number of edges need to be equal to number of active electrons//2\n{} edges given\n{} active electrons\nfrozen core is {}".format(
-                    len(edges), self.n_electrons, self.parameters.frozen_core))
+                    len(edges), self.n_electrons, self.parameters.frozen_core
+                )
+            )
         # making sure that orbitals are uniquely assigned to edges
-        for edge in edges:
-            for orbital in edge:
+        for edge_qubits in edges:
+            for q1 in edge_qubits:
                 for edge2 in edges:
-                    if edge2 == edge:
+                    if edge2 == edge_qubits:
                         continue
-                    elif orbital in edge2:
+                    elif q1 in edge2:
                         raise TequilaException(
                             "make_spa_ansatz: faulty list of edges, orbitals are overlapping e.g. orbital {} is in edge {} and edge {}".format(
-                                orbital, edge, edge2))
+                                q1, edge_qubits, edge2
+                            )
+                        )
 
         # auto assign if the circuit construction is optimized
         # depending on the current qubit encoding (if hcb_to_me is implemnented we can optimize)
         if optimize is None:
             try:
                 have_hcb_to_me = self.hcb_to_me() is not None
-            except:
+            except Exception:
                 have_hcb_to_me = False
             if have_hcb_to_me or not len(self.FER_SO):
                 optimize = True
@@ -1464,28 +1468,19 @@ class HybridBase(qc_base):
                     else:
                         U += gates.Ry(angle=angle, target=q1, control=c)
                     U += gates.CNOT(q1, c)
+
             if not hcb:
                 U += self.transformation.hcb_to_me()
         else:
-            # construction of the non-optimized circuit
+            orbs = [edge[0] for edge in edges]
             if hcb:
-                U = self.prepare_hardcore_boson_reference()
+                U = gates.X([pos[2*i] for i in orbs])
             else:
-                U = self.prepare_reference()
-            # will only work if the first orbitals in the edges are the reference orbitals
-            sane = True
-            reference_orbitals = self.reference_orbitals
-            for edge_qubits in edges:
-                if self.orbitals[edge_qubits[0]] not in reference_orbitals:
-                    sane = False
-                if len(edge_qubits) > 1:
-                    for orbital in edge_qubits[1:]:
-                        if self.orbitals[orbital] in reference_orbitals:
-                            sane = False
-            if not sane:
-                raise TequilaException(
-                    "Non-Optimized SPA (e.g. with encodings that are not JW) will only work if the first orbitals of all SPA edges are occupied reference orbitals and all others are not. You gave edges={} and reference_orbitals are {}".format(
-                        edges, reference_orbitals))
+                state = [0] * 2 * self.n_orbitals
+                for i in orbs:
+                    state[2 * i] = 1
+                    state[2 * i + 1] = 1
+                U = self.prepare_reference(state)
 
             for edge_qubits in edges:
                 previous = edge_qubits[0]
@@ -1500,7 +1495,9 @@ class HybridBase(qc_base):
                         if hcb:
                             U += self.make_hardcore_boson_excitation_gate(indices=[(q1, c)], angle=angle)
                         else:
-                            U += self.make_excitation_gate(indices=[(2 * c, 2 * q1), (2 * c + 1, 2 * q1 + 1)],angle=angle)
+                            U += self.make_excitation_gate(
+                                indices=[(2 * c, 2 * q1), (2 * c + 1, 2 * q1 + 1)], angle=angle
+                            )
                         previous = q1
         if not self.condense:
             U.n_qubits = 2*self.n_orbitals
