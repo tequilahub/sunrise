@@ -384,8 +384,9 @@ class HybridBase(qc_base):
                     constant_term=self.integral_manager.constant_term,
                     active_orbitals=[*to_active.values()],
                     reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals]
-                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s)
-                self.integral_manager._orbital_type = 'native'
+                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s,
+                    orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
+                    )
                 self.update_select(new_select)
                 return self
             else:
@@ -395,8 +396,9 @@ class HybridBase(qc_base):
                     constant_term=self.integral_manager.constant_term
                     , active_orbitals=[*to_active.values()],
                     reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals]
-                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s)
-                integral_manager._orbital_type = 'native'
+                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s,
+                    orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
+                    )
                 parameters = copy.deepcopy(self.parameters)
                 result = HybridBase(parameters=parameters, integral_manager=integral_manager,
                                                     transformation=self.transformation,

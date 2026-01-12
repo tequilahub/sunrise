@@ -549,6 +549,7 @@ class FermionicBase(QuantumChemistryBase):
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
+                    orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
                 )
                 return self
             else:
@@ -561,6 +562,7 @@ class FermionicBase(QuantumChemistryBase):
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
+                    orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
                 )
                 parameters = copy.deepcopy(self.parameters)
                 result = FermionicBase(
@@ -1511,6 +1513,50 @@ class FermionicBase(QuantumChemistryBase):
             return self.rdm2
         else:
             warnings.warn("compute_rdms called with instruction to not compute?", TequilaWarning)
+
+    def compute_energy(self, method, *args, **kwargs):
+        """
+        Call classical methods over PySCF (needs to be installed) or
+        use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
+
+        Parameters
+        ----------
+        method: method name
+                classical: HF, MP2, CCSD, CCSD(T), FCI -- with pyscf
+                quantum: UpCCD, UpCCSD, UpCCGSD, k-UpCCGSD, UCCSD,
+                see make_upccgsd_ansatz of the this class for more information
+        args
+        kwargs: for quantum methods, keyword arguments for minimizer
+
+        Returns
+        -------
+
+        """
+        if any([x in method.upper() for x in ["U"]]):
+            # simulate entirely in HCB representation if no singles are involved
+            if "S" not in method.upper().split("-")[-1] and "HCB" not in method.upper():
+                method = "HCB-" + method
+            U = self.make_ansatz(name=method)
+            if "hcb" in method.lower():
+                H = self.make_hardcore_boson_hamiltonian()
+            else:
+                H = self.make_hamiltonian()
+            E = Braket(H=H, U=U)
+            from sunrise import minimize
+
+            return minimize(objective=E, *args, **kwargs).energy
+        else:
+            from tequila.quantumchemistry import INSTALLED_QCHEMISTRY_BACKENDS
+
+            if "pyscf" not in INSTALLED_QCHEMISTRY_BACKENDS:
+                raise TequilaException(
+                    "PySCF needs to be installed to compute {}/{}".format(method, self.parameters.basis_set)
+                )
+            else:
+                from sunrise.molecules.fermionic_base import QuantumChemistryPySCF
+
+                molx = QuantumChemistryPySCF.from_tequila(self)
+                return molx.compute_energy(method=method, **kwargs)
 
     def n_rotation(self, i, phi)->FCircuit:
         """
