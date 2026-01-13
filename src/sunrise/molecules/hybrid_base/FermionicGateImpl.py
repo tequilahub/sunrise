@@ -1,8 +1,9 @@
 from tequila.circuit import gates
+from tequila import assign_variable
 from numpy import pi
 import typing
 from numbers import Real
-from tequila import Variable,QCircuit
+from tequila import Variable,QCircuit,compile_circuit
 from copy import deepcopy
 
 
@@ -17,7 +18,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         if "opt" in kwargs:
             self.opt = kwargs["opt"]
             kwargs.pop("opt")
-        else: self.opt =True
+        else: self.opt =False
         super().__init__(generator=generator, target=generator.qubits, p0=p0, *args, **kwargs)
         self._name = "FermionicExcitation"
         self.transformation = transformation
@@ -40,9 +41,8 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         '''
         lto = []
         lfrom = []
-        if isinstance(angle, str) or isinstance(angle, tuple):
-            angle = Variable(angle)
-        if not hasattr(indices[0],"__len__"):
+        angle = assign_variable(angle)
+        if isinstance(indices, tuple) and not hasattr(indices[0],"__len__"):
             indices = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
         for pair in indices:
             if self.select is None or self.select[pair[0] // 2] == "F" or (self.select[pair[0] // 2] == "B" and not pair[0] % 2) or self.two_qubit:
@@ -71,13 +71,13 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         if len(orbs):
             for o in range(len(orbs) - 1):
                 Uladder += gates.CNOT(orbs[o], orbs[o + 1])
-            Uladder += gates.CZ(orbs[-1], lto[-1])
+            Uladder += compile_circuit(gates.CZ(orbs[-1], lto[-1]))
         crt.pop(-1)
         if control is not None and (isinstance(control, int) or len(control) == 1):
             if isinstance(control, int):
                 crt.append(control)
             else:
-                crt = crt + control
+                crt = crt + [*control]
             control = []
         Ur = self.cCRy(target=lto[-1], dcontrol=crt, angle=angle, control=control)
         Upair2 = Upair.dagger()
@@ -147,7 +147,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         if isinstance(dcontrol, int):
             dcontrol = [dcontrol]
         if not len(dcontrol):
-            return gates.Ry(angle=angle, target=target, control=control)
+            return compile_circuit(gates.Ry(angle=angle, target=target, control=control))
         else:
             if isinstance(angle, str):
                 angle = Variable(angle)

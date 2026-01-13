@@ -1201,7 +1201,7 @@ class HybridBase(qc_base):
                 opt = kwargs["opt"]
                 kwargs.pop("opt")
             else:
-                opt = True
+                opt = False
             if not self.supports_ucc():
                 raise TequilaException("Molecule with transformation {} does not support general UCC operations".format(
                     self.transformation))
