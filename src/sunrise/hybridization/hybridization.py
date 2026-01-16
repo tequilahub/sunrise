@@ -304,8 +304,7 @@ class Graph:
         num_hybrid_orbitals = len(hybrid_orbitals)
 
         # If there are more bond vectors than hybrid orbitals (highly unusual but just in case):
-        effective_num_orbitals = min(num_bonds, num_hybrid_orbitals)
-
+        effective_num_orbitals = num_bonds if num_bonds>num_hybrid_orbitals else num_hybrid_orbitals
         # Step 2: Create a hybrid orbital matrix with contributions from p orbitals.
         final_hybrid_orbitals = np.zeros((effective_num_orbitals, 3))  # 3D space for 2p interactions
 
@@ -323,16 +322,21 @@ class Graph:
         # Align ideal hybrid orbital directions to bond vectors via Procrustes alignment.
         selected_hybrid_orbitals = hybrid_orbitals[:effective_num_orbitals]
 
-        rotated_hybrids = HybridizationUtils.kabsch_alignment(selected_hybrid_orbitals, final_hybrid_orbitals)
-        # rotated_hybrids = HybridizationUtils.correct_signs(rotated_hybrids, final_hybrid_orbitals)
-
-        if (try_align): final_hybrid_orbitals = rotated_hybrids
-
+        if (try_align): final_hybrid_orbitals = HybridizationUtils.kabsch_alignment(selected_hybrid_orbitals, final_hybrid_orbitals)
+        # if (try_align):  final_hybrid_orbitals = HybridizationUtils.correct_signs(rotated_hybrids, final_hybrid_orbitals)
+        placed = [False] + [True]*3  #1s always placed Modify if further orbitals
         # Replace the aligned results into the hybrid orbital matrix (s, px, py, pz contributions)
         for idx in range(effective_num_orbitals):
-            orbital_matrix[1 + idx, 1] = hybrid_weight  # s contribution
-            orbital_matrix[1 + idx, 2:] = final_hybrid_orbitals[idx, :]  # rotated px, py, pz contributions
-
+            if idx: #first always the s contribution
+                nzero = np.argwhere(final_hybrid_orbitals[idx, :])
+                for nz in nzero:
+                    if placed[nz[0]]: #care 1s
+                        placed[nz[0]]=False
+                        orbital_matrix[2 + nz[0], 1] = hybrid_weight  # s contribution, 2 + nz bcs 1 (from 1s) + 1 (p )
+                        orbital_matrix[2 + nz[0], 2:] = final_hybrid_orbitals[idx, :]  # rotated px, py, pz contributions
+            else:
+                orbital_matrix[1 + idx, 1] = hybrid_weight  # s contribution
+                orbital_matrix[1, 2:] = final_hybrid_orbitals[0, :]  # rotated px, py, pz contributions
         if strip_orbitals:
             orbital_matrix = orbital_matrix[1:, 1:]
 
@@ -383,7 +387,7 @@ class Graph:
         orbital_matrix = self.align_orbitals(atom, sp, preferred_atoms, strip_orbitals=strip_orbitals)
         return orbital_matrix
 
-    def get_orbital_coefficient_matrix(self, strip_orbitals:bool=False):
+    def get_orbital_coefficient_matrix(self, strip_orbitals:bool=False) -> np.array:
         '''
 
         :param strip_orbitals: will skip 1s orbs
@@ -403,13 +407,9 @@ class Graph:
             current_index += matrix_size  # Move the starting point for the next block
         applied_bonds = set()  # To avoid double application of transformations
         rows_start = {i:matrix_indices[i] for i in range(len(self.atoms))}
-        # print("rows_start ",rows_start)
         for i, atom_bonds in enumerate(bond_data):
-            # print('============================')
-            # print(f'Atom {self.atoms[i].symbol}_{i} bonded with')
             for j, neighbor_atom in enumerate(atom_bonds):
                 neighbor_idx = self.atom_indices[neighbor_atom]
-                # print(f'Atom {self.atoms[neighbor_idx].symbol}_{neighbor_idx}')
                 # Only apply transformation once per bond
                 bond_pair = tuple(sorted((i, neighbor_idx)))
                 if bond_pair in applied_bonds:
@@ -467,6 +467,20 @@ class Graph:
                     indices[i] += 1
                     b +=1
                     coefficient_matrix = np.dot(transformation_matrix, coefficient_matrix)
+        return coefficient_matrix
+
+    def get_HAO_orbitals(self) -> np.array:
+        matrices = [self.apply_hybridization(atom, strip_orbitals=False) for atom in self.atoms]
+        size = sum(matrix.shape[0] for matrix in matrices)
+        coefficient_matrix = np.zeros((size, size))
+        # Fill the final matrix by placing each matrix along the diagonal
+        current_index = 0
+        matrix_indices = []
+        for matrix in matrices:
+            matrix_size = matrix.shape[0]  # Size of the individual matrix (5x5 or 1x1, etc.)
+            coefficient_matrix[current_index:current_index + matrix_size,current_index:current_index + matrix_size] = matrix
+            matrix_indices.append(current_index)
+            current_index += matrix_size  # Move the starting point for the next block
         return coefficient_matrix
 
     def get_spa_edges(self, collapse=True,strip_orbitals:bool=True):
