@@ -103,7 +103,10 @@ def MoleculeFromPyscf(molecule:Mole,mo_coeff:Union[ndarray,None]=None,transforma
     
     if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = molecule.energy_nuc()
-
-    tqmol = QuantumChemistryBase(parameters=parameters,transformation=transformation,active_orbitals=active_orbitals,frozen_orbitals=frozen_orbitals,point_group=molecule.symmetry_subgroup,*args,**kwargs)
+    if 'units' in kwargs:
+        units = kwargs['units']
+        kwargs.pop(units)
+    else: units = 'a'
+    tqmol = QuantumChemistryBase(parameters=parameters,transformation=transformation,active_orbitals=active_orbitals,frozen_orbitals=frozen_orbitals,point_group=molecule.symmetry_subgroup,units=units,*args,**kwargs)
     tqmol.integral_manager.orbital_coefficients = mo_coeff
     return tqmol

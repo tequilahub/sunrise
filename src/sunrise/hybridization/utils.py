@@ -241,6 +241,16 @@ class HybridizationUtils:
             rotated = MatrixUtils.gram_schmidt(rotated)  # Re-orthogonalize/normalize directions
 
         return rotated
+    
+    @staticmethod
+    def get_kabsch_alignment_matrix(align_source, align_target, gram_correction=False)->np.ndarray:
+        """
+        Aligns vectors using the Kabsch algorithm (pure rotation).
+        :param align_source: Source vector set (Nx3).
+        :param align_target: Target vector set (Nx3).
+        :return: Rotation Matrix to apply as np.dot(align_source, Rotation_matrix.T).
+        """
+        return  MatrixUtils.kabsch_algorithm_with_sign_correction(align_source, align_target) 
 
     @staticmethod
     def quaternion_alignment(align_source, align_target, gram_correction=True):
