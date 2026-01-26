@@ -1,8 +1,9 @@
 import tequila as tq
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from tequila.quantumchemistry.pyscf_interface import QuantumChemistryPySCF
 import numpy
 import sunrise as sun
-from pyscf import scf
+from pyscf import scf,mp
 from pyscf.tools import molden
 from time import time
 import subprocess
@@ -73,6 +74,15 @@ def transform(original:QuantumChemistryBase,modified:QuantumChemistryBase)->Quan
     parameters = deepcopy(original.parameters)
     return QuantumChemistryBase(parameters=parameters,integral_manager=integral_manager,transformation=original.transformation)
 
+def get_MP2_occ(mol):
+    fr = [2 for _ in range(mol.parameters.get_number_of_core_electrons()//2)] #NOTE modify if not traditional
+    molx = QuantumChemistryPySCF.from_tequila(mol)
+    beg = time()
+    hf = molx._get_hf()
+    mp2 = mp.MP2(hf)
+    rdm1 = mp2.run().make_rdm1()
+    end = time()
+    return fr + numpy.diag(rdm1).tolist(),mp2.mo_energy ,end-beg
 
 geo = '''
     C	0.0000000	1.3894860	0.0000000
@@ -90,16 +100,26 @@ geo = '''
 basis = 'aug_cc_pvdz'
 threshold = 1.e-9
 begining = time()
+mp2_occ = True
 mol = tq.Molecule(geometry=geo,basis_set=basis,backend='pyscf',units='a')
+ref = mol.compute_energy('CCSD(T)') # NOTE 
 filename = f'{mol.parameters.name}_{basis}.data'
 pfmol = sun.from_tequila(mol)
 mf = scf.RHF(pfmol).run()
 name = mol.parameters.name 
 #IDEA: Not really sure when to use each option of pyscf molden generation
 ### OPTION 1
+
+if mp2_occ:
+    mo_occ,mo_energy,mp2_time = get_MP2_occ(mol)
+    print(f'MP2 computation overhead: {mp2_time} s')
+else:
+    mo_occ = mf.mo_occ
+    mo_energy = mf.mo_energy
+
 with open(f'{name}.molden', 'w') as f1:
-    molden.header(pfmol, f1)
-    molden.orbital_coeff(pfmol, f1, mf.mo_coeff, ene=mf.mo_energy, occ=mf.mo_occ)
+    molden.header(pfmol, f1) 
+    molden.orbital_coeff(pfmol, f1, mf.mo_coeff, ene=mo_energy, occ=mo_occ)
 ### OPTION 2
 # try:
 #     molden.from_mo(pfmol, f'{mol.parameters.name}.molden', mf.mo_coeff)
@@ -127,6 +147,16 @@ mol = transform(mol,sun.MoleculeFromPyscf(molecule=fmol,mo_coeff=mo_coeff,basis_
 sun.plot_MO(mol,filename=f'{name}_CLPO')
 
 # JANPA orders the orbitals by bonding-antibonding pairs, therefore the edges will be:
+# NOTE take care fore basis bigger than minimal, the edges may not be asigned to the lower angular moment basis
 edges = [(2*i,2*i+1) for i in range(mol.n_electrons//2)]
 with open(filename, 'wb') as file:
         pickle.dump(mol, file)
+
+U = mol.make_ansatz('HCB-SPA',edges=edges)
+
+beg = time()
+opt = tq.chemistry.optimize_orbitals(molecule=mol,circuit=U,use_hcb=True,silent=True)
+end = time()
+
+print(f'CLPO MP2 procedure time: {(end-beg)} s')
+print(f'CLPO MP2 energy error: {(opt.energy-ref)*1000} mH')
