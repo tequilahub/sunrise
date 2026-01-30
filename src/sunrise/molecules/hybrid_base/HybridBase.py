@@ -491,7 +491,7 @@ class HybridBase(qc_base):
                                                                                          list(encodings.keys())))
         return transformation
     
-    def _new_transformation(self, transformation=None,n_electrons:int|None=None,
+    def _new_transformation(self, transformation=None,n_electrons:typing.Union[int,None]=None,
                             n_orbitals:Union[int,None]=None,select:typing.Union[str,dict,list,tuple]={},
                             condense:bool=True,two_qubit:bool=False, *args, **kwargs)->EncodingBase:
         """
