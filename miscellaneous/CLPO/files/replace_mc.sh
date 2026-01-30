@@ -29,6 +29,6 @@ fi
 #   's' stands for substitute.
 #   'g' stands for global, meaning all occurrences on each line will be replaced.
 # -i flag modifies the file in place.
-sed -i 's/Beta/Alpha/g' "$FILE"
+sed -i '' 's/Beta/Alpha/g' "$FILE"
 
 #echo "Replacement complete."
