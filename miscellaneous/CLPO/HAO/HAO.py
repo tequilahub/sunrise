@@ -100,7 +100,16 @@ with open(f'{name}.molden', 'w') as f1:
 #     molden.from_mo(pfmol, f'{mol.parameters.name}.molden', mf.mo_coeff, ignore_h=True)
 # #Pyscf tutorial Molden: https://github.com/pyscf/pyscf/blob/master/examples/tools/02-molden.py
 #it will give you some options, accept only the first: Do you want to generate a new Molden file? ([Yes] / No)
-subprocess.call(f'./molden2aim_mc.exe -i {name}.molden',shell=True)
+input_answers = "y\nn\nn\nn\n"
+
+# Use Popen to pipe the answers in
+p = subprocess.Popen(
+    f'./molden2aim_mc.exe -i {name}.molden',
+    shell=True,
+    stdin=subprocess.PIPE,
+    text=True
+)
+p.communicate(input=input_answers)
 subprocess.call(f'./JANPA_macos -i {name}.molden -AHO_Molden_File {name}_AHO.molden   -HybrOptOccConvThresh {threshold}',shell=True)
 
 subprocess.call(f'./replace_mc.sh {name}_AHO.molden',shell=True) #if it doesnt work here: chmod u+rx replace.sh and run it again
