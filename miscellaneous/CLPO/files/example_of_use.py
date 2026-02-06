@@ -8,7 +8,6 @@ import subprocess
 from copy import deepcopy
 import pickle
 import sys
-sys.setrecursionlimit(100000)
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase
 import numpy
 from copy import deepcopy
@@ -187,7 +186,6 @@ basis = 'sto-3g'
 threshold = 1.e-12
 begining = time()
 mp2_occ = False
-so_mac = False
 name = 'awa'
 mol = tq.Molecule(geometry=geo,basis_set=basis,backend='pyscf',units='a',name=name)
 # ref = mol.compute_energy('CCSD(T)') # NOTE 
@@ -217,8 +215,7 @@ with open(f'{name}.molden', 'w') as f1:
 # #Pyscf tutorial Molden: https://github.com/pyscf/pyscf/blob/master/examples/tools/02-molden.py
 
 input_answers = "y\nn\nn\nn\n"
-
-if so_mac:
+if sys.platform == "darwin":
     p = subprocess.Popen(
     f'./molden2aim_mc.exe -i {name}.molden',
     shell=True,
@@ -228,16 +225,20 @@ if so_mac:
     p.communicate(input=input_answers)
     subprocess.call(f'./JANPA_macos -i {name}.molden -CLPO_Molden_File {name}_CLPO.molden -HybrOptOccConvThresh {threshold}',shell=True)
     subprocess.call(f'./replace_mc.sh {name}_CLPO.molden',shell=True) #if it doesnt work here: chmod u+rx replace.sh and run it again
-else:
+elif sys.platform == "linux" or sys.platform == "linux2":
     p = subprocess.Popen(
     f'./molden2aim.exe -i {name}.molden',
     shell=True,
     stdin=subprocess.PIPE,
     text=True
-)
+    )
     p.communicate(input=input_answers)
     subprocess.call(f'./JANPA_linux -i {name}.molden -CLPO_Molden_File {name}_CLPO.molden -HybrOptOccConvThresh {threshold}',shell=True)
     subprocess.call(f'./replace_lnx.sh {name}_CLPO.molden',shell=True) #if it doesnt work here: chmod u+rx replace.sh and run it again
+elif sys.platform == "win32":
+    raise tq.TequilaException('Windows not implemented (yet?)')
+else: raise tq.TequilaException('Is this code being run inside Doom?')
+
 subprocess.call(f'rm m2a.ini',shell=True)
 subprocess.call(f'rm {name}.molden',shell=True) 
 subprocess.call(f'rm {name}_new.molden',shell=True) 
@@ -250,7 +251,7 @@ ncore = len(mol.integral_manager.orbital_coefficients)-mol.n_orbitals
 graph = [tuple([to_active[i]-ncore for i in edge if i in to_active.keys()])for edge in graph]
 graph = [g for g in graph if len(g)]
 subprocess.call(f'rm graph',shell=True)
-
+print('Edges',graph)
 # sun.plot_MO(mol,filename=f'{name}_CLPO')
 # with open(filename+'.data', 'wb') as file:
 #         pickle.dump(mol, file)

@@ -226,3 +226,8 @@ __marimo__/
 .DS_Store
 
 sunrise/miscellaneous/CLPO/benchmark/
+
+erik/
+erik/*
+*.data
+*.molden
