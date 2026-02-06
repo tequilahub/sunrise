@@ -1,15 +1,20 @@
 import tequila as tq
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
 from tequila.quantumchemistry.pyscf_interface import QuantumChemistryPySCF
 import numpy
-import sunrise as sun
 from pyscf import scf,mp
 from pyscf.tools import molden
 from time import time
 import subprocess
 from copy import deepcopy
 import pickle
-def transform(original:QuantumChemistryBase,modified:QuantumChemistryBase)->QuantumChemistryBase:
+import sys
+sys.setrecursionlimit(100000)
+from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+import numpy
+from copy import deepcopy
+from typing import Tuple
+
+def transform(original:QuantumChemistryBase,modified:QuantumChemistryBase)->Tuple[QuantumChemistryBase,dict]:
     '''
     Procedure similar to what is done in use_native_orbitals but for arbitrary basis (the CLPO orbitals in this case)
     '''
@@ -71,7 +76,7 @@ def transform(original:QuantumChemistryBase,modified:QuantumChemistryBase)->Quan
                     active_orbitals= [i for i in range(n_basis) if  i not in co.keys()],frozen_orbitals=[*co.keys()],orbital_coefficients=jcoef,
                     overlap_integrals=original.integral_manager.overlap_integrals,reference_orbitals=reference_orbitals,orbital_type='CLPO')
     parameters = deepcopy(original.parameters)
-    return QuantumChemistryBase(parameters=parameters,integral_manager=integral_manager,transformation=original.transformation)
+    return QuantumChemistryBase(parameters=parameters,integral_manager=integral_manager,transformation=original.transformation),to_active
 
 def get_MP2_occ(mol):
     fr = [2 for _ in range(mol.parameters.get_number_of_core_electrons()//2)] #NOTE modify if not traditional
@@ -83,37 +88,123 @@ def get_MP2_occ(mol):
     end = time()
     return fr + numpy.diag(rdm1).tolist(),mp2.mo_energy ,end-beg
 
+def read_molden_mo_matrix(filename):
+    """
+    Reads a Molden file and returns a NumPy array where
+    each column is an MO coefficient vector.
+    """
+    mo_vectors = []
+    current_mo = []
+    in_mo_section = False
+
+    with open(filename, "r") as f:
+        for line in f:
+            line = line.strip()
+
+            # Detect MO section
+            if line == "[MO]":
+                in_mo_section = True
+                continue
+
+            if not in_mo_section:
+                continue
+
+            if line.startswith("Sym="):
+                if current_mo:
+                    mo_vectors.append(current_mo)
+                    current_mo = []
+                continue
+
+            # Skip metadata lines
+            if (
+                line.startswith("Ene=") or
+                line.startswith("Spin=") or
+                line.startswith("Occup=") or
+                not line
+            ):
+                continue
+
+            parts = line.split()
+            if len(parts) == 2:
+                try:
+                    coeff = float(parts[1])
+                    current_mo.append(coeff)
+                except ValueError:
+                    pass
+
+        if current_mo:
+            mo_vectors.append(current_mo)
+
+    matrix = numpy.array(mo_vectors).T
+    return matrix
+
+def extract_clpo_graph(graph_file):
+    """
+    Reads a CLPO 'graph' file and extracts a graph representation.
+
+    Returns:
+        List of tuples:
+        - (i,)      for lone pairs
+        - (i, i+1)  for BD/NB pairs
+    """
+    nodes = []
+
+    with open(graph_file, "r") as f:
+        lines = f.readlines()
+
+    # Skip header
+    data_lines = [line.rstrip() for line in lines if line.strip()][1:]
+
+    i = 0
+    while i < len(data_lines):
+        line = data_lines[i]
+
+        # Lone pair
+        if "(LP)" in line:
+            nodes.append((i,))
+            i += 1
+            continue
+
+        # Bonding orbital → must pair with next line
+        if "(BD)" in line:
+            if i + 1 >= len(data_lines):
+                raise ValueError("BD entry without following NB line")
+
+            nodes.append((i, i + 1))
+            i += 2
+            continue
+
+        i += 1
+
+    return nodes
+
 geo = '''
-O          0.00000        0.00000        0.11779
 H          0.00000        0.75545       -0.47116
+O          0.00000        0.00000        0.11779
 H          0.00000       -0.75545       -0.47116'''
 
 basis = 'sto-3g'
-
 threshold = 1.e-12
 begining = time()
 mp2_occ = False
-name = None
-so_mac = True #only compiled for mac and linux for now
-
-mol = tq.Molecule(geometry=geo,basis_set=basis,backend='pyscf',units='a')
-ref = mol.compute_energy('CCSD(T)') # NOTE May be too expensive for biger molecules, take care
-filename = f'{mol.parameters.name}_{basis}.data'
+so_mac = False
+name = 'awa'
+mol = tq.Molecule(geometry=geo,basis_set=basis,backend='pyscf',units='a',name=name)
+# ref = mol.compute_energy('CCSD(T)') # NOTE 
 pfmol = mol.pyscf_molecule
-mf = scf.RHF(pfmol).run()
-if name is None:
-    name = mol.parameters.name 
-name = '1a-1b_start'
-#IDEA: Not really sure when to use each option of pyscf molden generation
-### OPTION 1
+filename = f'{name}_{basis}'
+
 
 if mp2_occ:
     mo_occ,mo_energy,mp2_time = get_MP2_occ(mol)
     print(f'MP2 computation overhead: {mp2_time} s')
 else:
+    mf = scf.RHF(pfmol).run()
     mo_occ = mf.mo_occ
     mo_energy = mf.mo_energy
 
+# #IDEA: Not really sure when to use each option of pyscf molden generation
+# ### OPTION 1
 with open(f'{name}.molden', 'w') as f1:
     molden.header(pfmol, f1) 
     molden.orbital_coeff(pfmol, f1, mf.mo_coeff, ene=mo_energy, occ=mo_occ)
@@ -127,30 +218,49 @@ with open(f'{name}.molden', 'w') as f1:
 
 input_answers = "y\nn\nn\nn\n"
 
-#Use Popen to pipe the answers in
-p = subprocess.Popen(
+if so_mac:
+    p = subprocess.Popen(
+    f'./molden2aim_mc.exe -i {name}.molden',
+    shell=True,
+    stdin=subprocess.PIPE,
+    text=True
+    )
+    p.communicate(input=input_answers)
+    subprocess.call(f'./JANPA_macos -i {name}.molden -CLPO_Molden_File {name}_CLPO.molden -HybrOptOccConvThresh {threshold}',shell=True)
+    subprocess.call(f'./replace_mc.sh {name}_CLPO.molden',shell=True) #if it doesnt work here: chmod u+rx replace.sh and run it again
+else:
+    p = subprocess.Popen(
     f'./molden2aim.exe -i {name}.molden',
     shell=True,
     stdin=subprocess.PIPE,
     text=True
 )
-p.communicate(input=input_answers)
-#IDEA Instead going with this for bigger basis
-if so_mac:
-    subprocess.call(f'./JANPA_macos -i {name}.molden -CLPO_Molden_File {name}_CLPO.molden -HybrOptOccConvThresh {threshold}',shell=True) #reading the output molden file
-    subprocess.call(f'./replace_mc.sh {name}_CLPO.molden',shell=True) #if it doesnt work here: chmod u+rx replace.sh and run it again
-else:
-    subprocess.call(f'./JANPA_linux -i {name}.molden -CLPO_Molden_File {name}_CLPO.molden -HybrOptOccConvThresh {threshold}',shell=True) #reading the output molden file
+    p.communicate(input=input_answers)
+    subprocess.call(f'./JANPA_linux -i {name}.molden -CLPO_Molden_File {name}_CLPO.molden -HybrOptOccConvThresh {threshold}',shell=True)
     subprocess.call(f'./replace_lnx.sh {name}_CLPO.molden',shell=True) #if it doesnt work here: chmod u+rx replace.sh and run it again
-subprocess.call(f'rm m2a.ini',shell=True) #rm molden2aim input file autogenerated
+subprocess.call(f'rm m2a.ini',shell=True)
 subprocess.call(f'rm {name}.molden',shell=True) 
 subprocess.call(f'rm {name}_new.molden',shell=True) 
+mo_matrix = read_molden_mo_matrix(f"{name}_CLPO.molden")
+nmol = deepcopy(mol)
+nmol.integral_manager.orbital_coefficients = mo_matrix
+mol,to_active = transform(mol,nmol)
+graph = extract_clpo_graph("graph")
+ncore = len(mol.integral_manager.orbital_coefficients)-mol.n_orbitals
+graph = [tuple([to_active[i]-ncore for i in edge if i in to_active.keys()])for edge in graph]
+graph = [g for g in graph if len(g)]
+subprocess.call(f'rm graph',shell=True)
 
-fmol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = molden.load(f'{name}_CLPO.molden')
-mol = transform(mol,sun.MoleculeFromPyscf(molecule=fmol,mo_coeff=mo_coeff,basis_set=basis))
-sun.plot_MO(mol,filename=f'{name}_CLPO')
-# NOTE: JANPA orders the orbitals by bonding-antibonding pairs, therefore the edges will be:
-# NOTE take care fore basis bigger than minimal, the edges may not be asigned to the lower angular moment basis
-edges = [(2*i,2*i+1) for i in range(mol.n_electrons//2)]
-with open(filename, 'wb') as file:
-        pickle.dump(mol, file)
+# sun.plot_MO(mol,filename=f'{name}_CLPO')
+# with open(filename+'.data', 'wb') as file:
+#         pickle.dump(mol, file)
+
+# objects = []
+# with (open(filename + '.data', "rb")) as openfile:
+#     while True:
+#         try:
+#             objects.append(pickle.load(openfile))
+#         except EOFError:
+#             break
+# mol:tq.chemistry.QuantumChemistryBase = objects[0]
+# sun.plot_MO(mol,filename=filename)
