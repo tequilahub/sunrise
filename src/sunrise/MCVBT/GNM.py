@@ -1,7 +1,7 @@
 import tequila as tq
 import scipy
 import numpy as np
-from gem import gem_fast
+from sunrise.MCVBT.gem import gem_fast
 from tequila.quantumchemistry import QuantumChemistryBase
 
 import sunrise as sn
@@ -15,7 +15,7 @@ import os
 class mcvbt:
 
     def __init__(self, mol: QuantumChemistryBase, graphs: list, circuits=None, strategy=None, solver="FQE",
-                 filename="mcvbt_results.csv"):
+                 filename="mcvbt_results.csv", overwrite_file=True, silent=True):
 
         self.mol = mol
         self.graphs = graphs
@@ -26,24 +26,42 @@ class mcvbt:
         self.variables_preopt = {}
         self.results = {}
         self.csvfile_name = filename
+        self.final_variables = []
+        self.silent = silent
 
-        if os.path.isfile(self.csvfile_name):
-            raise FileExistsError(f"File {self.csvfile_name} already exists.")
+        if overwrite_file and os.path.isfile(self.csvfile_name):
+           os.remove(self.csvfile_name)
 
         if self.circuits is not None:
             if len(self.circuits) != len(self.graphs):
                 raise ValueError("Number of circuits must be equal to number of graphs")
 
 
-    def calculate_groundstate(self):
+    def calculate_groundstate(self,init_strategy: str = "pre-optimize"):
 
         if self.circuits is None:
             self.__create_circuits()
-        print("Calculating ground state...")
-        print("Start pre-optimization of individual circuits")
-        variables_preopt, energies = self.__preoptimize_variables()
-        self.results[(1, 0)] = min(energies)
-        print("End of pre-optimization")
+
+        if init_strategy == "pre-optimize":
+            if not self.silent: print("Start pre-optimization of individual circuits")
+            variables_preopt, energies = self.__preoptimize_variables()
+            self.results[(1, 0)] = min(energies)
+            if not self.silent: print("End of pre-optimization")
+        elif init_strategy == "zeros":
+            variables_preopt = {}
+            for circ in self.circuits:
+                for v in circ.variables:
+                    variables_preopt[v] = 0.01
+            self.results[(1, 0)] = None
+        elif init_strategy == "random":
+            variables_preopt = {}
+            for circ in self.circuits:
+                for v in circ.variables:
+                    variables_preopt[v] = np.random.uniform(0, 2*np.pi)
+            self.results[(1, 0)] = None
+        else:
+            raise ValueError("Unknown init_strategy {}".format(init_strategy))
+
 
         # self.strategy="shift" #todo check strategy
         if self.strategy is not None:
@@ -53,12 +71,12 @@ class mcvbt:
             writer = csv.writer(file)
             writer.writerow([self.mol.compute_energy("fci")])
 
-        print("Start G(N,M)  optimization")
+        if not self.silent: print("Start G(N,M)  optimization")
         N = len(self.circuits)
         for n in range(2, N+1):
-            print("Start G({},0) optimization".format(n))
+            if not self.silent: print("Start G({},0) optimization".format(n))
             v, _ = gem_fast(circuits=self.circuits[:n], solver=self.solver, variables=variables_preopt, mol=self.mol)
-            print("End G({},0)   optimization".format(n))
+            if not self.silent: print("End G({},0)   optimization".format(n))
             self.results[(n, 0)] = v[0]
 
 
@@ -71,11 +89,12 @@ class mcvbt:
                 with open(self.csvfile_name, mode="a", newline="") as file:
                     writer = csv.writer(file)
                     writer.writerow(["G({},{})".format(n,m)])
-                print("Start G({},{}) optimization".format(n,m))
+                if not self.silent: print("Start G({},{}) optimization".format(n,m))
                 v, _, variables = GNM(circuits=self.circuits[:n], variables=variables, solver=self.solver,
-                                      mol=self.mol,filename=self.csvfile_name, silent=False, M=m, max_iter=10)
-                print("End G({},{})   optimization".format(n,m))
+                                      mol=self.mol,filename=self.csvfile_name, M=m, max_iter=10)
+                if not self.silent: print("End G({},{})   optimization".format(n,m))
                 self.results[(n, m)] = v[0]
+                self.final_variables = variables
 
         return self.results
 
@@ -84,9 +103,11 @@ class mcvbt:
 
         fci = self.mol.compute_energy("fci")
         print("G(N,M) errors:")
+        print(self.results)
         for k, v in self.results.items():
+
             error = abs(fci - v)
-            print("G({},{}): {:+2.5f}".format(k[0], k[1], error))
+            print("G({},{}): {:+2.5f} Ha".format(k[0], k[1], error))
 
 
     def __preoptimize_variables(self):
@@ -94,7 +115,7 @@ class mcvbt:
         energies = []
         for preopt_circuit in self.circuits:
             if self.solver == "FQE":
-                E_preopt = sn.expval.FQEBraKet(ket_fcircuit=preopt_circuit, molecule=self.mol)
+                E_preopt = sn.expval.FQEBraKet(ket=preopt_circuit, molecule=self.mol)
 
                 variables = preopt_circuit.variables
                 init_vars = {vs: 0 for vs in variables}
@@ -173,10 +194,11 @@ class mcvbt:
                     circ += sn.gates.FermionicExcitation(indices=[(2 * edge[0] + 1, 2 * edge[1] + 1)],
                                                           variables="shift{}_{}".format(i, edge))
 
-            elif self.strategy == "skip":
-                pass
+
             elif self.strategy == "triangle":
-                pass
+                raise NotImplementedError
+            else:
+                raise NotImplementedError
 
             aux_circuits.append(circ)
             filtered_variables= [x for x in circ.variables if x not in variables_preopt]
@@ -186,6 +208,10 @@ class mcvbt:
         self.circuits = aux_circuits
 
         return variables_preopt
+
+
+    def get_final_variables(self):
+        return self.final_variables
 
 
 def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=None):
@@ -233,12 +259,9 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
 
 
     mcvbt_exp = BigExpVal(circuits=circuits, coefficcents=coeffs, mol=mol, solver=solver, H=mol.make_hamiltonian())
-    disp = False
-    if not silent:
-        disp = True
-    silent = True
+    disp = not silent
     for i in range(max_iter):
-        print("iteration {}".format(i))
+        if not silent: print("iteration {}".format(i))
         result = scipy.optimize.minimize(mcvbt_exp, x0=list(x0.values()), jac="2-point", method="slsqp",
                                          options={"finite_diff_rel_step":5.e-5, "disp": disp, "maxiter": 100},
                                          callback=callback)
@@ -250,9 +273,9 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
             x0[coeffs[i]] = vv[i, 0]
 
         if np.isclose(energy, v[0], atol=1.e-4):
-            print("not converged")
-            print(energy)
-            print(v[0])
+            if not silent: print("not converged")
+            if not silent: print(energy)
+            if not silent: print(v[0])
             energy = v[0]
         else:
             energy = v[0]
