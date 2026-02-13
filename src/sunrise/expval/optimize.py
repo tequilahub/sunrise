@@ -81,7 +81,8 @@ def optimize_orbitals(molecule,circuit=FCircuit,backend:str='tequila',use_hcb=Fa
                 vqe_solver_arguments = {}
             vqe_solver_arguments['restrict_to_hcb'] = True
     else:
-        circuit.to_qcircuit(molecule=molecule)
+        if isinstance(circuit,FCircuit):
+            circuit.to_qcircuit(molecule=molecule)
         vqe_solver = None
     result = tq_opt_orbs(molecule=molecule,circuit=circuit,vqe_solver=vqe_solver,pyscf_arguments=pyscf_arguments,silent=silent,initial_guess=initial_guess,return_mcscf=return_mcscf,molecule_factory=molecule_factory,molecule_arguments=molecule_arguments,restrict_to_active_space=restrict_to_active_space,vqe_solver_arguments=vqe_solver_arguments,*args,**kwargs)
     if isinstance(molecule,HybridBase):

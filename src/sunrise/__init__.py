@@ -15,4 +15,5 @@ from sunrise.expval.optimize import optimize_orbitals
 from sunrise import graphical
 from sunrise.expval import Braket as Expval
 from sunrise.CLPO import call_janpa,call_molden2aim
+from sunrise import CLPO
 from sunrise.MCVBT.GNM import mcvbt
