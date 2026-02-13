@@ -10,14 +10,14 @@ Please, install the package along with all required dependencies:
 
 1. Install the master branch from PyPi as
 ```bash
+conda create -n myenv python=3.10
+conda activate myenv
 pip install project-sunrise
 ```
 
 2. Clone the repository and install in developer mode
 ```bash
-conda create -n myenv python=3.10
-conda activate myenv
-
+git clone https://github.com/tequilahub/sunrise.git
 cd project-sunrise
 pip install -e .
 ```
