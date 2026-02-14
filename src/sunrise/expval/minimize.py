@@ -23,7 +23,7 @@ def minimize(objective,method: str = "bfgs",variables: list = None,initial_value
         return tminimize(objective=objective.build(),method=method,variables=variables,initial_values=initial_values,maxiter=maxiter,silent=silent,args=args,kwargs=kwargs)
     if type(objective).__name__ in  ['TCCBraket','FQEBraKet']:
         objective = Objective([objective])
-    if any([type(arg).__name__ in  ['TCCBraket','FQEBraKet'] for arg in objective.args]):
+    if hasattr(objective,'args') and any([type(arg).__name__ in  ['TCCBraket','FQEBraKet'] for arg in objective.args]):
         dE = grad(objective=objective,variable=variables,args=args,kwargs=kwargs)
         return tminimize(objective=objective,gradient=dE,method=method,variables=variables,initial_values=initial_values,maxiter=maxiter,silent=silent,args=args,kwargs=kwargs)
     else:

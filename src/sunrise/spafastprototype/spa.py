@@ -1,4 +1,5 @@
 import tequila as tq
+from sunrise import optimize_orbitals
 import numpy
 import time
 import warnings
@@ -6,11 +7,11 @@ from spafastprototype.fast_rdm import fast_rdm
 from spafastprototype.fast_qtensor import fast_qtensor
 from spafastprototype.decompose import decompose, make_decomposed_clusters
 from spafastprototype.utils import timing, reset_timings
-from tequila.quantumchemistry.orbital_optimizer import OptimizeOrbitalsResult,optimize_orbitals
+from tequila.quantumchemistry.orbital_optimizer import OptimizeOrbitalsResult
 from tequila import TequilaWarning
 from typing import Union
 
-def run_spa(mol, edges, initial_guess=None, decompose=True, silent=True,grouping:Union[int,list]=None,backend:str='qulacs', fast_rdm=True, **kwargs)->OptimizeOrbitalsResult:
+def run_spa(mol, edges, initial_guess=None, decompose=True, silent=True,grouping:Union[int,list[int],None]=None,backend:str='qulacs', fast_rdm=True, **kwargs)->OptimizeOrbitalsResult:
 
     if edges is None:
         U = mol.make_ansatz(name="HCB-SPA")
@@ -32,7 +33,7 @@ def run_spa(mol, edges, initial_guess=None, decompose=True, silent=True,grouping
 
 class SPASolver:
 
-    def __init__(self, decompose=False,grouping:Union[int,list]=None,backend:str='qulacs', fast_rdm=True, restrict_to_hcb=True):
+    def __init__(self, decompose=False,grouping:Union[int,list[int],None]=None,backend:str='qulacs', fast_rdm=True, restrict_to_hcb=True):
         self.decompose=decompose
         self.rdm_qtensors = None
         self.variables = None
