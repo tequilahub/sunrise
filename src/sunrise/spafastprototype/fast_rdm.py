@@ -1,7 +1,7 @@
 import tequila as tq
-from spafastprototype.decompose import make_decomposed_circuits
+from .decompose import make_decomposed_circuits
 import numpy
-from spafastprototype._compute_rdms import compute_rdms, _assemble_rdm2, _assemble_rdm1
+from ._compute_rdms import compute_rdms, _assemble_rdm2, _assemble_rdm1
 
 
 def fast_rdm(U, mol, clusters, variables, test=False,backend='qulacs'):

@@ -1,15 +1,12 @@
 import numpy
 import time
 import tequila as tq
-from spafastprototype.decompose import decompose
-from spafastprototype.utils import timing
+from .decompose import decompose
 
-@timing
 def tqcomp(*args, **kwargs):
     # print("\nHERE WE ARE\n")
     return tq.compile(*args, **kwargs)
 
-@timing
 def fast_qtensor(qtensor, variables, do_decompose=False, evaluate=True,grouping:int=None,backend='qulacs'):
     simple = True
     shape = qtensor.shape

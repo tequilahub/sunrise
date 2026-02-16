@@ -3,7 +3,6 @@ import networkx as nx
 import time
 import sys
 from copy import deepcopy
-from spafastprototype.utils import timing
 from typing import Union
 from collections import defaultdict
 
@@ -66,7 +65,6 @@ def make_decomposed_circuits(U:tq.QCircuit, grouping:Union[int,list,None]=None, 
 
     return circuits
 
-@timing
 def decompose(H:tq.QubitHamiltonian, U:tq.QCircuit,nolist=True,grouping:Union[int,list,None]=None):
     """
     In the case where U is a tensor product: U = U_0 * U_1 * U_2 ... 

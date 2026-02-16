@@ -3,10 +3,9 @@ from sunrise import optimize_orbitals
 import numpy
 import time
 import warnings
-from spafastprototype.fast_rdm import fast_rdm
-from spafastprototype.fast_qtensor import fast_qtensor
-from spafastprototype.decompose import decompose, make_decomposed_clusters
-from spafastprototype.utils import timing, reset_timings
+from .fast_rdm import fast_rdm
+from .fast_qtensor import fast_qtensor
+from .decompose import decompose, make_decomposed_clusters
 from tequila.quantumchemistry.orbital_optimizer import OptimizeOrbitalsResult
 from tequila import TequilaWarning
 from typing import Union
@@ -44,7 +43,7 @@ class SPASolver:
         self.fast_rdm=fast_rdm
     def __call__(self, *args, **kwargs):
         return self.vqe(*args, **kwargs)
-    @timing
+    
     def vqe(self, H, circuit, molecule, *args, **kwargs):
 
         if "restrict_to_hcb" in kwargs:
@@ -70,7 +69,6 @@ class SPASolver:
         #analyse()
         return result
 
-    @timing
     def compute_rdms(self, U, variables, molecule, use_hcb=False ):
         start = time.time()
         if self.fast_rdm:
@@ -106,40 +104,3 @@ def make_initial_orbital_guess(edges):
         result[j][i] = 1.0
         result[i][j] = -1.0
     return result.T
-
-if __name__ == "__main__":
-
-    # quite good so far
-    # weakest point: first RDM evaluation (or compilation)
-
-
-    R = 4.5
-    times = []
-    for N in [2,4,6,8,10,12,14,16,18,20,22,24,26,28,30]:
-        geom = ""
-        edges = []
-        reset_timings()
-        for n in range(N):
-            geom += "H 0.0 0.0 {}\n".format(n*R)
-            if n%2 ==0:
-                edges.append((n,n+1))
-
-        mol = tq.Molecule(geometry=geom, basis_set="sto-3g")
-
-        result1 = run_spa(mol=mol, edges=edges, decompose=False)
-        #print(result1.energy-mol.compute_energy("fci"))
-        # analyse()
-        # result2 = run_spa(mol=mol, edges=edges, decompose=False)
-        # reset_timings()
-        # analyse()
-
-        from spafastprototype.utils import _all_timinings
-        import copy
-        times += [copy.deepcopy(_all_timinings)]
-        print("N={:2} | {:5.4f}s".format(N,max(_all_timinings["run_spa"])))
-        #print(result1.energy)
-        #print(result2.energy)
-        #print(mol.compute_energy("fci"))
-
-        print(times)
-
