@@ -1,13 +1,15 @@
 from sunrise import FCircuit
+from tequila import QCircuit,TequilaException
 from . import Braket
 from tequila.quantumchemistry import optimize_orbitals as tq_opt_orbs
 from tequila.quantumchemistry.orbital_optimizer import OptimizeOrbitalsResult
 from ..molecules.fermionic_base.fer_base import FermionicBase
 from ..molecules.hybrid_base.HybridBase import HybridBase
 from .minimize import minimize
+from typing import Union
 
 
-def optimize_orbitals(molecule,circuit=FCircuit,backend:str='tequila',use_hcb=False,pyscf_arguments=None,silent=False,vqe_solver_arguments:dict=None,initial_guess=None,return_mcscf=False,
+def optimize_orbitals(molecule,circuit=Union[FCircuit,QCircuit],backend:str='tequila',use_hcb=False,pyscf_arguments=None,silent=False,vqe_solver_arguments:dict=None,initial_guess=None,return_mcscf=False,
     molecule_factory=None,molecule_arguments=None,restrict_to_active_space=True,*args,**kwargs)->OptimizeOrbitalsResult:
     """
 
@@ -47,7 +49,6 @@ def optimize_orbitals(molecule,circuit=FCircuit,backend:str='tequila',use_hcb=Fa
                 vqe_solver_arguments.pop('silent')
             else: silent = True
             return minimize(Braket(backend=backend,molecule=molecule,circuit=self.U,**vqe_solver_arguments),silent=silent)
-    vqe_solver = solver(backend=backend,circuit=circuit)
     
     if isinstance(molecule,HybridBase):
         if molecule_arguments is None:
@@ -62,10 +63,10 @@ def optimize_orbitals(molecule,circuit=FCircuit,backend:str='tequila',use_hcb=Fa
                                   "transformation": molecule.transformation,"backend":'pyscf'}
             mol_args.update(molecule_arguments)
             molecule_arguments = mol_args
-            circuit = circuit.to_qcircuit(molecule=molecule)
+            if isinstance(circuit,FCircuit):
+                circuit = circuit.to_qcircuit(molecule=molecule)
         if molecule_factory is None:
             molecule_factory = HybridBase
-        vqe_solver = None
     elif isinstance(molecule,FermionicBase):
         if molecule_factory is None:
             molecule_factory = FermionicBase
@@ -80,15 +81,14 @@ def optimize_orbitals(molecule,circuit=FCircuit,backend:str='tequila',use_hcb=Fa
             if vqe_solver_arguments is None:
                 vqe_solver_arguments = {}
             vqe_solver_arguments['restrict_to_hcb'] = True
-    else:
+        if isinstance(circuit,QCircuit):
+            raise TequilaException('No Qubit based circuit allowed with Fermionic Molecule')
+        if 'vqe_solver' not in kwargs:
+            kwargs['vqe_solver'] = solver(backend=backend,circuit=circuit)
+    else: #Plain tequila molecule
         if isinstance(circuit,FCircuit):
             circuit.to_qcircuit(molecule=molecule)
-        if 'vqe_solver' in kwargs:
-            vqe_solver = kwargs['vqe_solver']
-            kwargs.pop('vqe_solver')
-        else:
-            vqe_solver = None
-    result = tq_opt_orbs(molecule=molecule,use_hcb=use_hcb,circuit=circuit,vqe_solver=vqe_solver,pyscf_arguments=pyscf_arguments,silent=silent,initial_guess=initial_guess,return_mcscf=return_mcscf,molecule_factory=molecule_factory,molecule_arguments=molecule_arguments,restrict_to_active_space=restrict_to_active_space,vqe_solver_arguments=vqe_solver_arguments,*args,**kwargs)
+    result = tq_opt_orbs(molecule=molecule,use_hcb=use_hcb,circuit=circuit,pyscf_arguments=pyscf_arguments,silent=silent,initial_guess=initial_guess,return_mcscf=return_mcscf,molecule_factory=molecule_factory,molecule_arguments=molecule_arguments,restrict_to_active_space=restrict_to_active_space,vqe_solver_arguments=vqe_solver_arguments,*args,**kwargs)
     if isinstance(molecule,HybridBase):
         result.molecule = HybridBase(**molecule_arguments, integral_manager=result.molecule.integral_manager)
     elif isinstance(molecule,FermionicBase):

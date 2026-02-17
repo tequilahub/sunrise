@@ -6,11 +6,13 @@ from pyscf.tools import molden
 from copy import deepcopy
 import subprocess
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from sunrise.molecules.hybrid_base import HybridBase
+from sunrise.molecules.fermionic_base import FermionicBase
 import numpy
 from copy import deepcopy
 from typing import Tuple
 from numbers import Number
-from . import *
+from .binary_interface import *
 from sunrise import from_tequila
 
 def __transform(modified:QuantumChemistryBase,original:QuantumChemistryBase=None)->Tuple[QuantumChemistryBase,dict]:
@@ -79,7 +81,11 @@ def __transform(modified:QuantumChemistryBase,original:QuantumChemistryBase=None
                     active_orbitals= [i for i in range(n_basis) if  i not in co.keys()],frozen_orbitals=[*co.keys()],orbital_coefficients=jcoef,
                     overlap_integrals=original.integral_manager.overlap_integrals,reference_orbitals=reference_orbitals,orbital_type='CLPO')
     parameters = deepcopy(original.parameters)
-    return QuantumChemistryBase(parameters=parameters,integral_manager=integral_manager,transformation=original.transformation),to_active
+    if isinstance(modified,FermionicBase):
+        return FermionicBase(parameters=parameters,integral_manager=integral_manager,fermionic_backend=modified.fermionic_backend),to_active
+    elif isinstance(modified,HybridBase):
+        return HybridBase(parameters=parameters,integral_manager=integral_manager,transformation=modified.transformation,select=modified.select,two_qubit=modified.two_qubit, condense=modified.condense) ,to_active
+    return QuantumChemistryBase(parameters=parameters,integral_manager=integral_manager,transformation=modified.transformation),to_active
 
 def __get_MP2_occ(mol:QuantumChemistryBase):
     ''''

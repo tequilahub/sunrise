@@ -174,7 +174,9 @@ class JordanWigner(EB):
         return self.pos[2*i]
 
     def down(self, i):
-        return self.pos[2*i+1]
+        try:
+            return self.pos[2*i+1]
+        except: return None
 
     def update_select(self, select: typing.Union[str, dict, list, tuple], n_orb: int = None):
         '''

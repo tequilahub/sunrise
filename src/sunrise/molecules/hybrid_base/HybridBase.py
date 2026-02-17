@@ -151,15 +151,21 @@ class HybridBase(qc_base):
             """
             select = [*select]
             sel = {}
-            if (len(select) >= n_orb):
-                select = select[:n_orb]
+            if isinstance(select[0],int):
+                for i in range(self.n_orbitals):
+                    if i in select:
+                        sel[i] = "F"
+                    else: sel[i] = "B"
             else:
-                select= select + (n_orb-len(select))*["B"]
-            for i in range(len(select)):
-                if select[i] in ["F","B"]:
-                    sel.update({i: select[i]})
+                if (len(select) >= n_orb):
+                    select = select[:n_orb]
                 else:
-                    TequilaException(f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic).")
+                    select= select + (n_orb-len(select))*["B"]
+                for i in range(len(select)):
+                    if select[i] in ["F","B"]:
+                        sel.update({i: select[i]})
+                    else:
+                        TequilaException(f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic).")
             return sel
         def select_to_list(select:dict):
             """
