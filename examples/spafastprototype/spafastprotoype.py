@@ -12,7 +12,13 @@ mol = tq.Molecule(geometry=geo,basis_set='sto-3g',backend='pyscf',units='a').use
 # The first graph correspond to: H-H H-H H-H ...
 edges = [(2*i,2*i+1) for i in range(mol.n_orbitals//2)]
 
-#Step 2: The SPA fast prototype already contain a orbital optimizer which takes advantage of this decompostion
+#Step 2: The SPA fast prototype already contains an orbital optimizer which takes
+# advantage of this decomposition to compute the 1-RDM and 2-RDM more efficiently:
+# Each RDM element is expanded in Pauli strings: <O>_U = sum_k c_k <P_k>_U
+# Since the circuit factorizes over clusters (defined by `grouping`, see below), 
+# the expectation values also factorize:  <P_k>_U = <P_k,0>_U0 · <P_k,1>_U1 · <P_k,2>_U2 · ...
+# Thus only local expectation values are computed and combined, instead of simulating the full system.
+
 initial_guess = eye(mol.n_orbitals) # See explanation DOI: 10.22331/q-2023-08-03-1073
 for edge in edges:
     initial_guess[edge[0],edge[1]] = 1
