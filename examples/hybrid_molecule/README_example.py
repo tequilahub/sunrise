@@ -6,6 +6,8 @@ molecule  = sun.Molecule(geometry="H 0. 0. 0. \n Li 0. 0. 1.5",basis_set="sto-3g
 print(molecule.select)
 molecule  = sun.Molecule(geometry="H 0. 0. 0. \n Li 0. 0. 1.5",basis_set="sto-3g",select={2:"F",4:"F"},nature='h')
 print(molecule.select)
+molecule  = sun.Molecule(geometry="H 0. 0. 0. \n Li 0. 0. 1.5",basis_set="sto-3g",select=[2,4],nature='h')
+print(molecule.select)
 ### CREATE YOUR CIRCUITS
 Uspa = molecule.make_ansatz("SPA",edges=[(0,1)])
 U = tq.QCircuit() # see more on https://github.com/tequilahub/tequila-tutorials/blob/main/BasicUsage.ipynb
