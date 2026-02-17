@@ -9,7 +9,7 @@ from sunrise.miscellaneous.bar import giuseppe_bar
 from sunrise.expval import Braket,show_available_modules,show_supported_modules
 from sunrise.fermionic_operations import gates
 from sunrise.fermionic_operations.circuit import FCircuit
-from sunrise.expval.pyscf_molecule import *
+from sunrise.expval.pyscf_molecule import from_tequila,MoleculeFromPyscf
 from sunrise.expval.minimize import grad,minimize,simulate
 from sunrise.expval.optimize import optimize_orbitals
 from sunrise import graphical

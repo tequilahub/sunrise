@@ -1,3 +1,3 @@
-from .circuit import *
-from .gate import *
-from .named import *
+from .circuit import GraphicalCircuit
+from .gate import GenericGate
+from .named import NamedGate
