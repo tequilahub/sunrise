@@ -229,6 +229,14 @@ def compute_num_meas(circuit=None, variables=None, initial_state=None, is_hcb=Fa
     eps: the error tolerance
     """
     
+    # Initialize the input state in a wrapper class
+    state = input_state(circuit=circuit, variables=variables, wavefunction=initial_state)
+    if initial_state is not None and circuit is None:
+        circuit = state.get_circuit()
+        initial_state = state.get_wavefunction()
+    elif circuit is None and initial_state is None:
+        raise ValueError("Either a circuit or a wavefunction must be provided")
+
     # If hcb then split in the three measurement groups
     if is_hcb:
         H1 = tq.QubitHamiltonian()
