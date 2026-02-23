@@ -477,8 +477,8 @@ def two_orbs_classical_correlation(mol:tqMolecule, circuit:QCircuit=None, variab
     rho_ab = compute_two_orb_rdm(mol, circuit, variables, initial_state, p_orb=orb_a, q_orb=orb_b, PSSR=PSSR, NSSR=NSSR)
     chi = np.diag(np.diag(rho_ab))
 
-    o1 = compute_one_orb_rdm(mol, circuit, one_orb=orb_a)
-    o2 = compute_one_orb_rdm(mol, circuit, one_orb=orb_b)
+    o1 = compute_one_orb_rdm(mol, circuit, variables, initial_state, one_orb=orb_a)
+    o2 = compute_one_orb_rdm(mol, circuit, variables, initial_state, one_orb=orb_b)
     pi = np.kron(o1,o2)
     pi = change_basis(pi, 'to_molecular')
         
@@ -487,8 +487,8 @@ def two_orbs_classical_correlation(mol:tqMolecule, circuit:QCircuit=None, variab
 def two_orbs_mutual_info(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, orb_b:int=1, PSSR:bool=False, NSSR:bool=False)->float:
     
     rho_ab = compute_two_orb_rdm(mol, circuit, variables, initial_state, p_orb=orb_a, q_orb=orb_b, PSSR=PSSR, NSSR=NSSR)
-    o1 = compute_one_orb_rdm(mol, circuit, one_orb=orb_a)
-    o2 = compute_one_orb_rdm(mol, circuit, one_orb=orb_b)
+    o1 = compute_one_orb_rdm(mol, circuit, variables, initial_state, one_orb=orb_a)
+    o2 = compute_one_orb_rdm(mol, circuit, variables, initial_state, one_orb=orb_b)
     pi = np.kron(o1,o2)
     pi = change_basis(pi, 'to_molecular')
         
