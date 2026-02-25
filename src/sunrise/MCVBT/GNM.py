@@ -26,7 +26,7 @@ class mcvbt:
         self.variables_preopt = {}
         self.results = {}
         self.csvfile_name = filename
-        self.final_variables = []
+        self.final_variables = {}
         self.silent = silent
 
         if overwrite_file and os.path.isfile(self.csvfile_name):
@@ -78,7 +78,8 @@ class mcvbt:
             v, _ = gem_fast(circuits=self.circuits[:n], solver=self.solver, variables=variables_preopt, mol=self.mol)
             if not self.silent: print("End G({},0)   optimization".format(n))
             self.results[(n, 0)] = v[0]
-
+        self.final_variables = self.variables_preopt
+        self.final_variables[('c', 0)] = 1.0
 
         variables = {**variables_preopt}
         start = 2
