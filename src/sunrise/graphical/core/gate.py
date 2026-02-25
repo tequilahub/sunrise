@@ -218,7 +218,7 @@ class Gate(abc.ABC):
                     color = Color(name)
                 else:
                     color = Color(color)
-            elif isinstance(color,Union[List,Tuple]):
+            elif isinstance(color,(List,Tuple)):
                 assert len(color)==3, f"Three RGB components expected, received {len(color)}"
                 color = RGB(color[0],color[1],color[2])
             else: raise Exception('No color format indified')
@@ -239,7 +239,7 @@ class Gate(abc.ABC):
             style.pop('parametrized')
         if 'color_range' in style.keys():
             color_range = style['color_range']
-            if isinstance(color_range,Union[List,Tuple]):
+            if isinstance(color_range,(List,Tuple)):
                 if not len(color_range)==2:
                     raise Exception("Only 2 colors accepted")
                 c0,color_dict = parse_color(color_range[0],color_dict)

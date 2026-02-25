@@ -101,7 +101,7 @@ class FCircuit:
         '''
         if initial_state is None or isinstance(initial_state,QubitWaveFunction):
             pass
-        elif isinstance(initial_state,Union[QCircuit,FCircuit]):
+        elif isinstance(initial_state,(QCircuit,FCircuit)):
             initial_state = sunrise.simulate(initial_state,variables={})
         elif isinstance(initial_state,str):
             initial_state = QubitWaveFunction.from_string(initial_state)
