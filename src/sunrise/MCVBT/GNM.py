@@ -66,10 +66,11 @@ class mcvbt:
         # self.strategy="shift" #todo check strategy
         if self.strategy is not None:
             self.__add_delocalization(variables_preopt=variables_preopt)
-
-        with open(self.csvfile_name, mode="a", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow([self.mol.compute_energy("fci")])
+        
+        if not self.silent:
+            with open(self.csvfile_name, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([self.mol.compute_energy("fci")])
 
         if not self.silent: print("Start G(N,M)  optimization")
         N = len(self.circuits)
@@ -87,12 +88,13 @@ class mcvbt:
             if m > start:
                 start = m
             for n in range(start, N+1):
-                with open(self.csvfile_name, mode="a", newline="") as file:
-                    writer = csv.writer(file)
-                    writer.writerow(["G({},{})".format(n,m)])
+                if not self.silent:
+                    with open(self.csvfile_name, mode="a", newline="") as file:
+                        writer = csv.writer(file)
+                        writer.writerow(["G({},{})".format(n,m)])
                 if not self.silent: print("Start G({},{}) optimization".format(n,m))
                 v, _, variables = GNM(circuits=self.circuits[:n], variables=variables, solver=self.solver,
-                                      mol=self.mol,filename=self.csvfile_name, M=m, max_iter=10)
+                                      mol=self.mol,filename=self.csvfile_name, M=m, max_iter=10, silent=self.silent)
                 if not self.silent: print("End G({},{})   optimization".format(n,m))
                 self.results[(n, m)] = v[0]
                 self.final_variables = variables
@@ -253,10 +255,11 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
         if not silent:
             print("current energy: {:+2.4f}".format(energy))
         callback_energies.append(energy)
-
-        with open(filename, mode="a", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow([callback_energies[-1]])
+        
+        if not silent:
+            with open(filename, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([callback_energies[-1]])
 
 
     mcvbt_exp = BigExpVal(circuits=circuits, coefficcents=coeffs, mol=mol, solver=solver, H=mol.make_hamiltonian())
