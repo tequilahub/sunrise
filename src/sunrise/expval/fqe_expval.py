@@ -305,8 +305,10 @@ class FQEBraKet:
 
         if self.constant_dict_ket != {}:
             for const in self.constant_dict_ket.keys():
-
-                internal_variables[const] = internal_variables[const] + self.constant_dict_ket[const]
+                if type(const) is tq.objective.objective.Objective:
+                    internal_variables[const] = internal_variables[const.extract_variables()[0]] + self.constant_dict_ket[const]
+                else:
+                    internal_variables[const] = internal_variables[const] + self.constant_dict_ket[const]
             internal_variables["p0sign_ket"] = -np.pi # const
 
 
@@ -442,8 +444,18 @@ class FQEBraKet:
                     p0 = -p0
                     c[variable] = -  np.pi
 
-
-                index = braket.parameter_map_ket.index(variable)
+                if type(variable) is tq.Variable:
+                    index = braket.parameter_map_ket.index(variable)
+                else:
+                    i_f=0
+                    for k in braket.parameter_map_ket:
+                        if type(k) != tq.Variable:
+                            # print(k, "=======",variable)
+                            if k.extract_variables()[0] == variable.extract_variables()[0]:
+                                index=i_f
+                                # print(i_f)
+                        i_f+=1
+                # print(index)
                 aux_dict = {}
                 i = 0
                 for stuff in braket.ket_generator:
@@ -490,6 +502,12 @@ class FQEBraKet:
         if variable not in self.extract_variables():
 
             return 0.
+
+        if str(variable).find("R") != -1:
+            for k in self.ket_generator_idx_map.keys():
+                if type(k) != tq.Variable:
+                    if k.extract_variables()[0] == variable:
+                        variable = k
 
         erw=self.ket_generator_idx_map[variable]
         # print("Variable",variable,'->',erw)
@@ -570,7 +588,6 @@ def init_state_from_wavefunction(wvf:QubitWaveFunction, n_orb:int, bin_dict:dict
 
 
     return indices, values
-
 
 
 
