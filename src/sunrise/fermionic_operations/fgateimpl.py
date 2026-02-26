@@ -114,7 +114,6 @@ class FGateImpl:
         for gate in reversed(cir._indices):
             indinces.extend([[tuple([*idx][::-1]) for idx in gate]])
         cir.indices = indinces
-        cir.variables = -1*self.variables
         return cir
 
     @property
