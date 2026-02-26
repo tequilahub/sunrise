@@ -204,9 +204,6 @@ def rotate_and_hcb(molecule, rotators, circuit=None, variables=None, initial_sta
             print(f"Error in new basis:    {target-approx}")
             # print(f"test:                  {target-approx-rest}")
 
-            M_tot = compute_num_meas(circuit=circuit, variables=variables, initial_state=initial_state, is_hcb=True, hcb_mol=hcb_mol)
-            print(f"Number of measurements: {M_tot:e}\n")
-
         # Update values
         hcb_mols.append(hcb_mol)
         molecule = res_mol
@@ -271,6 +268,7 @@ def compute_num_meas(circuit=None, variables=None, initial_state=None, is_hcb=Fa
             # Compute individual Pauli number of measurements
             pauli_exp = tq.ExpectationValue(circuit+transformation, tq.QubitHamiltonian().from_paulistrings(op.naked()))
             var = 1.0 - tq.simulate(pauli_exp, variables=variables, initial_state=initial_state)**2
+            var = round(var, 10)
             M_l = ((abs(op.coeff) * np.sqrt(var)) / eps) ** 2
 
             # Pick the largest number of measurements
