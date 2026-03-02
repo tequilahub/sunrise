@@ -14,6 +14,7 @@ from typing import Tuple
 from numbers import Number
 from .binary_interface import *
 from sunrise import from_tequila
+from tequila import TequilaException
 
 def __transform(modified:QuantumChemistryBase,original:QuantumChemistryBase=None)->Tuple[QuantumChemistryBase,dict]:
     '''
@@ -97,7 +98,7 @@ def __get_MP2_occ(mol:QuantumChemistryBase):
     rdm1 = mp2.run().make_rdm1()
     return fr + numpy.diag(rdm1).tolist(),mp2.mo_energy
 
-def generate_molden(mol:QuantumChemistryBase,filename:str=None,output_dir:str=None,mo_occ:list=None,mo_energy:list=None,use_mp2:bool=False,option1:bool=True):
+def generate_molden(mol:QuantumChemistryBase,filename:str=None,output_dir:str=None,mo_occ:list=None,mo_energy:list=None,use_mp2:bool=False,option1:bool=True,use_active:bool=True):
     '''
     Interface with pyscf.tools molden file generation
 
@@ -108,10 +109,13 @@ def generate_molden(mol:QuantumChemistryBase,filename:str=None,output_dir:str=No
     :param mo_energy: Molecular Orbital energy. If None, hf or mp2 are used depending on use_mp2
     :param use_mp2: Whether to us mp2 or hf if no mo_occ and mo_energy are provided
     :param option1: Whether to use the first or second molden generation alternatives propsed by pyscf. See 
-    https://github.com/pyscf/pyscf/blob/master/examples/tools/02-molden.py for more info
+                    https://github.com/pyscf/pyscf/blob/master/examples/tools/02-molden.py for more info
+    :param use_active: Whether to include only the active orbitals.
     '''
 
     assert (mo_occ == None) and (mo_energy == None)
+    size_basis = len(mol.integral_manager._orbital_coefficients)
+    active = mol.integral_manager.active_space.active_orbitals
     pfmol = from_tequila(mol)
     if output_dir is None:
         output_dir = os.getcwd()
@@ -122,22 +126,35 @@ def generate_molden(mol:QuantumChemistryBase,filename:str=None,output_dir:str=No
             mf = scf.RHF(pfmol).run()
             mo_occ = mf.mo_occ
             mo_energy = mf.mo_energy
-
+    else:
+        assert len(mo_occ) == len(mo_energy)
+        if (use_active and len(mo_occ) == len(active) or len(mo_occ) == len(size_basis)) or (not use_active and len(mo_occ) == len(size_basis)):
+            pass
+        else:
+            raise TequilaException(f"{len(mo_occ)} Molecular Orbital Occupation but it doesn't fit not the total space size ({size_basis}) nor the active space size ({len(active)}). Use_active={use_active}") 
+    
     if filename is None: filename=mol.parameters.name
 
-    # #IDEA: Not really sure when to use each option of pyscf molden generation
+
+    mo_coeff = mol.integral_manager.orbital_coefficients
+    if use_active:
+        if len(mo_occ) == size_basis:
+            mo_occ = [mo_occ[i] for i in active]
+            mo_energy = [mo_energy[i] for i in active]
+        mo_coeff = mo_coeff[:,active]
+
     if option1:
         ### OPTION 1
         with open(f'{output_dir}/{filename}.molden', 'w') as f1:
             molden.header(pfmol, f1) 
-            molden.orbital_coeff(pfmol, f1, mol.integral_manager.orbital_coefficients, ene=mo_energy, occ=mo_occ)
+            molden.orbital_coeff(pfmol, f1, mo_coeff, ene=mo_energy, occ=mo_occ)
     else:
         ### OPTION 2
         try:
-            molden.from_mo(pfmol, f'{output_dir}/{filename}.molden',mol.integral_manager.orbital_coefficients,ene=mo_energy,occ=mo_occ)
+            molden.from_mo(pfmol, f'{output_dir}/{filename}.molden',mo_coeff,ene=mo_energy,occ=mo_occ)
         except RuntimeError:
             print('    Found l=5 in basis.')
-            molden.from_mo(pfmol, f'{output_dir}/{filename}.molden', mol.integral_manager.orbital_coefficients,ene=mo_energy,occ=mo_occ,ignore_h=True)
+            molden.from_mo(pfmol, f'{output_dir}/{filename}.molden', mo_coeff,ene=mo_energy,occ=mo_occ,ignore_h=True)
 
 def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,**kwargs)->Tuple[QuantumChemistryBase,list]:
     '''
@@ -169,8 +186,8 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,th
     nmol.integral_manager.orbital_coefficients = mo_matrix
     mol,to_active = __transform(original=mol,modified=nmol)
     graph = extract_clpo_graph(f"{output_dir}/graph")
-    ncore = len(mol.integral_manager.orbital_coefficients)-mol.n_orbitals
-    graph = [tuple([to_active[i]-ncore for i in edge if i in to_active.keys()])for edge in graph]
+    d = {o.idx_total:o.idx for o in mol.integral_manager.active_orbitals}
+    graph = [tuple([d[i] for i in edge if i in to_active.keys()]) for edge in graph]
     graph = [g for g in graph if len(g)]
     subprocess.call(f'rm {output_dir}/graph',shell=True)
     return mol,graph
