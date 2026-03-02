@@ -1,8 +1,8 @@
 <p align="left">
-  <img src="sunrise_logo.png" width="150"/>
+  <img src="sunrise_logo.png" width="175"/>
 </p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENCE) [![PyPI version](https://badge.fury.io/py/project-sunrise.svg)](https://pypi.org/project/project-sunrise/) ![CI](https://github.com/tequilahub/sunrise/actions/workflows/ci_basic.yml/badge.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE) [![PyPI version](https://badge.fury.io/py/project-sunrise.svg)](https://pypi.org/project/project-sunrise/) ![CI](https://github.com/tequilahub/sunrise/actions/workflows/ci_basic.yml/badge.svg)
 
 Sunrise is a package for all-around fermionic state preparation and simulation on quantum computers.
 It holds no qubits, but only physical information, making it efficient for storage and manipulation.
@@ -36,6 +36,10 @@ Or install from devel branch (most recent updates):
 ```bash
 pip install git+https://github.com/tequilahub/sunrise.git@devel
 ```
+
+# Examples
+All the examples can be found in the folder [examples](examples/). \
+In the following we show the most relevant examples.
 
 ## Fermionic Backends
 To see the supported fermionic backends:
