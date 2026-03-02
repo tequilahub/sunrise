@@ -62,11 +62,11 @@ def test_transition(backend):
 
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
-def test_maped_variables(geom,backend):
+def test_mapped_variables(geom,backend):
     random.seed(datetime.now().timestamp())
     mol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     edges = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='hybrid').get_spa_edges()
-    U = mol.make_ansatz("SPA",edges=edges,optimize=backend!='tequila')
+    U = mol.make_ansatz("SPA",edges=edges,optimize=False)
     mapa = {d:random.random()*np.pi for d in U.extract_variables()}
     U = U.map_variables(mapa)
     circuit = sn.FCircuit.from_edges(edges=edges,n_orb=mol.n_orbitals)
