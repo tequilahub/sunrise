@@ -1,3 +1,9 @@
+<p align="left">
+  <img src="sunrise_logo.png" width="150"/>
+</p>
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENCE) [![PyPI version](https://badge.fury.io/py/project-sunrise.svg)](https://pypi.org/project/project-sunrise/) ![CI](https://github.com/tequilahub/sunrise/actions/workflows/ci_basic.yml/badge.svg)
+
 Sunrise is a package for all-around fermionic state preparation and simulation on quantum computers.
 It holds no qubits, but only physical information, making it efficient for storage and manipulation.
 
