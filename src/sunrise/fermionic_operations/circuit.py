@@ -469,10 +469,10 @@ class FCircuit:
                 reference += X([edge[0],edge[0]+n_orb])
             previous = edge[0]
             for i in edge[1:]:
-                v = Variable(((previous,i),'D',label))
+                angle = Variable(((previous,i),'D',label))
                 if use_units_of_pi:
                     angle = angle * pi
-                operations += sunrise.gates.UC(i=previous,j=i,variables=v)
+                operations += sunrise.gates.UC(i=previous,j=i,variables=angle)
                 if ladder:
                     previous = i
         reference += I(target=[i for i in range(n_orb*2) if i not in reference.qubits])  # to set n_qubits
