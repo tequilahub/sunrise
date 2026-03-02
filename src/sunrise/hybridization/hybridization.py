@@ -335,7 +335,7 @@ class Graph:
             for n,o in enumerate(first):
                 new[n,:] = orbital_matrix[o,:]
             for i in range(not_bonded_hybrid,uneffective):
-                new[n+i,:] = orbital_matrix[i]
+                new[i,:] = orbital_matrix[i]
             orbital_matrix = new
             del new
 
@@ -472,8 +472,12 @@ class Graph:
                     coefficient_matrix = np.dot(transformation_matrix, coefficient_matrix)
         return coefficient_matrix
 
-    def get_HAO_orbitals(self) -> np.array:
-        matrices = [self.apply_hybridization(atom, strip_orbitals=False) for atom in self.atoms]
+    def get_HAO_orbitals(self,sp_list:list[int]=None) -> np.array:
+        if sp_list is None:
+            matrices = [self.apply_hybridization(atom ,strip_orbitals=False) for atom in self.atoms]
+        else:
+            matrices = [self.apply_hybridization(atom ,strip_orbitals=False,sp=sp_list[self.get_atom_indices(atom)]) for atom in self.atoms]
+
         size = sum(matrix.shape[0] for matrix in matrices)
         coefficient_matrix = np.zeros((size, size))
         # Fill the final matrix by placing each matrix along the diagonal

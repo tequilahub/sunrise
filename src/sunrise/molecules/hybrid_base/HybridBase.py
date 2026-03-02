@@ -20,7 +20,7 @@ from sunrise.molecules.hybrid_base.FermionicGateImpl import FermionicGateImpl
 from openfermion import FermionOperator
 import copy
 from sunrise.hybridization.hybridization import Graph
-from typing import Union
+from typing import Union,Optional,List
 class HybridBase(qc_base):
     def __init__(self, parameters: ParametersQC,select: typing.Union[str,dict]={},transformation: typing.Union[str, typing.Callable] = None, active_orbitals: list = None,
                  frozen_orbitals: list = None, orbital_type: str = None,reference_orbitals: list = None, orbitals: list = None, *args, **kwargs):
@@ -1877,10 +1877,34 @@ class HybridBase(qc_base):
         return g.get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals),g.get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
 
    
-    def get_HAO_orbitals_coeff(self)->numpy.ndarray:
-        return self.graph().get_HAO_orbitals()
+    def get_HAO_orbitals_coeff(self,sp_list:Union[List[int],List[str],dict,None]=None)->numpy.ndarray:
+        """
+        Parameters
+        ----------
+            sp_list:
+                Optional. List of integrers/strigs of int corresponding to the spX hybridization of each atoms. By default None, they are chosen by
+                geometrical considerations. If dont want to define all atoms, "Auto" will be chosen by geometry.
+                Also can be passed a dict as {atom_idx:sp}, if not atom on the dictionary, will be set to Auto.
+                
+        Returns
+        -------
+        Matrix of the Hybrid Atomic Orbitals
+        """
+        n_atoms = len(self.parameters.get_atoms())
+        if isinstance(sp_list,list):
+            if len(sp_list) <= n_atoms:
+                sp_list += (n_atoms-len(sp_list))*['Auto']
+            else:
+                TequilaWarning(f'{len(sp_list)} hybridization passed, but only expected {n_atoms}. Only the first {n_atoms} will be employed.')
+                sp_list = sp_list[:n_atoms]
+        elif isinstance(sp_list,dict):
+            new_sp_list = ['Auto']*n_atoms
+            for i in sp_list.keys():
+                new_sp_list[i] = sp_list[i]
+            sp_list = new_sp_list
+        return self.graph().get_HAO_orbitals(sp_list=sp_list)
 
-    def use_HAO_orbitals(self, inplace=False, core: list = None, *args, **kwargs):
+    def use_HAO_orbitals(self, inplace=False, core: Optional[list[int]] = None, sp_list: Union[list[int],list[str],dict,None] = None, *args, **kwargs):
         """
         Parameters
         ----------
@@ -1898,6 +1922,10 @@ class HybridBase(qc_base):
                 As an example, Assume the input geometry was H, He, H. active=[0,1,2] is selecting the (orthonormalized) atomic 1s (left H), 1s (He), 1s (right H).
                 If core=[0] and active is not set, then active=[0,2] will be selected automatically (as the 1s He atomic orbital will have the largest overlap
                 with the lowest energy HF orbital).
+            sp_list:
+                Optional. List of integrers corresponding to the spX hybridization of each atoms. By default None, they are chosen by
+                geometrical considerations. If dont want to define all atoms, "Auto" will be chosen by geometry.
+                Also can be passed a dict as {atom_idx:sp}, if not atom on the dictionary, will be set to Auto.
         Returns
         -------
         New molecule in the native (orthonormalized) basis given
@@ -1905,7 +1933,7 @@ class HybridBase(qc_base):
         """
         c = copy.deepcopy(self.integral_manager.orbital_coefficients)
         s = self.integral_manager.overlap_integrals
-        d = self.get_HAO_orbitals_coeff().T
+        d = self.get_HAO_orbitals_coeff(sp_list=sp_list).T
         def inner(a, b, s):
             return numpy.sum(numpy.multiply(numpy.outer(a, b), s))
 
@@ -1964,7 +1992,7 @@ class HybridBase(qc_base):
                     sprima[j][i] = sprima[i][j]
             lam_s, l_s = numpy.linalg.eigh(sprima)
             lam_s = lam_s * numpy.eye(len(lam_s))
-            lam_sqrt_inv = numpy.sqrt(numpy.linalg.inv(lam_s))
+            lam_sqrt_inv = numpy.sqrt(numpy.clip(numpy.linalg.inv(lam_s), a_min=1.e-8, a_max=None)) #safety
             symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
             return symm_orthog.dot(c).T
 
