@@ -2,7 +2,7 @@
 **/sunrise.egg-info
 **/.idea
 **/.git
-**/.hdf5
+*/.hdf5
 **/.vscode
 **/.pytest_cache
 
