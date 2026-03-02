@@ -39,7 +39,7 @@ pip install git+https://github.com/tequilahub/sunrise.git@devel
 
 # Examples
 All the examples can be found in the folder [examples](examples/). \
-In the following we show the most relevant examples.
+In the following we show the most relevant ones.
 
 ## Fermionic Backends
 To see the supported fermionic backends:
