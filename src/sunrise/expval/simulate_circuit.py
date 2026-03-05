@@ -17,6 +17,7 @@ try:
 except ImportError:
     pass
 try:
+    raise NotImplemented
     from sunrise.expval.fqe_expval import FQEBraKet
     INSTALLED_FERMIONIC_BACKENDS["fqe"] = FQEBraKet
 except ImportError:
@@ -37,7 +38,7 @@ def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='
     if variables is None and not (len(U.extract_variables()) == 0):
         raise TequilaException(
             "You called simulate for a parametrized type but forgot to pass down the variables: {}".format(
-                objective.extract_variables()
+                U.extract_variables()
             )
         )
     if backend in SUPPORTED_BACKENDS:
@@ -63,9 +64,12 @@ def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='
         else:
             raise TequilaException(f'Not Fermionic Backend selected ({backend}) and no manner of compiling to qubit provided.')
         return tq_simulate(U,backend=backend,variables=variables,**kwargs)
-    elif backend in ['tcc','fqe']:
-        simulator = INSTALLED_FERMIONIC_BACKENDS[backend]
-        return simulator(U=U,variables=variables,**kwargs)
+    elif backend in SUPPORTED_FERMIONIC_BACKENDS:
+        if backend in INSTALLED_FERMIONIC_BACKENDS:
+            simulator = INSTALLED_FERMIONIC_BACKENDS[backend]
+            return simulator(U=U,variables=variables,**kwargs)
+        else:
+            raise TequilaException(f'Backend {backend} not installed.')
     else:
         raise TequilaException(f'Not recognised backed: {backend}.')
 
