@@ -17,7 +17,7 @@ try:
 except ImportError:
     pass
 try:
-    raise NotImplemented
+    raise TequilaException("Not implemented yet.")
     from sunrise.expval.fqe_expval import FQEBraKet
     INSTALLED_FERMIONIC_BACKENDS["fqe"] = FQEBraKet
 except ImportError:
