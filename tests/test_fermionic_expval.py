@@ -129,3 +129,18 @@ def test_gradient(geom,backend):
     tqg = [tq.simulate(tq.grad(tqval,v),variables=values) for v in variables]
     sng = [sn.simulate(sn.grad(snval,v),variables=values) for v in variables]
     assert np.allclose(tqg,sng)
+
+@pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
+@pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
+def test_circuit_simulate(geom,backend):
+    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a')
+    snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f')
+    random.seed(datetime.now().timestamp())
+    tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=False)
+    snU = snmol.make_ansatz('UpCCSD')
+    variables = {d:random.random()*np.pi for d in tqU.extract_variables()}
+    
+    tq_wfn = tq.simulate(tqU,variables=variables)
+    sn_wfn = sn.simulate(snU,variables=variables,n_orb=snmol.n_orbitals,backend=backend)
+    
+    assert isclose(tq_wfn.inner(sn_wfn),1)

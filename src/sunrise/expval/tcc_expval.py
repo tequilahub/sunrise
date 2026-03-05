@@ -673,9 +673,7 @@ def init_state_from_wavefunction(wvf:QubitWaveFunction):
         return init_state_from_array(wvf=wvf)
     init_state = []
     for i in wvf._state:
-        vec = bin(i)[2:]
-        if len(vec) < wvf.n_qubits:
-            vec = '0'*(wvf.n_qubits-len(vec))+vec
+        vec = bin(i)[2:].zfill(wvf.n_qubits)
         init_state.append([vec,wvf._state[i].real])#tcc automatically does this, but with an anoying message everytime
     return init_state
 

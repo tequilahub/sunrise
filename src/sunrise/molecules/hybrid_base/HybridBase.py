@@ -151,7 +151,7 @@ class HybridBase(qc_base):
             """
             select = [*select]
             sel = {}
-            if isinstance(select[0],int):
+            if len(select) and isinstance(select[0],int):
                 for i in range(self.n_orbitals):
                     if i in select:
                         sel[i] = "F"

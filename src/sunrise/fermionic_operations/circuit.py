@@ -9,7 +9,7 @@ from tequila import assign_variable,QCircuit,QubitWaveFunction
 from typing import List,Union,Iterable,Optional,Callable
 import copy
 from collections import defaultdict
-from numpy import ndarray,where,isclose,pi,array
+from numpy import ndarray,where,isclose,pi,array,argwhere
 import warnings
 import numbers
 from copy import deepcopy
@@ -153,6 +153,15 @@ class FCircuit:
         idx = max(self.max_qubit() + 1, self._min_n_qubits)
         wvf = self._initial_state.n_qubits if self._initial_state is not None else 0
         return max(idx,wvf)
+    
+    @property
+    def n_electrons(self):
+        if self.initial_state is None:
+            return None
+        elif isinstance(self.initial_state._state,dict):
+            return bin([*self.initial_state._state.keys()][0])[2:].count('1')
+        else:
+            return bin(argwhere(self.initial_state._state>1.e-6)[0][0])[2:].count('1')
 
     @n_qubits.setter
     def n_qubits(self, other):
@@ -460,7 +469,7 @@ class FCircuit:
         operations = FCircuit()
         if n_orb:
             include_reference = True
-            reference = QCircuit()
+            reference = I(target=[i for i in range(n_orb*2)])  # to set n_qubits
         else: 
             include_reference = False
             reference = None
@@ -475,7 +484,6 @@ class FCircuit:
                 operations += sunrise.gates.UC(i=previous,j=i,variables=angle)
                 if ladder:
                     previous = i
-        reference += I(target=[i for i in range(n_orb*2) if i not in reference.qubits])  # to set n_qubits
         return cls(gates=operations._gates,initial_state=reference)
 
     @staticmethod

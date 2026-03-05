@@ -3,20 +3,17 @@ import typing
 from tequila.circuit.compiler import CircuitCompiler
 from tequila.objective.objective import Objective,ExpectationValueImpl,Variable,assign_variable,identity,FixedVariable
 from tequila.circuit.noise import NoiseModel
-from tequila import TequilaException,QCircuit,QubitWaveFunction,Molecule,TequilaWarning
-from tequila.circuit.gradient import grad as tgrad
+from tequila import TequilaException,QCircuit,QubitWaveFunction
 from tequila.objective import QTensor,format_variable_dictionary
 from tequila.simulators.simulator_api import compile
 import typing
-from numpy import vectorize,zeros
+from numpy import vectorize
 from tequila.autograd_imports import jax, __AUTOGRAD__BACKEND__
 from typing import Dict, Union, Hashable,Callable
 from numbers import Number
 from numbers import Real as RealNumber
 from ..fermionic_operations import FCircuit
-from sunrise.expval.pyscf_molecule import MoleculeFromPyscf 
-from pyscf.gto import Mole
-import warnings
+from sunrise.expval.simulate_circuit import simulate_fcircuit
 
 def minimize(objective,method: str = "bfgs",variables: list = None,initial_values: Union[dict, Number, Callable] = 0.0,maxiter: int = None,silent:bool=True,*args,**kwargs):
     if type(objective).__name__ == 'TequilaBraket':
@@ -313,49 +310,8 @@ def simulate(
     if type(objective).__name__ == 'TequilaBraket':
         return simulate(objective=objective.build(),variables=variables,samples=samples,backend=backend,noise=noise,device=device,initial_state=initial_state,*args,**kwargs)
     if isinstance(objective,FCircuit):
-        if initial_state != 0 :
-            raise TequilaWarning("sun.Simulate(FCircuit) doesn't support the keyword initial_state, you have to provide it from\n" \
-            "the FCicuit.initial_state, in UPTHENDOWN mandatory")
-        mol = None
-        nmo = None
-        if 'molecule' in kwargs:
-            mol = kwargs['molecule']
-            kwargs.pop('molecule')
-        elif 'mol' in kwargs:
-            mol = kwargs['mol']
-            kwargs.pop('mol')
-        elif 'n_mo' in kwargs:
-            nmo = kwargs['nmo']
-            kwargs.pop('nmo')
-        elif 'n_orbitals' in kwargs:
-            nmo = kwargs['n_orbitals']
-            kwargs.pop('n_orbitals')
-        else:
-            avisa = True
-            nmo = (max(objective.qubits)//2) + 1
-        if mol is not None:
-            if isinstance(mol,Mole):
-                mol = MoleculeFromPyscf(mol)
-        elif nmo is not None:
-            if 'transformation' in kwargs:
-                transformation = kwargs['transformation']
-                kwargs.pop('transformation')
-            else: transformation = 'Jordan-Wigner'
-            h = zeros((nmo,nmo))
-            g = zeros((nmo,nmo,nmo,nmo))
-            mol = Molecule(geometry= "\n".join(f"H 0.0 0.0 {i}" for i in range(nmo)),basis_set='sto-3g',one_body_integrals=h,two_body_integrals=g,transformation=transformation,units='Angstrom',nature='t',backend='pyscf')
-            if avisa and not all([ not g.reordered for g in objective.gates]):
-                warnings.warn("Some indices were provided in reordered, the output may not be correct",TequilaWarning)
-        mol.transformation.up_then_down = True
-        U = objective.to_qcircuit(mol)
-        #TODO: This is a temporaly bypass while more sofisticate initial states
-        return simulate(objective=U,variables=variables,samples=samples,backend=backend,noise=noise,device=device,args=args,kwargs=kwargs)
-        #IDEA this is should be continued when fixed
-        # ini = f''.join(f'{ini[i].real}|{bin(i)[2:]}>'.format() for i in main)
-        # ini = QubitWaveFunction.from_string(f''.join(f'{ini[i].real}|{bin(i)[2:]}>'.format() for i in main))
-        # U = objective.to_qcircuit(mol)
-        # return  simulate(objective=U,initial_state=ini,variables=variables,samples=samples,backend=backend,noise=noise,device=device,args=args,kwargs=kwargs)
-            
+        return simulate_fcircuit(U=objective,variables=variables,*args,**kwargs)
+    
     compiled_objective = compile(
         objective=objective,
         samples=samples,

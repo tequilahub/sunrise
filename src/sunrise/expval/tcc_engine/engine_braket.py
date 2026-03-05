@@ -23,6 +23,9 @@ from sunrise.expval.tcc_engine.evolve_pyscf import get_expval_and_grad_pyscf,get
 from sunrise.expval.tcc_engine.evolve_civector import get_energy_and_grad_civector,get_energy_and_grad_civector_nocache
 from sunrise.expval.tcc_engine.evolve_civector import get_expval_and_grad_civector,get_expval_and_grad_civector_nocache
 from tequila import Variable,Objective,simulate
+from tencirchem.static.engine_ucc import get_ket,civector_to_statevector
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +86,21 @@ def get_energy(angles, hamiltonian, n_qubits, n_elec_s, total_variables,params,e
     )
     hket = apply_op(hamiltonian, ket)
     return ket @ hket
+
+def get_statevector(angles, total_variables,params, n_qubits, n_elec_s, ex_ops, param_ids, mode, init_state, engine):
+    ci_strings = get_ci_strings(n_qubits, n_elec_s, mode)
+    assert len(angles)==len(total_variables)
+    dangles = {total_variables[i].name:angles[i] for i in range(len(angles))}
+    pa = []
+    for p in params:
+        pa.append(map_variables(p,dangles))
+    map_params = tc.backend.numpy(tc.backend.convert_to_tensor(pa).astype(tc.rdtypestr))
+    ket = get_ket(map_params, n_qubits, n_elec_s, ex_ops, param_ids, mode, init_state, ci_strings, engine)
+    if engine.startswith("civector") or engine == "pyscf":
+        statevector = civector_to_statevector(ket, n_qubits, ci_strings)
+    else:
+        statevector = ket
+    return statevector
 
 get_expval_statevector = partial(get_expval, engine="statevector")
 try:
