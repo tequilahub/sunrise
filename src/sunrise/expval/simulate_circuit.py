@@ -16,12 +16,12 @@ try:
     INSTALLED_FERMIONIC_BACKENDS["tcc"] = tcc_circuit_simulator
 except ImportError:
     pass
-try:
-    raise TequilaException("Not implemented yet.")
-    from sunrise.expval.fqe_expval import FQEBraKet
-    INSTALLED_FERMIONIC_BACKENDS["fqe"] = FQEBraKet
-except ImportError:
-    pass
+# try:
+#     raise TequilaException("Not implemented yet.")
+#     from sunrise.expval.fqe_expval import FQEBraKet
+#     INSTALLED_FERMIONIC_BACKENDS["fqe"] = FQEBraKet
+# except ImportError:
+#     pass
 
 
 def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='tcc',**kwargs) -> QubitWaveFunction:
