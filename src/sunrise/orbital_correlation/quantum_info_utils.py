@@ -32,10 +32,6 @@ def quantum_entropy(rho:np.ndarray)->float:
     if np.any(np.linalg.eigvalsh(rho).round() < 0):
         raise ValueError("rho must be positive semidefinite.")
 
-    # Compute directly
-    # log_rho = logm(rho)
-    # entropy = -np.trace(rho @ log_rho).real
-
     # Compute through eigenvalues
     rho_evals, rho_evecs = eigh(rho)
     rho_evals = np.clip(rho_evals, 1e-12, None)
@@ -74,16 +70,6 @@ def quantum_relative_entropy(rho:np.ndarray, sigma:np.ndarray)->float:
     if np.any(np.linalg.eigvalsh(sigma).round() < 0):
         raise ValueError("sigma must be positive semidefinite.")
 
-    # Add some noise to make it positive semidefinite
-    # epsilon = 1e-10
-    # rho = (rho + epsilon * np.eye(sigma.shape[0])).real
-    # sigma = (sigma + epsilon * np.eye(sigma.shape[0])).real
-
-    # Compute directly
-    # log_rho = logm(rho)
-    # log_sigma = logm(sigma)
-    # relative_entropy = np.trace(rho @ (log_rho - log_sigma)).real
-
     # Compute through eigenvalues
     rho_evals, rho_evecs = eigh(rho)
     sigma_evals, sigma_evecs = eigh(sigma)
@@ -96,6 +82,25 @@ def quantum_relative_entropy(rho:np.ndarray, sigma:np.ndarray)->float:
     return relative_entropy
 
 def mutual_info_simple(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, orb_b:int=1, PSSR:bool=False, NSSR:bool=False)->float:
+    """
+    Compute the pairwise mutual information I(A:B) = S(rho_A) + S(rho_B) - S(rho_AB)
+    between two orbitals A and B.
+
+    Parameters:
+        mol (tqMolecule): Tequila molecule object defining the system.
+        circuit (QCircuit, optional): Ansatz quantum circuit.
+        variables (Variables, optional): Optimized parameters for the circuit.
+        initial_state (QubitWaveFunction, optional): Initial state for the simulation.
+        orb_a (int): Index of the first orbital.
+        orb_b (int): Index of the second orbital.
+        PSSR (bool): If True, apply the Parity Superselection Rule when
+                     computing the two-orbital RDM. Defaults to False.
+        NSSR (bool): If True, apply the Particle Number Superselection Rule when
+                     computing the two-orbital RDM. Defaults to False.
+
+    Returns:
+        float: The mutual information I(A:B) between the two orbitals.
+    """
     rho_a = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_a)
     S_a = quantum_entropy(rho_a)
     rho_b = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_b)
@@ -106,6 +111,30 @@ def mutual_info_simple(mol:tqMolecule, circuit:QCircuit=None, variables:Variable
     return S_a + S_b - S_ab # there might be a 0.5 depending to convention
 
 def one_orb_mutual_info(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, PSSR:bool=False, NSSR:bool=False):
+    """
+    Compute the single-orbital mutual information I_i for orbital i.
+
+    Depending on the symmetry restriction flags, different formulas are applied:
+    - PSSR (Particle-number Symmetry Sector Restriction): Uses eigenvalue-based expression
+      corresponding to Eq.(29) of https://doi.org/10.1021/acs.jctc.0c00559 with particle-hole
+      pairing of eigenvalues.
+    - NSSR (Number Symmetry Sector Restriction): Uses a variant where only number-conserving
+      blocks are grouped.
+    - Default (no restriction): Returns twice the single-orbital entanglement entropy via
+      `one_orb_entanglement`.
+
+    Parameters:
+        mol (tqMolecule): Tequila molecule object defining the system.
+        circuit (QCircuit, optional): Ansatz quantum circuit. Defaults to None.
+        variables (Variables, optional): Optimized parameters for the circuit. Defaults to None.
+        initial_state (QubitWaveFunction, optional): Initial state for the simulation. Defaults to None.
+        orb_a (int): Index of the orbital. Defaults to 0.
+        PSSR (bool): Apply Parity Superselection Rule. Defaults to False.
+        NSSR (bool): Apply Particle Number Superselection Rule. Defaults to False.
+
+    Returns:
+        float: The single-orbital mutual information I_i.
+    """
     rho_a = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_a)
     if PSSR:
         rho_a_evals, rho_a_evecs = eigh(rho_a)
@@ -127,7 +156,21 @@ def one_orb_mutual_info(mol:tqMolecule, circuit:QCircuit=None, variables:Variabl
 
 def total_mutual_info(mol, circuit=None, variables=None, initial_state=0, orbs=None, PSSR=False, NSSR=False):
     """
-    Compute the mutual information between specified orbitals and the rest of the system.
+    Compute the total mutual information between specified orbitals and the rest of the system.
+
+    The total mutual information is defined as the sum of single-orbital entropies minus the
+    entropy of the full system state: I_total = sum_i S(rho_i) - S(rho).
+
+    Parameters:
+        mol: Tequila molecule object defining the system.
+        circuit (QCircuit, optional): Ansatz quantum circuit.
+        variables (Variables, optional): Optimized parameters for the circuit.
+        initial_state (int or QubitWaveFunction, optional): Initial state.
+        orbs (list of int, optional): List of orbital indices to include. If None, all
+                                      molecular orbitals are used.
+
+    Returns:
+        float: The total mutual information summed over the specified orbitals.
     """
 
     if not orbs:
@@ -146,6 +189,27 @@ def total_mutual_info(mol, circuit=None, variables=None, initial_state=0, orbs=N
     return one_entropy - system_entropy
 
 def one_orb_entanglement(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, PSSR:bool=False, NSSR:bool=False)->float:
+    """
+    Compute the single-orbital entanglement entropy E_i for orbital i.
+
+    Depending on the symmetry restriction flags, the entanglement entropy is computed using
+    a symmetry-adapted formula based on Eq.(29) of https://doi.org/10.1021/acs.jctc.0c00559:
+    - PSSR: Pairs eigenvalues symmetrically (particle-hole pairing) before computing entropy.
+    - NSSR: Groups number-conserving off-diagonal blocks when computing the entropy.
+    - Default: Returns the standard von Neumann entropy S(rho_a).
+
+    Parameters:
+        mol (tqMolecule): Tequila molecule object defining the system.
+        circuit (QCircuit, optional): Ansatz quantum circuit.
+        variables (Variables, optional): Optimized parameters for the circuit.
+        initial_state (QubitWaveFunction, optional): Initial state for the simulation.
+        orb_a (int): Index of the orbital to compute entanglement for.
+        PSSR (bool): Apply Parity Superselection Rule.
+        NSSR (bool): Apply Particle Number Superselection Rule.
+
+    Returns:
+        float: The single-orbital entanglement entropy E_i.
+    """
     rho_a = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_a)
     if PSSR==True:
         rho_a_evals, rho_a_evecs = eigh(rho_a)
@@ -161,17 +225,31 @@ def one_orb_entanglement(mol:tqMolecule, circuit:QCircuit=None, variables:Variab
         E -= (xlnx[1] + xlnx[2])
     else:
         S_a = quantum_entropy(rho_a)
-        # assert np.isclose(S_a,S_b)
         E = S_a
 
     return E
 
 
-
 def func(x, d, rho):
     """
-    Computes S(rho || sigma) where sigma is constructed from x.
-    Probabilities are derived from the norms of the vectors in x.
+    Objective function for minimizing the relative entropy of entanglement.
+
+    Constructs a separable state sigma from the parameter vector x and computes the
+    quantum relative entropy S(rho || sigma). The separable state is a convex combination
+    of d product states, where the mixing probabilities are derived from the squared norms
+    of the component vectors encoded in x.
+
+    Each component k contributes a term p_k * |psi_A_k><psi_A_k| ⊗ |psi_B_k><psi_B_k|
+    to sigma, where p_k = |v_A_k|^2 * |v_B_k|^2 (normalized over all components).
+
+    Parameters:
+        x (ndarray): Flat parameter vector of shape (2*d*4,), encoding d pairs of
+                     4-dimensional vectors (one for subsystem A, one for subsystem B).
+        d (int): Number of separable components in the decomposition.
+        rho (ndarray): Target density matrix (16x16) in the molecular orbital basis.
+
+    Returns:
+        float: The quantum relative entropy S(rho || sigma).
     """
     x_reshaped = x.reshape(2*d, 4)
     components = []
@@ -196,8 +274,6 @@ def func(x, d, rho):
         probs = raw_weights / total_weight
 
     for k in range(d):
-        # Normalize vectors for the state creation
-        # (create_separable_mixed_state handles normalization, but we need norms for probs)
         vA = vecs_A[k]
         vB = vecs_B[k]
         components.append((probs[k], vA, vB))
@@ -210,8 +286,22 @@ def func(x, d, rho):
 
 def relative_entropy_gradient_matrix(rho, sigma, epsilon=1e-12):
     """
-    Computes the matrix gradient of -Tr(rho log sigma) w.r.t sigma
-    using the Daleckii-Krein formula (divided differences).
+    Compute the matrix gradient of -Tr(rho log sigma) with respect to sigma.
+
+    Uses the Daleckii-Krein formula (divided differences) to handle both degenerate
+    and non-degenerate cases of sigma's spectrum. The result is a matrix G such that
+    the directional derivative of -Tr(rho log sigma) along dSigma is Tr(G @ dSigma).
+
+    Parameters:
+        rho (ndarray): Density matrix rho (Hermitian, positive semidefinite).
+        sigma (ndarray): Density matrix sigma (Hermitian, positive semidefinite).
+                         Must not have zero eigenvalues (clipped internally with epsilon).
+        epsilon (float): Small value for clipping eigenvalues and detecting degeneracy.
+                         Defaults to 1e-12.
+
+    Returns:
+        ndarray: Real-valued gradient matrix of shape (n, n), where n is the
+                 dimension of the density matrices.
     """
     # 1. Diagonalize sigma
     s_evals, s_evecs = eigh(sigma)
@@ -222,7 +312,7 @@ def relative_entropy_gradient_matrix(rho, sigma, epsilon=1e-12):
     # 2. Rotate rho to sigma basis: rho_rot = U^dag @ rho @ U
     rho_rot = s_evecs.conj().T @ rho @ s_evecs
     
-    # 3. Prepare differences
+    # 3. Prepare differences using Daleckii-Krein divided differences
     lambda_j = s_evals[:, None] 
     lambda_k = s_evals[None, :]
     
@@ -231,12 +321,12 @@ def relative_entropy_gradient_matrix(rho, sigma, epsilon=1e-12):
     
     D = np.zeros_like(rho)
     
-    # --- CASE 1: Non-Degenerate ---
+    # --- CASE 1: Non-Degenerate (standard divided difference) ---
     log_lambda = np.log(s_evals)
     log_diff = log_lambda[:, None] - log_lambda[None, :]
     D[~mask] = log_diff[~mask] / lin_diff[~mask]
     
-    # --- CASE 2: Degenerate (Limit Case) ---
+    # --- CASE 2: Degenerate (Limit: f'(lambda) = 1/lambda for f=log) ---
     rows, cols = np.nonzero(mask)
     D[rows, cols] = 1.0 / s_evals[rows]
     
@@ -249,6 +339,26 @@ def relative_entropy_gradient_matrix(rho, sigma, epsilon=1e-12):
     return grad_sigma.real
 
 def gradient_func(x, d, rho):
+    """
+    Compute the analytic gradient of the objective function `func` with respect to x.
+
+    Performs a full forward pass to reconstruct sigma from x, then backpropagates
+    through the relative entropy computation using the matrix gradient of -Tr(rho log sigma)
+    (via `relative_entropy_gradient_matrix`) and the chain rule through the norm-weighted
+    parameterization of the separable state.
+
+    The gradient accounts for two contributions per component k:
+    - The projector gradient: how the direction of each vector (psi_A_k, psi_B_k) affects sigma.
+    - The weight gradient: how the magnitude of each vector affects the mixing probability p_k.
+
+    Parameters:
+        x (ndarray): Flat parameter vector of shape (2*d*4,), same format as `func`.
+        d (int): Number of separable components in the decomposition.
+        rho (ndarray): Target density matrix (16x16) in the molecular orbital basis.
+
+    Returns:
+        ndarray: Gradient vector of shape (2*d*4,), matching the shape of x.
+    """
     x_reshaped = x.reshape(2*d, -1)
     
     # --- 1. Forward Pass ---
@@ -279,7 +389,6 @@ def gradient_func(x, d, rho):
     grad_sigma_mol = relative_entropy_gradient_matrix(rho, sigma_mol)
     
     # --- 3. Transform Gradient back to Computational Basis ---
-    # This replaces the inverse permutation logic
     grad_sigma_comp = change_basis(grad_sigma_mol, 'to_computational')
         
     # --- 4. Chain Rule for Norm-Weighted Params ---
@@ -309,7 +418,7 @@ def gradient_func(x, d, rho):
     dL_dw = (traces - avg_trace) / total_weight
     
     for k in range(d):
-        # Projector gradient part
+        # Projector gradient part (unnormalized gradient for a unit vector psi in direction v)
         def unnorm_grad(g_psi, psi, n):
             return (g_psi - np.dot(psi.conj(), g_psi).real * psi) / (n + 1e-12)
 
@@ -333,7 +442,26 @@ def gradient_func(x, d, rho):
 
 def get_classical_diagonal_guess(rho):
     """
-    Generates the Classical Diagonal state parameters from a 16x16 Density Matrix.
+    Generate an initial guess for the separable state optimization from a 16x16 density matrix.
+
+    Constructs a classical diagonal separable state by reading the diagonal of rho in the
+    computational basis. Each non-negligible diagonal entry rho[k,k] is interpreted as a
+    probability weight for the corresponding product basis state |i_A> ⊗ |i_B>, where
+    k = idx_A * 4 + idx_B.
+
+    The parameter vector x0 encodes each component as a pair of vectors (vec_A, vec_B)
+    scaled by sqrt(prob), so that the norm-squared product recovers the diagonal probability.
+
+    Parameters:
+        rho (ndarray): Density matrix (16x16) in the molecular orbital basis. Internally
+                       converted to the computational basis before reading the diagonal.
+
+    Returns:
+        tuple:
+            states (list of tuple): List of (prob, vec_A, vec_B) tuples for each component
+                                    with diagonal weight > 1e-6.
+            x0 (ndarray): Flat parameter vector encoding the initial guess, suitable as
+                          input to `func` and `gradient_func`.
     """
     # 1. Define the 4 basis vectors for a single orbital
     basis_vectors = np.eye(4) 
@@ -341,7 +469,7 @@ def get_classical_diagonal_guess(rho):
     states = []
     x0 = []
 
-    # FIX: The input rho is in the Molecular Basis.
+    # The input rho is in the Molecular Basis.
     # We must rotate it to Computational Basis to interpret index k as (idx_A * 4 + idx_B).
     rho_computational = change_basis(rho, direction='to_computational')
 
@@ -350,7 +478,7 @@ def get_classical_diagonal_guess(rho):
         prob = np.real(rho_computational[k, k])
         
         if prob > 1e-6:
-            # Now k correctly corresponds to the computational basis index
+            # k correctly corresponds to the computational basis index
             idx_A = k // 4 
             idx_B = k % 4 
             
@@ -404,14 +532,9 @@ def two_orbs_entanglement(
     """
     
     # 1. Compute the Reduced Density Matrix (rho_ab)
-    # Note: Ensure your compute_two_orb_rdm handles the 'variables' and 'circuit' mapping correctly
-    # If variables are provided, usually we map them to the circuit before passing, 
-    # but here we pass them through as requested.
     if not silent: 
         print(f"Computing RDM for orbitals ({orb_a}, {orb_b})...")
         
-    # Map variables if provided and circuit exists, otherwise pass as is
-    # (Adjust this line based on how compute_two_orb_rdm expects the circuit)
     if circuit is not None and variables is not None:
         circuit = circuit.map_variables(variables)
 
@@ -422,7 +545,7 @@ def two_orbs_entanglement(
     current_d = len(states0)
     
     # 3. Robustness Padding
-    # If the guess is too simple (e.g., just the HF state), we need to add "empty" components
+    # If the guess is too simple (e.g., just the HF state), add "empty" components
     # to allow the optimizer to find a mixed state solution.
     d = current_d
     if current_d < min_components:
@@ -466,14 +589,53 @@ def two_orbs_entanglement(
     return result.fun
 
 def two_orbs_quantum_correlation(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, orb_b:int=1, PSSR:bool=False, NSSR:bool=False)->float:
-    
+    """
+    Compute the quantum correlation between two molecular orbitals.
+
+    Quantum correlation is measured as the relative entropy between the two-orbital RDM
+    rho_ab and its closest classical (diagonal) state chi = diag(rho_ab), i.e.
+    S(rho_ab || chi). This quantifies the non-classical coherence present in rho_ab.
+
+    Parameters:
+        mol (tqMolecule): Tequila molecule object defining the system.
+        circuit (QCircuit, optional): Ansatz quantum circuit.
+        variables (Variables, optional): Optimized parameters for the circuit.
+        initial_state (QubitWaveFunction, optional): Initial state for the simulation.
+        orb_a (int): Index of the first orbital.
+        orb_b (int): Index of the second orbital.
+        PSSR (bool): Apply Parity Number Superselection Rule.
+        NSSR (bool): Apply Particle Number Superselection Rule.
+
+    Returns:
+        float: The quantum correlation S(rho_ab || diag(rho_ab)).
+    """
     rho_ab = compute_two_orb_rdm(mol, circuit, variables, initial_state, p_orb=orb_a, q_orb=orb_b, PSSR=PSSR, NSSR=NSSR)
     chi = np.diag(np.diag(rho_ab))
         
     return quantum_relative_entropy(rho_ab, chi)
 
 def two_orbs_classical_correlation(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, orb_b:int=1, PSSR:bool=False, NSSR:bool=False)->float:
-    
+    """
+    Compute the classical correlation between two molecular orbitals.
+
+    Classical correlation is measured as the relative entropy between the diagonal state
+    chi = diag(rho_ab) and the product of marginals pi = rho_a ⊗ rho_b, i.e.
+    S(chi || pi). This captures the classical statistical dependence between the orbitals
+    after discarding quantum coherences.
+
+    Parameters:
+        mol (tqMolecule): Tequila molecule object defining the system.
+        circuit (QCircuit, optional): Ansatz quantum circuit.
+        variables (Variables, optional): Optimized parameters for the circuit.
+        initial_state (QubitWaveFunction, optional): Initial state for the simulation.
+        orb_a (int): Index of the first orbital.
+        orb_b (int): Index of the second orbital.
+        PSSR (bool): Apply Parity Number Superselection Rule.
+        NSSR (bool): Apply Particle Number Superselection Rule.
+
+    Returns:
+        float: The classical correlation S(diag(rho_ab) || rho_a ⊗ rho_b).
+    """
     rho_ab = compute_two_orb_rdm(mol, circuit, variables, initial_state, p_orb=orb_a, q_orb=orb_b, PSSR=PSSR, NSSR=NSSR)
     chi = np.diag(np.diag(rho_ab))
 
@@ -485,7 +647,31 @@ def two_orbs_classical_correlation(mol:tqMolecule, circuit:QCircuit=None, variab
     return quantum_relative_entropy(chi, pi)
 
 def two_orbs_mutual_info(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, orb_a:int=0, orb_b:int=1, PSSR:bool=False, NSSR:bool=False)->float:
-    
+    """
+    Compute the quantum mutual information between two molecular orbitals via relative entropy.
+
+    The mutual information is defined as S(rho_ab || rho_a ⊗ rho_b), i.e. the relative
+    entropy between the joint two-orbital RDM and the product of the individual marginals.
+    This is equivalent to I(A:B) = S(rho_A) + S(rho_B) - S(rho_AB) but computed directly
+    from the relative entropy formulation.
+
+    Note: The product state pi = rho_a ⊗ rho_b is constructed in the computational basis
+    via a Kronecker product and then transformed to the molecular basis before computing
+    the relative entropy.
+
+    Parameters:
+        mol (tqMolecule): Tequila molecule object defining the system.
+        circuit (QCircuit, optional): Ansatz quantum circuit.
+        variables (Variables, optional): Optimized parameters for the circuit.
+        initial_state (QubitWaveFunction, optional): Initial state for the simulation.
+        orb_a (int): Index of the first orbital.
+        orb_b (int): Index of the second orbital.
+        PSSR (bool): Apply Parity Number Superselection Rule.
+        NSSR (bool): Apply Particle Number Superselection Rule.
+
+    Returns:
+        float: The mutual information S(rho_ab || rho_a ⊗ rho_b).
+    """
     rho_ab = compute_two_orb_rdm(mol, circuit, variables, initial_state, p_orb=orb_a, q_orb=orb_b, PSSR=PSSR, NSSR=NSSR)
     o1 = compute_one_orb_rdm(mol, circuit, variables, initial_state, one_orb=orb_a)
     o2 = compute_one_orb_rdm(mol, circuit, variables, initial_state, one_orb=orb_b)
