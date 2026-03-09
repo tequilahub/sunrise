@@ -173,8 +173,10 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,th
     else: filename = mol.parameters.name
     if output_dir is None:
         output_dir = os.getcwd()
-
-    generate_molden(mol=mol,filename=filename,output_dir=output_dir,**kwargs)
+    if 'use_active' in kwargs:
+        use_active = kwargs['use_active']
+        kwargs.pop('use_active')
+    generate_molden(mol=mol,filename=filename,output_dir=output_dir,use_active=False,**kwargs) #TODO: Janpa CLPO is bug for active space only, working on 
     call_molden2aim(moldenfile=filename+'.molden',output_dir=output_dir)
     call_janpa(command=f'-i {filename}.molden -CLPO_Molden_File {filename}_CLPO.molden -HybrOptOccConvThresh {thres}',silent=silent)
     subprocess.call(f'rm {output_dir}/m2a.ini',shell=True)
@@ -184,11 +186,14 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,th
     subprocess.call(f'rm {output_dir}/{filename}_CLPO.molden',shell=True)
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
-    mol,to_active = __transform(original=mol,modified=nmol)
+    if use_active:
+        mol,to_active = __transform(original=mol,modified=nmol)
+    else: mol = nmol
     graph = extract_clpo_graph(f"{output_dir}/graph")
-    d = {o.idx_total:o.idx for o in mol.integral_manager.active_orbitals}
-    graph = [tuple([d[i] for i in edge if i in to_active.keys()]) for edge in graph]
-    graph = [g for g in graph if len(g)]
+    ncore = len(mol.integral_manager.orbital_coefficients)-mol.n_orbitals
+    if use_active:
+        graph = [tuple([to_active[i] - ncore for i in edge if i in to_active.keys()]) for edge in graph]
+        graph = [g for g in graph if len(g)]
     subprocess.call(f'rm {output_dir}/graph',shell=True)
     return mol,graph
 
