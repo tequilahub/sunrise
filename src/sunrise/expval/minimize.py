@@ -310,7 +310,7 @@ def simulate(
     if type(objective).__name__ == 'TequilaBraket':
         return simulate(objective=objective.build(),variables=variables,samples=samples,backend=backend,noise=noise,device=device,initial_state=initial_state,*args,**kwargs)
     if isinstance(objective,FCircuit):
-        return simulate_fcircuit(U=objective,variables=variables,*args,**kwargs)
+        return simulate_fcircuit(U=objective,variables=variables,backend=backend,*args,**kwargs)
     
     compiled_objective = compile(
         objective=objective,
