@@ -133,8 +133,6 @@ def test_gradient(geom,backend):
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_circuit_simulate(geom,backend):
-    if backend == "fqe":
-        pytest.skip("Not implemented yet.")
     tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a')
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f')
     random.seed(datetime.now().timestamp())
