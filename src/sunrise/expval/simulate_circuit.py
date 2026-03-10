@@ -10,8 +10,6 @@ from tequila import SUPPORTED_BACKENDS
 SUPPORTED_FERMIONIC_BACKENDS = ["fqe", "tcc"]
 INSTALLED_FERMIONIC_BACKENDS = {}
 
-from sunrise.expval.fqe_circuit_sim import fqe_circuit_simulatorU
-INSTALLED_FERMIONIC_BACKENDS["fqe"] = fqe_circuit_simulatorU
 try:
     from sunrise.expval.tcc_engine.simulate import tcc_circuit_simulator
     INSTALLED_FERMIONIC_BACKENDS["tcc"] = tcc_circuit_simulator
