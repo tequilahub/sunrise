@@ -38,7 +38,12 @@ def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='
                 U.extract_variables()
             )
         )
-    if backend in SUPPORTED_BACKENDS:
+    backend = backend.strip().lower()
+    if 'tequila' in backend.lower() or backend in SUPPORTED_BACKENDS:
+        if backend.lower()== 'tequila':
+            backend = None
+        elif 'tequila-' in backend.lower() and not backend.find('tequila-'):
+            backend = backend[len('tequila-')]
         if 'mol' in kwargs:
             mol = kwargs['mol']
             kwargs.pop('mol')
