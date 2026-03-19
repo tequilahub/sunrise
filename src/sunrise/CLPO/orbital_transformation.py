@@ -156,13 +156,14 @@ def generate_molden(mol:QuantumChemistryBase,filename:str=None,output_dir:str=No
             print('    Found l=5 in basis.')
             molden.from_mo(pfmol, f'{output_dir}/{filename}.molden', mo_coeff,ene=mo_energy,occ=mo_occ,ignore_h=True)
 
-def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,**kwargs)->Tuple[QuantumChemistryBase,list]:
+def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,use_active:bool=True,**kwargs)->Tuple[QuantumChemistryBase,list]:
     '''
     Temporal function for generating a molecule with CLPO orbitals (10.1002/qua.25798) until integrated in Sunrise molecules
     
     :param mol: Any kind of Tequila/Sunrise Molecules.
     :param output_dir: default None = working file.
     :param thres: -HybrOptOccConvThresh from Janpa. Default 1.e-9.
+    :param use_active: Whether to respect input molecule frozen/active space, letting frozen as HF
     :param kwargs: keywords accepted by 'generate_molden', see above.
 
     Return modified Molecule and SPA edges
@@ -173,9 +174,6 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,th
     else: filename = mol.parameters.name
     if output_dir is None:
         output_dir = os.getcwd()
-    if 'use_active' in kwargs:
-        use_active = kwargs['use_active']
-        kwargs.pop('use_active')
     generate_molden(mol=mol,filename=filename,output_dir=output_dir,use_active=False,**kwargs) #TODO: Janpa CLPO is bug for active space only, working on 
     call_molden2aim(moldenfile=filename+'.molden',output_dir=output_dir)
     call_janpa(command=f'-i {filename}.molden -CLPO_Molden_File {filename}_CLPO.molden -HybrOptOccConvThresh {thres}',silent=silent)
@@ -197,13 +195,14 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,th
     subprocess.call(f'rm {output_dir}/graph',shell=True)
     return mol,graph
 
-def generate_HAO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,**kwargs)->QuantumChemistryBase:
+def generate_HAO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,use_active:bool=True,**kwargs)->QuantumChemistryBase:
     '''
     Temporal function for generating a molecule with Hybrid Atomic Orbitals via janpa (10.1002/qua.25798) until integrated in Sunrise molecules
     
     :param mol: Any kind of Tequila/Sunrise Molecules.
     :param output_dir: default None = working file.
     :param thres: -HybrOptOccConvThresh from Janpa. Default 1.e-9.
+    :param use_active: Whether to respect input molecule frozen/active space, letting frozen as HF
     :param kwargs: keywords accepted by 'generate_molden', see above.
 
     Return modified Molecule and SPA edges
@@ -225,19 +224,22 @@ def generate_HAO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Num
     subprocess.call(f'rm {output_dir}/{filename}_HAO.molden',shell=True)
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
-    mol,to_active = __transform(original=mol,modified=nmol)
+    if use_active:
+        mol,to_active = __transform(original=mol,modified=nmol)
+    else: mol = nmol
     return mol
 
-def generate_CLPO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,**kwargs)->QuantumChemistryBase:
+def generate_CLPO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,use_active:bool=True,**kwargs)->QuantumChemistryBase:
     '''
     Temporal function for generating a molecule with CLPO orbitals (10.1002/qua.25798) until integrated in Sunrise molecules
     
     :param mol: Any kind of Tequila/Sunrise Molecules.
     :param output_dir: default None = working file.
     :param thres: -HybrOptOccConvThresh from Janpa. Default 1.e-9.
+    :param use_active: Whether to respect input molecule frozen/active space, letting frozen as HF
     :param kwargs: keywords accepted by 'generate_molden', see above.
 
     Return modified Molecule and SPA edges
     '''
-    mol,edges = generate_CLPO_molecule_edges(mol,output_dir,thres,silent,**kwargs)
+    mol,edges = generate_CLPO_molecule_edges(mol,output_dir,thres,silent,use_active,**kwargs)
     return mol
