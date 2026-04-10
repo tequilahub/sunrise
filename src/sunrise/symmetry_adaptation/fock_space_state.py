@@ -3,7 +3,7 @@ import tequila
 from tequila import Molecule
 import numpy
 from pandas import DataFrame
-from .irrep_provider import IrrepProvider
+from sunrise.symmetry_adaptation.irrep_provider import IrrepProvider
 
 
 @dataclass
@@ -41,8 +41,8 @@ class FockSpaceState:
 		"""Returns the occupation numbers of the molecular orbitals corresponding to the state."""
 
 		# TODO too restrictive
-		if self.is_superposition:
-			return None
+		# if self.is_superposition:
+		# 	return None
 		
 		n_orbitals = len(self.bitstring) // 2
 		mo_occ = [0.0] * n_orbitals

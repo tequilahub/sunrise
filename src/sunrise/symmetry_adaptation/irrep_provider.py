@@ -5,7 +5,6 @@ from tequila import Molecule
 import numpy
 from .point_group import PointGroup
 from .point_group_representation import PointGroupRepresentation
-from .fock_space_state import FockSpaceState
 from .qcircuit_representation_builder import QCircuitRepresentationBuilder
 
 
@@ -15,7 +14,7 @@ class IrrepProvider(ABC):
 	pg: PointGroup
 	
 	@abstractmethod
-	def get_irrep(self, state: FockSpaceState) -> str:
+	def get_irrep(self, state: 'FockSpaceState') -> str:
 		pass
 
 
