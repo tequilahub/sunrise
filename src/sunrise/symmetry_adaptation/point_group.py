@@ -39,7 +39,7 @@ class CharacterTable:
 
 
 	@property
-	def array(self) -> NDArray[numpy.complex128]:
+	def matrix(self) -> NDArray[numpy.complex128]:
 		"""A NumPy array representation of the character table."""
 
 		return numpy.array([ irrep.characters for irrep in self.irrep_data ])
