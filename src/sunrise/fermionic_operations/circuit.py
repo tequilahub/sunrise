@@ -358,8 +358,11 @@ class FCircuit:
         return qmax
 
     def __iadd__(self, other):
+        if hasattr(other,'initial_state'):
+            w = other.initial_state
+        else: w = None
         other = self.wrap_gate(gate=other.gates)
-
+        other.initial_state = w
         offset = len(self.gates)
         for k, v in other._parameter_map.items():
             self._parameter_map[k] += [(x[0] + offset, x[1]) for x in v]
@@ -373,7 +376,11 @@ class FCircuit:
         return self
 
     def __add__(self, other):
-        other = self.wrap_gate(other.gates)
+        if hasattr(other,'initial_state'):
+            w = other.initial_state
+        else: w = None
+        other = self.wrap_gate(gate=other.gates)
+        other.initial_state = w
         gates = [deepcopy(g) for g in (self.gates + other.gates)]
         result = FCircuit(gates=gates)
         result._min_n_qubits = max(self._min_n_qubits, other._min_n_qubits)
@@ -487,17 +494,17 @@ class FCircuit:
         return cls(gates=operations._gates,initial_state=reference)
 
     @staticmethod
-    def wrap_gate(gate):
+    def wrap_gate(gate)->FCircuit:
         """
         take a gate and return a qcircuit containing only that gate.
         Parameters
         ----------
-        gate: QGateImpl
+        gate: FGateImpl
             the gate to wrap in a circuit.
 
         Returns
         -------
-        QCircuit:
+        FCircuit:
             a one gate circuit.
         """
         if isinstance(gate, FCircuit):
