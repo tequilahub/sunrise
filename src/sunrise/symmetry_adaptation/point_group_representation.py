@@ -49,11 +49,11 @@ class PointGroupRepresentation(Generic[T, S]):
 			**dict.fromkeys(["sh","sz"], numpy.array([[ 1,  0,  0],
 													[ 0,  1,  0],
 													[ 0,  0, -1]])),
-			**dict.fromkeys(["sv","sy"], numpy.array([[-1,  0,  0],
-													[ 0,  1,  0],
-													[ 0,  0,  1]])),
-			**dict.fromkeys(["sd","sx"], numpy.array([[ 1,  0,  0],
+			**dict.fromkeys(["sv","sy"], numpy.array([[ 1,  0,  0],
 													[ 0, -1,  0],
+													[ 0,  0,  1]])),
+			**dict.fromkeys(["sd","sx"], numpy.array([[-1,  0,  0],
+													[ 0, 1,  0],
 													[ 0,  0,  1]])),
 		}
 

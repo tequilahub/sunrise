@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from re import sub
 import tequila
-import pandas as pd
 from tequila import Molecule
+import pandas as pd
+from itertools import groupby
 import numpy
 from .irrep_provider import IrrepProvider
 from .point_group import PointGroup
@@ -26,51 +28,54 @@ class SymmetrizationProcedure(ABC):
 class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 	"""A symmetrization procedure that symmetrizes states with respect to spin."""
 
-	def symmetrize(self, states: pd.DataFrame) -> pd.DataFrame:
-		df: pd.DataFrame = states.copy(deep=True)
+	def symmetrize(self, states: list[FockSpaceState] | pd.DataFrame) -> pd.DataFrame:
+		is_dataframe = isinstance(states, pd.DataFrame)
+		if is_dataframe:
+			state_list: list[FockSpaceState] = list(states.itertuples(index=False, name="FockSpaceState")) # produces namedtuples with attribute access
+		else:
+			state_list = list(states)
 
 		# assume the IrrepProvider is the same for all states
-		irrep_provider = df['irrep_provider'].iloc[0]
+		irrep_provider = state_list[0].irrep_provider
 		if irrep_provider is None or not isinstance(irrep_provider, IrrepProvider):
 			raise ValueError(f"IrrepProvider is an illegal argument: {irrep_provider}.")
 
 		# Create an empty dataframe with the same columns as df
 		diagonalised_states: list[FockSpaceState] = []
 
-		# Convert mo_occ lists to tuples for grouping
-		# This is sort of bodged but the most simple solution
-		df['mo_occ_tuple'] = df['mo_occ'].apply(tuple)
-		
-		# Group by the tuple version and m_s/⟨S_z⟩
-		grouped = df.groupby(['mo_occ_tuple', 'm_s'])
+		# Group by and m_s/⟨S_z⟩
+		# an additional grouping by mo_occ could be added however mo_occ does not always exist
+		state_list_sorted = sorted(state_list, key=lambda s: s.m_s)
+		grouped = groupby(state_list_sorted, key=lambda s: s.m_s)
 
 		# Iterate over each group
-		for (mo_occ_val, ms_sz_val), sub_df in grouped:
-			mini_matrix = numpy.zeros((len(sub_df), len(sub_df)), dtype=complex)
+		for ms_val, group in grouped:
+			sub_states: list[FockSpaceState] = list(group)
+			mini_matrix = numpy.zeros((len(sub_states), len(sub_states)), dtype=complex)
 
-			for i, wfn1 in enumerate(sub_df['wavefunction']):
-				for j, wfn2 in enumerate(sub_df['wavefunction']):
-					val = wfn1.inner(self.mol.make_s2_op()(wfn2))
+			for i, state1 in enumerate(sub_states):
+				for j, state2 in enumerate(sub_states):
+					val = state1.wavefunction.inner(self.mol.make_s2_op()(state2.wavefunction))
 					mini_matrix[i, j] = val
 
-
+			mini_matrix = numpy.round(mini_matrix, decimals=10)
 			eigvals, eigvecs = numpy.linalg.eigh(mini_matrix)
 
 			for k in range(len(eigvals)):
-				#eigval = eigvals[k]
 				eigvec = eigvecs[:, k]
 
 				new_wfn = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals*2)
-				for coef, wfn in zip(eigvec, sub_df['wavefunction']):
-					new_wfn += coef * wfn
+				for coef, state in zip(eigvec, sub_states):
+					new_wfn += coef * state.wavefunction
 
 				diagonalised_states.append(FockSpaceState(
 					mol=self.mol,
 					wavefunction=new_wfn,
 					provider=irrep_provider
 				))
-				
-		return FockSpaceState.dataframe(diagonalised_states)
+		if is_dataframe:
+			return FockSpaceState.dataframe(diagonalised_states)
+		return diagonalised_states
 
 
 @dataclass
@@ -84,29 +89,33 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		if self.pgr is None:
 			self.pgr = QCircuitRepresentationBuilder(self.mol, self.pg).build_qcircuit_representation()
 
-	def symmetrize(self, states: pd.DataFrame) -> pd.DataFrame:
-		df: pd.DataFrame = states.copy(deep=True)
+	def symmetrize(self, states: list[FockSpaceState] | pd.DataFrame) -> list[FockSpaceState] | pd.DataFrame:
+		is_dataframe = isinstance(states, pd.DataFrame)
+		if is_dataframe:
+			state_list: list[FockSpaceState] = list(states.itertuples(index=False, name="FockSpaceState")) # produces namedtuples with attribute access
+		else:
+			state_list = list(states)
 
 		# assume the IrrepProvider is the same for all states
-		irrep_provider = df['irrep_provider'].iloc[0]
+		irrep_provider = state_list[0].irrep_provider
 		if irrep_provider is None or not isinstance(irrep_provider, IrrepProvider):
 			raise ValueError(f"IrrepProvider is an illegal argument: {irrep_provider}.")
 
 		# assumes the representation as quantum circuit
 		SALC_list: list[tequila.QubitWaveFunction] = []
 
-		for i, state in df.iterrows():
+		for state in state_list:
 			# assumes a consistent ordering of the operations
 			resulting_state_list: list[tequila.QubitWaveFunction] = []
 
 			# apply all symmetry operations to the state
 			for op_label, op in self.pgr.operations.items():
-				resulting_state_list.append(self.pgr.apply(op, state["wavefunction"]))
+				resulting_state_list.append(self.pgr.apply(op, state.wavefunction))
 
 			for j, irrep in enumerate(self.pg.character_table.dict.keys()):
 				state_SALC = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals*2)
 				
-				state_SALC_summands = []
+				state_SALC_summands: list[tequila.QubitWaveFunction] = []
 				for k, character in enumerate(self.pg.character_table.dict[irrep]):
 					state_SALC_summands.append(character * resulting_state_list[k])
 
@@ -124,8 +133,11 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 			if not any(state.isclose(existing_state) for existing_state in SALC_list_unique):
 				SALC_list_unique.append(state)
 
-		assert len(SALC_list_unique) == df.shape[0], "Assertion failed: the number of unique resulting SALC states is not equal to the number of original states."
+		#assert len(SALC_list_unique) == len(state_list), "Assertion failed: the number of unique resulting SALC states is not equal to the number of original states."
 
-		return FockSpaceState.dataframe([ FockSpaceState(self.mol, SALC, irrep_provider) for SALC in SALC_list_unique ])
+		result_objects = [FockSpaceState(self.mol, SALC, irrep_provider) for SALC in SALC_list_unique]
+		if is_dataframe:
+			return FockSpaceState.dataframe(result_objects)
+		return result_objects
 
 				

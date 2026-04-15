@@ -3,6 +3,7 @@ from numpy.typing import NDArray
 from tequila import Molecule
 import tequila
 import numpy
+from tunits import F
 from .point_group import PointGroup
 from .point_group_representation import PointGroupRepresentation
 
@@ -50,6 +51,50 @@ class GeometricTransformationHelper:
 			coordinates.append([float(x) for x in parts[1:4]])
 
 		return symbols, numpy.array(coordinates, dtype=float)
+
+
+	# This function is specific to the STO-3g base
+	@classmethod
+	def num_active_spatial_orbitals(cls, charges: list[int]) -> list[int]:
+		"""
+		Returns an ordered list of active spin orbital counts, given only
+		the list of atomic charges (atomic numbers) of the molecule's atoms.
+
+		"""
+		core_per_period = {1: 0, 2: 1, 3: 5, 4: 9, 5: 18}
+
+		def get_period(charge):
+			if charge <= 2:  return 1
+			if charge <= 10: return 2
+			if charge <= 18: return 3
+			if charge <= 36: return 4
+			if charge <= 54: return 5
+			return 6
+
+		def minimal_basis_ao_count(charge):
+			"""
+			Number of spatial AOs in the minimal (STO-3G) basis for a given element.
+			Equals the number of occupied shells in the neutral ground-state atom.
+			"""
+			if charge <= 2:  return 1          # 1s
+			if charge <= 4:  return 2          # 1s 2s        (Li, Be)
+			if charge <= 10: return 5          # 1s 2s 2p     (B–Ne)
+			if charge <= 12: return 6          # + 3s          (Na, Mg)
+			if charge <= 18: return 9          # + 3s 3p      (Al–Ar)
+			if charge <= 20: return 10         # + 4s          (K, Ca)
+			if charge <= 30: return 15         # + 3d          (Sc–Zn)
+			if charge <= 36: return 18         # + 4p          (Ga–Kr)
+			return 18                          # extend as needed
+
+		result = []
+		for charge in charges:
+			period        = get_period(charge)
+			n_core        = core_per_period.get(period, 0)
+			n_total       = minimal_basis_ao_count(charge)
+			n_active = max(n_total - n_core, 0)
+			result.append(n_active)
+
+		return result
 
 
 	@classmethod
@@ -383,11 +428,11 @@ class QCircuitRepresentationBuilder:
 		# This can be presumed as an NDArray
 		operations = atomic_permutation_representation.operations
 
-		atom_nelec: list[int] = [gto.charge(atom) for atom in GeometricTransformationHelper.parse_xyz_string(self.mol)[0]]
+		atom_num_aos: list[int] = GeometricTransformationHelper.num_active_spatial_orbitals([gto.charge(atom) for atom in GeometricTransformationHelper.parse_xyz_string(self.mol)[0]])
 
 		ao_blocks: list[int] = []
-		for i in range(len(atom_nelec)):
-			ao_blocks.extend([i] * atom_nelec[i])
+		for i in range(len(atom_num_aos)):
+			ao_blocks.extend([i] * atom_num_aos[i])
 
 		ao_permutation_representation_operations: dict[str, NDArray[numpy.int_]] = {}
 		for l, op in operations.items():
@@ -409,9 +454,18 @@ class QCircuitRepresentationBuilder:
 		for l, op in operations.items():
 			swaps = GeometricTransformationHelper.perm_matrix_to_swaps(op)
 
-			U = tequila.QCircuit()
-			U += tequila.gates.Rx(target=list(range(self.mol.n_electrons*2)), angle=0)  # Identity operation to initialize the circuit with the correct number of qubits
+			if swaps == []:
+				U: tequila.QCircuit = tequila.QCircuit()  # Identity operation, no swaps needed
+				U += tequila.gates.I(target=list(range(self.mol.n_orbitals*2)))
+				qcircuit_representation_operations[l] = U
+				continue
+
+			max_qubit_index = max(max(max(swap) for swap in swaps), self.mol.n_orbitals*2)
+
+			U: tequila.QCircuit = tequila.QCircuit()
+			U += tequila.gates.I(target=list(range(max_qubit_index))) # self.mol.n_orbitals*2 might not be enough for the fermionic swaps
 			for i, j in swaps:
+				assert i < U.n_qubits and j < U.n_qubits, f"Mismatch between the AO permutation representation and the number of qubits in the circuit: swap indices ({i}, {j}) exceed current circuit qubits {U.n_qubits}. This likely indicates an error in the AO permutation representation construction."
 				# alternative method with FSWAP
 				#U += FSWAP(i=i, j=j, n_orbitals=self.mol.n_electrons, up_then_down=True).construct_circuit()
 				U += FermionicSWAP(self.mol).f_swap(i, j)
@@ -424,7 +478,11 @@ class QCircuitRepresentationBuilder:
 				return False
 			return tequila.QubitWaveFunction.isclose(state1, state2)
 
+		def _apply(op, state):
+			assert op.n_qubits == state.n_qubits, f"Operation and state have different number of qubits: {op.n_qubits} vs {state.n_qubits}"
+			return tequila.simulate(op, initial_state=state)
+
 		return PointGroupRepresentation(
-			application_function=lambda op, state: tequila.simulate(op, initial_state=state),
+			application_function=_apply,
 			is_close_function=_is_close,
 			operations=qcircuit_representation_operations)
