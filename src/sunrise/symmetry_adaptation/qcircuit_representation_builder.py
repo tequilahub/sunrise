@@ -421,14 +421,43 @@ class QCircuitRepresentationBuilder:
 		PySCF is required as this method relies on it to determine the number of atomic orbitals on each atom.
 		"""
 
-		from pyscf import gto
+		from pyscf import gto, scf
 
 		atomic_permutation_representation = self.build_atomic_permutation_representation()
 
 		# This can be presumed as an NDArray
 		operations = atomic_permutation_representation.operations
 
-		atom_num_aos: list[int] = GeometricTransformationHelper.num_active_spatial_orbitals([gto.charge(atom) for atom in GeometricTransformationHelper.parse_xyz_string(self.mol)[0]])
+		# This finds out the number of active spatial orbitals by constructing a one-atom PySCF molecule
+		# and then creating a tequila molecule with it such that mol.n_orbitals is given by tequila
+		atom_num_aos: list[int] = []
+		for atom in GeometricTransformationHelper.parse_xyz_string(self.mol)[0]:
+			# Build a one-atom pyscf molecule with automatic spin
+			pyscf_mol = gto.M(atom=f'{atom} 0 0 0', basis=self.mol.parameters.basis_set, spin=None, verbose=0)
+			mf = scf.UHF(pyscf_mol).run()
+
+			# Compute integrals manually
+			mo_coeff = mf.mo_coeff[0]  # alpha MOs for UHF
+			h_ao = pyscf_mol.intor("int1e_kin") + pyscf_mol.intor("int1e_nuc")
+			g_ao = pyscf_mol.intor("int2e", aosym="s1")
+			S   = pyscf_mol.intor_symmetric("int1e_ovlp")
+
+			# Pass them to tequila, bypassing the internal mol build
+			# the attributes are the same to the constructor in tequila
+			tq_mol = tequila.Molecule(
+				geometry=f'{atom} 0 0 0',
+				basis_set=self.mol.parameters.basis_set,
+				one_body_integrals=h_ao,
+				two_body_integrals=tequila.quantumchemistry.NBodyTensor(elems=g_ao, ordering="mulliken"),
+				overlap_integrals=S,
+				orbital_coefficients=mo_coeff,
+				nuclear_repulsion=pyscf_mol.energy_nuc(),
+			)
+
+			atom_num_aos.append(tq_mol.n_orbitals)
+
+		# Alternative: statically determine the number of active spatial orbitals for STO-3G based on num_active_spatial_orbitals
+		#atom_num_aos: list[int] = GeometricTransformationHelper.num_active_spatial_orbitals([gto.charge(atom) for atom in GeometricTransformationHelper.parse_xyz_string(self.mol)[0]])
 
 		ao_blocks: list[int] = []
 		for i in range(len(atom_num_aos)):
