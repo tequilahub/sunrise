@@ -165,6 +165,8 @@ class GeometricTransformationHelper:
 		result = []
 		for col in B.T:
 			matches = numpy.where(numpy.all(numpy.abs(A - col[:, None]) < tol, axis=0))[0]
+			if len(matches) == 0:
+				raise ValueError("No matching column found in A for column in B. Is the point group for the molecule correct?")
 			result.append(matches[0])
 		return numpy.array(result)
 
