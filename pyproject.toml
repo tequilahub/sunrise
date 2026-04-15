@@ -10,22 +10,22 @@ readme = "README.md"
 requires-python = ">=3.9"
 
 authors = [
-    { name = "Jakob S. Kottmann et al. ", email = "jakob.kottmann@uni-a.de" },
+    { name = "Jakob S. Kottmann et al.", email = "jakob.kottmann@uni-a.de" },
 ]
 maintainers = [
-    {name = "Sunrise Developers", email="jakob.kottmann@uni-a.de"},
+    { name = "Sunrise Developers", email = "jakob.kottmann@uni-a.de" },
 ]
 
 dependencies = [
-"tequila-basic",
-"numpy",
-"autograd",
-"openfermion>= 1.0",
-"qulacs",
-"pytest",
-"setuptools",
-"qpic",
-"pyscf",
+    "tequila-basic",
+    "numpy",
+    "autograd",
+    "openfermion>=1.0",
+    "qulacs",
+    "pytest",
+    "setuptools",
+    "qpic",
+    "pyscf",
 ]
 
 classifiers = [
@@ -38,12 +38,9 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Java",
     "Topic :: Software Development",
     "Topic :: Scientific/Engineering",
     "Typing :: Typed",
-
-
     "Operating System :: POSIX",
     "Operating System :: Unix",
     "Operating System :: MacOS",
@@ -55,12 +52,6 @@ Homepage = "https://github.com/tequilahub/sunrise"
 
 [tool.setuptools]
 include-package-data = true
-
-# Setuptools-style build caching in a local directory
-build-dir = "build/{wheel_tag}"
-
-# Build stable ABI wheels for CPython 3.12+
-wheel.py-api = "cp312"
 
 [project.optional-dependencies]
 test = ["pytest"]
