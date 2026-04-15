@@ -60,13 +60,13 @@ class FockSpaceState:
 	@property
 	def m_s(self) -> numpy.float64:
 		"""Returns the total spin projection (m_s or ⟨S_z⟩) of the state."""
-		return numpy.round(self.wavefunction.inner(self.mol.max_sz_op()(self.wavefunction)).real, decimals=10)
+		return numpy.round(self.wavefunction.inner(self.mol.make_sz_op()(self.wavefunction)).real, decimals=10)
 		
 	
 	@property
 	def S2(self) -> numpy.float64:
 		"""Returns the expectation value of the total spin squared operator (⟨S^2⟩) for the state."""
-		return numpy.round(self.wavefunction.inner(self.mol.max_s2_op()(self.wavefunction)).real, decimals=10)
+		return numpy.round(self.wavefunction.inner(self.mol.make_s2_op()(self.wavefunction)).real, decimals=10)
 
 
 	@property
