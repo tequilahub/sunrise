@@ -436,7 +436,7 @@ class QCircuitRepresentationBuilder:
 		for atom in GeometricTransformationHelper.parse_xyz_string(self.mol)[0]:
 			# Build a one-atom pyscf molecule with automatic spin
 			pyscf_mol = gto.M(atom=f'{atom} 0 0 0', basis=self.mol.parameters.basis_set, spin=None, verbose=0)
-			mf = scf.UHF(pyscf_mol).run()
+			mf = scf.UHF(pyscf_mol).run() # NOTE: check if RHF works equally well
 
 			# Compute integrals manually
 			mo_coeff = mf.mo_coeff[0]  # alpha MOs for UHF
