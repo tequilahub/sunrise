@@ -454,6 +454,7 @@ class QCircuitRepresentationBuilder:
 				overlap_integrals=S,
 				orbital_coefficients=mo_coeff,
 				nuclear_repulsion=pyscf_mol.energy_nuc(),
+				frozen_core=self.mol.parameters.frozen_core
 			)
 
 			atom_num_aos.append(tq_mol.n_orbitals)
