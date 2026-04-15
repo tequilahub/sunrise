@@ -96,28 +96,12 @@ class FockSpaceState:
 	@classmethod
 	def all_states(cls, mol: Molecule, provider: IrrepProvider) -> list['FockSpaceState']:
 		"""Generates all possible Fock space states for a given molecule."""
-		import pyscf
-
-		n_qubits = 2 * mol.n_orbitals
-		states = []
-		for i in range(2**n_qubits):
-			bitstring = format(i, f'0{n_qubits}b')
-			states.append(cls(mol, bitstring, provider))
-		return states
+		return cls.by_filter(mol, provider)
 	
 	@classmethod
 	def non_ionic_states(cls, mol: Molecule, provider: IrrepProvider) -> list['FockSpaceState']:
 		"""Generates all non-ionic Fock space states for a given molecule."""
-		import pyscf
-		
-		n_qubits = 2 * mol.n_orbitals
-		states = []
-		for i in range(2**n_qubits):
-			bitstring = format(i, f'0{n_qubits}b')
-			state = cls(mol, bitstring, provider)
-			if sum(state.mo_occ) == mol.pyscf_molecule.nelectron:
-				states.append(state)
-		return states
+		return cls.by_filter(mol, provider, non_ionic=True)
 	
 	@classmethod
 	def by_filter(cls, mol: Molecule, provider: IrrepProvider, mo_occ: list[int] | None = None, m_s: int | None = None, S2: int | None = None, spin_multiplicity: str | None = None, irrep: str | None = None, non_ionic: bool = False, max_count: int | None = None, bitstring_generator: Generator[str, None, None] | None = None) -> list['FockSpaceState']:
