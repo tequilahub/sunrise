@@ -51,6 +51,7 @@ def optimize_orbitals(molecule,circuit=Union[FCircuit,QCircuit],backend:str='teq
             return minimize(Braket(backend=backend,molecule=molecule,circuit=self.U,**vqe_solver_arguments),silent=silent)
     
     if isinstance(molecule,HybridBase):
+        use_hcb = False
         if molecule_arguments is None:
             molecule_arguments = {"select": molecule.select, "condense": molecule.condense,
                                   "two_qubit": molecule.two_qubit,

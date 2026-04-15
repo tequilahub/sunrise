@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "project-sunrise"
+version = "0.1"
+description = "Sunrise is a package for all-around fermionic state preparation and simulation on quantum computers. It holds no qubits, but only physical information, making it efficient for storage and manipulation."
+readme = "README.md"
+requires-python = ">=3.9"
+
+authors = [
+    { name = "Jakob S. Kottmann et al.", email = "jakob.kottmann@uni-a.de" },
+]
+maintainers = [
+    { name = "Sunrise Developers", email = "jakob.kottmann@uni-a.de" },
+]
+
+dependencies = [
+    "tequila-basic",
+    "numpy",
+    "autograd",
+    "openfermion>=1.0",
+    "qulacs",
+    "pytest",
+    "setuptools",
+    "qpic",
+    "pyscf",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Operating System :: MacOS",
+    "License :: OSI Approved :: MIT License",
+]
+
+[project.urls]
+Homepage = "https://github.com/tequilahub/sunrise"
+
+[tool.setuptools]
+include-package-data = true
+
+[project.optional-dependencies]
+test = ["pytest"]

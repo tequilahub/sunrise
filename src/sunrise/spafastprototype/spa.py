@@ -100,7 +100,8 @@ class SPASolver:
 def make_initial_orbital_guess(edges):
 
     result = numpy.eye(2*len(edges))
-    for i,j in edges:
-        result[j][i] = 1.0
-        result[i][j] = -1.0
+    for  edge in edges:
+        if len(edge) -1:
+            result[edge[0]][edge[1]] = 1.0
+            result[edge[1]][edge[0]] = -1.0
     return result.T

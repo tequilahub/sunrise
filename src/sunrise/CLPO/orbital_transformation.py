@@ -16,7 +16,7 @@ from .binary_interface import *
 from sunrise import from_tequila
 from tequila import TequilaException
 
-def __transform(modified:QuantumChemistryBase,original:QuantumChemistryBase=None)->Tuple[QuantumChemistryBase,dict]:
+def __transform(modified:QuantumChemistryBase,original:QuantumChemistryBase=None,orbital_type='CLPO')->Tuple[QuantumChemistryBase,dict]:
     '''
     Procedure similar to what is done in use_native_orbitals but for arbitrary basis. Keeps frozen orbitals canHF
     orthogonalized with the active modified ones
@@ -77,10 +77,12 @@ def __transform(modified:QuantumChemistryBase,original:QuantumChemistryBase=None
     lam_sqrt_inv = numpy.sqrt(numpy.linalg.inv(lam_s))
     symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
     jcoef = symm_orthog.dot(c).T
+    ref = [i.idx_total for i in original.integral_manager.reference_orbitals if i not in original.integral_manager.active_reference_orbitals]
+    ref.extend([i for i in range(n_basis) if  i not in co.keys()][len(original.integral_manager.active_reference_orbitals):])
     integral_manager = modified.initialize_integral_manager(one_body_integrals=original.integral_manager.one_body_integrals,
                     two_body_integrals=original.integral_manager.two_body_integrals,constant_term=original.integral_manager.constant_term,
                     active_orbitals= [i for i in range(n_basis) if  i not in co.keys()],frozen_orbitals=[*co.keys()],orbital_coefficients=jcoef,
-                    overlap_integrals=original.integral_manager.overlap_integrals,reference_orbitals=reference_orbitals,orbital_type='CLPO')
+                    overlap_integrals=original.integral_manager.overlap_integrals,reference_orbitals=ref,orbital_type=orbital_type)
     parameters = deepcopy(original.parameters)
     if isinstance(modified,FermionicBase):
         return FermionicBase(parameters=parameters,integral_manager=integral_manager,fermionic_backend=modified.fermionic_backend),to_active
@@ -225,7 +227,7 @@ def generate_HAO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Num
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
     if use_active:
-        mol,to_active = __transform(original=mol,modified=nmol)
+        mol,to_active = __transform(original=mol,modified=nmol,orbital_type='HAO')
     else: mol = nmol
     return mol
 
