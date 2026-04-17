@@ -26,8 +26,8 @@ rep_qcircuit = QCircuitRepresentationBuilder(mol, pg).build_qcircuit_representat
 # There is an abstraction to apply an operation to a state abstracted
 # of the representation they are in, but if you know their types you
 # can apply the operation directly
-rep_ao.apply(rep_ao.operations["i"], np.ones(4)) # is the same as
-rep_ao.operations["i"] @  np.ones(4)
+rep_ao.apply(rep_ao.operations["i"], np.ones(2)) # is the same as
+rep_ao.operations["i"] @  np.ones(2)
 
 rep_qcircuit.apply(rep_qcircuit.operations["i"], states[0].wavefunction) # is the same as
 tq.simulate(rep_qcircuit.operations["i"], initial_state=states[0].wavefunction)
