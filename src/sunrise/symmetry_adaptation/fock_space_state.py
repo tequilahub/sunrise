@@ -141,6 +141,8 @@ class FockSpaceState:
 			if mo_occ is None:
 				generator = range(2**n_qubits)
 			else:
+				if len(mo_occ) != mol.n_orbitals:
+					raise ValueError(f"Length of mo_occ list must match the number of orbitals in the molecule ({mol.n_orbitals}), but got {len(mo_occ)}.") # TODO: support dictionaries
 				generator = mo_occ_bitstring_generator(mo_occ)
 		else:
 			generator: Generator[str, None, None] = bitstring_generator
