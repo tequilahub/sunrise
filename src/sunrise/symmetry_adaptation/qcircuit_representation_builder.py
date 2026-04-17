@@ -3,7 +3,6 @@ from numpy.typing import NDArray
 from tequila import Molecule
 import tequila
 import numpy
-from tunits import F
 from .point_group import PointGroup
 from .point_group_representation import PointGroupRepresentation
 
