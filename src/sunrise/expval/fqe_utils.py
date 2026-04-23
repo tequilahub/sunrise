@@ -1,11 +1,11 @@
 from itertools import combinations
 from .fermionic_utils import make_excitation_generator_op
+from collections import defaultdict
 
 def create_fermionic_generators(instructions, angles, form: str = 'fermionic') -> dict:
 
-    #todo check for instruction format: even, repeating indeces
 
-    generators={}
+    generators=defaultdict(list)
     new_instructions = []
 
     for exct in instructions:
@@ -19,11 +19,7 @@ def create_fermionic_generators(instructions, angles, form: str = 'fermionic') -
 
 
     for angle_idx, fermionic_circuit in enumerate(instructions):
-        # todo checks
-        if angles[angle_idx] in generators:
-            generators[angles[angle_idx]] = generators[angles[angle_idx]] + make_excitation_generator_op(indices=fermionic_circuit[0], form=form)
-        else:
-            generators[angles[angle_idx]] = make_excitation_generator_op(indices=fermionic_circuit[0], form=form)
+        generators[angles[angle_idx]].append(make_excitation_generator_op(indices=fermionic_circuit[0], form=form))
 
     return generators
 

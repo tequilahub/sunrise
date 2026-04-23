@@ -84,6 +84,8 @@ def test_mapped_variables(geom,backend):
 def test_optimize_orbitals(geom,backend,use_hcb):
     if backend == "tequila":
         pytest.skip("Tequila backend requires a Qubit-based molecule")
+    if backend == "fqe":
+        pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     edges = snmol.get_spa_edges()
     initial_guess = snmol.get_spa_guess().T
@@ -119,7 +121,7 @@ def test_gradient(geom,backend):
     tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a').use_native_orbitals()
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     random.seed(datetime.now().timestamp())
-    tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=backend=='fqe')
+    tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=False)
     snU = snmol.make_ansatz('UpCCSD')
     tqval = tq.ExpectationValue(H=tqmol.make_hamiltonian(),U=tqU)
     snval = sn.Braket(molecule=snmol,ket=snU,backend=backend)
