@@ -14,7 +14,7 @@ authors = [
     { name = "Francisco Javier del Arco Santos"},
     { name = "Davide Bincoletto"},
     { name = "Navid Roshani"},
-    { name = et at.},
+    { name = "et at."},
 ]
 maintainers = [
     { name = "Sunrise Developers", email = "jakob.kottmann@uni-a.de" },
