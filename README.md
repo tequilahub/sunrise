@@ -59,6 +59,23 @@ pip install git+https://github.com/davibinco/TenCirChem-NG.git
 ```
 Note that the link above is not the original repo but our own fork, fixing [this bug](https://github.com/tensorcircuit/TenCirChem-NG/pull/4) until implemented on the code.
 
+## Acknowledgments & Citations
+
+This software incorporates components from the following third-party projects. If you use this software to obtain results for publication, you are required to cite these works as follows:
+
+### 1. JANPA package of programs
+This product includes components from the **JANPA package of programs** ([http://janpa.sourceforge.net/](http://janpa.sourceforge.net/)) developed by Tymofii Nikolaienko.
+
+**Required Citations:**
+* T. Yu. Nikolaienko, L. A. Bulavin; *Localized orbitals for optimal decomposition of molecular properties*, Int. J. Quantum Chem. (2019), Vol.119, page e25798, DOI: [10.1002/qua.25798](https://doi.org/10.1002/qua.25798)
+* T.Y.Nikolaienko, L.A.Bulavin, D.M.Hovorun; *JANPA: an open source cross-platform implementation of the Natural Population Analysis on the Java platform*, Comput.Theor.Chem.(2014), V.1050, P.15-22, DOI: [10.1016/j.comptc.2014.10.002](https://doi.org/10.1016/j.comptc.2014.10.002)
+
+### 2. Molden2AIM
+This product includes the **Molden2AIM** utility ([https://github.com/zorkzou/Molden2AIM](https://github.com/zorkzou/Molden2AIM)) developed by Zhi-Qiang Zou.
+
+**Suggested Citation:**
+* Zhi-Qiang Zou, *Molden2AIM: A program for converting MOLDEN files to WFN/WFX files*, [https://github.com/zorkzou/Molden2AIM](https://github.com/zorkzou/Molden2AIM).
+
 # Fermionic Circuit
 The FCircuit has been developed in order to preserve abstract fermionic layers. This circuit consists of two main parts, the `initial_state` and the circuit itself. The `initial_state` relies on a tequila `QubitWaveFunction`, whose states are checked to be particle conserving. It can be set through any way of creating a `tq.QubitWaveFunction`, either with a `FCircuit` or `QCircuit` with already mapped variables, or the options available in `QubitWaveFunction.convert_from()`. **It is important to take into account that both fqe and tcc work with initial_states in upthendown, therefore we are keeping here that as mandatory**. In order to create the circuit itself, some gates have been already defined at sunrise.gates. 
 
@@ -334,3 +351,4 @@ U += tq.gates.X(1)
 print(U)
 ```
      
+Licensing > This project is licensed under the MIT License. It includes third-party components (JANPA and Molden2AIM) with specific attribution and citation requirements. See LICENSE-THIRD-PARTY for details.

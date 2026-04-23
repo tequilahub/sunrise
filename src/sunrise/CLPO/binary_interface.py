@@ -108,6 +108,9 @@ def extract_clpo_graph(graph_file:str):
 
         # Lone pair
         if "(LP)" in line:
+            if float(line.split()[3]) < 1.: # By how the code work, it is either close to 2 o close to 0, so 1 is nice threshold
+                i += 1
+                continue
             nodes.append((i,))
             i += 1
             continue

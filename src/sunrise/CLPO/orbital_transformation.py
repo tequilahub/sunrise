@@ -78,7 +78,7 @@ def __transform(modified:QuantumChemistryBase,original:QuantumChemistryBase=None
     symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
     jcoef = symm_orthog.dot(c).T
     ref = [i.idx_total for i in original.integral_manager.reference_orbitals if i not in original.integral_manager.active_reference_orbitals]
-    ref.extend([i for i in range(n_basis) if  i not in co.keys()][len(original.integral_manager.active_reference_orbitals):])
+    ref.extend([i for i in range(n_basis) if  i not in co.keys()][:len(original.integral_manager.active_reference_orbitals)])
     integral_manager = modified.initialize_integral_manager(one_body_integrals=original.integral_manager.one_body_integrals,
                     two_body_integrals=original.integral_manager.two_body_integrals,constant_term=original.integral_manager.constant_term,
                     active_orbitals= [i for i in range(n_basis) if  i not in co.keys()],frozen_orbitals=[*co.keys()],orbital_coefficients=jcoef,

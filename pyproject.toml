@@ -10,7 +10,11 @@ readme = "README.md"
 requires-python = ">=3.9"
 
 authors = [
-    { name = "Jakob S. Kottmann et al.", email = "jakob.kottmann@uni-a.de" },
+    { name = "Jakob S. Kottmann", email = "jakob.kottmann@uni-a.de" },
+    { name = "Francisco Javier del Arco Santos"},
+    { name = "Davide Bincoletto"},
+    { name = "Navid Roshani"},
+    { name = et at.},
 ]
 maintainers = [
     { name = "Sunrise Developers", email = "jakob.kottmann@uni-a.de" },
