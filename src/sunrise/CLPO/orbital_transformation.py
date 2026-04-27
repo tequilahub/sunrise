@@ -96,9 +96,9 @@ def __get_MP2_occ(mol:QuantumChemistryBase):
     '''
     fr = [2 for _ in range(mol.parameters.get_number_of_core_electrons()//2)]
     molx = QuantumChemistryPySCF.from_tequila(mol)
-    mp2 = mp.MP2(molx._get_hf())
-    rdm1 = mp2.run().make_rdm1()
-    return fr + numpy.diag(rdm1).tolist(),mp2.mo_energy
+    hf = molx._get_hf()
+    rdm1 = mp.MP2(hf).run().make_rdm1()
+    return fr + numpy.diag(rdm1).tolist(),hf.mo_energy
 
 def generate_molden(mol:QuantumChemistryBase,filename:str=None,output_dir:str=None,mo_occ:list=None,mo_energy:list=None,use_mp2:bool=False,option1:bool=True,use_active:bool=True):
     '''
@@ -158,7 +158,7 @@ def generate_molden(mol:QuantumChemistryBase,filename:str=None,output_dir:str=No
             print('    Found l=5 in basis.')
             molden.from_mo(pfmol, f'{output_dir}/{filename}.molden', mo_coeff,ene=mo_energy,occ=mo_occ,ignore_h=True)
 
-def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,use_active:bool=True,**kwargs)->Tuple[QuantumChemistryBase,list]:
+def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, output_dir:str=None, thres:Number=1.e-12, silent:bool=True, use_active:bool=True, rm_files:bool=True, **kwargs)->Tuple[QuantumChemistryBase,list]:
     '''
     Temporal function for generating a molecule with CLPO orbitals (10.1002/qua.25798) until integrated in Sunrise molecules
     
@@ -179,25 +179,27 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase,output_dir:str=None,th
     generate_molden(mol=mol,filename=filename,output_dir=output_dir,use_active=False,**kwargs) #TODO: Janpa CLPO is bug for active space only, working on 
     call_molden2aim(moldenfile=filename+'.molden',output_dir=output_dir)
     call_janpa(command=f'-i {filename}.molden -CLPO_Molden_File {filename}_CLPO.molden -HybrOptOccConvThresh {thres}',silent=silent)
-    subprocess.call(f'rm {output_dir}/m2a.ini',shell=True)
-    subprocess.call(f'rm {output_dir}/{filename}.molden',shell=True) 
-    subprocess.call(f'rm {output_dir}/{filename}_new.molden',shell=True)
     mo_matrix = read_molden_mo_matrix(f"{filename}_CLPO.molden")
-    subprocess.call(f'rm {output_dir}/{filename}_CLPO.molden',shell=True)
+    if rm_files:
+        subprocess.call(f'rm {output_dir}/m2a.ini',shell=True)
+        subprocess.call(f'rm {output_dir}/{filename}.molden',shell=True) 
+        subprocess.call(f'rm {output_dir}/{filename}_new.molden',shell=True)
+        subprocess.call(f'rm {output_dir}/{filename}_CLPO.molden',shell=True)
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
     if use_active:
         mol,to_active = __transform(original=mol,modified=nmol)
     else: mol = nmol
     graph = extract_clpo_graph(f"{output_dir}/graph")
-    ncore = len(mol.integral_manager.orbital_coefficients)-mol.n_orbitals
     if use_active:
+        ncore = len(mol.integral_manager.orbital_coefficients)-mol.n_orbitals
         graph = [tuple([to_active[i] - ncore for i in edge if i in to_active.keys()]) for edge in graph]
         graph = [g for g in graph if len(g)]
-    subprocess.call(f'rm {output_dir}/graph',shell=True)
+    if rm_files:
+        subprocess.call(f'rm {output_dir}/graph',shell=True)
     return mol,graph
 
-def generate_HAO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,use_active:bool=True,**kwargs)->QuantumChemistryBase:
+def generate_HAO_molecule(mol:QuantumChemistryBase, output_dir:str=None, thres:Number=1.e-9, silent:bool=True, use_active:bool=True, rm_files:bool=True,**kwargs)->QuantumChemistryBase:
     '''
     Temporal function for generating a molecule with Hybrid Atomic Orbitals via janpa (10.1002/qua.25798) until integrated in Sunrise molecules
     
@@ -219,11 +221,12 @@ def generate_HAO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Num
     generate_molden(mol=mol,filename=filename,output_dir=output_dir,**kwargs)
     call_molden2aim(moldenfile=filename+'.molden',output_dir=output_dir)
     call_janpa(command=f'-i {filename}.molden -AHO_Molden_File {filename}_HAO.molden -HybrOptOccConvThresh {thres}',silent=silent,output_dir=output_dir)
-    subprocess.call(f'rm {output_dir}/m2a.ini',shell=True)
-    subprocess.call(f'rm {output_dir}/{filename}.molden',shell=True) 
-    subprocess.call(f'rm {output_dir}/{filename}_new.molden',shell=True)
     mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_HAO.molden")
-    subprocess.call(f'rm {output_dir}/{filename}_HAO.molden',shell=True)
+    if rm_files:
+        subprocess.call(f'rm {output_dir}/m2a.ini',shell=True)
+        subprocess.call(f'rm {output_dir}/{filename}.molden',shell=True) 
+        subprocess.call(f'rm {output_dir}/{filename}_new.molden',shell=True)
+        subprocess.call(f'rm {output_dir}/{filename}_HAO.molden',shell=True)
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
     if use_active:
@@ -231,7 +234,7 @@ def generate_HAO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Num
     else: mol = nmol
     return mol
 
-def generate_CLPO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Number=1.e-9,silent:bool=True,use_active:bool=True,**kwargs)->QuantumChemistryBase:
+def generate_CLPO_molecule(mol:QuantumChemistryBase, output_dir:str=None, thres:Number=1.e-9, silent:bool=True, use_active:bool=True, rm_files:bool=True, **kwargs)->QuantumChemistryBase:
     '''
     Temporal function for generating a molecule with CLPO orbitals (10.1002/qua.25798) until integrated in Sunrise molecules
     
@@ -243,5 +246,5 @@ def generate_CLPO_molecule(mol:QuantumChemistryBase,output_dir:str=None,thres:Nu
 
     Return modified Molecule and SPA edges
     '''
-    mol,edges = generate_CLPO_molecule_edges(mol,output_dir,thres,silent,use_active,**kwargs)
+    mol,edges = generate_CLPO_molecule_edges(mol,output_dir,thres,silent,use_active,rm_files,**kwargs)
     return mol

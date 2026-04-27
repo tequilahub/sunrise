@@ -1,5 +1,5 @@
 import tequila as tq
-from sunrise import optimize_orbitals
+from sunrise import optimize_orbitals,FCircuit
 import numpy
 import time
 import warnings
@@ -14,6 +14,8 @@ def run_spa(mol, edges, initial_guess=None, decompose=True, silent=True,grouping
 
     if edges is None:
         U = mol.make_ansatz(name="HCB-SPA")
+    elif isinstance(edges,(tq.QCircuit,FCircuit)):
+        U = edges
     else:
         U = mol.make_ansatz(name="HCB-SPA", edges=edges)
     if initial_guess is None:

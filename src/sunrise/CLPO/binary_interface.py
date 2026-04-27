@@ -4,6 +4,7 @@ import os
 import shlex
 from importlib import resources
 from numpy import array
+from warnings import warn
 
 def call_janpa(command:str='',output_dir=None,silent=False):
     """
@@ -105,10 +106,12 @@ def extract_clpo_graph(graph_file:str):
     i = 0
     while i < len(data_lines):
         line = data_lines[i]
-
         # Lone pair
         if "(LP)" in line:
-            if float(line.split()[3]) < 1.: # By how the code work, it is either close to 2 o close to 0, so 1 is nice threshold
+            occ = float(line.split()[3])
+            if occ < 1.5 and occ > 0.5: # NOTE: arbitrary numbers
+                warn(f'Lone Pair {i} found with occupation close to 1 => {occ}, take care.') 
+            if occ < 1.: 
                 i += 1
                 continue
             nodes.append((i,))
@@ -119,6 +122,11 @@ def extract_clpo_graph(graph_file:str):
         if "(BD)" in line:
             if i + 1 >= len(data_lines):
                 raise ValueError("BD entry without following NB line")
+
+            bd_pair_occ = float(line.split()[6])
+            at_pair_occ = float(data_lines[i+1].split()[4])
+            if bd_pair_occ + at_pair_occ < 1.7: # NOTE: arbitrary number
+                warn(f'Bond pair orbitals {[i,i+1]} population expected under expected 2e-, predicted: {bd_pair_occ + at_pair_occ}, take care with predicted edges.')
 
             nodes.append((i, i + 1))
             i += 2
