@@ -22,7 +22,7 @@ def from_tequila(molecule:QuantumChemistryBase,**kwargs)->pyscf.gto.Mole: #TODO:
         basis=molecule.parameters.basis_set,
         charge=molecule.parameters.charge,
         verbose=0,
-        spin=0,
+        spin=(molecule.parameters.multiplicity-1)/2,
     )
     if point_group is not None:
         if point_group.lower() != "c1":

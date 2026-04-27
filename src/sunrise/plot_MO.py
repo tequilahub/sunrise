@@ -25,7 +25,7 @@ def plot_MO(molecule:QuantumChemistryBase=None,filename:str=None,orbital:list=No
     if orbital is None:
         orbital = [i.idx_total for i in molecule.integral_manager.orbitals]
     pmol = gto.Mole()
-    pmol.build(atom=molecule.parameters.geometry, basis=molecule.parameters.basis_set, spin=0)
+    pmol.build(atom=molecule.parameters.geometry, basis=molecule.parameters.basis_set, charge=molecule.parameters.charge)
     if density or mep:
         mf = scf.RHF(pmol).run()
         mf.mo_coeff=molecule.integral_manager.orbital_coefficients
