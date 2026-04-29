@@ -282,7 +282,6 @@ def brute_force(num_atoms: int, coordinates: np.ndarray):
     -------
     list[tuple[int, int]]
         Optimal edge configuration as a list of atom index pairs. Each tuple (i, j) represents an edge between atom i and atom j. 
-        This is the perfect matching with minimum total edge distance.
     """
 
     distance_matrix = squareform(pdist(coordinates)) 
@@ -477,8 +476,7 @@ def simulated_annealing(num_atoms: int,
     end : float, default=1e-3
         Final temperature threshold. Algorithm terminates when temperature drops below this value. Lower values extend the search.
     alpha : float, default=0.95
-        Cooling rate (0 < alpha < 1). Temperature is multiplied by alpha after each iteration: T_{i+1} = alpha * T_i. Values closer to 1.0 
-        cool more slowly, allowing longer search.
+        Cooling rate (0 < alpha < 1). Temperature is multiplied by alpha after each iteration: T_{i+1} = alpha * T_i. 
     max_iter : int, default=1000
         Maximum number of iterations. 
 
@@ -597,7 +595,7 @@ def mutation(edges: list):
     Returns
     -------
     list[tuple[int, int]]
-        Mutated edge configuration with one 2-edge swap applied. If the swap would create invalid edges, returns the original configuration unchanged.
+        Mutated edge configuration. If the swap would create invalid edges, returns the original configuration unchanged.
     """
 
     new_edges = edges[:]
@@ -616,7 +614,11 @@ def mutation(edges: list):
 
     return new_edges
 
-def genetic_algorithm(num_atoms: int, coordinates: np.ndarray, pop_size = 50, max_iter = 200, mutation_rate = 0.2, elite_size = 2):
+def genetic_algorithm(num_atoms: int, 
+                      coordinates: np.ndarray, 
+                      pop_size = 50, max_iter = 200, 
+                      mutation_rate = 0.2, 
+                      elite_size = 2):
 
     """
     Find an edge configuration using a Genetic Algorithm metaheuristic.
@@ -677,8 +679,7 @@ def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
     Find the optimal edge configuration using Edmonds' Blossom Algorithm.
 
     This function computes the minimum weight perfect matching - the set of edges that pairs all atoms with minimum total distance. 
-    Unlike heuristics, this guarantees the globally optimal solution in polynomial time.
-
+    
     Parameters
     ----------
     num_atoms : int
