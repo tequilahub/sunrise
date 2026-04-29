@@ -217,21 +217,18 @@ def random_matching(num_atoms):
 
 def generate_all_possible_edges(atoms: list[int]):
     """ 
-    Generate all possible perfect matchings for a set of atoms.
-
-    A perfect matching is a complete pairing where each atom appears in exactly one edge. 
-    This function generates all valid ways to pair the atoms.
+    Generate all perfect matchings of atoms.
 
     Parameters
     ----------
     atoms : list[int]
-        List of atom indices to be paired. Must have even length for a perfect matching to exist.
+        Atom indices (must have even length).
 
     Returns
     -------
     list[list[tuple[int, int]]]
-        List of all possible edge configurations. Each configuration is represented as a list of tuples (atom_i, atom_j).
-        Returns empty list if atoms has odd length.
+        All possible pairings of atoms. Each pairing is a list of edges (i, j).
+        Returns an empty list if the number of atoms is odd.
     """
     edges = []
     partial_edges = [([], atoms)]
@@ -267,21 +264,17 @@ def generate_all_possible_edges(atoms: list[int]):
 
 def brute_force(num_atoms: int, coordinates: np.ndarray):
     """
-    Find the optimal edge configuration by exhaustive search (brute force).
-
-    This function finds the edge configuration that minimizes the total Euclidean distance between all paired atoms by evaluating every possible pairing combination.
+    Find optimal pairing via exhaustive search (minimum total distance).
 
     Parameters
     ----------
     num_atoms : int
-        Number of atoms in the molecule. 
     coordinates : np.ndarray
-        3D Cartesian coordinates of atoms.
 
     Returns
     -------
     list[tuple[int, int]]
-        Optimal edge configuration as a list of atom index pairs. Each tuple (i, j) represents an edge between atom i and atom j. 
+        Best edge configuration.
     """
 
     distance_matrix = squareform(pdist(coordinates)) 
@@ -311,20 +304,16 @@ def brute_force(num_atoms: int, coordinates: np.ndarray):
 
 def nearest_insertion(coordinates: np.ndarray):
     """
-    Find an edge configuration using the Nearest Insertion heuristic.
-
-    This heuristic builds a tour by iteratively inserting the atom that is nearest to any atom already in the tour. 
-    After constructing the complete tour, consecutive atoms are paired to form the edge configuration.
+    Build pairing using nearest insertion heuristic.
 
     Parameters
     ----------
     coordinates : np.ndarray
-        3D Cartesian coordinates of atoms. 
 
     Returns
     -------
     list[tuple[int, int]]
-        Edge configuration as a list of atom index pairs. Consecutive atoms in the constructed tour are paired: (tour[0], tour[1]), (tour[2], tour[3]), etc.
+        Edge pairs from constructed tour.
     """
 
     distance_matrix = squareform(pdist(coordinates))  
@@ -357,24 +346,18 @@ def nearest_insertion(coordinates: np.ndarray):
 def two_opt(num_atoms: int, coordinates: np.ndarray, max_iter = 200):
 
     """
-    Improve an edge configuration using the 2-opt local search heuristic.
-
-    This iterative improvement heuristic starts with a random edge configuration and repeatedly applies 2-edge swaps that reduce the total distance 
-    until no further improvement is found or maximum iterations are reached.
+    Improve pairing using 2-opt local search.
 
     Parameters
     ----------
     num_atoms : int
-        Number of atoms in the molecule. 
     coordinates : np.ndarray
-        3D Cartesian coordinates of atoms. 
-    max_iter : int, default=200
-        Maximum number of improvement iterations.
+    max_iter : int
 
     Returns
     -------
     list[tuple[int, int]]
-        Improved edge configuration as a list of atom index pairs. 
+        Improved edge configuration.
     """
 
     edges = random_matching(num_atoms=num_atoms)
@@ -419,21 +402,11 @@ def two_opt(num_atoms: int, coordinates: np.ndarray, max_iter = 200):
 def random_neighbour(edges: list[tuple[int, int]]):
 
     """
-    Generate a random neighboring edge configuration by swapping two edges.
-
-    This function creates a new edge configuration by randomly selecting two edges and recombining their endpoints. 
-    This is used as the neighborhood exploration operator in simulated annealing.
-
-    Parameters
-    ----------
-    edges : list[tuple[int, int]]
-        Current edge configuration as a list of atom index pairs.
+    Generate neighboring solution via edge swap.
 
     Returns
     -------
     list[tuple[int, int]]
-        New edge configuration with one 2-edge swap applied. If the swap would create invalid edges (duplicates), 
-        returns the original configuration unchanged.
     """
 
     new_edges = edges[:]
@@ -460,30 +433,21 @@ def simulated_annealing(num_atoms: int,
                         max_iter = 1000):
 
     """
-    Find an edge configuration using Simulated Annealing metaheuristic.
-
-    This optimization technique starts with a random edge configuration and iteratively explores the solution space by accepting both improving and 
-    (with decreasing probability) worsening moves. This allows the algorithm to escape local optima and find high-quality solutions.
+    Optimize pairing using simulated annealing.
 
     Parameters
     ----------
     num_atoms : int
-        Number of atoms in the molecule.
     coordinates : np.ndarray
-        3D Cartesian coordinates of atoms. 
-    start : float, default=1.0
-        Initial temperature for the annealing schedule. Higher values allow more exploration of worse solutions early in the search.
-    end : float, default=1e-3
-        Final temperature threshold. Algorithm terminates when temperature drops below this value. Lower values extend the search.
-    alpha : float, default=0.95
-        Cooling rate (0 < alpha < 1). Temperature is multiplied by alpha after each iteration: T_{i+1} = alpha * T_i. 
-    max_iter : int, default=1000
-        Maximum number of iterations. 
+    start : float
+    end : float
+    alpha : float
+    max_iter : int
 
     Returns
     -------
     list[tuple[int, int]]
-        Best edge configuration found during the search as a list of atom index pairs. 
+        Best found configuration.
     """
 
     starting_edges = random_matching(num_atoms)
@@ -528,24 +492,11 @@ def crossover(parent_a: list[tuple[int, int]],
               num_atoms: int):
     
     """
-    Create a child edge configuration by combining two parent configurations.
-
-    This genetic algorithm crossover operator combines edges from two parent solutions to create a new offspring. 
-    It preserves common edges and fills remaining atoms with compatible edges from parents or random pairings.
-
-    Parameters
-    ----------
-    parent_a : list[tuple[int, int]]
-        First parent edge configuration.
-    parent_b : list[tuple[int, int]]
-        Second parent edge configuration.
-    num_atoms : int
-        Total number of atoms in the molecule.
+    Combine two parent solutions into a child.
 
     Returns
     -------
     list[tuple[int, int]]
-        Child edge configuration inheriting characteristics from both parents.
 
     Notes
     -----
@@ -583,19 +534,11 @@ def crossover(parent_a: list[tuple[int, int]],
 def mutation(edges: list):
 
     """
-    Mutate an edge configuration by randomly swapping two edges.
-
-    This genetic algorithm mutation operator introduces random variation by recombining two randomly selected edges.
-
-    Parameters
-    ----------
-    edges : list[tuple[int, int]]
-        Edge configuration to mutate.
+    Mutate solution by swapping edges.
 
     Returns
     -------
     list[tuple[int, int]]
-        Mutated edge configuration. If the swap would create invalid edges, returns the original configuration unchanged.
     """
 
     new_edges = edges[:]
@@ -621,30 +564,21 @@ def genetic_algorithm(num_atoms: int,
                       elite_size = 2):
 
     """
-    Find an edge configuration using a Genetic Algorithm metaheuristic.
-
-    This evolutionary algorithm maintains a population of edge configurations and iteratively improves it through selection, crossover, and mutation 
-    operators inspired by natural evolution.
+    Solve using genetic algorithm.
 
     Parameters
     ----------
     num_atoms : int
-        Number of atoms in the molecule.
     coordinates : np.ndarray
-        3D Cartesian coordinates of atoms.
-    pop_size : int, default=50
-        Population size - number of edge configurations maintained. Larger populations provide more diversity but increase computation per iteration.
-    max_iter : int, default=200
-        Number of generations (iterations) to evolve the population. More generations allow better convergence but increase total runtime.
-    mutation_rate : float, default=0.2
-        Probability (0-1) of applying mutation to offspring. Higher rates increase exploration; lower rates favor exploitation of good solutions.
-    elite_size : int, default=2
-        Number of best solutions preserved unchanged each generation (elitism). Ensures best solutions are never lost.
+    pop_size : int, optional
+    max_iter : int, optional
+    mutation_rate : float, optional
+    elite_size : int, optional
 
     Returns
     -------
     list[tuple[int, int]]
-        Best edge configuration found across all generations as a list of atom index pairs.
+        Best solution found.
     """
 
     population = [random_matching(num_atoms=num_atoms) for i in range(pop_size)]
@@ -676,21 +610,17 @@ def genetic_algorithm(num_atoms: int,
 def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
     
     """
-    Find the optimal edge configuration using Edmonds' Blossom Algorithm.
+    Solve optimal matching using Blossom algorithm.
 
-    This function computes the minimum weight perfect matching - the set of edges that pairs all atoms with minimum total distance. 
-    
     Parameters
     ----------
     num_atoms : int
-        Number of atoms in the molecule. 
     coordinates : np.ndarray
-        3D Cartesian coordinates of atoms. 
 
     Returns
     -------
     list[tuple[int, int]]
-        Optimal edge configuration as a list of atom index pairs.
+        Optimal matching.
     """
 
     distance_matrix = squareform(pdist(coordinates))  
