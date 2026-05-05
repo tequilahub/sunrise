@@ -31,6 +31,56 @@ def call_janpa(command:str='',output_dir=None,silent=False):
             os.chmod(binary_path, st.st_mode | 0o111)
 
         cmd = [os.path.abspath(binary_path)]
+    if len(command):
+        e = None
+        if '-edges' in command:
+            idx = command.index('-edges ')
+            odx = command.index('[',idx)
+            cdx = command.index(']',odx)+1
+            e = command[odx:cdx]
+            command = command[:idx]+command[cdx:]
+        extra_args = shlex.split(command)
+        if e is not None:
+            extra_args += ['-edges']
+            extra_args += [f'{e}']
+        cmd.extend(extra_args)
+        # 4. Run the subprocess
+        try:
+            res = subprocess.run(
+                cmd, 
+                capture_output=silent, 
+                text=True, 
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing binary: {e.stderr}")
+            raise
+
+def call_molden2molden(command:str='',output_dir=None,silent=False):
+    """
+    Wraper for the molden2molden executable files. See CLPO.README.md for link.
+    command:str Command string as it would be introduced on the terminal. See sunrise.call_janpa() for options
+    silent:bool Whether to silece molden2molden output 
+    output_dir: default None = working file.
+    """
+    if sys.platform == "darwin":
+        filename = 'molden2molden_macos'
+    elif sys.platform == "linux" or sys.platform == "linux2":
+        filename = 'molden2molden_linux'
+    elif sys.platform == "win32":
+        raise NotImplementedError('Windows not implemented (yet?)')
+    else: raise Exception('Is this code being run inside Doom?')
+    
+    if output_dir is None:
+        output_dir = os.getcwd()
+    with resources.as_file(resources.files('sunrise.CLPO.bin').joinpath(filename)) as binary_path:
+        
+        # 2. Ensure executable permissions (Linux/Mac)
+        if sys.platform != "win32":
+            st = os.stat(binary_path)
+            os.chmod(binary_path, st.st_mode | 0o111)
+
+        cmd = [os.path.abspath(binary_path)]
         if len(command):
             extra_args = shlex.split(command)
             cmd.extend(extra_args)
