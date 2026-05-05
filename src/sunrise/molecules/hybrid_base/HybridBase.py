@@ -1123,7 +1123,7 @@ class HybridBase(qc_base):
         """
         i, j = self.format_excitation_indices([(i, j)])[0]
         if not (self.select[i] == "F" and self.select[j] == "F"):
-            raise TequilaException("Rotation not allowed, try Correlator")
+            raise TequilaException(f"Rotation{(i,j)} not allowed, try Correlator")
         if angle is None:
             if label is None:
                 angle = Variable(name=("R", i, j)) * numpy.pi
