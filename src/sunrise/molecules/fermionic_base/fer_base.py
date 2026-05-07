@@ -18,6 +18,7 @@ from tequila.quantumchemistry.chemistry_tools import (
     NBodyTensor,
 )
 import typing
+from numbers import Number
 import numpy
 from itertools import product
 from sunrise.fermionic_operations.givens_rotations import get_givens_circuit as __get_givens_circuit
@@ -548,6 +549,7 @@ class FermionicBase(QuantumChemistryBase):
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
+                    orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
                 )
                 return self
             else:
@@ -560,6 +562,7 @@ class FermionicBase(QuantumChemistryBase):
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
+                    orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
                 )
                 parameters = copy.deepcopy(self.parameters)
                 result = FermionicBase(
@@ -662,35 +665,11 @@ class FermionicBase(QuantumChemistryBase):
         fop = openfermion.transforms.get_fermion_operator(fop)
         return fop
 
-    def make_hardcore_boson_hamiltonian(self, condensed=False)->OFFermionOperator:
-        """
-        Returns
-        -------
-        Hamiltonian in Hardcore-Boson approximation (electrons are forced into spin-pairs)
-        Indepdent of Fermion-to-Qubit mapping
-        condensed: always give Hamiltonian back from qubit 0 to N where N is the number of orbitals
-        if condensed=False then JordanWigner would give back the Hamiltonian defined on even qubits between 0 to 2N
-        """
-
-        # integrate with QubitEncoding at some point
-        n_orbitals = self.n_orbitals
-        c, obt, tbt = self.get_integrals()
-        h = numpy.zeros(shape=[n_orbitals] * 2)
-        g = numpy.zeros(shape=[n_orbitals] * 2)
-        for p in range(n_orbitals):
-            h[p, p] += 2 * obt[p, p]
-            for q in range(n_orbitals):
-                h[p, q] += +tbt.elems[p, p, q, q]
-                if p != q:
-                    g[p, q] += 2 * tbt.elems[p, q, q, p] - tbt.elems[p, q, p, q]
-
-        H = OFFermionOperator(term=c)
-        for p in range(n_orbitals):
-            for q in range(n_orbitals):
-                up = p
-                uq = q
-                H += h[p, q] * self.make_creation_op(up) * self.make_annihilation_op(uq) + g[p, q] * self.make_number_op(up) * self.make_number_op(uq)
-        return H
+    def make_hardcore_boson_hamiltonian(self)->OFFermionOperator:
+        '''
+        Only expected to be used when HCB orbital optimization, where it is faster to use the default fermionic hamiltonian with pseudo-'HCB' states/circuits
+        '''
+        return 'H'
 
     def prepare_reference(self, state=None, *args, **kwargs)->FCircuit:
         """
@@ -1181,6 +1160,8 @@ class FermionicBase(QuantumChemistryBase):
             if true, the tequila expectation values are evaluated directly via the tq.simulate command.
             the protocol is optimized to avoid repetation of wavefunction simulation
             if false, the rdms are returned as tq.QTensors
+        use_hcb :
+            hcb on the sense the wvf is restricted to double Spatial Orbital occupations only, the operatros will remain Fermiomic
         Returns
         -------
         """
@@ -1191,20 +1172,41 @@ class FermionicBase(QuantumChemistryBase):
         # Set up number of spin-orbitals and molecular orbitals respectively
         n_SOs = 2 * self.n_orbitals
         n_MOs = self.n_orbitals
-
-        # Check whether unitary circuit is not 0
-        if U is None:
-            raise TequilaException("Need to specify a Quantum Circuit.")
-        def _get_hcb_op(op_tuple):
-            raise TequilaException('No HCB operations in Fermionic Backends')
-        
+              
         def _get_of_op(operator_tuple):
             """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
             op = openfermion.FermionOperator(operator_tuple)
             return op
 
+        def _get_of_hcb_op(op_tuple):
+            """Build the hardcore boson operators: b^\dagger_ib_j + h.c. in qubit encoding"""
+            if len(op_tuple) == 2:
+                return openfermion.FermionOperator(op_tuple,2)
+            elif len(op_tuple) == 4:
+                if (op_tuple[0][0] == op_tuple[1][0] and op_tuple[2][0] == op_tuple[3][0]):  # iijj uddu+duud
+                    return openfermion.FermionOperator(op_tuple,0.5)
+                elif (
+                    (op_tuple[0][0] == op_tuple[2][0])
+                    and (op_tuple[1][0] == op_tuple[3][0])
+                    and (op_tuple[0][0] != op_tuple[1][0])
+                    and (op_tuple[2][0] != op_tuple[3][0])
+                ):  # ijij uuuu+dddd
+                    return openfermion.FermionOperator(op_tuple,2)
+                elif (
+                    (op_tuple[0][0] == op_tuple[3][0])
+                    and (op_tuple[1][0] == op_tuple[2][0])
+                    and (op_tuple[0][0] != op_tuple[1][0])
+                    and (op_tuple[2][0] != op_tuple[3][0])
+                ):  # ijji abba
+                    return openfermion.FermionOperator(op_tuple)
+                else: return 0
+            else:
+                return 0
+
         def _get_qop_hermitian(of_operator):
             """Returns Hermitian"""
+            if isinstance(of_operator,Number):
+                return of_operator
             return 0.5*(of_operator + hermitian_conjugated(of_operator))
 
         def _build_1bdy_operators_spinful() -> list:
@@ -1347,15 +1349,107 @@ class FermionicBase(QuantumChemistryBase):
                     rdm2[q, p, s, r] = rdm2[p, q, r, s]
 
             return rdm2
+        
+        def _build_1bdy_hcb_operators_spinfree() -> list:
+            """Returns spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            # Exploit symmetry pq = qp (not changed by spin-summation)
+            ops = []
+            for p in range(n_MOs):
+                for q in range(p + 1):
+                    if p == q:
+                        # Spin aa
+                        op_tuple = ((2 * p, 1), (2 * p, 0))
+                        op = _get_of_op(op_tuple)
+                        # Spin bb
+                        op_tuple = ((2 * p + 1, 1), (2 * p + 1, 0))
+                        op += _get_of_op(op_tuple)
+                        ops += [op]
+                    else:
+                        ops += [0.]
+            return ops
+
+        def _build_1bdy_hcb_operators_spinful() -> list:
+            """Returns spinful one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            # Exploit symmetry pq = qp
+            ops = []
+            for p in range(n_SOs):
+                for q in range(p + 1):
+                    if p==q:
+                        op_tuple = ((p, 1), (q, 0))
+                        op = _get_of_op(op_tuple)
+                        ops += [op]
+                    else:
+                        ops += [0.]
+            return ops
+        
+        def _build_2bdy_hcb_operators_spinful() -> list:
+            """Returns spinful two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
+            #                and      =  rspq
+            ops = []
+            for p in range(n_SOs):
+                for q in range(p):
+                    for r in range(n_SOs):
+                        for s in range(r):
+                            if p * n_SOs + q >= r * n_SOs + s:
+                                if (p//2 == q//2 and s == r) or (p != q and r != s and p == r and s == q) or (p != q and r != s and p == s and q == r):
+                                    op_tuple = ((p, 1), (q, 1), (s, 0), (r, 0)) if ((((p == r and q == s) or (p==s and q==r)) and p%2==q%2==r%2==s%2) or  # Spin aaaa and bbbb
+                                                                                   ( (p%2==s%2 and r%2==q%2 and p%2!=q%2 and r%2!=s%2) and ((p//2==q//2 and r//2==s//2) or (q//2==s//2 and p//2==p//2))) # Spin abba and baab
+                                                                                    )else "0.0 []"
+                                    op = _get_of_op(op_tuple)
+                                    ops += [op]
+            return ops
+
+        def _build_2bdy_hcb_operators_spinfree() -> list:
+            """Returns spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
+            #                and      = rspq
+            ops = []
+            for p, q, r, s in product(range(n_MOs), repeat=4):
+                if p * n_MOs + q >= r * n_MOs + s and (p >= q or r >= s):
+                    # Spin aaaa
+                    op_tuple = ((2 * p, 1), (2 * q, 1), (2 * s, 0), (2 * r, 0)) if (p == r and q == s) or (p==s and q==r) else "0.0 []"
+                    op = _get_of_op(op_tuple)
+                    # Spin abba
+                    op_tuple = (
+                        ((2 * p, 1), (2 * q + 1, 1), (2 * s + 1, 0), (2 * r, 0))
+                        if (p==q and r==s) or (q==s and p==r)
+                        else "0.0 []"
+                    )
+                    op += _get_of_op(op_tuple)
+                    # Spin baab
+                    op_tuple = (
+                        ((2 * p + 1, 1), (2 * q, 1), (2 * s, 0), (2 * r + 1, 0))
+                        if (p==q and r==s) or (q==s and p==r)
+                        else "0.0 []"
+                    )
+                    op += _get_of_op(op_tuple)
+                    # Spin bbbb
+                    op_tuple = (
+                        ((2 * p + 1, 1), (2 * q + 1, 1), (2 * s + 1, 0), (2 * r + 1, 0))
+                        if (p == r and q == s)  or (p==s and q==r)
+                        else "0.0 []"
+                    )
+                    op += _get_of_op(op_tuple)
+                    ops += [op]
+            return ops
 
         # Build operator lists
         qops = []
         if spin_free:
-            qops += _build_1bdy_operators_spinfree() if get_rdm1 else []
-            qops += _build_2bdy_operators_spinfree() if get_rdm2 else []
+            if use_hcb:
+                qops += _build_1bdy_hcb_operators_spinfree() if get_rdm1 else []
+                qops += _build_2bdy_hcb_operators_spinfree() if get_rdm2 else []
+            else:
+                qops += _build_1bdy_operators_spinfree() if get_rdm1 else []
+                qops += _build_2bdy_operators_spinfree() if get_rdm2 else []
         else:
-            qops += _build_1bdy_operators_spinful() if get_rdm1 else []
-            qops += _build_2bdy_operators_spinful() if get_rdm2 else []
+            if use_hcb:
+                qops += _build_1bdy_hcb_operators_spinful() if get_rdm1 else []
+                qops += _build_2bdy_hcb_operators_spinful() if get_rdm2 else []
+            else:
+                qops += _build_1bdy_operators_spinful() if get_rdm1 else []
+                qops += _build_2bdy_operators_spinful() if get_rdm2 else []
 
         # Transform operator lists to QubitHamiltonians
         qops = [_get_qop_hermitian(op) for op in qops]
@@ -1419,6 +1513,50 @@ class FermionicBase(QuantumChemistryBase):
             return self.rdm2
         else:
             warnings.warn("compute_rdms called with instruction to not compute?", TequilaWarning)
+
+    def compute_energy(self, method, *args, **kwargs):
+        """
+        Call classical methods over PySCF (needs to be installed) or
+        use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
+
+        Parameters
+        ----------
+        method: method name
+                classical: HF, MP2, CCSD, CCSD(T), FCI -- with pyscf
+                quantum: UpCCD, UpCCSD, UpCCGSD, k-UpCCGSD, UCCSD,
+                see make_upccgsd_ansatz of the this class for more information
+        args
+        kwargs: for quantum methods, keyword arguments for minimizer
+
+        Returns
+        -------
+
+        """
+        if any([x in method.upper() for x in ["U"]]):
+            # simulate entirely in HCB representation if no singles are involved
+            if "S" not in method.upper().split("-")[-1] and "HCB" not in method.upper():
+                method = "HCB-" + method
+            U = self.make_ansatz(name=method)
+            if "hcb" in method.lower():
+                H = self.make_hardcore_boson_hamiltonian()
+            else:
+                H = self.make_hamiltonian()
+            E = Braket(H=H, U=U)
+            from sunrise import minimize
+
+            return minimize(objective=E, *args, **kwargs).energy
+        else:
+            from tequila.quantumchemistry import INSTALLED_QCHEMISTRY_BACKENDS
+
+            if "pyscf" not in INSTALLED_QCHEMISTRY_BACKENDS:
+                raise TequilaException(
+                    "PySCF needs to be installed to compute {}/{}".format(method, self.parameters.basis_set)
+                )
+            else:
+                from sunrise.molecules.fermionic_base import QuantumChemistryPySCF
+
+                molx = QuantumChemistryPySCF.from_tequila(self)
+                return molx.compute_energy(method=method, **kwargs)
 
     def n_rotation(self, i, phi)->FCircuit:
         """
@@ -1492,3 +1630,216 @@ class FermionicBase(QuantumChemistryBase):
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
         g = self.graph()
         return g.get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals),g.get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
+   
+    def get_HAO_orbitals_coeff(self,sp_list:typing.Union[typing.List[int],typing.List[str],dict,None]=None)->numpy.ndarray:
+        """
+        Parameters
+        ----------
+            sp_list:
+                Optional. List of integrers/strigs of int corresponding to the spX hybridization of each atoms. By default None, they are chosen by
+                geometrical considerations. If dont want to define all atoms, "Auto" will be chosen by geometry.
+                Also can be passed a dict as {atom_idx:sp}, if not atom on the dictionary, will be set to Auto.
+                
+        Returns
+        -------
+        Matrix of the Hybrid Atomic Orbitals
+        """
+        n_atoms = len(self.parameters.get_atoms())
+        if isinstance(sp_list,list):
+            if len(sp_list) <= n_atoms:
+                sp_list += (n_atoms-len(sp_list))*['Auto']
+            else:
+                TequilaWarning(f'{len(sp_list)} hybridization passed, but only expected {n_atoms}. Only the first {n_atoms} will be employed.')
+                sp_list = sp_list[:n_atoms]
+        elif isinstance(sp_list,dict):
+            new_sp_list = ['Auto']*n_atoms
+            for i in sp_list.keys():
+                new_sp_list[i] = sp_list[i]
+            sp_list = new_sp_list
+        return self.graph().get_HAO_orbitals(sp_list=sp_list)
+
+    def use_HAO_orbitals(self, inplace=False, core: typing.Optional[list[int]] = None, sp_list: typing.Union[list[int],list[str],dict,None] = None, *args, **kwargs):
+        """
+        Parameters
+        ----------
+            inplace:
+                update current molecule or return a new instance
+            core:
+                list of core orbital indices (optional) — orbitals will be frozen and treated as doubly occupied. The orbitals correspond to
+                the currently used orbitals of the molecule (default is usually canonical HF), see mol.print_basis_info() if unsure. Providing core
+                orbitals is optional; the default is inherited from the active space set in self.integral_manager. If core is provided, the
+                corresponding active native orbitals will be chosen based on their overlap with the core orbitals.
+            active(in kwargs):
+                list the active orbital indices (optional, in kwargs) - on the Native Orbital schema. Default: All orbitals, if core (see above) is provided,
+                then the default is to automatically select the active orbitals based on their overlap with the provided core orbitals (selectint the N-|core|
+                orbitals that have smallest overlap with coree).
+                As an example, Assume the input geometry was H, He, H. active=[0,1,2] is selecting the (orthonormalized) atomic 1s (left H), 1s (He), 1s (right H).
+                If core=[0] and active is not set, then active=[0,2] will be selected automatically (as the 1s He atomic orbital will have the largest overlap
+                with the lowest energy HF orbital).
+            sp_list:
+                Optional. List of integrers corresponding to the spX hybridization of each atoms. By default None, they are chosen by
+                geometrical considerations. If dont want to define all atoms, "Auto" will be chosen by geometry.
+                Also can be passed a dict as {atom_idx:sp}, if not atom on the dictionary, will be set to Auto.
+        Returns
+        -------
+        New molecule in the native (orthonormalized) basis given
+        e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
+        """
+        c = copy.deepcopy(self.integral_manager.orbital_coefficients)
+        s = self.integral_manager.overlap_integrals
+        d = self.get_HAO_orbitals_coeff(sp_list=sp_list).T
+        def inner(a, b, s):
+            return numpy.sum(numpy.multiply(numpy.outer(a, b), s))
+
+        def orthogonalize(c, d, s):
+            """
+            :return: orthogonalized orbitals with core HF orbitals and active Orthongonalized Native orbitals.
+            """
+            ### Computing Core-Active overlap Matrix
+            # sbar_{ki} = \langle \phi_k | \varphi_i \rangle = \sum_{m,n} c_{nk}d_{mi}\langle \chi_n | \chi_m \rangle
+            # c_{nk} = HF coeffs, d_{mi} = nat orb coef s_{mn} = Atomic Overlap Matrix
+            # k \in active orbs, i \in core orbs, m,n \in basis coeffs
+            # sbar = np.einsum('nk,mi,nm->ki', c, d, s) #only works if active == to_active
+            c = c.T
+            d = d.T
+            sbar = numpy.zeros(shape=s.shape)
+            n_basis = len(d)
+            ov = numpy.zeros(shape=(n_basis))
+            for i in core:
+                for j in range(n_basis):
+                    ov[j] += numpy.abs(inner(c[i], d[j], s))
+            co = {}
+            for i in core:
+                idx = numpy.argmax(ov)
+                co[i] = idx
+                ov[idx] = 0
+            active = [i for i in range(n_basis) if i not in co.values()]
+            to_active =  [i for i in range(n_basis) if  i not in co.keys()]
+            to_active = {active[i]:to_active[i] for i in range(len(active))}
+            reference_orbitals = [*co.keys()]
+            i =0
+            while len(reference_orbitals)<self.parameters.total_n_electrons//2:
+                if i not in reference_orbitals:
+                    reference_orbitals.append(i)
+                i += 1
+            sbar = numpy.zeros(shape=s.shape)
+            for k in active:
+                for i in core:
+                    sbar[i][to_active[k]] = inner(c[i], d[k], s)
+            dbar = numpy.zeros(shape=s.shape)
+
+            for j in active:
+                dbar[to_active[j]] = d[j]
+                for i in core:
+                    temp = sbar[i][to_active[j]] * c[i]
+                    dbar[to_active[j]] -= temp
+            for i in to_active.values():
+                norm = numpy.sqrt(inner(dbar[i], dbar[i], s.T))
+                if not numpy.isclose(norm, 0):
+                    dbar[i] = dbar[i] / norm
+            for j in to_active.values():
+                c[j] = dbar[j]
+            sprima = numpy.eye(len(c))
+            for idx, i in enumerate(to_active.values()):
+                for j in [*to_active.values()][idx:]:
+                    sprima[i][j] = inner(c[i], c[j], s)
+                    sprima[j][i] = sprima[i][j]
+            lam_s, l_s = numpy.linalg.eigh(sprima)
+            lam_s = lam_s * numpy.eye(len(lam_s))
+            lam_sqrt_inv = numpy.sqrt(numpy.clip(numpy.linalg.inv(lam_s), a_min=1.e-8, a_max=None)) #safety
+            symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
+            return symm_orthog.dot(c).T
+
+        def get_active(core):
+            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
+            for i in core:
+                for j in range(len(d)):
+                    ov[j] += numpy.abs(inner(c.T[i], d.T[j], s))
+            act = []
+            for i in range(len(self.integral_manager.orbitals) - len(core)):
+                idx = numpy.argmin(ov)
+                act.append(idx)
+                ov[idx] = 1 * len(core)
+            act.sort()
+            return act
+
+        def get_core(active):
+            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
+            for i in active:
+                for j in range(len(d)):
+                    ov[j] += numpy.abs(inner(d.T[i], c.T[j], s))
+            co = []
+            for i in range(len(self.integral_manager.orbitals) - len(active)):
+                idx = numpy.argmin(ov)
+                co.append(idx)
+                ov[idx] = 1 * len(active)
+            co.sort()
+            return co
+
+        active = None
+        if not self.integral_manager.active_space_is_trivial() and core is None:
+            core = [i.idx_total for i in self.integral_manager.orbitals if i.idx is None]
+        if "active" in kwargs:
+            active = kwargs["active"]
+            kwargs.pop("active")
+            if core is None:
+                core = get_core(active)
+        else:
+            if active is None:
+                if core is None:
+                    core = []
+                    active = [i for i in range(len(self.integral_manager.orbitals))]
+                else:
+                    if isinstance(core, int):
+                        core = [core]
+                    active = get_active(core)
+        assert len(active) + len(core) == len(self.integral_manager.orbitals)
+        to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
+        to_active = {active[i]: to_active[i] for i in range(len(active))}
+        if len(core):
+            coeff = orthogonalize(c, d, s)
+            if inplace:
+                self.integral_manager = self.initialize_integral_manager(
+                    one_body_integrals=self.integral_manager.one_body_integrals,
+                    two_body_integrals=self.integral_manager.two_body_integrals,
+                    constant_term=self.integral_manager.constant_term,
+                    active_orbitals=[*to_active.values()],
+                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals],
+                    frozen_orbitals=core,
+                    orbital_coefficients=coeff,
+                    overlap_integrals=s,
+                    orbital_type="HAO",
+                )
+                return self
+            else:
+                integral_manager = self.initialize_integral_manager(
+                    one_body_integrals=self.integral_manager.one_body_integrals,
+                    two_body_integrals=self.integral_manager.two_body_integrals,
+                    constant_term=self.integral_manager.constant_term,
+                    active_orbitals=[*to_active.values()],
+                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals],
+                    frozen_orbitals=core,
+                    orbital_coefficients=coeff,
+                    overlap_integrals=s,
+                    orbital_type="HAO",
+                )
+                parameters = copy.deepcopy(self.parameters)
+                result = FermionicBase(
+                    parameters=parameters,
+                    integral_manager=integral_manager,
+                    active_orbitals=[*to_active.values()],
+                )
+                return result
+        # can not be an instance of a specific backend (otherwise we get inconsistencies with classical methods in the backend)
+        if inplace:
+            self.integral_manager.orbital_coefficients = d
+            self.integral_manager._orbital_type = "HAO"
+            return self
+        else:
+            integral_manager = copy.deepcopy(self.integral_manager)
+            integral_manager.orbital_coefficients = d
+            integral_manager._orbital_type = "HAO"
+            result = FermionicBase(
+                parameters=self.parameters, integral_manager=integral_manager, fermionic_backend= self.fermionic_backend
+            )
+            return result

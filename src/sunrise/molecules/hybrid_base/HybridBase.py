@@ -20,7 +20,7 @@ from sunrise.molecules.hybrid_base.FermionicGateImpl import FermionicGateImpl
 from openfermion import FermionOperator
 import copy
 from sunrise.hybridization.hybridization import Graph
-from typing import Union
+from typing import Union,Optional,List
 class HybridBase(qc_base):
     def __init__(self, parameters: ParametersQC,select: typing.Union[str,dict]={},transformation: typing.Union[str, typing.Callable] = None, active_orbitals: list = None,
                  frozen_orbitals: list = None, orbital_type: str = None,reference_orbitals: list = None, orbitals: list = None, *args, **kwargs):
@@ -151,15 +151,21 @@ class HybridBase(qc_base):
             """
             select = [*select]
             sel = {}
-            if (len(select) >= n_orb):
-                select = select[:n_orb]
+            if len(select) and isinstance(select[0],int):
+                for i in range(self.n_orbitals):
+                    if i in select:
+                        sel[i] = "F"
+                    else: sel[i] = "B"
             else:
-                select= select + (n_orb-len(select))*["B"]
-            for i in range(len(select)):
-                if select[i] in ["F","B"]:
-                    sel.update({i: select[i]})
+                if (len(select) >= n_orb):
+                    select = select[:n_orb]
                 else:
-                    TequilaException(f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic).")
+                    select= select + (n_orb-len(select))*["B"]
+                for i in range(len(select)):
+                    if select[i] in ["F","B"]:
+                        sel.update({i: select[i]})
+                    else:
+                        TequilaException(f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic).")
             return sel
         def select_to_list(select:dict):
             """
@@ -384,8 +390,9 @@ class HybridBase(qc_base):
                     constant_term=self.integral_manager.constant_term,
                     active_orbitals=[*to_active.values()],
                     reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals]
-                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s)
-                self.integral_manager._orbital_type = 'native'
+                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s,
+                    orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
+                    )
                 self.update_select(new_select)
                 return self
             else:
@@ -395,8 +402,9 @@ class HybridBase(qc_base):
                     constant_term=self.integral_manager.constant_term
                     , active_orbitals=[*to_active.values()],
                     reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals]
-                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s)
-                integral_manager._orbital_type = 'native'
+                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s,
+                    orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
+                    )
                 parameters = copy.deepcopy(self.parameters)
                 result = HybridBase(parameters=parameters, integral_manager=integral_manager,
                                                     transformation=self.transformation,
@@ -489,7 +497,7 @@ class HybridBase(qc_base):
                                                                                          list(encodings.keys())))
         return transformation
     
-    def _new_transformation(self, transformation=None,n_electrons:int|None=None,
+    def _new_transformation(self, transformation=None,n_electrons:typing.Union[int,None]=None,
                             n_orbitals:Union[int,None]=None,select:typing.Union[str,dict,list,tuple]={},
                             condense:bool=True,two_qubit:bool=False, *args, **kwargs)->EncodingBase:
         """
@@ -1115,7 +1123,7 @@ class HybridBase(qc_base):
         """
         i, j = self.format_excitation_indices([(i, j)])[0]
         if not (self.select[i] == "F" and self.select[j] == "F"):
-            raise TequilaException("Rotation not allowed, try Correlator")
+            raise TequilaException(f"Rotation{(i,j)} not allowed, try Correlator")
         if angle is None:
             if label is None:
                 angle = Variable(name=("R", i, j)) * numpy.pi
@@ -1199,7 +1207,7 @@ class HybridBase(qc_base):
                 opt = kwargs["opt"]
                 kwargs.pop("opt")
             else:
-                opt = True
+                opt = False
             if not self.supports_ucc():
                 raise TequilaException("Molecule with transformation {} does not support general UCC operations".format(
                     self.transformation))
@@ -1403,36 +1411,40 @@ class HybridBase(qc_base):
         ladder: if true the excitation pattern will be local. E.g. in the pair from orbitals (1,2,3) we will have the excitations 1->2 and 2->3, if set to false we will have standard coupled-cluster style excitations - in this case this would be 1->2 and 1->3
         """
         if edges is None:
-            # raise TequilaException(
-            #     "SPA ansatz within a standard orbital basis needs edges. Please provide with the keyword edges.\nExample: edges=[(0,1,2),(3,4)] would correspond to two edges created from orbitals (0,1,2) and (3,4), note that orbitals can only be assigned to a single edge")
             edges = self.get_spa_edges()
         # sanity checks
         # current SPA implementation needs even number of electrons
         if self.n_electrons % 2 != 0:
             raise TequilaException(
-                "need even number of electrons for SPA ansatz.\n{} active electrons".format(self.n_electrons))
+                "need even number of electrons for SPA ansatz.\n{} active electrons".format(self.n_electrons)
+            )
         # making sure that enough edges are assigned
+        n_edges = len(edges)
         if len(edges) != self.n_electrons // 2:
             raise TequilaException(
                 "number of edges need to be equal to number of active electrons//2\n{} edges given\n{} active electrons\nfrozen core is {}".format(
-                    len(edges), self.n_electrons, self.parameters.frozen_core))
+                    len(edges), self.n_electrons, self.parameters.frozen_core
+                )
+            )
         # making sure that orbitals are uniquely assigned to edges
-        for edge in edges:
-            for orbital in edge:
+        for edge_qubits in edges:
+            for q1 in edge_qubits:
                 for edge2 in edges:
-                    if edge2 == edge:
+                    if edge2 == edge_qubits:
                         continue
-                    elif orbital in edge2:
+                    elif q1 in edge2:
                         raise TequilaException(
                             "make_spa_ansatz: faulty list of edges, orbitals are overlapping e.g. orbital {} is in edge {} and edge {}".format(
-                                orbital, edge, edge2))
+                                q1, edge_qubits, edge2
+                            )
+                        )
 
         # auto assign if the circuit construction is optimized
         # depending on the current qubit encoding (if hcb_to_me is implemnented we can optimize)
         if optimize is None:
             try:
                 have_hcb_to_me = self.hcb_to_me() is not None
-            except:
+            except Exception:
                 have_hcb_to_me = False
             if have_hcb_to_me or not len(self.FER_SO):
                 optimize = True
@@ -1464,28 +1476,19 @@ class HybridBase(qc_base):
                     else:
                         U += gates.Ry(angle=angle, target=q1, control=c)
                     U += gates.CNOT(q1, c)
+
             if not hcb:
                 U += self.transformation.hcb_to_me()
         else:
-            # construction of the non-optimized circuit
+            orbs = [edge[0] for edge in edges]
             if hcb:
-                U = self.prepare_hardcore_boson_reference()
+                U = gates.X([pos[2*i] for i in orbs])
             else:
-                U = self.prepare_reference()
-            # will only work if the first orbitals in the edges are the reference orbitals
-            sane = True
-            reference_orbitals = self.reference_orbitals
-            for edge_qubits in edges:
-                if self.orbitals[edge_qubits[0]] not in reference_orbitals:
-                    sane = False
-                if len(edge_qubits) > 1:
-                    for orbital in edge_qubits[1:]:
-                        if self.orbitals[orbital] in reference_orbitals:
-                            sane = False
-            if not sane:
-                raise TequilaException(
-                    "Non-Optimized SPA (e.g. with encodings that are not JW) will only work if the first orbitals of all SPA edges are occupied reference orbitals and all others are not. You gave edges={} and reference_orbitals are {}".format(
-                        edges, reference_orbitals))
+                state = [0] * 2 * self.n_orbitals
+                for i in orbs:
+                    state[2 * i] = 1
+                    state[2 * i + 1] = 1
+                U = self.prepare_reference(state)
 
             for edge_qubits in edges:
                 previous = edge_qubits[0]
@@ -1500,7 +1503,9 @@ class HybridBase(qc_base):
                         if hcb:
                             U += self.make_hardcore_boson_excitation_gate(indices=[(q1, c)], angle=angle)
                         else:
-                            U += self.make_excitation_gate(indices=[(2 * c, 2 * q1), (2 * c + 1, 2 * q1 + 1)],angle=angle)
+                            U += self.make_excitation_gate(
+                                indices=[(2 * c, 2 * q1), (2 * c + 1, 2 * q1 + 1)], angle=angle
+                            )
                         previous = q1
         if not self.condense:
             U.n_qubits = 2*self.n_orbitals
@@ -1870,3 +1875,229 @@ class HybridBase(qc_base):
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
         g = self.graph()
         return g.get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals),g.get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
+
+   
+    def get_HAO_orbitals_coeff(self,sp_list:Union[List[int],List[str],dict,None]=None)->numpy.ndarray:
+        """
+        Parameters
+        ----------
+            sp_list:
+                Optional. List of integrers/strigs of int corresponding to the spX hybridization of each atoms. By default None, they are chosen by
+                geometrical considerations. If dont want to define all atoms, "Auto" will be chosen by geometry.
+                Also can be passed a dict as {atom_idx:sp}, if not atom on the dictionary, will be set to Auto.
+                
+        Returns
+        -------
+        Matrix of the Hybrid Atomic Orbitals
+        """
+        n_atoms = len(self.parameters.get_atoms())
+        if isinstance(sp_list,list):
+            if len(sp_list) <= n_atoms:
+                sp_list += (n_atoms-len(sp_list))*['Auto']
+            else:
+                TequilaWarning(f'{len(sp_list)} hybridization passed, but only expected {n_atoms}. Only the first {n_atoms} will be employed.')
+                sp_list = sp_list[:n_atoms]
+        elif isinstance(sp_list,dict):
+            new_sp_list = ['Auto']*n_atoms
+            for i in sp_list.keys():
+                new_sp_list[i] = sp_list[i]
+            sp_list = new_sp_list
+        return self.graph().get_HAO_orbitals(sp_list=sp_list)
+
+    def use_HAO_orbitals(self, inplace=False, core: Optional[list[int]] = None, sp_list: Union[list[int],list[str],dict,None] = None, *args, **kwargs):
+        """
+        Parameters
+        ----------
+            inplace:
+                update current molecule or return a new instance
+            core:
+                list of core orbital indices (optional) — orbitals will be frozen and treated as doubly occupied. The orbitals correspond to
+                the currently used orbitals of the molecule (default is usually canonical HF), see mol.print_basis_info() if unsure. Providing core
+                orbitals is optional; the default is inherited from the active space set in self.integral_manager. If core is provided, the
+                corresponding active native orbitals will be chosen based on their overlap with the core orbitals.
+            active(in kwargs):
+                list the active orbital indices (optional, in kwargs) - on the Native Orbital schema. Default: All orbitals, if core (see above) is provided,
+                then the default is to automatically select the active orbitals based on their overlap with the provided core orbitals (selectint the N-|core|
+                orbitals that have smallest overlap with coree).
+                As an example, Assume the input geometry was H, He, H. active=[0,1,2] is selecting the (orthonormalized) atomic 1s (left H), 1s (He), 1s (right H).
+                If core=[0] and active is not set, then active=[0,2] will be selected automatically (as the 1s He atomic orbital will have the largest overlap
+                with the lowest energy HF orbital).
+            sp_list:
+                Optional. List of integrers corresponding to the spX hybridization of each atoms. By default None, they are chosen by
+                geometrical considerations. If dont want to define all atoms, "Auto" will be chosen by geometry.
+                Also can be passed a dict as {atom_idx:sp}, if not atom on the dictionary, will be set to Auto.
+        Returns
+        -------
+        New molecule in the native (orthonormalized) basis given
+        e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
+        """
+        c = copy.deepcopy(self.integral_manager.orbital_coefficients)
+        s = self.integral_manager.overlap_integrals
+        d = self.get_HAO_orbitals_coeff(sp_list=sp_list).T
+        def inner(a, b, s):
+            return numpy.sum(numpy.multiply(numpy.outer(a, b), s))
+
+        def orthogonalize(c, d, s):
+            """
+            :return: orthogonalized orbitals with core HF orbitals and active Orthongonalized Native orbitals.
+            """
+            ### Computing Core-Active overlap Matrix
+            # sbar_{ki} = \langle \phi_k | \varphi_i \rangle = \sum_{m,n} c_{nk}d_{mi}\langle \chi_n | \chi_m \rangle
+            # c_{nk} = HF coeffs, d_{mi} = nat orb coef s_{mn} = Atomic Overlap Matrix
+            # k \in active orbs, i \in core orbs, m,n \in basis coeffs
+            # sbar = np.einsum('nk,mi,nm->ki', c, d, s) #only works if active == to_active
+            c = c.T
+            d = d.T
+            sbar = numpy.zeros(shape=s.shape)
+            n_basis = len(d)
+            ov = numpy.zeros(shape=(n_basis))
+            for i in core:
+                for j in range(n_basis):
+                    ov[j] += numpy.abs(inner(c[i], d[j], s))
+            co = {}
+            for i in core:
+                idx = numpy.argmax(ov)
+                co[i] = idx
+                ov[idx] = 0
+            active = [i for i in range(n_basis) if i not in co.values()]
+            to_active =  [i for i in range(n_basis) if  i not in co.keys()]
+            to_active = {active[i]:to_active[i] for i in range(len(active))}
+            reference_orbitals = [*co.keys()]
+            i =0
+            while len(reference_orbitals)<self.parameters.total_n_electrons//2:
+                if i not in reference_orbitals:
+                    reference_orbitals.append(i)
+                i += 1
+            sbar = numpy.zeros(shape=s.shape)
+            for k in active:
+                for i in core:
+                    sbar[i][to_active[k]] = inner(c[i], d[k], s)
+            dbar = numpy.zeros(shape=s.shape)
+
+            for j in active:
+                dbar[to_active[j]] = d[j]
+                for i in core:
+                    temp = sbar[i][to_active[j]] * c[i]
+                    dbar[to_active[j]] -= temp
+            for i in to_active.values():
+                norm = numpy.sqrt(inner(dbar[i], dbar[i], s.T))
+                if not numpy.isclose(norm, 0):
+                    dbar[i] = dbar[i] / norm
+            for j in to_active.values():
+                c[j] = dbar[j]
+            sprima = numpy.eye(len(c))
+            for idx, i in enumerate(to_active.values()):
+                for j in [*to_active.values()][idx:]:
+                    sprima[i][j] = inner(c[i], c[j], s)
+                    sprima[j][i] = sprima[i][j]
+            lam_s, l_s = numpy.linalg.eigh(sprima)
+            lam_s = lam_s * numpy.eye(len(lam_s))
+            lam_sqrt_inv = numpy.sqrt(numpy.clip(numpy.linalg.inv(lam_s), a_min=1.e-8, a_max=None)) #safety
+            symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
+            return symm_orthog.dot(c).T
+
+        def get_active(core):
+            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
+            for i in core:
+                for j in range(len(d)):
+                    ov[j] += numpy.abs(inner(c.T[i], d.T[j], s))
+            act = []
+            for i in range(len(self.integral_manager.orbitals) - len(core)):
+                idx = numpy.argmin(ov)
+                act.append(idx)
+                ov[idx] = 1 * len(core)
+            act.sort()
+            return act
+
+        def get_core(active):
+            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
+            for i in active:
+                for j in range(len(d)):
+                    ov[j] += numpy.abs(inner(d.T[i], c.T[j], s))
+            co = []
+            for i in range(len(self.integral_manager.orbitals) - len(active)):
+                idx = numpy.argmin(ov)
+                co.append(idx)
+                ov[idx] = 1 * len(active)
+            co.sort()
+            return co
+
+        active = None
+        if not self.integral_manager.active_space_is_trivial() and core is None:
+            core = [i.idx_total for i in self.integral_manager.orbitals if i.idx is None]
+        if "active" in kwargs:
+            active = kwargs["active"]
+            kwargs.pop("active")
+            if core is None:
+                core = get_core(active)
+        else:
+            if active is None:
+                if core is None:
+                    core = []
+                    active = [i for i in range(len(self.integral_manager.orbitals))]
+                else:
+                    if isinstance(core, int):
+                        core = [core]
+                    active = get_active(core)
+        assert len(active) + len(core) == len(self.integral_manager.orbitals)
+        to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
+        to_active = {active[i]: to_active[i] for i in range(len(active))}
+        if len(core):
+            coeff = orthogonalize(c, d, s)
+            if not all([i == to_active[i] for i in to_active]) and len(self.BOS_MO) and len(self.FER_MO):
+                print("Orbital may be reordered, please double check F/B selection")
+            if len(active) == len(self.select):
+                new_select = {i: self.select[i] for i in range(len(active))}
+            else:
+                s = {i: self.select[i] for i in self.select.keys() if i not in core}
+                new_select = {i: s[[*s.keys()][i]] for i in range(len(s))}
+            if inplace:
+                self.integral_manager = self.initialize_integral_manager(
+                    one_body_integrals=self.integral_manager.one_body_integrals,
+                    two_body_integrals=self.integral_manager.two_body_integrals,
+                    constant_term=self.integral_manager.constant_term,
+                    active_orbitals=[*to_active.values()],
+                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals],
+                    frozen_orbitals=core,
+                    orbital_coefficients=coeff,
+                    overlap_integrals=s,
+                    orbital_type="HAO",
+                )
+                return self
+            else:
+                integral_manager = self.initialize_integral_manager(
+                    one_body_integrals=self.integral_manager.one_body_integrals,
+                    two_body_integrals=self.integral_manager.two_body_integrals,
+                    constant_term=self.integral_manager.constant_term,
+                    active_orbitals=[*to_active.values()],
+                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals],
+                    frozen_orbitals=core,
+                    orbital_coefficients=coeff,
+                    overlap_integrals=s,
+                    orbital_type="HAO",
+                )
+                parameters = copy.deepcopy(self.parameters)
+                result = HybridBase(
+                    parameters=parameters,
+                    integral_manager=integral_manager,
+                    active_orbitals=[*to_active.values()],
+                    transformation=self.transformation,
+                    select=new_select,
+                    two_qubit=self.two_qubit, condense=self.condense
+                    , integral_tresh=self.integral_tresh)
+                return result
+        # can not be an instance of a specific backend (otherwise we get inconsistencies with classical methods in the backend)
+        if inplace:
+            self.integral_manager.orbital_coefficients = d
+            self.integral_manager._orbital_type = "HAO"
+            return self
+        else:
+            integral_manager = copy.deepcopy(self.integral_manager)
+            integral_manager.orbital_coefficients = d
+            integral_manager._orbital_type = "HAO"
+            result = HybridBase(
+                parameters=self.parameters, integral_manager=integral_manager, transformation=self.transformation, select=self.select,
+                                                two_qubit=self.two_qubit, condense=self.condense,
+                                                integral_tresh=self.integral_tresh)
+            return result
+        

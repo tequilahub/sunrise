@@ -1,7 +1,0 @@
-https://github.com/pyscf/pyscf/blob/master/examples/local_orb/07-pipek_mezey.py pyscf example pipek_mezey localization
-
-https://sites.lsa.umich.edu/zimmerman-lab/ they should have the link to the code on https://doi.org/10.1063/1.4923084 but I dont find it
-maybe better to write them, if the pipek_mezey localization doesnt works properly
-
-https://www.lcpq.ups-tlse.fr/codes/cost_package/ https://git.irsamc.ups-tlse.fr/LCPQ/Cost_package
-I belive this is the localization code used for the algorithmiq paper, wait for jakob to answer, maybe read LoDo paper 

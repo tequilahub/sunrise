@@ -1,6 +1,7 @@
 from tequila import TequilaException, QubitWaveFunction
 from tequila.quantumchemistry import ParametersQC, NBodyTensor
 import pyscf
+from pyscf import fci
 from .fer_base import FermionicBase
 from tequila.quantumchemistry.chemistry_tools import OrbitalData
 
@@ -109,24 +110,40 @@ class QuantumChemistryPySCF(FermionicBase):
 
         super().__init__(parameters=parameters, orbitals=orbitals, *args, **kwargs)
 
-    def compute_fci(self, get_wfn=False, **kwargs):
-        from pyscf import fci
-
+    def compute_fci(self, get_wfn=False, ci0=None, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="chem")
         norb = self.n_orbitals
         nelec = self.n_electrons
-        e, fcivec = fci.direct_spin1.kernel(h1, h2.elems, norb, nelec, **kwargs)
+
+        if ci0 is not None:
+            ci0 = self.create_ci_vector(ci0)
+
+        e, fcivecs = fci.direct_spin1.kernel(
+            h1, h2.elems, norb, nelec, max_cycle=2000, max_space=100, ci0=ci0, **kwargs
+        )
 
         if get_wfn:
-            alpha_strs = fci.cistring.make_strings(range(norb), nelec // 2)
-            beta_strs = alpha_strs.copy()
-            wfn_dim = 2 ** (2 * norb)
-            wfn = numpy.zeros(wfn_dim)
-            for i, alpha_str in enumerate(alpha_strs):
-                for j, beta_str in enumerate(beta_strs):
-                    merged_str, phase = _merge_alpha_beta_strs(alpha_str, beta_str, norb)
-                    wfn[merged_str] = phase * fcivec[i, j]
-            return e + c, QubitWaveFunction.from_array(wfn)
+            if not ("nroots" in kwargs and kwargs["nroots"] > 1):
+                fcivecs = [fcivecs]
+                e = [e]
+            wfns = []
+            energies = [x + c for x in e]
+            for fcivec in fcivecs:
+                alpha_strs = fci.cistring.make_strings(range(norb), nelec // 2)
+                beta_strs = alpha_strs.copy()
+                wfn_dim = 2 ** (2 * norb)
+                wfn = numpy.zeros(wfn_dim)
+                for i, alpha_str in enumerate(alpha_strs):
+                    for j, beta_str in enumerate(beta_strs):
+                        alpha_str_b = bin(alpha_str)[2:].zfill(norb)
+                        beta_str_b = bin(beta_str)[2:].zfill(norb)
+                        merged_str_b = (alpha_str_b + beta_str_b)[::-1]
+                        merged_str = int(merged_str_b,2)
+                        wfn[merged_str] = fcivec[i, j]
+                wfns.append(QubitWaveFunction.from_array(wfn))
+            if not ("nroots" in kwargs and kwargs["nroots"] > 1):
+                return energies[0], wfns[0]
+            return energies, wfns
 
         return e + c
 

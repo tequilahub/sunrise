@@ -2,7 +2,7 @@
 **/sunrise.egg-info
 **/.idea
 **/.git
-**/.hdf5
+*/.hdf5
 **/.vscode
 **/.pytest_cache
 
@@ -13,7 +13,8 @@ __pycache__/
 
 # C extensions
 *.so
-
+**/tmp/
+**/restart/
 # Distribution / packaging
 .Python
 build/
@@ -224,3 +225,10 @@ __marimo__/
 .streamlit/secrets.toml
 
 .DS_Store
+
+sunrise/miscellaneous/CLPO/benchmark/
+
+erik/
+erik/*
+*.data
+*.molden

@@ -62,11 +62,11 @@ def test_transition(backend):
 
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
-def test_maped_variables(geom,backend):
+def test_mapped_variables(geom,backend):
     random.seed(datetime.now().timestamp())
     mol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     edges = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='hybrid').get_spa_edges()
-    U = mol.make_ansatz("SPA",edges=edges,optimize=backend!='tequila')
+    U = mol.make_ansatz("SPA",edges=edges,optimize=False)
     mapa = {d:random.random()*np.pi for d in U.extract_variables()}
     U = U.map_variables(mapa)
     circuit = sn.FCircuit.from_edges(edges=edges,n_orb=mol.n_orbitals)
@@ -79,17 +79,20 @@ def test_maped_variables(geom,backend):
 
 
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
+@pytest.mark.parametrize("use_hcb",[True,False])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
-def test_optimize_orbitals(geom,backend):
+def test_optimize_orbitals(geom,backend,use_hcb):
     if backend == "tequila":
         pytest.skip("Tequila backend requires a Qubit-based molecule")
+    if backend == "fqe":
+        pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     edges = snmol.get_spa_edges()
     initial_guess = snmol.get_spa_guess().T
     tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
-    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,initial_guess=initial_guess)
+    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,initial_guess=initial_guess,use_hcb=use_hcb)
     tqopt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True,initial_guess=initial_guess)
     assert isclose(snopt.energy,tqopt.energy)
 
@@ -113,10 +116,12 @@ def test_optimize_orbitals(geom,backend):
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_gradient(geom,backend):
+    if backend == "tequila":
+        pytest.skip("Tequila backend requires a Qubit-based molecule")
     tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a').use_native_orbitals()
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     random.seed(datetime.now().timestamp())
-    tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=backend=='fqe')
+    tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=False)
     snU = snmol.make_ansatz('UpCCSD')
     tqval = tq.ExpectationValue(H=tqmol.make_hamiltonian(),U=tqU)
     snval = sn.Braket(molecule=snmol,ket=snU,backend=backend)
@@ -126,3 +131,18 @@ def test_gradient(geom,backend):
     tqg = [tq.simulate(tq.grad(tqval,v),variables=values) for v in variables]
     sng = [sn.simulate(sn.grad(snval,v),variables=values) for v in variables]
     assert np.allclose(tqg,sng)
+
+@pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
+@pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
+def test_circuit_simulate(geom,backend):
+    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a')
+    snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f')
+    random.seed(datetime.now().timestamp())
+    tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=False)
+    snU = snmol.make_ansatz('UpCCSD')
+    variables = {d:random.random()*np.pi for d in tqU.extract_variables()}
+    
+    tq_wfn = tq.simulate(tqU,variables=variables)
+    sn_wfn = sn.simulate(snU,variables=variables,n_orb=snmol.n_orbitals,backend=backend)
+    
+    assert isclose(tq_wfn.inner(sn_wfn),1)

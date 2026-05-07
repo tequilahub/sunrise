@@ -213,6 +213,70 @@ def compute_two_orb_rdm(mol:tqMolecule, circuit:QCircuit=None, variables:Variabl
 
     return rho
 
+def compute_one_spin_rdm(mol:tqMolecule, circuit:QCircuit=None, variables:Variables=None, initial_state:QubitWaveFunction=None, one_orb: int = 0, spin: str = 'up') -> np.ndarray:
+
+    # Initialize the input state in a wrapper class
+    state = Input_State(circuit=circuit, variables=variables, wavefunction=initial_state)
+    if initial_state is not None and circuit is None:
+        circuit = state.get_circuit()
+        initial_state = state.get_wavefunction()
+    elif circuit is None and initial_state is None:
+        raise ValueError("Either a circuit or a wavefunction must be provided")
+
+    if spin == 'up':
+        target_qubit = mol.transformation.up(one_orb)
+    elif spin == 'down':
+        target_qubit = mol.transformation.down(one_orb)
+    else:
+        raise ValueError("Spin must be 'up' or 'down'")
+
+    ops = {
+        "vacuum": tq.paulis.I(),
+        "a": mol.make_annihilation_op(target_qubit),
+        "a_dag": mol.make_creation_op(target_qubit),
+        "n": mol.make_number_op(target_qubit)
+    }
+
+    row = [
+        ["vacuum"], # empty
+        ["a_dag"]   # occupied
+    ]
+
+    # Create column as the daggered row
+    column = []
+    for tmp_ops in row:
+        col_ops = []
+        for op in tmp_ops:
+            if op.endswith("_dag"):
+                col_ops.append(op[:-4]) # removes the last 4 characters "_dag"
+            else: 
+                col_ops.append(op)
+        # reverse as we are daggering
+        col_ops.reverse()
+        column.append(col_ops)
+
+    rho = np.zeros((2, 2))
+    for i, state_i in enumerate(row):
+        for j, state_j in enumerate(column):
+                
+            # for convenience we multiply individual operators before
+            op_i = tq.paulis.I()
+            for v in state_i:
+                op_i *= ops[v]
+            op_j = tq.paulis.I()
+            for v in state_j:
+                op_j *= ops[v]
+
+            P = op_i * (1-ops["n"]) * op_j
+            if P.is_hermitian():
+                rho[i][j] = tq.simulate(tq.ExpectationValue(circuit,P), variables=variables, initial_state=initial_state)
+            else:
+                P_herm, P_non_herm = P.split()
+                rho[i][j] = tq.simulate(tq.ExpectationValue(circuit,P_herm), variables=variables, initial_state=initial_state) + \
+                    tq.simulate(tq.ExpectationValue(circuit,-1j * P_non_herm), variables=variables, initial_state=initial_state)
+
+    return rho
+
 def outer(psi):
     """Helper: Computes |psi><psi|."""
     return np.outer(psi, psi.conj())

@@ -202,6 +202,17 @@ class TCCBraket:
         return self.simulate(variables=variables)
 
     def simulate(self,variables:Union[list,dict]=None)->float:
+        check_variables = {k: k in variables for k in self.extract_variables()}
+        if not all(list(check_variables.values())):
+            raise TequilaException(
+                "Objective did not receive all variables:\n"
+                "You gave\n"
+                " {}\n"
+                " but the objective depends on\n"
+                " {}\n"
+                " missing values for\n"
+                " {}".format(variables, self.extract_variables(), [k for k, v in check_variables.items() if not v])
+            )
         if isinstance(variables,Variables):
             variables = variables.store
         if isinstance(variables,dict):
@@ -236,7 +247,7 @@ class TCCBraket:
         return unique
 
     def grad(self,variable:Variable = None)->Objective:
-        def apply_phase(braket: TCCBraket,exct:List[Tuple[int]],variable,ket:bool=True,p0sign:bool=True)->Objective:
+        def apply_phase(braket: TCCBraket,exct:List[Tuple[int]],idx:int,variable,ket:bool=True,p0sign:bool=True)->Objective:
             '''
             braket: TCC object to modify
             exct: Excitation indices on the tequila format [(0,2),(1,3),...] to which 
@@ -246,10 +257,9 @@ class TCCBraket:
             '''
             p0 = []
             s = {True:+1,False:-1} 
-
-            for idx in exct:
-                p0.append((idx[0],idx[0]))
-                p0.append((idx[1],idx[1]))
+            for ind in exct:
+                p0.append((ind[0],ind[0]))
+                p0.append((ind[1],ind[1]))
             braket._name = 'Gradient'
             if ket:
                 if braket.is_diagonal: 
@@ -257,8 +267,7 @@ class TCCBraket:
                     v = deepcopy(braket.params_ket)
                     braket.bra = deepcopy(k)
                     braket.variables_bra = deepcopy(v)
-                    idx = k.index(exct)
-                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],Union[FixedVariable,Number,Variable]) else 1
+                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],(FixedVariable,Number,Variable)) else 1
                     v[idx] +=  s[ket]*pi/2 
                     for p in reversed(p0):
                         k.insert(idx,[p])
@@ -270,8 +279,7 @@ class TCCBraket:
                     v = deepcopy(braket.params_ket)
                     if exct not in k:
                         return 0.
-                    idx = k.index(exct)
-                    ph = tq_grad(1*v[idx],variable) if not isinstance(v[idx],Union[FixedVariable,Number,Variable]) else 1
+                    ph = tq_grad(1*v[idx],variable) if not isinstance(v[idx],(FixedVariable,Number,Variable)) else 1
                     v[idx] +=  s[ket]*pi/2
                     for p in reversed(p0):
                         k.insert(idx,[p])
@@ -282,8 +290,7 @@ class TCCBraket:
                 if braket.is_diagonal: 
                     k = deepcopy(braket.ket)
                     v = deepcopy(braket.params_ket)
-                    idx = k.index(exct)
-                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],Union[FixedVariable,Number,Variable]) else 1
+                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],(FixedVariable,Number,Variable)) else 1
                     v[idx] +=  s[ket]*pi/2 
                     for p in reversed(p0):
                         k.insert(idx,[p])
@@ -295,8 +302,7 @@ class TCCBraket:
                     v = deepcopy(braket.params_bra)
                     if exct not in k:
                         return 0.
-                    idx = k.index(exct)
-                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],Union[FixedVariable,Number,Variable]) else 1
+                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],(FixedVariable,Number,Variable)) else 1
                     v[idx] +=  s[ket]*pi/2
                     for p in reversed(p0):
                         k.insert(idx,[p])
@@ -325,13 +331,20 @@ class TCCBraket:
                 _,grad = self.BK.expval_and_grad(angles=variable)
                 return grad
             except: raise TequilaException("For civector engine it doesn't work out P0 approach for gradient, try better the TCCBraket.minimize() or change to other engine")
-        ex_ops = self.param_to_ex_ops[variable]
+        pos = [variable in v.extract_variables() for v in self.params]
         g = 0
-        for exct in ex_ops:
-            g +=apply_phase(braket=deepcopy(self),exct=exct,variable=variable,ket=True,p0sign=True) 
-            # g +=apply_phase(braket=deepcopy(self),exct=exct,variable=variable,ket=True,p0sign=False) #wfn always real for tcc 
-            g +=apply_phase(braket=deepcopy(self),exct=exct,variable=variable,ket=False,p0sign=True)
-            # g +=apply_phase(braket=deepcopy(self),exct=exct,variable=variable,ket=False,p0sign=False) #wfn always real for tcc
+        for idx in range(len(pos)):
+            if not pos[idx]:
+                continue
+            if self.is_diagonal:
+                exct = self.ket[idx]
+            else:
+                p = self.bra + self.ket
+                exct = p[idx]
+            g +=apply_phase(braket=deepcopy(self),exct=exct,idx=idx,variable=variable,ket=True,p0sign=True) 
+            # g +=apply_phase(braket=deepcopy(self),exct=exct,idx=idx,variable=variable,ket=True,p0sign=False) #wfn always real for tcc 
+            g +=apply_phase(braket=deepcopy(self),exct=exct,idx=idx,variable=variable,ket=False,p0sign=True)
+            # g +=apply_phase(braket=deepcopy(self),exct=exct,idx=idx,variable=variable,ket=False,p0sign=False) #wfn always real for tcc
         return 0.5*g
 
     @property
@@ -603,7 +616,7 @@ class TCCBraket:
         else:
             return len(self.BK.civector(params=[.0 for _ in range(self.BK.n_variables_ket)]))
 
-    def build_operator(self,operator:Union[str,FermionOperator,QubitHamiltonian]=None)->Union[None,Callable]:
+    def build_operator(self,operator:Union[str,FermionOperator,QubitHamiltonian,Number]=None)->Union[None,Callable]:
         '''
         Build the expectation value operator. 
         Even if it is accepted a QubitHamiltonian, we disencorage its use here since TCC works on fermionic states.
@@ -638,6 +651,9 @@ class TCCBraket:
             self.BK.e_core = 0
         elif isinstance(operator,QubitHamiltonian):
             self.BK.e_core = 0
+        elif isinstance(operator,Number):
+            from_string('I')
+            return operator
         else:
             raise TequilaException(f"No operator {type(operator).__name__} supported")
         ci_vec = get_ci_strings(n_elec_s=self.BK.n_elec,n_qubits=2*len(self.BK.aslst),mode='fermion')
@@ -657,9 +673,7 @@ def init_state_from_wavefunction(wvf:QubitWaveFunction):
         return init_state_from_array(wvf=wvf)
     init_state = []
     for i in wvf._state:
-        vec = bin(i)[2:]
-        if len(vec) < wvf.n_qubits:
-            vec = '0'*(wvf.n_qubits-len(vec))+vec
+        vec = bin(i)[2:].zfill(wvf.n_qubits)
         init_state.append([vec,wvf._state[i].real])#tcc automatically does this, but with an anoying message everytime
     return init_state
 

@@ -1,5 +1,8 @@
 
-from sunrise.expval.fqe_expval import FQEBraKet
+try:
+    from sunrise.expval.fqe_expval import FQEBraKet
+except ImportError:
+    pass
 from tequila.quantumchemistry import QuantumChemistryBase
 from sunrise.MCVBT.QulacsBraKet import BraKetQulacs
 

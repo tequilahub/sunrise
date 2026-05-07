@@ -9,12 +9,12 @@ from tequila import assign_variable,QCircuit,QubitWaveFunction
 from typing import List,Union,Iterable,Optional,Callable
 import copy
 from collections import defaultdict
-from numpy import ndarray,where,isclose,pi,array
+from numpy import ndarray,where,isclose,pi,array,argwhere
 import warnings
 import numbers
 from copy import deepcopy
 import sunrise
-from tequila.circuit.gates import X
+from tequila.circuit.gates import X,I
 
 class FCircuit:
     """
@@ -101,7 +101,7 @@ class FCircuit:
         '''
         if initial_state is None or isinstance(initial_state,QubitWaveFunction):
             pass
-        elif isinstance(initial_state,Union[QCircuit,FCircuit]):
+        elif isinstance(initial_state,(QCircuit,FCircuit)):
             initial_state = sunrise.simulate(initial_state,variables={})
         elif isinstance(initial_state,str):
             initial_state = QubitWaveFunction.from_string(initial_state)
@@ -153,6 +153,15 @@ class FCircuit:
         idx = max(self.max_qubit() + 1, self._min_n_qubits)
         wvf = self._initial_state.n_qubits if self._initial_state is not None else 0
         return max(idx,wvf)
+    
+    @property
+    def n_electrons(self):
+        if self.initial_state is None:
+            return None
+        elif isinstance(self.initial_state._state,dict):
+            return bin([*self.initial_state._state.keys()][0])[2:].count('1')
+        else:
+            return bin(argwhere(self.initial_state._state>1.e-6)[0][0])[2:].count('1')
 
     @n_qubits.setter
     def n_qubits(self, other):
@@ -349,8 +358,11 @@ class FCircuit:
         return qmax
 
     def __iadd__(self, other):
+        if hasattr(other,'initial_state'):
+            w = other.initial_state
+        else: w = None
         other = self.wrap_gate(gate=other.gates)
-
+        other.initial_state = w
         offset = len(self.gates)
         for k, v in other._parameter_map.items():
             self._parameter_map[k] += [(x[0] + offset, x[1]) for x in v]
@@ -364,7 +376,11 @@ class FCircuit:
         return self
 
     def __add__(self, other):
-        other = self.wrap_gate(other.gates)
+        if hasattr(other,'initial_state'):
+            w = other.initial_state
+        else: w = None
+        other = self.wrap_gate(gate=other.gates)
+        other.initial_state = w
         gates = [deepcopy(g) for g in (self.gates + other.gates)]
         result = FCircuit(gates=gates)
         result._min_n_qubits = max(self._min_n_qubits, other._min_n_qubits)
@@ -458,9 +474,9 @@ class FCircuit:
     @classmethod
     def from_edges(cls,edges:Union[list,tuple],label=None,n_orb:int=0, use_units_of_pi=False,ladder=True):
         operations = FCircuit()
-        if n_orb is not None:
+        if n_orb:
             include_reference = True
-            reference = QCircuit()
+            reference = I(target=[i for i in range(n_orb*2)])  # to set n_qubits
         else: 
             include_reference = False
             reference = None
@@ -469,26 +485,26 @@ class FCircuit:
                 reference += X([edge[0],edge[0]+n_orb])
             previous = edge[0]
             for i in edge[1:]:
-                v = Variable(((previous,i),'D',label))
+                angle = Variable(((previous,i),'D',label))
                 if use_units_of_pi:
                     angle = angle * pi
-                operations += sunrise.gates.UC(i=previous,j=i,variables=v)
+                operations += sunrise.gates.UC(i=previous,j=i,variables=angle)
                 if ladder:
                     previous = i
         return cls(gates=operations._gates,initial_state=reference)
 
     @staticmethod
-    def wrap_gate(gate):
+    def wrap_gate(gate)->FCircuit:
         """
         take a gate and return a qcircuit containing only that gate.
         Parameters
         ----------
-        gate: QGateImpl
+        gate: FGateImpl
             the gate to wrap in a circuit.
 
         Returns
         -------
-        QCircuit:
+        FCircuit:
             a one gate circuit.
         """
         if isinstance(gate, FCircuit):
@@ -533,7 +549,7 @@ class FCircuit:
         new_gates = [gate.map_qubits(qubit_map) for gate in self.gates]
         # could speed up by applying qubit_map to parameter_map here
         # currently its recreated in the init function
-        return FCircuit(gates=new_gates)
+        return FCircuit(gates=new_gates) #TODO: initial state?
 
     def map_variables(self, variables: dict, *args, **kwargs):
         """

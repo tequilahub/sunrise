@@ -48,8 +48,8 @@ def test_exc_gate(system,select,excit):
     E_jw = tq.ExpectationValue(H=H_jw, U=U_jw)
     E_mix = tq.ExpectationValue(H=H_mix, U=U_mix)
 
-    result_jw = tq.minimize(E_jw)
-    result_mix = tq.minimize(E_mix)
+    result_jw = tq.minimize(E_jw, silent=True)
+    result_mix = tq.minimize(E_mix, silent=True)
 
     U_mix += mol_mix.transformation.hcb_to_me(bos=True)
     U_mix.n_qubits=U_jw.n_qubits

@@ -22,7 +22,7 @@ def from_tequila(molecule:QuantumChemistryBase,**kwargs)->pyscf.gto.Mole: #TODO:
         basis=molecule.parameters.basis_set,
         charge=molecule.parameters.charge,
         verbose=0,
-        spin=0,
+        spin=(molecule.parameters.multiplicity-1)/2,
     )
     if point_group is not None:
         if point_group.lower() != "c1":
@@ -103,7 +103,10 @@ def MoleculeFromPyscf(molecule:Mole,mo_coeff:Union[ndarray,None]=None,transforma
     
     if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = molecule.energy_nuc()
-
-    tqmol = QuantumChemistryBase(parameters=parameters,transformation=transformation,active_orbitals=active_orbitals,frozen_orbitals=frozen_orbitals,point_group=molecule.symmetry_subgroup,*args,**kwargs)
+    if 'units' in kwargs:
+        units = kwargs['units']
+        kwargs.pop(units)
+    else: units = 'a'
+    tqmol = QuantumChemistryBase(parameters=parameters,transformation=transformation,active_orbitals=active_orbitals,frozen_orbitals=frozen_orbitals,point_group=molecule.symmetry_subgroup,units=units,*args,**kwargs)
     tqmol.integral_manager.orbital_coefficients = mo_coeff
     return tqmol

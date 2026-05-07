@@ -13,7 +13,7 @@ path = 'PATH/pyscf_opentrustregion'
 os.environ['PYSCF_EXT_PATH']=path
 import sunrise as sun
 import tequila as tq
-from sunrise.hybrid_base.HybridBase import HybridBase
+from sunrise.molecules.hybrid_base import HybridBase
 from pyscf import gto, scf
 from pyscf.opentrustregion import (
     PipekMezeyOTR,

@@ -17,12 +17,11 @@ from tencirchem.utils.misc import scipy_opt_wrap
 from tencirchem.utils.circuit import get_circuit_dataframe
 from tencirchem.static.engine_ucc import (
     get_civector,
-    get_statevector,
     translate_init_state,
 )
 from tencirchem.static.ci_utils import get_ci_strings, get_ex_bitstring, get_init_civector
 from tencirchem.static.evolve_tensornetwork import get_circuit
-from sunrise.expval.tcc_engine.engine_braket import get_energy, get_expval,get_expval_and_grad,get_energy_and_grad
+from sunrise.expval.tcc_engine.engine_braket import get_energy, get_expval,get_expval_and_grad,get_energy_and_grad,get_statevector
 from tequila import Objective,Variable,simulate,assign_variable
 from tequila.objective.objective import Variables,FixedVariable
 
@@ -249,6 +248,16 @@ class EXPVAL(UCC):
         angles  = self._check_params_argument(angles)
         if hamiltonian is None:
             hamiltonian, _, engine = self._get_hamiltonian_and_core(engine)
+        elif isinstance(hamiltonian,Number):
+            if np.isclose(hamiltonian,0.0):
+                    return 0.0
+            else:
+                hamiltonian = lambda ket: ket
+                e , s = get_expval(angles=angles,hamiltonian=hamiltonian, n_qubits=self.n_qubits, n_elec_s=self.n_elec_s,total_variables=self.total_variables,
+                       engine= engine,mode=self.mode,ex_ops=self.ex_ops_ket , ex_ops_bra=self.ex_ops_bra, 
+                       params=self.variables_ket ,params_bra=self.variables_bra,
+                       init_state=self.init_state_ket , init_state_bra=self.init_state_bra)
+                return hamiltonian*(float(e) + self.e_core*s) 
         e , s = get_expval(angles=angles,hamiltonian=hamiltonian, n_qubits=self.n_qubits, n_elec_s=self.n_elec_s,total_variables=self.total_variables,
                        engine= engine,mode=self.mode,ex_ops=self.ex_ops_ket , ex_ops_bra=self.ex_ops_bra, 
                        params=self.variables_ket ,params_bra=self.variables_bra,
@@ -296,6 +305,14 @@ class EXPVAL(UCC):
         angles  = self._check_params_argument(angles)
         if hamiltonian is None:
             hamiltonian, _, engine = self._get_hamiltonian_and_core(engine)
+        elif isinstance(hamiltonian,Number):
+            if np.isclose(hamiltonian,0.0):
+                    return 0.0
+            else:
+                hamiltonian = lambda ket: ket
+                e = get_energy(angles=angles,hamiltonian=hamiltonian, n_qubits=self.n_qubits, n_elec_s=self.n_elec_s,total_variables=self.total_variables,
+                       engine= engine,mode=self.mode,ex_ops=self.ex_ops_ket,params=self.variables_ket,init_state=self.init_state_ket)
+                return hamiltonian*(float(e) + self.e_core)
         e = get_energy(angles=angles,hamiltonian=hamiltonian, n_qubits=self.n_qubits, n_elec_s=self.n_elec_s,total_variables=self.total_variables,
                        engine= engine,mode=self.mode,ex_ops=self.ex_ops_ket,params=self.variables_ket,init_state=self.init_state_ket)
         return float(e) + self.e_core
@@ -489,7 +506,7 @@ class EXPVAL(UCC):
     # since there's ci_vector method
     ci_strings = get_ci_strings
 
-    def statevector(self, params: Tensor = None, engine: str = None, ket: bool = True) -> Tensor:
+    def statevector(self, angles: Tensor = None, engine: str = None, ket: bool = True) -> Tensor:
         """
         Evaluate the circuit state vector.
 
@@ -521,7 +538,7 @@ class EXPVAL(UCC):
         array([0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         """
         self._sanity_check()
-        params = self._check_params_argument(params)
+        angles = self._check_params_argument(angles)
         self._check_engine(engine)
         if engine is None:
             engine = self.engine
@@ -532,7 +549,16 @@ class EXPVAL(UCC):
             ex_ops = self.ex_ops_bra
             init_state = self.init_state_bra
         statevector = get_statevector(
-            params, self.n_qubits, self.n_elec_s, ex_ops, [*range(len(ex_ops))], self.mode, init_state, engine
+            total_variables = self.total_variables,
+            angles = angles, 
+            params = self.variables_ket,
+            n_qubits = self.n_qubits,
+            n_elec_s = self.n_elec_s, 
+            ex_ops = ex_ops, 
+            param_ids = [*range(len(ex_ops))],
+            mode = self.mode, 
+            init_state = init_state, 
+            engine = engine
         )
         return statevector
 

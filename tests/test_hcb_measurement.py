@@ -5,11 +5,14 @@ import numpy as np
 import openfermion as of
 import scipy
 
-# @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found")
+HAS_PYSCF = "pyscf" in tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
+HAS_PSI4 = "psi4" in tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
+
+@pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found")
 @pytest.mark.parametrize("backend",tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS)
 def test_hcb_measurement_linearH4_scenario2(backend):
-    if backend == 'base':
-        pytest.skip("Base")
+    if backend in ('base', 'madness'):
+        pytest.skip(f"{backend} not available")
     # Create the molecule
     mol = tq.Molecule(geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5", basis_set="sto-3g", backend=backend).use_native_orbitals()
     H = mol.make_hamiltonian()
@@ -44,19 +47,19 @@ def test_hcb_measurement_linearH4_scenario2(backend):
         rotators.append(UR)
 
     # Test rotation of H and U simultaneously
-    HX = sun.fold_rotators(mol, rotators[0]).make_hamiltonian()
+    HX = sun.measurement.fold_rotators(mol, rotators[0]).make_hamiltonian()
     EX = tq.ExpectationValue(H=HX, U=U+rotators[0])
     assert np.isclose(energy, tq.simulate(EX, variables))
 
     # Test measurement of H rotated in SPA with SPA circuit
     E_test = tq.ExpectationValue(U=U0+rotators[0].dagger(), H=mol.make_hamiltonian())
-    tmol = sun.fold_rotators(mol, rotators[0])
-    hcb_mol, res_mol = sun.get_hcb_part(tmol)
+    tmol = sun.measurement.fold_rotators(mol, rotators[0])
+    hcb_mol, res_mol = sun.measurement.get_hcb_part(tmol)
     EX = tq.ExpectationValue(U=U0+rotators[0].dagger() + rotators[0], H=hcb_mol.make_hamiltonian())
     assert np.isclose(tq.simulate(EX, variables1), tq.simulate(E_test, variables1))
 
     # Apply the measurement protocol
-    result = sun.rotate_and_hcb(molecule=mol, circuit=U, variables=variables, rotators=rotators, target=energy, silent=True)
+    result = sun.measurement.rotate_and_hcb(molecule=mol, circuit=U, variables=variables, rotators=rotators, target=energy, silent=True)
 
     test_energy = 0
     for i,molecule in enumerate(result[0]):
@@ -64,10 +67,11 @@ def test_hcb_measurement_linearH4_scenario2(backend):
         test_energy += tq.simulate(E, variables=variables)
     assert np.isclose(test_energy, energy, 10**-3)
 
+@pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf/madness not found")
 @pytest.mark.parametrize("backend",tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS)
 def test_hcb_measurement_linearH4_scenario1(backend):
-    if backend == 'base':
-        pytest.skip("Base")
+    if backend in ('base', 'madness'):
+        pytest.skip(f"{backend} not available")
     # Create the molecule
     mol = tq.Molecule(geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5", basis_set="sto-3g", backend=backend).use_native_orbitals()
     fci = mol.compute_energy("fci")
@@ -94,12 +98,12 @@ def test_hcb_measurement_linearH4_scenario1(backend):
         rotators.append(UR)
 
     # Test rotation of H and U simultaneously
-    HX = sun.fold_rotators(mol, rotators[0]).make_hamiltonian()
+    HX = sun.measurement.fold_rotators(mol, rotators[0]).make_hamiltonian()
     EX = tq.ExpectationValue(H=HX, U=rotators[0])
     assert np.isclose(energy, tq.simulate(EX, initial_state=wfn))
 
     # Apply the measurement protocol
-    result = sun.rotate_and_hcb(molecule=mol, rotators=rotators, target=fci, initial_state=wfn, silent=True)
+    result = sun.measurement.rotate_and_hcb(molecule=mol, rotators=rotators, target=fci, initial_state=wfn, silent=True)
 
     test_energy = 0
     for i,molecule in enumerate(result[0]):

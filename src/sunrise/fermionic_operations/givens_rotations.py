@@ -24,7 +24,7 @@ def n_rotation(i:int, phi)->fe.FCircuit:
         circuit += fe.Phase(2*i+1, variables=-2 * phi)
         return circuit
 
-def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[list,tuple,str]=OPTIMIZED_ORDERING)->fe.FCircuit:
+def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[list,tuple,str]=OPTIMIZED_ORDERING, fix: bool = True, label=None,)->fe.FCircuit:
     """
     Constructs a quantum circuit from a given real unitary matrix using Givens rotations.
 
@@ -32,9 +32,11 @@ def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[lis
     then constructs and returns a quantum circuit that implements this sequence of rotations.
 
     Parameters:
-    - unitary (numpy.array): A real unitary matrix representing the transformation to implement.
-    - tol (float): A tolerance threshold below which matrix elements are considered zero.
-    - ordering (list of tuples or 'Optimized'): Custom ordering of indices for Givens rotations or 'Optimized' to generate them automatically.
+        - unitary (numpy.array): A real unitary matrix representing the transformation to implement.
+        - tol (float): A tolerance threshold below which matrix elements are considered zero.
+        - ordering (list of tuples or 'Optimized'): Custom ordering of indices for Givens rotations or 'Optimized' to generate them automatically.
+        - fix (bool): whether to set the angle as fixed or as inial value as: angle=tq.Variable(idx) + value. Useful to let further relaxation to the basis change
+        - label: can be passed instead of angle to have auto-naming with label ("R",i,j,label) useful for repreating gates with individual variables
 
     Returns:
     - FCircuit: A quantum circuit implementing the series of rotations decomposed from the unitary.
@@ -49,14 +51,36 @@ def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[lis
     for phi in phi_list:
         if  isinstance(phi[0],numbers.Number) and abs(phi[0])%(2*numpy.pi)<tol:
                 continue
-        circuit += n_rotation(phi[1], phi[0])
+        if fix:
+            circuit += n_rotation(i=phi[1], phi=phi[0])
+        else:
+            circuit += n_rotation(
+                i=phi[1],
+                phi=phi[0]
+                + Variable(
+                    f"Ph({phi[1]}" + ("," + str(label)) * (label is not None) + ")"
+                ),
+            )
 
     # Add all Givens rotations to the circuit.
     for theta in reversed(theta_list):
         if  isinstance(theta[0],numbers.Number) and abs(theta[0])%numpy.pi<tol:
                 continue
-        circuit += fe.UR(theta[2], theta[1], theta[0] * -2)
-    return circuit
+        if fix:
+            circuit += fe.UR(i=theta[1], j=theta[2], angle=theta[0] * -2)
+        else:
+            circuit += fe.UR(
+                i=theta[1],
+                j=theta[2],
+                angle=(theta[0] * -2)
+                + Variable(
+                    f"UR({theta[1]},{theta[2]}"
+                    + ("," + str(label)) * (label is not None)
+                    + ")"
+                ),
+            )
+
+        return circuit
 
 def givens_matrix(n, p, q, theta)->QTensor:
     """
