@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "project-sunrise"
-version = "0.2"
+version = "0.2.1"
 description = "Sunrise is a package for all-around fermionic state preparation and simulation on quantum computers. It holds no qubits, but only physical information, making it efficient for storage and manipulation."
 readme = "README.md"
 requires-python = ">=3.9"
