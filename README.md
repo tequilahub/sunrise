@@ -1,5 +1,5 @@
 <p align="left">
-  <img src="sunrise_logo.png" width="175"/>
+  <img src="https://raw.githubusercontent.com/tequilahub/sunrise/master/sunrise_logo.png" width="175"/>
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE) [![PyPI version](https://badge.fury.io/py/project-sunrise.svg)](https://pypi.org/project/project-sunrise/) ![CI](https://github.com/tequilahub/sunrise/actions/workflows/ci_basic.yml/badge.svg)
