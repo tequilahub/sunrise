@@ -109,7 +109,6 @@ class PySCF(HybridBase):
         c, h1, h2 = self.get_integrals(ordering="chem")
         norb = self.n_orbitals
         nelec = self.n_electrons
-        print('norb ',self.n_orbitals,' nelec ',self.n_electrons)
 
         if ci0 is not None:
             ci0 = self.create_ci_vector(ci0, use_hcb=use_hcb)

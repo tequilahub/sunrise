@@ -181,15 +181,22 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]
     else: filename = mol.parameters.name
     if output_dir is None:
         output_dir = os.getcwd()
-    generate_molden(mol = mol, filename=filename, output_dir = output_dir, use_active=False, **kwargs) #TODO: Janpa CLPO is bug for active space only, working on 
-    call_molden2aim(moldenfile=filename+'.molden', output_dir = output_dir)
-    call_molden2molden(command=f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent)
+    generate_molden(mol = mol, filename = filename, output_dir = output_dir, use_active=False, **kwargs) #TODO: Janpa CLPO is bug for active space only, working on 
+    call_molden2aim(moldenfile = filename+'.molden', output_dir = output_dir)
+    call_molden2molden(command = f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent, output_dir = output_dir)
     c = f'-i {filename}.molden -CLPO_Molden_File {filename}_CLPO.molden -HybrOptOccConvThresh {thres} '
     if edges is not None:
-        edges = [tuple([e for e in edge]) for edge in edges]
+        if use_active:
+            _, to_active = generate_HAO_molecule(deepcopy(mol), output_dir = output_dir, thres = thres, silent = True, use_active = True, rm_files = False, to_active = True) 
+            d = {i.idx:i.idx_total for i in mol.integral_manager.active_orbitals} # We need the correspondence between active space indices and complete basis
+            to_active = {v:k for k,v in to_active.items()} # to_active keeps track of reordering on active space (frozen orbitals are kept at the begining) 
+            edges = [tuple([to_active[d[e]] for e in edge]) for edge in edges] # Therefore the edges are transformed by: edges_in_active -> edges_in_complete_basis -> edges_in_complete_basis_non_active_space_order
+            # to_active is taken between from HAO bcs it may differ from HAO to CLPO to_active, but we want the pairing on the HAO basis  
+        else:
+            edges = [tuple([e for e in edge]) for edge in edges]
         c += f' -edges {edges}'
-    call_janpa(command=c, silent = silent)
-    mo_matrix = read_molden_mo_matrix(f"{filename}_CLPO.molden")
+    call_janpa(command = c, silent = silent)
+    mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_CLPO.molden")
     if rm_files:
         subprocess.call(f'rm {output_dir}/m2a.ini', shell=True)
         subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True) 
@@ -198,7 +205,7 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
     if use_active:
-        mol, to_active = __transform(original=mol,modified=nmol)
+        mol, to_active = __transform(original = mol, modified = nmol)
     else: mol = nmol
     graph = extract_clpo_graph(f"{output_dir}/graph")
     if use_active:
@@ -225,25 +232,32 @@ def generate_HAO_molecule(mol:QuantumChemistryBase, output_dir:str = None, thres
         filename = kwargs['filename']
         kwargs.pop('filename')
     else: filename = mol.parameters.name
+    if 'to_active' in kwargs:  # Internal use, thats why not mentioned on funtion description
+        ret2act = kwargs['to_active']
+        kwargs.pop('to_active')
+    else: ret2act = False
+
     if output_dir is None:
         output_dir = os.getcwd()
 
     generate_molden(mol = mol, filename = filename, output_dir = output_dir, use_active = False, **kwargs)
     call_molden2aim(moldenfile = filename+'.molden', output_dir = output_dir)
-    call_molden2molden(command = f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent)
+    call_molden2molden(command = f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent, output_dir = output_dir)
     call_janpa(command=f'-i {filename}.molden -AHO_Molden_File {filename}_HAO.molden -HybrOptOccConvThresh {thres}', silent = silent, output_dir = output_dir)
     mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_HAO.molden")
     if rm_files:
         subprocess.call(f'rm {output_dir}/m2a.ini', shell=True)
-        subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True) 
+        subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True)
         subprocess.call(f'rm {output_dir}/{filename}_new.molden', shell=True)
         subprocess.call(f'rm {output_dir}/{filename}_HAO.molden', shell=True)
         subprocess.call(f'rm {output_dir}/graph', shell=True)
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
     if use_active:
-        mol, to_active = __transform(original = mol, modified = nmol, orbital_type='HAO')
+        mol, to_active = __transform(original = mol, modified = nmol, orbital_type = 'HAO')
     else: mol = nmol
+    if ret2act:
+        return mol, to_active
     return mol
 
 def generate_CLPO_molecule(mol:QuantumChemistryBase, edges:list[tuple[int]] = None, output_dir:str = None, thres:Number = 1.e-12, silent:bool = True, use_active:bool = True, rm_files:bool = True, **kwargs) -> QuantumChemistryBase:
