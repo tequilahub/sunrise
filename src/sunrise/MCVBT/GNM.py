@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import tequila as tq
 import scipy
 import numpy as np
@@ -6,6 +8,7 @@ from tequila.quantumchemistry import QuantumChemistryBase
 
 import sunrise as sn
 from sunrise.MCVBT.Big_Exp import BigExpVal
+from sunrise.expval.fqe_expval import FQEBraKet
 
 from typing import Dict
 import csv
@@ -76,7 +79,8 @@ class mcvbt:
         N = len(self.circuits)
         for n in range(2, N+1):
             if not self.silent: print("Start G({},0) optimization".format(n))
-            v, _ = gem_fast(circuits=self.circuits[:n], solver=self.solver, variables=variables_preopt, mol=self.mol)
+            print("variables preopt", variables_preopt)
+            v, _ = gem_fast(circuits=self.circuits[:n], solver=self.solver, variables=variables_preopt, mol=self.mol, silent=self.silent)
             if not self.silent: print("End G({},0)   optimization".format(n))
             self.results[(n, 0)] = v[0]
         self.final_variables = self.variables_preopt
@@ -109,7 +113,7 @@ class mcvbt:
         print(self.results)
         for k, v in self.results.items():
 
-            error = abs(fci - v)
+            error = fci - v
             print("G({},{}): {:+2.5f} Ha".format(k[0], k[1], error))
 
 
@@ -118,7 +122,7 @@ class mcvbt:
         energies = []
         for preopt_circuit in self.circuits:
             if self.solver == "FQE":
-                E_preopt = sn.expval.FQEBraKet(ket=preopt_circuit, molecule=self.mol)
+                E_preopt = FQEBraKet(ket=preopt_circuit, molecule=self.mol)
 
                 variables = preopt_circuit.variables
                 init_vars = {vs: 0 for vs in variables}
@@ -134,17 +138,27 @@ class mcvbt:
                 energies.append(r.fun)
 
                 r_variabales = {vs: r.x[i].real for i, vs in enumerate(init_vars)}
+
+                # r = sn.minimize(objective=E_preopt, initial_values = init_vars)
+                # energies.append(r.energy)
+                # r_variabales = {vs: r.variables[vs].real for vs in init_vars}
+
                 self.variables_preopt = {**self.variables_preopt, **r_variabales}
 
             elif self.solver == "Qulacs":
                 E_preopt = tq.ExpectationValue(U=preopt_circuit, H=self.mol.make_hamiltonian())
 
-                result = tq.minimize(E_preopt, silent=True)
+                variables = E_preopt.extract_variables()
+                init_vars = {vs: 0 for vs in variables}
+
+                for vs in init_vars:
+                    if "R" in str(vs):
+                        init_vars[vs] = 0.01
+                result = tq.minimize(E_preopt, silent=self.silent)
 
                 energies.append(result.energy)
 
                 self.variables_preopt = {**self.variables_preopt, **result.variables}
-
 
 
         self.results[(1, 0)] = min(energies)
@@ -225,7 +239,7 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
         M = len(circuits)
 
     for i in range(M, N): #map pre opt variables to current circuit set and overrite old circuits
-        U = circuits[i]
+        U = deepcopy(circuits[i])
         U = U.map_variables(variables)
         circuits[i] = U
 
@@ -266,22 +280,29 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
     disp = not silent
     for i in range(max_iter):
         if not silent: print("iteration {}".format(i))
-        result = scipy.optimize.minimize(mcvbt_exp, x0=list(x0.values()), jac="2-point", method="slsqp",
-                                         options={"finite_diff_rel_step":5.e-5, "disp": disp, "maxiter": 100},
-                                         callback=callback)
+        if solver.lower() == 'qulacs':
+            result = scipy.optimize.minimize(mcvbt_exp, x0=list(x0.values()), jac="2-point", method="bfgs",
+                                         options={ "disp": disp, "maxiter": 100},
+                                          callback=callback) #wtf slsqp
+            x0 = {vkeys[i]: result.x[i] for i in range(len(result.x))}
 
-        x0 = {vkeys[i]: result.x[i] for i in range(len(result.x))}
+        else:
+            result = sn.minimize(tq.Objective(args=[mcvbt_exp]), initial_values=x0,  method="bfgs",silent=silent,
+                                             callback=callback)
+            x0 = deepcopy(result.variables)
+        # print("x0",x0)
         v, vv = gem_fast(circuits=circuits, variables=x0, mol=mol, solver=solver)
 
         for i in range(len(coeffs)):
             x0[coeffs[i]] = vv[i, 0]
 
-        if np.isclose(energy, v[0], atol=1.e-4):
+        if not np.isclose(energy, v[0], atol=1.e-4):
             if not silent: print("not converged")
             if not silent: print(energy)
             if not silent: print(v[0])
             energy = v[0]
         else:
+            if not silent: print("converged after {} iterations with energy {}".format(i,energy))
             energy = v[0]
             break
 

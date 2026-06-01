@@ -6,7 +6,7 @@ try:
     from sunrise.expval.fqe_expval import FQEBraKet
 except ImportError:
     pass
-
+from sunrise.expval import Braket
 from tequila.quantumchemistry import QuantumChemistryBase
 from sunrise.MCVBT.QulacsBraKet import BraKetQulacs
 
@@ -23,7 +23,8 @@ def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True
         for j in range(i,len(circuits)):
 
             if solver == "TCC":
-                raise NotImplementedError
+                transition_element = Braket(ket=circuits[j], bra=circuits[i], molecule=mol, backend='tcc')
+                overlap_element = Braket(ket=circuits[j], bra=circuits[i], backend='tcc', molecule=mol, operator='I')
 
             elif solver == "FQE":
                 transition_element = FQEBraKet(ket_fcircuit=circuits[i], bra_fcircuit=circuits[j], molecule=mol)
