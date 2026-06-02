@@ -16,7 +16,7 @@ Please, install the package along with all required dependencies:
 
 In order to create a conda environment use:
 ```bash
-conda create -n tq-sun python=3.10
+conda create -n tq-sun python=3.12
 conda activate tq-sun
 ```
 
