@@ -16,6 +16,74 @@ from .binary_interface import *
 from sunrise import from_tequila
 from tequila import TequilaException
 
+def __orthogonalize(c, s):
+    """
+    Symmetrically orthogonalize orbital coefficients.
+    c: (basis_functions, orbitals)
+    s: (basis_functions, basis_functions)
+    """
+    # 1. Compute the overlap of the current MOs: S' = C^T * S * C
+    # This replaces your entire nested loop and inner() function.
+    sprima = c.T @ s @ c
+    # 2. Diagonalize S'
+    lam_s, l_s = numpy.linalg.eigh(sprima)
+    
+    # Optional but recommended: Clip tiny negative eigenvalues due to numerical noise
+    lam_s = numpy.maximum(lam_s, 1e-14)
+    
+    # 3. Construct (S')^{-1/2}
+    # This is much faster/cleaner than inverting a full matrix
+    lam_sqrt_inv = numpy.diag(1.0 / numpy.sqrt(lam_s))
+    symm_orthog = l_s @ lam_sqrt_inv @ l_s.T
+    
+    # 4. Transform coefficients: C_new = C * (S')^{-1/2}
+    jcoef = c @ symm_orthog
+    
+    return jcoef
+
+def __orthogonalize_active_space(c, s, active_indices):
+    """
+    Orthogonalize active orbitals while leaving frozen orbitals untouched.
+    
+    c: array (basis_functions, orbitals)
+    s: array (basis_functions, basis_functions)
+    active_indices: list or array of column indices for the active orbitals
+    """
+    # 1. Separate frozen and active coefficients
+    n_orbitals = c.shape[1]
+    frozen_indices = numpy.setdiff1d(numpy.arange(n_orbitals), active_indices)
+    
+    c_froz = c[:, frozen_indices]
+    c_act = c[:, active_indices]
+    
+    # 2. Project the frozen space out of the active space
+    # Compute the overlap between frozen and active: S_{fa} = C_f^T * S * C_a
+    overlap_fa = c_froz.T @ s @ c_act
+    
+    # Subtract the frozen components from the active orbitals
+    c_act_proj = c_act - (c_froz @ overlap_fa)
+    
+    # 3. Symmetrically orthogonalize the projected active block
+    # Compute the overlap matrix of just the active block: S_{aa} = C_a'^T * S * C_a'
+    s_act = c_act_proj.T @ s @ c_act_proj
+    
+    lam, l_s = numpy.linalg.eigh(s_act)
+    
+    # Your safety clip is good practice!
+    lam = numpy.maximum(lam, 1e-12) 
+    
+    lam_sqrt_inv = numpy.diag(1.0 / numpy.sqrt(lam))
+    symm_orthog = l_s @ lam_sqrt_inv @ l_s.T
+    
+    # Transform only the active block
+    c_act_ortho = c_act_proj @ symm_orthog
+    
+    # 4. Recombine into the final matrix
+    c_new = c.copy()
+    c_new[:, active_indices] = c_act_ortho
+    
+    return c_new
+
 def __transform(modified:QuantumChemistryBase, original:QuantumChemistryBase = None, orbital_type = 'CLPO') -> Tuple[QuantumChemistryBase, dict]:
     '''
     Procedure similar to what is done in use_native_orbitals but for arbitrary basis. Keeps frozen orbitals canHF
@@ -67,19 +135,7 @@ def __transform(modified:QuantumChemistryBase, original:QuantumChemistryBase = N
             dbar[i] = dbar[i] / norm
     for j in to_active.values():
         c[j] = dbar[j]
-    sprima = numpy.eye(len(c))
-    for idx, i in enumerate(to_active.values()):
-        for j in [*to_active.values()][idx:]:
-            sprima[i][j] = inner(c[i], c[j], s)
-            sprima[j][i] = sprima[i][j]
-    lam_s, l_s = numpy.linalg.eigh(sprima)
-    for ei, e in enumerate(lam_s):
-        if numpy.isclose(e,0,atol=1.e-9):
-            lam_s[ei] = max(e,1.e-9) # Note: Fix to avoid inestabilities 
-    lam_s = lam_s * numpy.eye(len(lam_s))
-    lam_sqrt_inv = numpy.sqrt(numpy.linalg.inv(lam_s))
-    symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
-    jcoef = symm_orthog.dot(c).T
+    jcoef = __orthogonalize_active_space(c.T, s, [*to_active.values()])
     ref = [i.idx_total for i in original.integral_manager.reference_orbitals if i not in original.integral_manager.active_reference_orbitals]
     ref.extend([i for i in range(n_basis) if  i not in co.keys()][:len(original.integral_manager.active_reference_orbitals)])
     integral_manager = modified.initialize_integral_manager(one_body_integrals=original.integral_manager.one_body_integrals,
@@ -141,7 +197,7 @@ def generate_molden(mol:QuantumChemistryBase, filename:str = None, output_dir:st
     if filename is None: filename=mol.parameters.name
 
 
-    mo_coeff = mol.integral_manager.orbital_coefficients
+    mo_coeff = mol.integral_manager.orbital_coefficients.copy()
     if use_active:
         if len(mo_occ) == size_basis:
             mo_occ = [mo_occ[i] for i in active]
@@ -197,6 +253,8 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]
         c += f' -edges {edges}'
     call_janpa(command = c, silent = silent)
     mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_CLPO.molden")
+    if not use_active:
+        mo_matrix = __orthogonalize(mo_matrix, mol.integral_manager.overlap_integrals)
     if rm_files:
         subprocess.call(f'rm {output_dir}/m2a.ini', shell=True)
         subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True) 
@@ -245,6 +303,8 @@ def generate_HAO_molecule(mol:QuantumChemistryBase, output_dir:str = None, thres
     call_molden2molden(command = f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent, output_dir = output_dir)
     call_janpa(command=f'-i {filename}.molden -AHO_Molden_File {filename}_HAO.molden -HybrOptOccConvThresh {thres}', silent = silent, output_dir = output_dir)
     mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_HAO.molden")
+    if not use_active:
+        mo_matrix = __orthogonalize(mo_matrix, mol.integral_manager.overlap_integrals)
     if rm_files:
         subprocess.call(f'rm {output_dir}/m2a.ini', shell=True)
         subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True)
