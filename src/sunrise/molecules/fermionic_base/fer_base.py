@@ -461,6 +461,12 @@ class FermionicBase(QuantumChemistryBase):
                         core = [core]
                     active = get_active(c, d, s, core)
         assert len(active) + len(core) == len(self.integral_manager.orbitals)
+        if "reference_orbitals" in kwargs:
+            reference_orbitals = kwargs["reference_orbitals"]
+            kwargs.pop()
+            assert len(reference_orbitals) == len(self.parameters.total_n_electrons)//2,f'Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons//2}, received {len(reference_orbitals)}'
+        else:
+            reference_orbitals = [i.idx_total for i in self.integral_manager.reference_orbitals]
         to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
         to_active = {active[i]: to_active[i] for i in range(len(active))}
         if len(core):
@@ -476,7 +482,7 @@ class FermionicBase(QuantumChemistryBase):
                     two_body_integrals=self.integral_manager.two_body_integrals,
                     constant_term=self.integral_manager.constant_term,
                     active_orbitals=[*to_active.values()],
-                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals],
+                    reference_orbitals=reference_orbitals,
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
