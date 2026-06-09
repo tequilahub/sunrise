@@ -16,18 +16,18 @@ def orthogonalize(c:numpy.ndarray, s:numpy.ndarray) -> numpy.ndarray:
     sprima = c.T @ s @ c
     # 2. Diagonalize S'
     lam_s, l_s = numpy.linalg.eigh(sprima)
-    
+
     # Optional but recommended: Clip tiny negative eigenvalues due to numerical noise
     lam_s = numpy.maximum(lam_s, 1e-14)
-    
+
     # 3. Construct (S')^{-1/2}
     # This is much faster/cleaner than inverting a full matrix
     lam_sqrt_inv = numpy.diag(1.0 / numpy.sqrt(lam_s))
     symm_orthog = l_s @ lam_sqrt_inv @ l_s.T
-    
+
     # 4. Transform coefficients: C_new = C * (S')^{-1/2}
     jcoef = c @ symm_orthog
-    
+
     return jcoef
 
 def orthogonalize_active_space(c:numpy.ndarray, s:numpy.ndarray, frozen_idx:list[int], active_idx:list[int]) -> numpy.ndarray:
@@ -66,18 +66,18 @@ def get_active(c_orig:numpy.ndarray, d_orig:numpy.ndarray, s:numpy.ndarray, acti
     """
     # 1. Extract the entire reference active space block from c_orig
     c_active = c_orig[:, active_idx_c]
-    
+
     # 2. Compute the full overlap matrix between reference active and all d_orig orbitals
     # Shape will be (n_active_ref, n_total_orbitals_d)
     overlap_matrix = c_active.T @ s @ d_orig
-    
+
     # 3. Sum of squares along the reference axis gives the total "active character"
     # Shape will be (n_total_orbitals_d,)
     active_weights = numpy.sum(overlap_matrix**2, axis=0)
-    
+
     # 4. Sort all orbital indices of d_orig by weight in descending order
     sorted_d_indices = numpy.argsort(active_weights)[::-1]
-    
+
     # 5. Select the top N orbitals that match the active space best
     chosen_active_idx = sorted_d_indices[:len(active_idx_c)]
 
@@ -98,20 +98,20 @@ def get_core(c_orig:numpy.ndarray, d_orig:numpy.ndarray, s:numpy.ndarray, active
 
     # 1. Extract the active subspace block from d_orig
     d_active = d_orig[:, active_idx_d]
-    
+
     # 2. Compute the overlap between all c_orig orbitals and the d_orig active subspace
     # Shape will be (n_total_orbitals_c, n_active_d)
     overlap_matrix = c_orig.T @ s @ d_active
-    
+
     # 3. Sum of squares along the d_active axis gives the "active character" of each c_orig orbital
     active_weights = numpy.sum(overlap_matrix**2, axis=1)
-    
+
     # 4. Sort the orbitals by their active weight in ASCENDING order
     # The orbitals with the LOWEST active weight are your core (frozen) orbitals!
     sorted_fr_indices = numpy.argsort(active_weights)
-    
-    chosen_fr_idx = sorted_fr_indices[:len(n_occ_c)]
-        
+
+    chosen_fr_idx = sorted_fr_indices[:n_occ_c]
+
     return sorted(chosen_fr_idx)
 
 def transform(modified:QuantumChemistryBase, original:QuantumChemistryBase, orbital_type:str = None) -> Tuple[QuantumChemistryBase, dict]:
