@@ -1,7 +1,7 @@
 tequila-basic
 numpy
 autograd
-openfermion ~= 1.0 # can not be smaller than 1.0
+openfermion >= 1.7.1 # can not be smaller than 1.0, on 1.7.1 fix consistency with numpy>2.
 qulacs
 pytest
 setuptools
