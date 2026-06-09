@@ -8,7 +8,10 @@ from tequila.quantumchemistry import QuantumChemistryBase
 
 import sunrise as sn
 from sunrise.MCVBT.Big_Exp import BigExpVal
-from sunrise.expval.fqe_expval import FQEBraKet
+try:
+    from sunrise.expval.fqe_expval import FQEBraKet
+except ImportError:
+    pass
 
 from typing import Dict
 import csv

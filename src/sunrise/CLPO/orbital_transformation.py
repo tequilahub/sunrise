@@ -1,3 +1,4 @@
+from __future__ import annotations
 from tequila.quantumchemistry.pyscf_interface import QuantumChemistryPySCF
 import os
 import numpy
@@ -6,8 +7,6 @@ from pyscf.tools import molden
 from copy import deepcopy
 import subprocess
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase
-from sunrise.molecules.hybrid_base import HybridBase
-from sunrise.molecules.fermionic_base import FermionicBase
 import numpy
 from copy import deepcopy
 from typing import Tuple
@@ -15,85 +14,9 @@ from numbers import Number
 from .binary_interface import *
 from sunrise import from_tequila
 from tequila import TequilaException
+from sunrise.molecules.utils_orbital_transformation import transform, orthogonalize
 
-def __transform(modified:QuantumChemistryBase, original:QuantumChemistryBase = None, orbital_type = 'CLPO') -> Tuple[QuantumChemistryBase, dict]:
-    '''
-    Procedure similar to what is done in use_native_orbitals but for arbitrary basis. Keeps frozen orbitals canHF
-    orthogonalized with the active modified ones
-    Returns modified molecule with the core orbitals of the original one
-    And a dictionary with the form {active_orbital_index_before:active_orbital_index_after}
-    The frozen orbitals will always be the N first on the orbital matrix
-    '''
-    def inner(a, b, s):
-        return numpy.sum(numpy.multiply(numpy.outer(a, b), s))
-    core = [i.idx_total for i in original.integral_manager.orbitals if i.idx is None]
-    assert len(original.integral_manager.orbitals) == len(modified.integral_manager.orbitals)
-    d = deepcopy(modified.integral_manager.orbital_coefficients).T
-    c = deepcopy(original.integral_manager.orbital_coefficients).T
-    s = original.integral_manager.overlap_integrals
-    n_basis = len(d)
-    ov = numpy.zeros(shape = (n_basis))
-    for i in core:
-        for j in range(n_basis):
-            ov[j] += numpy.abs(inner(c[i], d[j], s))
-    co = {}
-    for i in core:
-        idx = numpy.argmax(ov)
-        co[i] = idx
-        ov[idx] = 0
-    active = [i for i in range(n_basis) if i not in co.values()]
-    to_active =  [i for i in range(n_basis) if  i not in co.keys()]
-    to_active = {active[i] : to_active[i] for i in range(len(active))}
-    reference_orbitals = [*co.keys()]
-    i =0
-    while len(reference_orbitals) < original.parameters.total_n_electrons//2:
-        if i not in reference_orbitals:
-            reference_orbitals.append(i)
-        i += 1
-    sbar = numpy.zeros(shape = s.shape)
-    for k in active:
-        for i in core:
-            sbar[i][to_active[k]] = inner(c[i], d[k], s)
-    dbar = numpy.zeros(shape = s.shape)
-
-    for j in active:
-        dbar[to_active[j]] = d[j]
-        for i in core:
-            temp = sbar[i][to_active[j]] * c[i]
-            dbar[to_active[j]] -= temp
-    for i in to_active.values():
-        norm = numpy.sqrt(inner(dbar[i], dbar[i], s.T))
-        if not numpy.isclose(norm, 0):
-            dbar[i] = dbar[i] / norm
-    for j in to_active.values():
-        c[j] = dbar[j]
-    sprima = numpy.eye(len(c))
-    for idx, i in enumerate(to_active.values()):
-        for j in [*to_active.values()][idx:]:
-            sprima[i][j] = inner(c[i], c[j], s)
-            sprima[j][i] = sprima[i][j]
-    lam_s, l_s = numpy.linalg.eigh(sprima)
-    for ei, e in enumerate(lam_s):
-        if numpy.isclose(e,0,atol=1.e-9):
-            lam_s[ei] = max(e,1.e-9) # Note: Fix to avoid inestabilities 
-    lam_s = lam_s * numpy.eye(len(lam_s))
-    lam_sqrt_inv = numpy.sqrt(numpy.linalg.inv(lam_s))
-    symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
-    jcoef = symm_orthog.dot(c).T
-    ref = [i.idx_total for i in original.integral_manager.reference_orbitals if i not in original.integral_manager.active_reference_orbitals]
-    ref.extend([i for i in range(n_basis) if  i not in co.keys()][:len(original.integral_manager.active_reference_orbitals)])
-    integral_manager = modified.initialize_integral_manager(one_body_integrals=original.integral_manager.one_body_integrals,
-                    two_body_integrals=original.integral_manager.two_body_integrals, constant_term=original.integral_manager.constant_term,
-                    active_orbitals= [i for i in range(n_basis) if  i not in co.keys()], frozen_orbitals=[*co.keys()], orbital_coefficients=jcoef,
-                    overlap_integrals=original.integral_manager.overlap_integrals, reference_orbitals=ref, orbital_type=orbital_type)
-    parameters = deepcopy(original.parameters)
-    if isinstance(modified, FermionicBase):
-        return FermionicBase(parameters=parameters, integral_manager=integral_manager, fermionic_backend=modified.fermionic_backend), to_active
-    elif isinstance(modified, HybridBase):
-        return HybridBase(parameters=parameters, integral_manager=integral_manager, transformation=modified.transformation, select=modified.select, two_qubit=modified.two_qubit, condense=modified.condense), to_active
-    return QuantumChemistryBase(parameters=parameters, integral_manager=integral_manager, transformation=modified.transformation), to_active
-
-def __get_MP2_occ(mol:QuantumChemistryBase):
+def __get_MP2_occ(mol:QuantumChemistryBase) -> Tuple[list[Number], list[Number]]:
     ''''
     Small helper function, given a tequila molecule returns the MP2 orbital occupation and orbital energy
     '''
@@ -103,7 +26,7 @@ def __get_MP2_occ(mol:QuantumChemistryBase):
     rdm1 = mp.MP2(hf).run().make_rdm1()
     return fr + numpy.diag(rdm1).tolist(), hf.mo_energy
 
-def generate_molden(mol:QuantumChemistryBase, filename:str = None, output_dir:str  =None, mo_occ:list = None, mo_energy:list = None, use_mp2:bool = False, option1:bool = True, use_active:bool = True):
+def generate_molden(mol:QuantumChemistryBase, filename:str = None, output_dir:str = None, mo_occ:list = None, mo_energy:list = None, use_mp2:bool = False, option1:bool = True, use_active:bool = True):
     '''
     Interface with pyscf.tools molden file generation
 
@@ -141,7 +64,7 @@ def generate_molden(mol:QuantumChemistryBase, filename:str = None, output_dir:st
     if filename is None: filename=mol.parameters.name
 
 
-    mo_coeff = mol.integral_manager.orbital_coefficients
+    mo_coeff = mol.integral_manager.orbital_coefficients.copy()
     if use_active:
         if len(mo_occ) == size_basis:
             mo_occ = [mo_occ[i] for i in active]
@@ -197,6 +120,8 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]
         c += f' -edges {edges}'
     call_janpa(command = c, silent = silent)
     mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_CLPO.molden")
+    if not use_active:
+        mo_matrix = orthogonalize(mo_matrix, mol.integral_manager.overlap_integrals)
     if rm_files:
         subprocess.call(f'rm {output_dir}/m2a.ini', shell=True)
         subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True) 
@@ -205,8 +130,10 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
     if use_active:
-        mol, to_active = __transform(original = mol, modified = nmol)
-    else: mol = nmol
+        mol, to_active = transform(original = mol, modified = nmol, orbital_type = 'CLPO')
+    else:
+        mol = nmol
+        mol.integral_manager._orbital_type = 'CLPO'
     graph = extract_clpo_graph(f"{output_dir}/graph")
     if use_active:
         ncore = len(mol.integral_manager.orbital_coefficients) - mol.n_orbitals
@@ -216,7 +143,7 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]
         subprocess.call(f'rm {output_dir}/graph', shell=True)
     return mol,graph
 
-def generate_HAO_molecule(mol:QuantumChemistryBase, output_dir:str = None, thres:Number = 1.e-9, silent:bool = True, use_active:bool = True, rm_files:bool = True,**kwargs)->QuantumChemistryBase:
+def generate_HAO_molecule(mol:QuantumChemistryBase, output_dir:str = None, thres:Number = 1.e-9, silent:bool = True, use_active:bool = True, rm_files:bool = True,**kwargs) -> QuantumChemistryBase:
     '''
     Temporal function for generating a molecule with Hybrid Atomic Orbitals via janpa (10.1002/qua.25798) until integrated in Sunrise molecules
     
@@ -245,6 +172,8 @@ def generate_HAO_molecule(mol:QuantumChemistryBase, output_dir:str = None, thres
     call_molden2molden(command = f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent, output_dir = output_dir)
     call_janpa(command=f'-i {filename}.molden -AHO_Molden_File {filename}_HAO.molden -HybrOptOccConvThresh {thres}', silent = silent, output_dir = output_dir)
     mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_HAO.molden")
+    if not use_active:
+        mo_matrix = orthogonalize(mo_matrix, mol.integral_manager.overlap_integrals)
     if rm_files:
         subprocess.call(f'rm {output_dir}/m2a.ini', shell=True)
         subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True)
@@ -254,8 +183,10 @@ def generate_HAO_molecule(mol:QuantumChemistryBase, output_dir:str = None, thres
     nmol = deepcopy(mol)
     nmol.integral_manager.orbital_coefficients = mo_matrix
     if use_active:
-        mol, to_active = __transform(original = mol, modified = nmol, orbital_type = 'HAO')
-    else: mol = nmol
+        mol, to_active = transform(original = mol, modified = nmol, orbital_type = 'HAO')
+    else:
+        mol = nmol
+        mol.integral_manager._orbital_type = "HAO"
     if ret2act:
         return mol, to_active
     return mol
