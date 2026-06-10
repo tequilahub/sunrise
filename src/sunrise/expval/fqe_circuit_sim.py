@@ -2,7 +2,10 @@ import fqe
 from tequila import Variable,Objective,simulate,QubitWaveFunction,TequilaWarning,BitNumbering
 from tequila.objective.objective import Variables
 from tequila import  BitString, BitStringLSB
-from sunrise.expval.fqe_expval import FQEBraKet
+try:
+    from sunrise.expval.fqe_expval import FQEBraKet
+except ImportError:
+    pass
 from sunrise.fermionic_operations import FCircuit
 from tequila import Molecule
 import numpy as np
