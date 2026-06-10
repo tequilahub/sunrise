@@ -278,7 +278,7 @@ class HybridBase(qc_base):
                 else:
                     if isinstance(core, int):
                         core = [core]
-                    active = get_active(c, d, s, core)
+                    active = get_active(c, d, s, [i.idx_total for i in self.integral_manager.active_orbitals])
         assert len(active) + len(core) == len(self.integral_manager.orbitals)
         if "reference_orbitals" in kwargs:
             reference_orbitals = kwargs["reference_orbitals"]
