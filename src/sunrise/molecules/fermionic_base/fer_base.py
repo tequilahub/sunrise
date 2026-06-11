@@ -188,7 +188,7 @@ class FermionicBase(QuantumChemistryBase):
     def make_excitation_generator(
         self, indices: typing.Iterable[typing.Tuple[int, int]], form: str = None,
     ) -> openfermion.FermionOperator:
-        """
+        r"""
         Notes
         ----------
         Creates the transformed hermitian generator of UCC type unitaries:
@@ -1116,7 +1116,7 @@ class FermionicBase(QuantumChemistryBase):
             return op
 
         def _get_of_hcb_op(op_tuple):
-            """Build the hardcore boson operators: b^\dagger_ib_j + h.c. in qubit encoding"""
+            r"""Build the hardcore boson operators: b^\dagger_ib_j + h.c. in qubit encoding"""
             if len(op_tuple) == 2:
                 return openfermion.FermionOperator(op_tuple,2)
             elif len(op_tuple) == 4:

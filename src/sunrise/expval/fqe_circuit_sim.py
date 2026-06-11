@@ -1,4 +1,7 @@
-import fqe
+try:
+    import fqe
+except ImportError:
+    pass
 from tequila import Variable,Objective,simulate,QubitWaveFunction,TequilaWarning,BitNumbering
 from tequila.objective.objective import Variables
 from tequila import  BitString, BitStringLSB
@@ -10,8 +13,10 @@ from sunrise.fermionic_operations import FCircuit
 from tequila import Molecule
 import numpy as np
 from warnings import warn
-from fqe.util import sort_configuration_keys
-
+try:
+    from fqe.util import sort_configuration_keys
+except ImportError:
+    pass
 def fqe_circuit_simulatorU(U:FCircuit,variables:Variables, n_orb:int,**backend_kwargs)->QubitWaveFunction:
 
     res = QubitWaveFunction(n_qubits=2*n_orb,numbering=BitNumbering.MSB,dense=False)
