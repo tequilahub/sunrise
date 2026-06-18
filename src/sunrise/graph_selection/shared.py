@@ -206,7 +206,7 @@ def generate_local_optimal_edges_from_vertices(vertices: np.ndarray, start=0):
 def total_distance(edges: list[tuple[int, int]], coordinates: np.ndarray):
     return sum(np.linalg.norm(coordinates[i] - coordinates[j]) for i,j in edges)
 
-def random_matching(num_atoms):
+def random_matching(num_atoms: int):
     atoms = list(range(num_atoms))
     random.shuffle(atoms)
     random_edges = [(atoms[i], atoms[i + 1]) for i in range(0, num_atoms, 2)]
