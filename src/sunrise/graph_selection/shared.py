@@ -2,13 +2,12 @@ from dataclasses import dataclass
 from os import PathLike
 import numpy as np
 import pandas as pd
-import random 
-import math 
+import random
+import math
 import networkx as nx
 from numpy.typing import NDArray
 from tequila.quantumchemistry import QuantumChemistryBase
 from scipy.spatial.distance import pdist, squareform
-
 
 
 @dataclass
@@ -199,12 +198,13 @@ def generate_local_optimal_edges_from_vertices(vertices: np.ndarray, start=0):
     return (edges, edge_length_sum)
 
 
-
 # additional heuristics
 
-#helper functions
+
+# helper functions
 def total_distance(edges: list[tuple[int, int]], coordinates: np.ndarray):
-    return sum(np.linalg.norm(coordinates[i] - coordinates[j]) for i,j in edges)
+    return sum(np.linalg.norm(coordinates[i] - coordinates[j]) for i, j in edges)
+
 
 def random_matching(num_atoms: int):
     atoms = list(range(num_atoms))
@@ -215,8 +215,9 @@ def random_matching(num_atoms: int):
 
 # brute force
 
+
 def generate_all_possible_edges(atoms: list[int]):
-    """ 
+    """
     Generate all perfect matchings of atoms.
 
     Parameters
@@ -233,7 +234,7 @@ def generate_all_possible_edges(atoms: list[int]):
     edges = []
     partial_edges = [([], atoms)]
 
-    if len(atoms) % 2 != 0: 
+    if len(atoms) % 2 != 0:
         return edges
 
     while len(partial_edges) > 0:
@@ -244,7 +245,7 @@ def generate_all_possible_edges(atoms: list[int]):
             if len(remaining) == 0:
                 edges.append(current_edge_pair)
                 continue
-        
+
             atom_1 = remaining[0]
 
             for i in range(1, len(remaining)):
@@ -253,14 +254,17 @@ def generate_all_possible_edges(atoms: list[int]):
                 new_remaining = []
 
                 for j in range(1, len(remaining)):
-                    if j != i: 
+                    if j != i:
                         new_remaining.append(remaining[j])
-                
-                next_partial_edge.append((current_edge_pair + [new_edge_pair], new_remaining))
+
+                next_partial_edge.append(
+                    (current_edge_pair + [new_edge_pair], new_remaining)
+                )
 
         partial_edges = next_partial_edge
 
     return edges
+
 
 def brute_force(num_atoms: int, coordinates: np.ndarray):
     """
@@ -277,10 +281,10 @@ def brute_force(num_atoms: int, coordinates: np.ndarray):
         Best edge configuration.
     """
 
-    distance_matrix = squareform(pdist(coordinates)) 
+    distance_matrix = squareform(pdist(coordinates))
     atoms = list(range(num_atoms))
-    
-    edges = generate_all_possible_edges(atoms) 
+
+    edges = generate_all_possible_edges(atoms)
 
     iterator = 0
 
@@ -300,7 +304,9 @@ def brute_force(num_atoms: int, coordinates: np.ndarray):
 
     return best_edge_config
 
+
 # nearest insertion
+
 
 def nearest_insertion(coordinates: np.ndarray):
     """
@@ -316,13 +322,13 @@ def nearest_insertion(coordinates: np.ndarray):
         Edge pairs from constructed tour.
     """
 
-    distance_matrix = squareform(pdist(coordinates))  
+    distance_matrix = squareform(pdist(coordinates))
     rows = distance_matrix.shape[0]
     unused = set(range(rows))
     explore = [0]
     unused.remove(0)
-    
-    nearest = min(unused, key = lambda j: distance_matrix[0, j])
+
+    nearest = min(unused, key=lambda j: distance_matrix[0, j])
     explore.append(nearest)
     unused.remove(nearest)
 
@@ -343,8 +349,7 @@ def nearest_insertion(coordinates: np.ndarray):
 
 
 # 2-opt
-def two_opt(num_atoms: int, coordinates: np.ndarray, max_iter = 200):
-
+def two_opt(num_atoms: int, coordinates: np.ndarray, max_iter=200):
     """
     Improve pairing using 2-opt local search.
 
@@ -375,32 +380,37 @@ def two_opt(num_atoms: int, coordinates: np.ndarray, max_iter = 200):
                 (a, b) = edges[i]
                 (c, d) = edges[j]
 
-                new_edge_opt_one = edges[:i] + edges[i+1:j] + edges[j+1:] + [(a,c), (b,d)]
-                new_edge_opt_two = edges[:i] + edges[i+1:j] + edges[j+1:] + [(a,d), (b,c)]
+                new_edge_opt_one = (
+                    edges[:i] + edges[i + 1 : j] + edges[j + 1 :] + [(a, c), (b, d)]
+                )
+                new_edge_opt_two = (
+                    edges[:i] + edges[i + 1 : j] + edges[j + 1 :] + [(a, d), (b, c)]
+                )
 
                 distance_opt_one = total_distance(new_edge_opt_one, coordinates)
                 distance_opt_two = total_distance(new_edge_opt_two, coordinates)
 
-                if(distance_opt_one < distance):
+                if distance_opt_one < distance:
                     edges = new_edge_opt_one
                     distance = distance_opt_one
                     improved = True
                     break
 
-                elif(distance_opt_two < distance):
+                elif distance_opt_two < distance:
                     edges = new_edge_opt_two
                     distance = distance_opt_two
                     improved = True
                     break
-            if(improved == True):
+            if improved == True:
                 break
-    
+
     return edges
+
 
 # simulated annealing
 
-def random_neighbour(edges: list[tuple[int, int]]):
 
+def random_neighbour(edges: list[tuple[int, int]]):
     """
     Generate neighboring solution via edge swap.
 
@@ -419,19 +429,21 @@ def random_neighbour(edges: list[tuple[int, int]]):
         edge1, edge2 = (d, a), (b, c)
 
     if edge1[0] == edge1[1] or edge2[0] == edge2[1] or edge1 == edge2:
-        return edges  
+        return edges
 
     new_edges[i], new_edges[j] = edge1, edge2
 
     return new_edges
 
-def simulated_annealing(num_atoms: int,
-                        coordinates: np.ndarray,
-                        start = 1.0,
-                        end = 1e-3,
-                        alpha=0.95, 
-                        max_iter = 1000):
 
+def simulated_annealing(
+    num_atoms: int,
+    coordinates: np.ndarray,
+    start=1.0,
+    end=1e-3,
+    alpha=0.95,
+    max_iter=1000,
+):
     """
     Optimize pairing using simulated annealing.
 
@@ -451,7 +463,7 @@ def simulated_annealing(num_atoms: int,
     """
 
     starting_edges = random_matching(num_atoms)
-        
+
     current_edges = starting_edges[:]
     current_distance = total_distance(current_edges, coordinates=coordinates)
 
@@ -460,7 +472,7 @@ def simulated_annealing(num_atoms: int,
     T = start
     i = 0
     no_improv = 0
-    while(start > end and i < max_iter):
+    while start > end and i < max_iter:
 
         i += 1
         new_edges = random_neighbour(current_edges)
@@ -468,29 +480,30 @@ def simulated_annealing(num_atoms: int,
 
         difference = new_distance - current_distance
 
-        if(difference < 0 or random.random() < math.exp(-difference / T)):
+        if difference < 0 or random.random() < math.exp(-difference / T):
             current_edges = new_edges
             current_distance = new_distance
-            if(current_distance < best_distance):
+            if current_distance < best_distance:
                 best_edges = current_edges
                 best_distance = current_distance
                 no_improv = 0
             else:
                 no_improv += 1
 
-            if(no_improv >= 20):
-                break    
+            if no_improv >= 20:
+                break
 
         T *= alpha
 
     return best_edges
 
+
 # genetic algorithm
 
-def crossover(parent_a: list[tuple[int, int]], 
-              parent_b: list[tuple[int, int]], 
-              num_atoms: int):
-    
+
+def crossover(
+    parent_a: list[tuple[int, int]], parent_b: list[tuple[int, int]], num_atoms: int
+):
     """
     Combine two parent solutions into a child.
 
@@ -501,11 +514,11 @@ def crossover(parent_a: list[tuple[int, int]],
     Notes
     -----
     **Crossover Strategy (Three-Phase Inheritance):**
-    
+
     1. Common edges: Edges that appear in BOTH parents are always inherited
-    
-    2. Compatible parent edges: From remaining atoms, inherit edges where 
-    
+
+    2. Compatible parent edges: From remaining atoms, inherit edges where
+
     3. Random completion: Any remaining unpaired atoms are randomly paired
     """
 
@@ -518,21 +531,23 @@ def crossover(parent_a: list[tuple[int, int]],
             used_atoms.update(edge)
 
     for parent in [parent_a, parent_b]:
-        for(a, b) in parent:
+        for a, b in parent:
             if a not in used_atoms and b not in used_atoms:
                 child_edges.append((a, b))
                 used_atoms.update((a, b))
 
-
     remaining_atoms = [a for a in range(num_atoms) if a not in used_atoms]
     random.shuffle(remaining_atoms)
 
-    child_edges += [(remaining_atoms[i], remaining_atoms[i+1]) for i in range(0, len(remaining_atoms) - 1, 2)]
+    child_edges += [
+        (remaining_atoms[i], remaining_atoms[i + 1])
+        for i in range(0, len(remaining_atoms) - 1, 2)
+    ]
 
     return child_edges
-    
-def mutation(edges: list):
 
+
+def mutation(edges: list):
     """
     Mutate solution by swapping edges.
 
@@ -545,24 +560,27 @@ def mutation(edges: list):
     i, j = random.sample(range(len(new_edges)), 2)
     (a, b), (c, d) = new_edges[i], new_edges[j]
 
-    if(random.random() < 0.5):
+    if random.random() < 0.5:
         edge1, edge2 = (a, c), (b, d)
     else:
         edge1, edge2 = (d, a), (b, c)
 
-    if(edge1[0] == edge1[1] or edge2[0] == edge2[1] or edge1 == edge2):
-        return edges  
+    if edge1[0] == edge1[1] or edge2[0] == edge2[1] or edge1 == edge2:
+        return edges
 
     new_edges[i], new_edges[j] = edge1, edge2
 
     return new_edges
 
-def genetic_algorithm(num_atoms: int, 
-                      coordinates: np.ndarray, 
-                      pop_size = 50, max_iter = 200, 
-                      mutation_rate = 0.2, 
-                      elite_size = 2):
 
+def genetic_algorithm(
+    num_atoms: int,
+    coordinates: np.ndarray,
+    pop_size=50,
+    max_iter=200,
+    mutation_rate=0.2,
+    elite_size=2,
+):
     """
     Solve using genetic algorithm.
 
@@ -588,27 +606,31 @@ def genetic_algorithm(num_atoms: int,
         ranked = sorted(zip(fitness, population), key=lambda x: x[0])
 
         new_population = [edge for i, edge in ranked[:elite_size]]
-        
-        while(len(new_population) < pop_size):
-            parent_a = random.choice(ranked[:pop_size//2])[1]
-            parent_b = random.choice(ranked[:pop_size//2])[1]
+
+        while len(new_population) < pop_size:
+            parent_a = random.choice(ranked[: pop_size // 2])[1]
+            parent_b = random.choice(ranked[: pop_size // 2])[1]
             child = crossover(parent_a, parent_b, num_atoms)
-            
-            if(random.random() < mutation_rate):
+
+            if random.random() < mutation_rate:
                 child = mutation(child)
-                
+
             new_population.append(child)
 
         population = new_population
-    
-    _, best_edges = min([(total_distance(edge, coordinates=coordinates), edge) for edge in population], key=lambda x: x[0])
+
+    _, best_edges = min(
+        [(total_distance(edge, coordinates=coordinates), edge) for edge in population],
+        key=lambda x: x[0],
+    )
 
     return best_edges
 
+
 # blossom
 
+
 def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
-    
     """
     Solve optimal matching using Blossom algorithm.
 
@@ -623,12 +645,12 @@ def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
         Optimal matching.
     """
 
-    distance_matrix = squareform(pdist(coordinates))  
+    distance_matrix = squareform(pdist(coordinates))
     graph = nx.Graph()
 
     for i in range(num_atoms):
         for j in range(i + 1, num_atoms):
-            graph.add_edge(i ,j, weight = distance_matrix[i][j])
+            graph.add_edge(i, j, weight=distance_matrix[i][j])
 
     edges = nx.algorithms.matching.min_weight_matching(graph, weight="weight")
     return list(edges)
