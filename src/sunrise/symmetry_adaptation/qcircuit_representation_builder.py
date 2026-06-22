@@ -11,9 +11,9 @@ class GeometricTransformationHelper:
 	"""A helper class for transformations from symmetry operations in 3D space on molecules around a given center."""
 
 	@classmethod
-	def parse_xyz_string(cls, mol: Molecule) -> tuple[list[str], NDArray[numpy.float64]]:
+	def atoms_from_molecule(cls, mol: Molecule) -> tuple[list[str], NDArray[numpy.float64]]:
 		"""
-		Parses molecule geometry into symbols and coordinates.
+		Parses the molecule geometry of a tequila molecule into atomic symbols and coordinates.
 
 		Parameters
 		----------
@@ -23,7 +23,7 @@ class GeometricTransformationHelper:
 		Returns
 		-------
 		tuple
-			(list of chemical symbols, numpy array of coordinates)
+			(list of atomic symbols, numpy array of coordinates)
 		"""
 
 		xyz_string = str(mol.parameters.geometry).strip()
@@ -96,8 +96,26 @@ class GeometricTransformationHelper:
 		return result
 
 
+
 	@classmethod
 	def homogeneous_operation(cls, M: NDArray[numpy.float64], center: NDArray[numpy.float64]=numpy.zeros(3)) -> NDArray[numpy.float64]:
+		"""
+		Construct the homogeneous representation of a linear operation.
+
+		Homogeneous coordinates embed a 3D affine transformation in a
+		higher-dimensional linear space by representing points as
+		``[x, y, z, 1]``. This allows rotations, reflections, and the
+		translations required to perform them about an arbitrary center to
+		be expressed as a single 4×4 matrix.
+
+		Parameters
+		----------
+		M
+			3×3 matrix representing a linear operation in Cartesian space.
+		center
+			Point about which the operation is applied.
+		"""
+			
 		M_h = numpy.eye(4)
 		M_h[:3, :3] = M
 		M_h[:3, 3] = center - (M @ center)
@@ -106,6 +124,24 @@ class GeometricTransformationHelper:
 
 	@classmethod
 	def homogeneous_coordinates(cls, v: NDArray[numpy.float64], is_row_vector: bool = True) -> NDArray[numpy.float64]:
+		"""
+		Convert Cartesian coordinates to homogeneous coordinates.
+
+		Homogeneous coordinates represent a point ``[x, y, z]`` as
+		``[x, y, z, 1]``, embedding 3D affine geometry in a 4D linear
+		space. In this representation, affine transformations (including
+		translations) can be applied using matrix multiplication, just as
+		ordinary linear transformations are applied in Cartesian space.
+
+		Parameters
+		----------
+		v
+			A single 3-vector or an array of 3-vectors.
+		is_row_vector
+			If ``True``, vectors are stored as rows ``(N, 3)``; otherwise
+			vectors are stored as columns ``(3, N)``.
+		"""
+
 		v = numpy.asarray(v)
 
 		# Single vector: [x, y, z] -> [x, y, z, 1]
@@ -125,7 +161,7 @@ class GeometricTransformationHelper:
 					raise ValueError(f"Expected shape (3, N) for column vectors, got {v.shape}.")
 				return numpy.vstack([v, numpy.ones((1, v.shape[1]))])
 
-		raise ValueError("Inumpyut must be a 1D 3-vector or a 2D array.")
+		raise ValueError("Input must be a 1D 3-vector or a 2D array.")
 	
 
 	@classmethod
@@ -387,7 +423,7 @@ class QCircuitRepresentationBuilder:
 		# This can be presumed as an NDArray
 		operations = geometric_representation.operations
 
-		mol_atom_coordinates = GeometricTransformationHelper.parse_xyz_string(self.mol)[1]
+		mol_atom_coordinates = GeometricTransformationHelper.atoms_from_molecule(self.mol)[1]
 		mol_center = numpy.mean(mol_atom_coordinates, axis=0)
 		mol_hom_atom_coordinates = GeometricTransformationHelper.homogeneous_coordinates(mol_atom_coordinates, is_row_vector=True).T
 
@@ -432,7 +468,7 @@ class QCircuitRepresentationBuilder:
 		# This finds out the number of active spatial orbitals by constructing a one-atom PySCF molecule
 		# and then creating a tequila molecule with it such that mol.n_orbitals is given by tequila
 		atom_num_aos: list[int] = []
-		for atom in GeometricTransformationHelper.parse_xyz_string(self.mol)[0]:
+		for atom in GeometricTransformationHelper.atoms_from_molecule(self.mol)[0]:
 			# Build a one-atom pyscf molecule with automatic spin
 			pyscf_mol = gto.M(atom=f'{atom} 0 0 0', basis=self.mol.parameters.basis_set, spin=None, verbose=0)
 			mf = scf.UHF(pyscf_mol).run() # NOTE: check if RHF works equally well
@@ -459,7 +495,7 @@ class QCircuitRepresentationBuilder:
 			atom_num_aos.append(tq_mol.n_orbitals)
 
 		# Alternative: statically determine the number of active spatial orbitals for STO-3G based on num_active_spatial_orbitals
-		#atom_num_aos: list[int] = GeometricTransformationHelper.num_active_spatial_orbitals([gto.charge(atom) for atom in GeometricTransformationHelper.parse_xyz_string(self.mol)[0]])
+		#atom_num_aos: list[int] = GeometricTransformationHelper.num_active_spatial_orbitals([gto.charge(atom) for atom in GeometricTransformationHelper.atoms_from_molecule(self.mol)[0]])
 
 		ao_blocks: list[int] = []
 		for i in range(len(atom_num_aos)):
