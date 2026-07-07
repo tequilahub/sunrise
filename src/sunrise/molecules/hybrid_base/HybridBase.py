@@ -20,7 +20,8 @@ from sunrise.molecules.hybrid_base.FermionicGateImpl import FermionicGateImpl
 from openfermion import FermionOperator
 import copy
 from sunrise.hybridization.hybridization import Graph
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Tuple
+
 class HybridBase(qc_base):
     def __init__(self, parameters: ParametersQC,select: typing.Union[str,dict]={},transformation: typing.Union[str, typing.Callable] = None, active_orbitals: list = None,
                  frozen_orbitals: list = None, orbital_type: str = None,reference_orbitals: list = None, orbitals: list = None, *args, **kwargs):
@@ -540,7 +541,7 @@ class HybridBase(qc_base):
         H = make_fermionic_hamiltonian() + make_bosonic_hamiltonian() + make_interaction_hamiltonian() + self.C
         return H.simplify(self.integral_tresh)
 
-    def make_hardcore_boson_hamiltonian(self):
+    def make_hardcore_boson_hamiltonian(self) -> QubitHamiltonian:
         '''
         Just for consistency.
         '''
@@ -1020,7 +1021,7 @@ class HybridBase(qc_base):
                 return False
         return True
 
-    def UR(self, i, j, angle=None, label=None, control=None, assume_real=True, *args, **kwargs):
+    def UR(self, i, j, angle=None, label=None, control=None, assume_real=True, *args, **kwargs) -> QCircuit:
         """
         Convenience function for orbital rotation circuit (rotating spatial orbital i and j) with standard naming of variables
         See arXiv:2207.12421 Eq.6 for UR(0,1)
@@ -1055,7 +1056,7 @@ class HybridBase(qc_base):
                                              control=control, *args, **kwargs)
         return circuit
 
-    def UC(self, i, j, angle=None, label=None, control=None, assume_real=True, *args, **kwargs):
+    def UC(self, i, j, angle=None, label=None, control=None, assume_real=True, *args, **kwargs) -> QCircuit:
         """
         Convenience function for orbital correlator circuit (correlating spatial orbital i and j through a spin-paired double excitation) with standard naming of variables
         See arXiv:2207.12421 Eq.22 for UC(1,2)
@@ -1092,7 +1093,7 @@ class HybridBase(qc_base):
             return self.make_excitation_gate(indices=[(2 * i, 2 * j), (2 * i + 1, 2 * j + 1)], angle=angle,
                                              control=control, assume_real=assume_real, *args, **kwargs)
 
-    def make_excitation_gate(self, indices: typing.Iterable[typing.Tuple[int, int]], angle, control=None, assume_real=True, **kwargs)->QCircuit:
+    def make_excitation_gate(self, indices: typing.Iterable[typing.Tuple[int, int]], angle, control=None, assume_real=True, **kwargs) -> QCircuit:
         """
         Initialize a fermionic excitation gate defined as
 
@@ -1246,7 +1247,7 @@ class HybridBase(qc_base):
         return qop.simplify()
 
     #Ansatzs and Algorithm
-    def prepare_reference(self, state=None, *args, **kwargs):
+    def prepare_reference(self, state=None, *args, **kwargs) -> QCircuit:
         """
         Returns
         -------
@@ -1263,7 +1264,7 @@ class HybridBase(qc_base):
             U.n_qubits = len(self.FER_SO) + len(self.BOS_MO)   # adapt when tapered transformations work
         return U
     
-    def prepare_hardcore_boson_reference(self):
+    def prepare_hardcore_boson_reference(self) -> QCircuit:
         """
         Prepare reference state in the Hardcore-Boson approximation (eqch qubit represents two spin-paired electrons)
         Returns
@@ -1275,7 +1276,7 @@ class HybridBase(qc_base):
         U.n_qubits = self.n_orbitals
         return U
     
-    def make_ansatz(self, name: str, *args, **kwargs)->QCircuit:
+    def make_ansatz(self, name: str, *args, **kwargs) -> QCircuit:
         """
         Automatically calls the right subroutines to construct ansatze implemented in tequila.chemistry
         name: namne of the ansatz, examples are: UpCCGSD, UpCCD, SPA, UCCSD, SPA+UpCCD, SPA+GS
@@ -1317,7 +1318,7 @@ class HybridBase(qc_base):
         else:
             raise TequilaException("unknown ansatz with name={}".format(name))
 
-    def make_spa_ansatz(self, edges=None, hcb=False, use_units_of_pi=False, label=None, optimize=None, ladder=True):
+    def make_spa_ansatz(self, edges=None, hcb=False, use_units_of_pi=False, label=None, optimize=None, ladder=True) -> QCircuit:
         """
         Separable Pair Ansatz (SPA) for general molecules
         see arxiv:
@@ -1432,7 +1433,7 @@ class HybridBase(qc_base):
 
     def make_upccgsd_ansatz(self, include_reference: bool = True, name: str = "UpCCGSD",label: str = None,order: int = None,
                             assume_real: bool = True,hcb_optimization: bool = None,spin_adapt_singles: bool = True,
-                            neglect_z:bool=False, mix_sd:bool=False,firts_double:bool=True,*args, **kwargs)->QCircuit:
+                            neglect_z:bool=False, mix_sd:bool=False,firts_double:bool=True,*args, **kwargs) -> QCircuit:
         """
         UpGCCSD Ansatz similar as described by Lee et. al.
 
@@ -1537,7 +1538,7 @@ class HybridBase(qc_base):
 
     def make_upccgsd_layer(self, indices, include_singles=True, include_doubles=True, assume_real=True, label=None,
                            spin_adapt_singles: bool = True, angle_transform=None, mix_sd=False, neglect_z=False,
-                           firts_double:bool=True,*args,**kwargs):
+                           firts_double:bool=True,*args,**kwargs) -> QCircuit:
         U = QCircuit()
         if include_singles and not mix_sd and not firts_double:
             U += self.make_upccgsd_singles(indices=indices, assume_real=assume_real, label=label,
@@ -1573,7 +1574,7 @@ class HybridBase(qc_base):
         return U
     
     def make_upccgsd_singles(self, indices="UpCCGSD", spin_adapt_singles=True, label=None, angle_transform=None,
-                             assume_real=True, neglect_z=False,*args, **kwargs):
+                             assume_real=True, neglect_z=False,*args, **kwargs) -> QCircuit:
         if neglect_z and "jordanwigner" not in self.transformation.name.lower():
             raise TequilaException(
                 "neglegt-z approximation in UpCCGSD singles needs the (Reversed)JordanWigner representation")
@@ -1618,7 +1619,7 @@ class HybridBase(qc_base):
         return U
     
     def make_hardcore_boson_excitation_gate(self, indices, angle, control=None, assume_real=True,
-                                            compile_options="optimize"):
+                                            compile_options="optimize") -> QCircuit:
         """
         Make excitation generator in the hardcore-boson approximation (all electrons are forced to spin-pairs)
         use only in combination with make_hardcore_boson_hamiltonian()
@@ -1648,10 +1649,10 @@ class HybridBase(qc_base):
                 "make_hardcore_boson_excitation_gate: Inconsistencies in indices={} for encoding: {}".format(indices, self.transformation))
         return gates.QubitExcitation(angle=angle, target=target, assume_real=assume_real, control=control,compile_options=compile_options)
     
-    def hcb_to_me(self,**kwargs):
+    def hcb_to_me(self,**kwargs) -> QCircuit:
         return self.transformation.hcb_to_me(**kwargs)
 
-    def compute_energy(self, method:str, *args, **kwargs):
+    def compute_energy(self, method:str, *args, **kwargs) -> float:
         """
         Call classical methods over PySCF (needs to be installed) or
         use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
@@ -1678,7 +1679,7 @@ class HybridBase(qc_base):
         else:
             return super().compute_energy(method,*args,**kwargs)
     
-    def compute_restricted_energy(self, method:str, *args, **kwargs):
+    def compute_restricted_energy(self, method:str, *args, **kwargs) -> float:
         """
             Call classical methods over PySCF (needs to be installed) or
             use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
@@ -1732,7 +1733,7 @@ class HybridBase(qc_base):
         parameters = copy.deepcopy(self.parameters)
         return mol(parameters=parameters,one_body_integrals=h,two_body_integrals=g,nuclear_repulsion=c,backend='pyscf',transformation=self.transformation.name,n_electrons=self.n_electrons).compute_energy(method=method, *args,**kwargs)
 
-    def get_restricted_integrals(self, *args, **kwargs):
+    def get_restricted_integrals(self, *args, **kwargs) -> Tuple[float,numpy.ndarray,numpy.ndarray]:
         c, h, g = self.get_integrals()
         BOS_L = self.BOS_MO
         NBOS_L = self.FER_MO
@@ -1767,7 +1768,7 @@ class HybridBase(qc_base):
         g.elems = new_g
         return c,h,g
 
-    def get_xyz(self)->str:
+    def get_xyz(self) -> str:
         geom = self.parameters.get_geometry()
         f = ''
         f += f'{len(geom)}\n'
@@ -1779,24 +1780,23 @@ class HybridBase(qc_base):
     def graph(self):
         return Graph.parse_xyz(self.get_xyz())
     
-    def get_spa_edges(self,collapse:bool=True,strip_orbitals:bool=None):
+    def get_spa_edges(self,collapse:bool=True,strip_orbitals:bool=None) -> List[Tuple[int]]:
         if strip_orbitals  is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
         return self.graph().get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals)
     
-    def get_spa_guess(self,strip_orbitals:bool=None):
+    def get_spa_guess(self,strip_orbitals:bool=None) -> numpy.ndarray:
         if strip_orbitals  is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
         return self.graph().get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
 
-    def get_spa_edges_and_guess(self,collapse:bool=True,strip_orbitals:bool=None):
+    def get_spa_edges_and_guess(self,collapse:bool=True,strip_orbitals:bool=None) -> Tuple[List[Tuple[int]],numpy.ndarray]:
         if strip_orbitals  is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
         g = self.graph()
         return g.get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals),g.get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
 
-   
-    def get_HAO_orbitals_coeff(self,sp_list:Union[List[int],List[str],dict,None]=None)->numpy.ndarray:
+    def get_HAO_orbitals_coeff(self,sp_list:Union[List[int],List[str],dict,None]=None) -> numpy.ndarray:
         """
         Parameters
         ----------
