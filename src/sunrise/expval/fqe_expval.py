@@ -3,15 +3,14 @@ from typing import Union, Tuple, List, Any, Dict
 import tequila as tq
 from numpy.ma.core import shape
 from tequila import QubitWaveFunction, TequilaException
-from tequila.objective.objective import Objective, Variables, assign_variable
+from tequila.objective.objective import Objective, Variables, Variable
 
 import fqe
 
 from sunrise.expval.fqe_utils import *
 from sunrise.expval.fermionic_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
-from collections import defaultdict
-from sunrise.expval.fqe_circuit_sim import fqe_circuit_simulatorU
+
 
 class FQEBraKet:
 
@@ -321,12 +320,14 @@ class FQEBraKet:
             for x in self.ket_angles:
                 if x == "p0sign_bra":
                     angle_internal_bra.append(np.pi/2)
+                elif x == "p0sign_ket":
+                    pass
                 else:
                     angle_internal_bra.append(x(internal_variables))
 
             if isinstance(self.bra_generator, dict):
                 list_gen_vals_bra = []
-                for gens in self.p.values():
+                for gens in self.bra_generator.values():
                     if len(gens) == 1:
                         list_gen_vals_bra.append(gens)
                     else:
@@ -374,11 +375,12 @@ class FQEBraKet:
 
         g=0
         for idx,v in enumerate(self.ket_angles):
-            if variable in v.extract_variables():
-                g += apply_phase(deepcopy(self), self.ket_original_obj.extract_indices()[idx], v, variable,
-                                 idx, ket=True, p0sign=True)
-                g += apply_phase(deepcopy(self), self.ket_original_obj.extract_indices()[idx],v, variable,
-                                 idx, ket=True, p0sign=False)
+            if isinstance(v, Variable):
+                if variable in v.extract_variables():
+                    g += apply_phase(deepcopy(self), self.ket_original_obj.extract_indices()[idx], v, variable,
+                                     idx, ket=True, p0sign=True)
+                    g += apply_phase(deepcopy(self), self.ket_original_obj.extract_indices()[idx],v, variable,
+                                     idx, ket=True, p0sign=False)
 
 
         return 0.5*g
@@ -410,15 +412,13 @@ class FQEBraKet:
         return self.ket_extract_variables_names
 
     def extract_bra_variables(self):
-        return self.non_fixed_variables_bra
+        return self.bra_extract_variables_names
 
     def extract_variables(self):
         ket_v = self.extract_ket_variables()
 
-        bra_v = []
         if self.bra_instructions is not None:
-            bra_v = self.extract_bra_variables()
-            ket_v.append(bra_v)
+            ket_v += self.extract_bra_variables()
         return ket_v
 
     @property

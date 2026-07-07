@@ -20,7 +20,7 @@ def minimize(objective,method: str = "bfgs",variables: list = None,initial_value
         return tminimize(objective=objective.build(),method=method,variables=variables,initial_values=initial_values,maxiter=maxiter,silent=silent,args=args,kwargs=kwargs)
     if type(objective).__name__ in  ['TCCBraket','FQEBraKet']:
         objective = Objective([objective])
-    if hasattr(objective,'args') and any([type(arg).__name__ in  ['TCCBraket','FQEBraKet'] for arg in objective.args]):
+    if hasattr(objective,'args') and any([type(arg).__name__ in  ['TCCBraket','FQEBraKet','BigExpVal'] for arg in objective.args]):
         dE = grad(objective=objective,variable=variables,args=args,kwargs=kwargs)
         return tminimize(objective=objective,gradient=dE,method=method,variables=variables,initial_values=initial_values,maxiter=maxiter,silent=silent,args=args,kwargs=kwargs)
     else:
@@ -35,7 +35,7 @@ def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_com
         default None: total gradient.
     return: dictionary of Objectives, if called on gate, circuit, exp.value, or objective; if Variable or Transform, returns number.
     """
-    if type(objective).__name__ in  ['TCCBraket','FQEBraKet']:
+    if type(objective).__name__ in  ['TCCBraket','FQEBraKet','BigExpVal']:
         objective = Objective([objective],transformation=identity)
     elif type(objective).__name__ == 'TequilaBraket':
         objective = objective.build()
@@ -74,7 +74,7 @@ def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_com
     # if the objective was already translated to a backend
     # we need to reverse that here
     our = False
-    if any([type(arg).__name__ in  ['TCCBraket','FQEBraKet'] for arg in objective.args]):
+    if any([type(arg).__name__ in  ['TCCBraket','FQEBraKet','BigExpVal'] for arg in objective.args]):
         our = True
         no_compile = True
     elif not our and objective.is_translated():
@@ -305,7 +305,7 @@ def simulate(
     
     if isinstance(objective,list):
         return [simulate(op,variables,samples,backend,noise,device,initial_state,*args,**kwargs) for op in objective]
-    if type(objective).__name__ in ['TCCBraket','FQEBraKet']:
+    if type(objective).__name__ in ['TCCBraket','FQEBraKet','BigExpVal']:
         return objective(variables=variables)
     if type(objective).__name__ == 'TequilaBraket':
         return simulate(objective=objective.build(),variables=variables,samples=samples,backend=backend,noise=noise,device=device,initial_state=initial_state,*args,**kwargs)

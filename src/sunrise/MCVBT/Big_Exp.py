@@ -1,3 +1,4 @@
+import numpy as np
 
 try:
     from sunrise.expval.fqe_expval import FQEBraKet
@@ -5,22 +6,25 @@ except ImportError:
     pass
 from tequila.quantumchemistry import QuantumChemistryBase
 from sunrise.MCVBT.QulacsBraKet import BraKetQulacs
-
+from sunrise.expval.minimize import simulate,grad
+from sunrise.expval import Braket
+from  tequila.objective.objective import Objective,identity,Variable,assign_variable
+from tequila import TequilaException
+from copy import deepcopy
 
 class BigExpVal:
 
     def __init__(self, circuits, coefficcents, mol:QuantumChemistryBase, solver, **kwargs):
-
         self.n = len(circuits)
-
-        SS = []
-        EE = []
+        self.solver = solver
+        SS = 0.
+        EE = 0.
         for i in range(self.n):
-            tmp1 = []
-            tmp2 = []
-            for j in range(i+1):
+            for j in range(self.n): #oder n ?
                 if solver == "TCC":
-                    raise NotImplementedError
+                    # raise NotImplementedError
+                    xEE = Braket(ket=circuits[j], bra=circuits[i], molecule=mol,backend='tcc')
+                    xSS = Braket(ket=circuits[j], bra=circuits[i],backend='tcc',molecule=mol,operator='I')
                 elif solver == "FQE":
                     xEE = FQEBraKet(ket_fcircuit=circuits[j], bra_fcircuit=circuits[i], molecule=mol)
                     xSS = FQEBraKet(ket_fcircuit=circuits[j], bra_fcircuit=circuits[i],
@@ -31,14 +35,13 @@ class BigExpVal:
                     xSS = BraKetQulacs(circuits[i], circuits[j], H=None)
                 else:
                     raise ValueError("Unknown solver {}".format(solver))
-                tmp1.append(xEE)
-                tmp2.append(xSS)
 
-            EE.append(tmp1)
-            SS.append(tmp2)
 
-        self.SS = SS
-        self.EE = EE
+                EE += (1*coefficcents[i])*(1*coefficcents[j])*Objective(args=[xEE],transformation=identity)
+                SS += (1*coefficcents[i])*(1*coefficcents[j])*Objective(args=[xSS],transformation=identity)
+
+        self.SS:Objective = SS
+        self.EE:Objective = EE
         self.coeffs = coefficcents
 
         variables = {}
@@ -50,26 +53,51 @@ class BigExpVal:
         self.variables = list(variables.keys())
 
 
-    def __call__(self, x, *args, **kwargs):
+    def __call__(self, variables, *args, **kwargs):
 
-        assert len(x) <= len(self.variables)
-
-        values = {self.variables[i]: x[i] for i in range(len(self.variables))}
-        c = [self.coeffs[i](values) for i in range(self.n)]
-
-        f = 0.0
-        s = 0.0
-        for i in range(self.n):
-            f+=self.EE[i][i](values)*c[i]**2
-            s+=c[i]**2
-            for j in range(i):
-               f+=2.0*self.EE[i][j](values)*c[i]*c[j]
-               s+=2.0*self.SS[i][j](values)*c[i]*c[j]
-
-        f=f.real
-        s=s.real
-        if s>0.0:
-            r=f/s
+        assert len(variables) <= len(self.variables)
+        if self.solver == "Qulacs":
+            values = {self.variables[i]: variables[i] for i in range(len(self.variables))}
         else:
-            r=1e5
+            values = {i: variables[i] for i in self.variables}
+
+        A = simulate(self.EE,values)
+        B = simulate(self.SS,values)
+
+        f=A.real
+        s=B.real
+        if np.isclose(s,0):
+            r = 1e5
+        else:
+            r = f/s
+
         return r
+
+    def extract_variables(self):
+        return self.variables
+
+    def grad(self, variable: Variable = None, *args, **kwargs):
+
+        if variable is None:
+            # None means that all components are created
+            variables = deepcopy(self.extract_variables())
+            result = {}
+
+            if len(variables) == 0:
+                raise TequilaException("Error in gradient: Objective has no variables")
+
+            for k in variables:
+                assert k is not None
+                result[k] = self.grad(k)
+            return result
+        else:
+            variable = assign_variable(variable)
+        if variable not in self.extract_variables():
+            return 0.
+
+        top = grad(self.EE,variable)*self.SS - self.EE*grad(self.SS,variable)
+        bottom = self.SS ** 2
+
+        gradient = top/bottom
+
+        return gradient

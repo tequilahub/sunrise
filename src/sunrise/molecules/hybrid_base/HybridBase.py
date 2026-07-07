@@ -20,7 +20,8 @@ from sunrise.molecules.hybrid_base.FermionicGateImpl import FermionicGateImpl
 from openfermion import FermionOperator
 import copy
 from sunrise.hybridization.hybridization import Graph
-from typing import Union,Optional,List
+from typing import Union, Optional, List, Tuple
+
 class HybridBase(qc_base):
     def __init__(self, parameters: ParametersQC,select: typing.Union[str,dict]={},transformation: typing.Union[str, typing.Callable] = None, active_orbitals: list = None,
                  frozen_orbitals: list = None, orbital_type: str = None,reference_orbitals: list = None, orbitals: list = None, *args, **kwargs):
@@ -257,125 +258,44 @@ class HybridBase(qc_base):
         New molecule in the native (orthonormalized) basis given
         e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
         """
-        c = copy.deepcopy(self.integral_manager.orbital_coefficients)
-        s = self.integral_manager.overlap_integrals
-        d = self.integral_manager.get_orthonormalized_orbital_coefficients()
-
-        def inner(a, b, s):
-            return numpy.sum(numpy.multiply(numpy.outer(a, b), s))
-
-        def orthogonalize(c, d, s):
-            '''
-            :return: orthogonalized orbitals with core HF orbitals and active Orthongonalized Native orbitals.
-            '''
-            ### Computing Core-Active overlap Matrix
-            # sbar_{ki} = \langle \phi_k | \varphi_i \rangle = \sum_{m,n} c_{nk}d_{mi}\langle \chi_n | \chi_m \rangle
-            # c_{nk} = HF coeffs, d_{mi} = nat orb coef s_{mn} = Atomic Overlap Matrix
-            # k \in active orbs, i \in core orbs, m,n \in basis coeffs
-            # sbar = np.einsum('nk,mi,nm->ki', c, d, s) #only works if active == to_active
-            c = c.T
-            d = d.T
-            sbar = numpy.zeros(shape=s.shape)
-            for k in active:
-                for i in core:
-                    sbar[i][to_active[k]] = inner(c[i], d[k], s)
-            ### Projecting out Core orbitals from the Native ones
-            # dbar_{ji} = d_{ji} - \sum_k sbar_{ki}c_{jk}
-            # k \in active, i \in core, j in basis coeffs
-            dbar = numpy.zeros(shape=s.shape)
-
-            for j in active:
-                dbar[to_active[j]] = d[j]
-                for i in core:
-                    temp = sbar[i][to_active[j]] * c[i]
-                    dbar[to_active[j]] -= temp
-            ### Projected-out Nat Orbs Normalization
-            for i in to_active.values():
-                norm = numpy.sqrt(numpy.sum(numpy.multiply(numpy.outer(dbar[i], dbar[i]), s.T)))
-                if not numpy.isclose(norm, 0):
-                    dbar[i] = dbar[i] / norm
-            ### Reintroducing the New Coeffs on the HF coeff matrix
-            for j in to_active.values():
-                c[j] = dbar[j]
-            ### Compute new orbital overlap matrix:
-            sprima = numpy.eye(len(c))
-            for idx, i in enumerate(to_active.values()):
-                for j in [*to_active.values()][idx:]:
-                    sprima[i][j] = inner(c[i], c[j], s)
-                    sprima[j][i] = sprima[i][j]
-            ### Symmetric orthonormalization
-            lam_s, l_s = numpy.linalg.eigh(sprima)
-            lam_s = lam_s * numpy.eye(len(lam_s))
-            lam_sqrt_inv = numpy.sqrt(numpy.linalg.inv(lam_s))
-            symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
-            return symm_orthog.dot(c).T
-
-        def get_active(core):
-            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
-            for i in core:
-                for j in range(len(d)):
-                    ov[j] += numpy.abs(inner(c.T[i], d.T[j], s))
-            act = []
-            for i in range(len(self.integral_manager.orbitals) - len(core)):
-                idx = numpy.argmin(ov)
-                act.append(idx)
-                ov[idx] = 1 * len(core)
-            act.sort()
-            return act
-
-        def get_core(active):
-            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
-            for i in active:
-                for j in range(len(d)):
-                    ov[j] += numpy.abs(inner(d.T[i], c.T[j], s))
-            co = []
-            for i in range(len(self.integral_manager.orbitals) - len(active)):
-                idx = numpy.argmin(ov)
-                co.append(idx)
-                ov[idx] = 1 * len(active)
-            co.sort()
-            return co
-
-        def active_to_active(active):
-            '''
-            translates active indices from canonical/the original basis to the native coeffs
-            '''
-            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
-            for i in active:
-                for j in range(len(d)):
-                    ov[j] += numpy.abs(inner(c.T[i], d.T[j], s))
-            act = []
-            for i in range(len(active)):
-                idx = numpy.argmax(ov)
-                act.append(idx)
-                ov[idx] = 0.
-            act.sort()
-            return act
+        from sunrise.molecules.utils_orbital_transformation import get_active, get_core, orthogonalize_active_space
+        c = self.integral_manager.orbital_coefficients.copy()
+        s = self.integral_manager.overlap_integrals.copy()
+        d = self.integral_manager.get_orthonormalized_orbital_coefficients().copy()
 
         active = None
+        if not self.integral_manager.active_space_is_trivial() and core is None:
+            core = [i.idx_total for i in self.integral_manager.orbitals if i.idx is None]
         if "active" in kwargs:
             active = kwargs["active"]
             kwargs.pop("active")
             if core is None:
-                core = get_core(active)
+                core = get_core(c, d, s, active)
         else:
-            if core is None:
-                if not self.integral_manager.active_space_is_trivial():
-                    active = [i.idx_total for i in self.integral_manager.orbitals if i.idx is not None]
-                    active = active_to_active(active)
-                    core = [i.idx_total for i in self.integral_manager.orbitals if i.idx is None]
-                else:
+            if active is None:
+                if core is None:
                     core = []
                     active = [i for i in range(len(self.integral_manager.orbitals))]
-            else:
-                if isinstance(core, int):
-                    core = [core]
-                active = get_active(core)
+                else:
+                    if isinstance(core, int):
+                        core = [core]
+                    active = get_active(c, d, s, [i.idx_total for i in self.integral_manager.active_orbitals])
         assert len(active) + len(core) == len(self.integral_manager.orbitals)
+        if "reference_orbitals" in kwargs:
+            reference_orbitals = kwargs["reference_orbitals"]
+            kwargs.pop()
+            assert len(reference_orbitals) == len(self.parameters.total_n_electrons)//2,f'Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons//2}, received {len(reference_orbitals)}'
+        else:
+            reference_orbitals = [i.idx_total for i in self.integral_manager.reference_orbitals]
         to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
         to_active = {active[i]: to_active[i] for i in range(len(active))}
         if len(core):
-            coeff = orthogonalize(c, d, s)
+            c_combined = numpy.zeros(shape=c.shape)
+            for i,idx in enumerate(core):
+                c_combined[:, i] = c[:, idx]
+            for act_idx in active:
+                c_combined[:, to_active[act_idx]] = d[:, act_idx]
+            coeff = orthogonalize_active_space(c_combined, s, core, [*to_active.values()])
             if not all([i == to_active[i] for i in to_active]) and len(self.BOS_MO) and len(self.FER_MO):
                 print("Orbital may be reordered, please double check F/B selection")
             if len(active) == len(self.select):
@@ -389,8 +309,8 @@ class HybridBase(qc_base):
                     two_body_integrals=self.integral_manager.two_body_integrals,
                     constant_term=self.integral_manager.constant_term,
                     active_orbitals=[*to_active.values()],
-                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals]
-                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s,
+                    reference_orbitals=reference_orbitals,
+                    frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s,
                     orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
                     )
                 self.update_select(new_select)
@@ -399,10 +319,10 @@ class HybridBase(qc_base):
                 integral_manager = self.initialize_integral_manager(
                     one_body_integrals=self.integral_manager.one_body_integrals,
                     two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term
-                    , active_orbitals=[*to_active.values()],
-                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals]
-                    , frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s,
+                    constant_term=self.integral_manager.constant_term,
+                    active_orbitals=[*to_active.values()],
+                    reference_orbitals=reference_orbitals,
+                    frozen_orbitals=core, orbital_coefficients=coeff, overlap_integrals=s,
                     orbital_type="orthonormalized-{}-basis".format(self.integral_manager._basis_name),
                     )
                 parameters = copy.deepcopy(self.parameters)
@@ -621,7 +541,7 @@ class HybridBase(qc_base):
         H = make_fermionic_hamiltonian() + make_bosonic_hamiltonian() + make_interaction_hamiltonian() + self.C
         return H.simplify(self.integral_tresh)
 
-    def make_hardcore_boson_hamiltonian(self):
+    def make_hardcore_boson_hamiltonian(self) -> QubitHamiltonian:
         '''
         Just for consistency.
         '''
@@ -1101,7 +1021,7 @@ class HybridBase(qc_base):
                 return False
         return True
 
-    def UR(self, i, j, angle=None, label=None, control=None, assume_real=True, *args, **kwargs):
+    def UR(self, i, j, angle=None, label=None, control=None, assume_real=True, *args, **kwargs) -> QCircuit:
         """
         Convenience function for orbital rotation circuit (rotating spatial orbital i and j) with standard naming of variables
         See arXiv:2207.12421 Eq.6 for UR(0,1)
@@ -1136,7 +1056,7 @@ class HybridBase(qc_base):
                                              control=control, *args, **kwargs)
         return circuit
 
-    def UC(self, i, j, angle=None, label=None, control=None, assume_real=True, *args, **kwargs):
+    def UC(self, i, j, angle=None, label=None, control=None, assume_real=True, *args, **kwargs) -> QCircuit:
         """
         Convenience function for orbital correlator circuit (correlating spatial orbital i and j through a spin-paired double excitation) with standard naming of variables
         See arXiv:2207.12421 Eq.22 for UC(1,2)
@@ -1173,7 +1093,7 @@ class HybridBase(qc_base):
             return self.make_excitation_gate(indices=[(2 * i, 2 * j), (2 * i + 1, 2 * j + 1)], angle=angle,
                                              control=control, assume_real=assume_real, *args, **kwargs)
 
-    def make_excitation_gate(self, indices: typing.Iterable[typing.Tuple[int, int]], angle, control=None, assume_real=True, **kwargs)->QCircuit:
+    def make_excitation_gate(self, indices: typing.Iterable[typing.Tuple[int, int]], angle, control=None, assume_real=True, **kwargs) -> QCircuit:
         """
         Initialize a fermionic excitation gate defined as
 
@@ -1327,7 +1247,7 @@ class HybridBase(qc_base):
         return qop.simplify()
 
     #Ansatzs and Algorithm
-    def prepare_reference(self, state=None, *args, **kwargs):
+    def prepare_reference(self, state=None, *args, **kwargs) -> QCircuit:
         """
         Returns
         -------
@@ -1344,7 +1264,7 @@ class HybridBase(qc_base):
             U.n_qubits = len(self.FER_SO) + len(self.BOS_MO)   # adapt when tapered transformations work
         return U
     
-    def prepare_hardcore_boson_reference(self):
+    def prepare_hardcore_boson_reference(self) -> QCircuit:
         """
         Prepare reference state in the Hardcore-Boson approximation (eqch qubit represents two spin-paired electrons)
         Returns
@@ -1356,7 +1276,7 @@ class HybridBase(qc_base):
         U.n_qubits = self.n_orbitals
         return U
     
-    def make_ansatz(self, name: str, *args, **kwargs)->QCircuit:
+    def make_ansatz(self, name: str, *args, **kwargs) -> QCircuit:
         """
         Automatically calls the right subroutines to construct ansatze implemented in tequila.chemistry
         name: namne of the ansatz, examples are: UpCCGSD, UpCCD, SPA, UCCSD, SPA+UpCCD, SPA+GS
@@ -1398,7 +1318,7 @@ class HybridBase(qc_base):
         else:
             raise TequilaException("unknown ansatz with name={}".format(name))
 
-    def make_spa_ansatz(self, edges=None, hcb=False, use_units_of_pi=False, label=None, optimize=None, ladder=True):
+    def make_spa_ansatz(self, edges=None, hcb=False, use_units_of_pi=False, label=None, optimize=None, ladder=True) -> QCircuit:
         """
         Separable Pair Ansatz (SPA) for general molecules
         see arxiv:
@@ -1513,7 +1433,7 @@ class HybridBase(qc_base):
 
     def make_upccgsd_ansatz(self, include_reference: bool = True, name: str = "UpCCGSD",label: str = None,order: int = None,
                             assume_real: bool = True,hcb_optimization: bool = None,spin_adapt_singles: bool = True,
-                            neglect_z:bool=False, mix_sd:bool=False,firts_double:bool=True,*args, **kwargs)->QCircuit:
+                            neglect_z:bool=False, mix_sd:bool=False,firts_double:bool=True,*args, **kwargs) -> QCircuit:
         """
         UpGCCSD Ansatz similar as described by Lee et. al.
 
@@ -1618,7 +1538,7 @@ class HybridBase(qc_base):
 
     def make_upccgsd_layer(self, indices, include_singles=True, include_doubles=True, assume_real=True, label=None,
                            spin_adapt_singles: bool = True, angle_transform=None, mix_sd=False, neglect_z=False,
-                           firts_double:bool=True,*args,**kwargs):
+                           firts_double:bool=True,*args,**kwargs) -> QCircuit:
         U = QCircuit()
         if include_singles and not mix_sd and not firts_double:
             U += self.make_upccgsd_singles(indices=indices, assume_real=assume_real, label=label,
@@ -1654,7 +1574,7 @@ class HybridBase(qc_base):
         return U
     
     def make_upccgsd_singles(self, indices="UpCCGSD", spin_adapt_singles=True, label=None, angle_transform=None,
-                             assume_real=True, neglect_z=False,*args, **kwargs):
+                             assume_real=True, neglect_z=False,*args, **kwargs) -> QCircuit:
         if neglect_z and "jordanwigner" not in self.transformation.name.lower():
             raise TequilaException(
                 "neglegt-z approximation in UpCCGSD singles needs the (Reversed)JordanWigner representation")
@@ -1699,7 +1619,7 @@ class HybridBase(qc_base):
         return U
     
     def make_hardcore_boson_excitation_gate(self, indices, angle, control=None, assume_real=True,
-                                            compile_options="optimize"):
+                                            compile_options="optimize") -> QCircuit:
         """
         Make excitation generator in the hardcore-boson approximation (all electrons are forced to spin-pairs)
         use only in combination with make_hardcore_boson_hamiltonian()
@@ -1729,10 +1649,10 @@ class HybridBase(qc_base):
                 "make_hardcore_boson_excitation_gate: Inconsistencies in indices={} for encoding: {}".format(indices, self.transformation))
         return gates.QubitExcitation(angle=angle, target=target, assume_real=assume_real, control=control,compile_options=compile_options)
     
-    def hcb_to_me(self,**kwargs):
+    def hcb_to_me(self,**kwargs) -> QCircuit:
         return self.transformation.hcb_to_me(**kwargs)
 
-    def compute_energy(self, method:str, *args, **kwargs):
+    def compute_energy(self, method:str, *args, **kwargs) -> float:
         """
         Call classical methods over PySCF (needs to be installed) or
         use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
@@ -1759,7 +1679,7 @@ class HybridBase(qc_base):
         else:
             return super().compute_energy(method,*args,**kwargs)
     
-    def compute_restricted_energy(self, method:str, *args, **kwargs):
+    def compute_restricted_energy(self, method:str, *args, **kwargs) -> float:
         """
             Call classical methods over PySCF (needs to be installed) or
             use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
@@ -1813,7 +1733,7 @@ class HybridBase(qc_base):
         parameters = copy.deepcopy(self.parameters)
         return mol(parameters=parameters,one_body_integrals=h,two_body_integrals=g,nuclear_repulsion=c,backend='pyscf',transformation=self.transformation.name,n_electrons=self.n_electrons).compute_energy(method=method, *args,**kwargs)
 
-    def get_restricted_integrals(self, *args, **kwargs):
+    def get_restricted_integrals(self, *args, **kwargs) -> Tuple[float,numpy.ndarray,numpy.ndarray]:
         c, h, g = self.get_integrals()
         BOS_L = self.BOS_MO
         NBOS_L = self.FER_MO
@@ -1848,7 +1768,7 @@ class HybridBase(qc_base):
         g.elems = new_g
         return c,h,g
 
-    def get_xyz(self)->str:
+    def get_xyz(self) -> str:
         geom = self.parameters.get_geometry()
         f = ''
         f += f'{len(geom)}\n'
@@ -1860,24 +1780,23 @@ class HybridBase(qc_base):
     def graph(self):
         return Graph.parse_xyz(self.get_xyz())
     
-    def get_spa_edges(self,collapse:bool=True,strip_orbitals:bool=None):
+    def get_spa_edges(self,collapse:bool=True,strip_orbitals:bool=None) -> List[Tuple[int]]:
         if strip_orbitals  is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
         return self.graph().get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals)
     
-    def get_spa_guess(self,strip_orbitals:bool=None):
+    def get_spa_guess(self,strip_orbitals:bool=None) -> numpy.ndarray:
         if strip_orbitals  is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
         return self.graph().get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
 
-    def get_spa_edges_and_guess(self,collapse:bool=True,strip_orbitals:bool=None):
+    def get_spa_edges_and_guess(self,collapse:bool=True,strip_orbitals:bool=None) -> Tuple[List[Tuple[int]],numpy.ndarray]:
         if strip_orbitals  is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
         g = self.graph()
         return g.get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals),g.get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
 
-   
-    def get_HAO_orbitals_coeff(self,sp_list:Union[List[int],List[str],dict,None]=None)->numpy.ndarray:
+    def get_HAO_orbitals_coeff(self,sp_list:Union[List[int],List[str],dict,None]=None) -> numpy.ndarray:
         """
         Parameters
         ----------

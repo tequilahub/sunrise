@@ -620,7 +620,7 @@ class TCCBraket:
         '''
         Build the expectation value operator. 
         Even if it is accepted a QubitHamiltonian, we disencorage its use here since TCC works on fermionic states.
-        It will be applied to the ci_vector and kept these results which doesn't leave the ci_vector space with READ Coeff.
+        It will be applied to the ci_vector and kept these results which doesn't leave the ci_vector space with REAL Coeff.
         '''
         def from_string(operator:str):
             if operator.upper()=="I":
