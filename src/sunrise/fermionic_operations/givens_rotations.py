@@ -20,8 +20,8 @@ def n_rotation(i:int, phi)->fe.FCircuit:
         """
 
         # Start a new circuit and apply rotations to each component.
-        circuit = fe.Phase(2*i, variables=-2 * phi)
-        circuit += fe.Phase(2*i+1, variables=-2 * phi)
+        circuit = fe.Phase(2*i, angle=-2 * phi)
+        circuit += fe.Phase(2*i+1, angle=-2 * phi)
         return circuit
 
 def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[list,tuple,str]=OPTIMIZED_ORDERING, fix: bool = True, label=None,)->fe.FCircuit:
@@ -80,7 +80,7 @@ def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[lis
                 ),
             )
 
-        return circuit
+    return circuit
 
 def givens_matrix(n, p, q, theta)->QTensor:
     """
@@ -144,8 +144,6 @@ def get_givens_decomposition(unitary:numpy.ndarray, tol:float=1e-6, ordering:Uni
     def calcTheta(U, c, r):
         """Calculate and apply the Givens rotation for a specific matrix element."""
         t = arctan2(-U[r, c], U[r - 1, c])
-        if isinstance(t,numbers.Number) and numpy.isclose(numpy.abs(t)%numpy.pi,0,atol=tol):
-            return U
         theta_list.append((t, r, r - 1))
         g = givens_matrix(n, r, r - 1, t)  # is a QTensor
         U = g.dot(U)

@@ -459,12 +459,12 @@ class FCircuit:
                     reference += gate
                 elif isinstance(gate,FermionicGateImpl):
                     begining = False 
-                    operations += sunrise.gates.FermionicExcitation(indices=gate.indices,variables=gate.parameter,reordered=reordered)
+                    operations += sunrise.gates.FermionicExcitation(indices=gate.indices,angle=gate.parameter,reordered=reordered)
                 else:
                     temp = []
                     for i in range(len(gate._target)//2):
                         temp.append((gate._target[2*i],gate._target[2*i+1]))
-                    operations += sunrise.gates.FermionicExcitation(indices=temp,variables=gate.parameter,reordered=reordered)
+                    operations += sunrise.gates.FermionicExcitation(indices=temp,angle=gate.parameter,reordered=reordered)
             else:
                 raise TequilaException(f'Gate {gate._name}({gate._parameter}) not allowed')
         if not reordered and len(reference.gates):
@@ -488,7 +488,7 @@ class FCircuit:
                 angle = Variable(((previous,i),'D',label))
                 if use_units_of_pi:
                     angle = angle * pi
-                operations += sunrise.gates.UC(i=previous,j=i,variables=angle)
+                operations += sunrise.gates.UC(i=previous,j=i,angle=angle)
                 if ladder:
                     previous = i
         return cls(gates=operations._gates,initial_state=reference)
