@@ -15,6 +15,7 @@ from .binary_interface import *
 from sunrise import from_tequila
 from tequila import TequilaException
 from sunrise.molecules.utils_orbital_transformation import transform, orthogonalize
+from warnings import warn
 
 def __get_MP2_occ(mol:QuantumChemistryBase) -> Tuple[list[Number], list[Number]]:
     ''''
@@ -104,6 +105,7 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]
     else: filename = mol.parameters.name
     if output_dir is None:
         output_dir = os.getcwd()
+    ncore = mol.integral_manager.orbital_coefficients.shape[1] - mol.n_orbitals
     generate_molden(mol = mol, filename = filename, output_dir = output_dir, use_active=False, **kwargs) #TODO: Janpa CLPO is bug for active space only, working on 
     call_molden2aim(moldenfile = filename+'.molden', output_dir = output_dir)
     call_molden2molden(command = f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent, output_dir = output_dir)
@@ -134,9 +136,18 @@ def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]
     else:
         mol = nmol
         mol.integral_manager._orbital_type = 'CLPO'
-    graph = extract_clpo_graph(f"{output_dir}/graph")
+    graph, rad_warn, edge_warn = extract_clpo_graph(f"{output_dir}/graph")
+    if len(rad_warn):
+        if use_active:
+            rad_warn = [[to_active[i[0]] - ncore, i[1]] for i in rad_warn if i[0] in to_active.keys()]
+        for i in rad_warn:
+            warn(f'Lone Pair {i[0]} found with occupation close to 1 => {i[1]}, take care.')
+    if len(edge_warn):
+        if use_active:
+            edge_warn = [[[to_active[e] - ncore for e in edge[0] if e in to_active.keys()],edge[1]] for edge in edge_warn]
+        for i in edge_warn:
+            warn(f'Bond pair orbitals {i[0]} population expected under expected 2e-, predicted: {i[0]}, take care with predicted edges.')
     if use_active:
-        ncore = len(mol.integral_manager.orbital_coefficients) - mol.n_orbitals
         graph = [tuple([to_active[i] - ncore for i in edge if i in to_active.keys()]) for edge in graph]
         graph = [g for g in graph if len(g)]
     if rm_files:

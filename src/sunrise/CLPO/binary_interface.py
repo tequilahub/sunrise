@@ -4,7 +4,6 @@ import os
 import shlex
 from importlib import resources
 from numpy import array
-from warnings import warn
 
 def call_janpa(command:str='',output_dir=None,silent=False):
     """
@@ -146,7 +145,8 @@ def extract_clpo_graph(graph_file:str):
         - (i, i+1)  for BD/NB pairs
     """
     nodes = []
-
+    rad_warn = []
+    edge_warn = []
     with open(graph_file, "r") as f:
         lines = f.readlines()
 
@@ -160,7 +160,8 @@ def extract_clpo_graph(graph_file:str):
         if "(LP)" in line:
             occ = float(line.split()[3])
             if occ < 1.5 and occ > 0.5: # NOTE: arbitrary numbers
-                warn(f'Lone Pair {i} found with occupation close to 1 => {occ}, take care.') 
+                rad_warn.append([i,occ])
+                # warn(f'Lone Pair {i} found with occupation close to 1 => {occ}, take care.') 
             if occ < 1.: 
                 i += 1
                 continue
@@ -176,15 +177,15 @@ def extract_clpo_graph(graph_file:str):
             bd_pair_occ = float(line.split()[6])
             at_pair_occ = float(data_lines[i+1].split()[4])
             if bd_pair_occ + at_pair_occ < 1.7: # NOTE: arbitrary number
-                warn(f'Bond pair orbitals {[i,i+1]} population expected under expected 2e-, predicted: {bd_pair_occ + at_pair_occ}, take care with predicted edges.')
-
+                edge_warn.append([[i,i+1],bd_pair_occ + at_pair_occ])
+                # warn(f'Bond pair orbitals {[i,i+1]} population expected under expected 2e-, predicted: {bd_pair_occ + at_pair_occ}, take care with predicted edges.')
             nodes.append((i, i + 1))
             i += 2
             continue
 
         i += 1
 
-    return nodes
+    return nodes, rad_warn, edge_warn
 
 def read_molden_mo_matrix(filename:str):
     """
