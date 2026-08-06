@@ -9,6 +9,16 @@ import numpy
 from pandas import DataFrame
 from sunrise.symmetry_adaptation.irrep_provider import IrrepProvider
 
+from itertools import combinations
+
+def _fixed_popcount_bitstrings(n_qubits: int, n_ones: int) -> Generator[str, None, None]:
+    """Yields exactly the bitstrings of length n_qubits with n_ones bits set —
+    i.e. the non-ionic Fock space, with no wasted candidates."""
+    for ones_positions in combinations(range(n_qubits), n_ones):
+        chars = ['0'] * n_qubits
+        for p in ones_positions:
+            chars[p] = '1'
+        yield ''.join(chars)
 
 @dataclass
 class FockSpaceState:
@@ -101,7 +111,9 @@ class FockSpaceState:
 	@classmethod
 	def non_ionic_states(cls, mol: Molecule, provider: IrrepProvider) -> list['FockSpaceState']:
 		"""Generates all non-ionic Fock space states for a given molecule."""
-		return cls.by_filter(mol, provider, non_ionic=True)
+		n_qubits = 2 * mol.n_orbitals
+		gen = _fixed_popcount_bitstrings(n_qubits, mol.n_electrons)
+		return cls.by_filter(mol, provider, bitstring_generator=gen)
 	
 	@classmethod
 	def by_filter(cls, mol: Molecule, provider: IrrepProvider, mo_occ: list[int] | None = None, m_s: int | None = None, S2: int | None = None, spin_multiplicity: str | None = None, irrep: str | None = None, non_ionic: bool = False, max_count: int | None = None, bitstring_generator: Generator[str, None, None] | None = None) -> list['FockSpaceState']:
@@ -159,33 +171,21 @@ class FockSpaceState:
 			state = cls(mol, bitstring, provider)
 			if non_ionic:
 				if sum(state.mo_occ) != mol.n_electrons:
-					del state
-					gc.collect()
 					continue
 			if mo_occ is not None:
 				if state.mo_occ != mo_occ:
-					del state
-					gc.collect()
 					continue
 			if m_s is not None:
 				if state.m_s != m_s:
-					del state
-					gc.collect()
 					continue
 			if S2 is not None:
 				if state.S2 != S2:
-					del state
-					gc.collect()
 					continue
 			if spin_multiplicity is not None:
 				if state.spin_multiplicity != spin_multiplicity:
-					del state
-					gc.collect()
 					continue
 			if irrep is not None:
 				if state.irrep != irrep:
-					del state
-					gc.collect()
 					continue
 			states.append(state)
 		return states
