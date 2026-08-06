@@ -17,7 +17,7 @@ molecule_pointgroup_list: list[tuple[str, str]] = [
 
 
 # Statically tests the values for D2h as imported from pyscf
-@pytest.mark.skipif(condition=not not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_point_group_correctness() -> None:
 	D2h_expected_character_table = np.array([[ 1,  1,  1,  1,  1,  1,  1,  1],
 															[ 1, -1, -1,  1,  1, -1, -1,  1],
@@ -31,7 +31,7 @@ def test_point_group_correctness() -> None:
 	assert np.array_equal(character_table, D2h_expected_character_table)
 
 
-@pytest.mark.skipif(condition=not not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
 def test_representation_builder(molecule_pointgroup) -> None:
 	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
@@ -62,7 +62,7 @@ def test_representation_builder(molecule_pointgroup) -> None:
 
 # Statically tests the values for the inversion of H4 (square) with D2h
 # as imported from pyscf in its AO permutation representation
-@pytest.mark.skipif(condition=not not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_representation_builder_correctness() -> None:
 	mol = tq.Molecule(geometry="H 1. -1. 0. \n H 1. 1. 0. \n H -1. 1. 0. \n H -1. -1. 0.",basis_set='sto-3g', backend="pyscf")
 	pg = PointGroup.from_pyscf("D2h")
@@ -76,7 +76,7 @@ def test_representation_builder_correctness() -> None:
 
 
 # Test spin symmetrization for canonical orbitals
-@pytest.mark.skipif(condition=not not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
 def test_spin_symmetrization(molecule_pointgroup) -> None:
 	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
@@ -92,7 +92,7 @@ def test_spin_symmetrization(molecule_pointgroup) -> None:
 
 
 # Statically tests the values for H2 with canonical MOs
-@pytest.mark.skipif(condition=not not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_spin_symmetrization_correctness() -> None:
 	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("D2h")
@@ -117,7 +117,7 @@ def test_spin_symmetrization_correctness() -> None:
 	
 	
 # Tests SALC symmetrization for localized orbitals
-@pytest.mark.skipif(condition=not not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
 def test_SALC_symmetrization(molecule_pointgroup) -> None:
 	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
@@ -132,7 +132,7 @@ def test_SALC_symmetrization(molecule_pointgroup) -> None:
 
 
 # Statically tests the values for H2 with localized MOs
-@pytest.mark.skipif(condition=not not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_SALC_symmetrization_correctness() -> None:
 	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("D2h")
