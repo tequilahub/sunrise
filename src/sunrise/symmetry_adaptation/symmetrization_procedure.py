@@ -12,6 +12,25 @@ from .point_group_representation import PointGroupRepresentation
 from .fock_space_state import FockSpaceState
 from .qcircuit_representation_builder import QCircuitRepresentationBuilder
 
+def _get_connected_components(matrix, tol=1e-10):
+    """Finds the connected components of a block-diagonal matrix."""
+    n = matrix.shape[0]
+    visited = [False] * n
+    components = []
+    for i in range(n):
+        if not visited[i]:
+            component = []
+            stack = [i]
+            visited[i] = True
+            while stack:
+                node = stack.pop()
+                component.append(node)
+                for neighbor in range(n):
+                    if not visited[neighbor] and abs(matrix[node, neighbor]) > tol:
+                        visited[neighbor] = True
+                        stack.append(neighbor)
+            components.append(component)
+    return components
 
 @dataclass
 class SymmetrizationProcedure(ABC):
@@ -28,7 +47,7 @@ class SymmetrizationProcedure(ABC):
 class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 	"""A symmetrization procedure that symmetrizes states with respect to spin."""
 
-	def symmetrize(self, states: list[FockSpaceState] | pd.DataFrame) -> pd.DataFrame:
+	def symmetrize(self, states: list[FockSpaceState] | pd.DataFrame) -> list[FockSpaceState] | pd.DataFrame:
 		is_dataframe = isinstance(states, pd.DataFrame)
 		if is_dataframe:
 			state_list: list[FockSpaceState] = list(states.itertuples(index=False, name="FockSpaceState")) # produces namedtuples with attribute access
@@ -49,34 +68,70 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 		grouped = groupby(state_list_sorted, key=lambda s: s.m_s)
 
 		# Iterate over each group
+		s2_op = self.mol.make_s2_op()
 		for ms_val, group in grouped:
 			sub_states: list[FockSpaceState] = list(group)
 			mini_matrix = numpy.zeros((len(sub_states), len(sub_states)), dtype=complex)
 
+			s2_applied = [s2_op(state.wavefunction) for state in sub_states]  # O(n) applications
+
 			for i, state1 in enumerate(sub_states):
-				for j, state2 in enumerate(sub_states):
-					val = state1.wavefunction.inner(self.mol.make_s2_op()(state2.wavefunction))
+				for j in range(i, len(sub_states)):  # only upper triangle
+					val = state1.wavefunction.inner(s2_applied[j])
 					mini_matrix[i, j] = val
+					mini_matrix[j, i] = numpy.conj(val)  # Hermitian
+
+			# for i, state1 in enumerate(sub_states):
+			# 	for j, state2 in enumerate(sub_states):
+			# 		val = state1.wavefunction.inner(self.mol.make_s2_op()(state2.wavefunction))
+			# 		mini_matrix[i, j] = val
 
 			mini_matrix = numpy.round(mini_matrix, decimals=10)
-			eigvals, eigvecs = numpy.linalg.eigh(mini_matrix)
 
-			for k in range(len(eigvals)):
-				eigvec = eigvecs[:, k]
+			# Diagonalize each connected component separately to prevent
+			# degenerate states from different spatial irreps from mixing
+			components = _get_connected_components(mini_matrix, tol=1e-10)
 
-				new_wfn = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals*2)
-				for coef, state in zip(eigvec, sub_states):
-					new_wfn += coef * state.wavefunction
+			for component in components:
+				sub_matrix = mini_matrix[numpy.ix_(component, component)]
+				eigvals, eigvecs = numpy.linalg.eigh(sub_matrix)
 
-				diagonalised_states.append(FockSpaceState(
-					mol=self.mol,
-					wavefunction=new_wfn,
-					provider=irrep_provider
-				))
+				for k in range(len(eigvals)):
+					eigvec = eigvecs[:, k]
+
+					new_wfn = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals*2)
+					for coef, idx in zip(eigvec, component):
+						new_wfn += coef * sub_states[idx].wavefunction
+
+					diagonalised_states.append(FockSpaceState(
+						mol=self.mol,
+						wavefunction=new_wfn,
+						provider=irrep_provider
+					))
 		if is_dataframe:
 			return FockSpaceState.dataframe(diagonalised_states)
 		return diagonalised_states
 
+def _salc_key(wfn: tequila.QubitWaveFunction, decimals: int = 8) -> tuple:
+	"""Canonical, hashable representation of a wavefunction for O(1) dedup lookups,
+	invariant to overall global phase (states differing only by an overall
+	phase factor represent the same physical state and must hash identically)."""
+
+	items = sorted(wfn.items())  # deterministic order by bitstring
+	if not items:
+		return ()
+
+    # Find the phase of the first nonzero coefficient and divide it out,
+    # so phase-equivalent states collapse to the same canonical key.
+	first_coef = items[0][1]
+	if abs(first_coef) < 1e-15:
+		return ()
+	phase = first_coef / abs(first_coef)
+
+	return tuple(
+		(bitstring, complex(round((coef / phase).real, decimals), round((coef / phase).imag, decimals)))
+		for bitstring, coef in items
+    )
 
 @dataclass
 class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
@@ -113,24 +168,21 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 				resulting_state_list.append(self.pgr.apply(op, state.wavefunction))
 
 			for j, irrep in enumerate(self.pg.character_table.dict.keys()):
-				state_SALC = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals*2)
-				
-				state_SALC_summands: list[tequila.QubitWaveFunction] = []
-				for k, character in enumerate(self.pg.character_table.dict[irrep]):
-					state_SALC_summands.append(character * resulting_state_list[k])
-
 				state_SALC = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals * 2)
-				for wfn in state_SALC_summands:
-					state_SALC += wfn
+				for k, character in enumerate(self.pg.character_table.dict[irrep]):
+					if character != 0:
+						state_SALC += character * resulting_state_list[k]
 				
-				# when an empty QubitWavefunction is normalized, the result is not nescessarily an empty QubitWavefunction
-				if not numpy.allclose(state_SALC.to_array(), tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals*2).to_array()):
+				norm_sq = state_SALC.inner(state_SALC).real
+				if norm_sq > 1e-10:
 					SALC_list.append(state_SALC.normalize())
 
-		# only keep linearly independent states
 		SALC_list_unique: list[tequila.QubitWaveFunction] = []
+		seen_keys: set[tuple] = set()
 		for state in SALC_list:
-			if not any(state.isclose(existing_state) for existing_state in SALC_list_unique):
+			key = _salc_key(state)
+			if key not in seen_keys:
+				seen_keys.add(key)
 				SALC_list_unique.append(state)
 
 		#assert len(SALC_list_unique) == len(state_list), "Assertion failed: the number of unique resulting SALC states is not equal to the number of original states."
