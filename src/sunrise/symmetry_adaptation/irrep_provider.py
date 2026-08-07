@@ -42,12 +42,15 @@ class LocalizedIrrepProvider(IrrepProvider):
 
 	def get_irrep(self, state: 'FockSpaceState') -> str | None:
 		# Use fast bitstring permutation instead of compiled circuits
-		from .symmetrization_procedure import _apply_spatial_permutation_bitstring
+		from .symmetrization_procedure import SymmetryAdaptedLinearCombintationSymmetrization
+
 		n_orbitals = self.mol.n_orbitals
 		chars = []
 		for label in self.pg.character_table.operation_symbols:
 			perm = self._spatial_perms[label]
-			transformed = _apply_spatial_permutation_bitstring(state.wavefunction, perm, n_orbitals)
+			transformed = SymmetryAdaptedLinearCombintationSymmetrization._apply_spatial_permutation_bitstring(
+				state.wavefunction, perm, n_orbitals
+				)
 			expectation = state.wavefunction.inner(transformed).real
 			chars.append(numpy.round(expectation))
 		
