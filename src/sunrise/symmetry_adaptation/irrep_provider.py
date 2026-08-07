@@ -29,13 +29,29 @@ class LocalizedIrrepProvider(IrrepProvider):
 		super().__init__(mol, pg)
 		self._representation: PointGroupRepresentation[tequila.QCircuit, tequila.QubitWaveFunction] = QCircuitRepresentationBuilder(mol, pg).build_qcircuit_representation()
 
+		# Pre-compute spatial permutations for fast irrep evaluation
+		ao_repr = QCircuitRepresentationBuilder(mol, pg).build_ao_permutation_representation()
+		self._spatial_perms = {
+			label: list(numpy.argmax(ao_repr.operations[label], axis=1))
+			for label in pg.character_table.operation_symbols
+		}
 
 	@property
 	def representation(self) -> PointGroupRepresentation[tequila.QCircuit, tequila.QubitWaveFunction]:
 		return self._representation
 
 	def get_irrep(self, state: 'FockSpaceState') -> str | None:
-		character_vector = self.representation.character_vector(state.wavefunction)
+		# Use fast bitstring permutation instead of compiled circuits
+		from .symmetrization_procedure import _apply_spatial_permutation_bitstring
+		n_orbitals = self.mol.n_orbitals
+		chars = []
+		for label in self.pg.character_table.operation_symbols:
+			perm = self._spatial_perms[label]
+			transformed = _apply_spatial_permutation_bitstring(state.wavefunction, perm, n_orbitals)
+			expectation = state.wavefunction.inner(transformed).real
+			chars.append(numpy.round(expectation))
+		
+		character_vector = numpy.array(chars)
 		irrep = self.pg.character_table.vec_to_str(character_vector)
 		return irrep if irrep is not None else None
 	
