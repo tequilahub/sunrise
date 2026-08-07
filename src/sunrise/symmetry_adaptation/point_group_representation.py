@@ -5,7 +5,7 @@ import numpy
 from .point_group import PointGroup
 
 T = TypeVar('T') # The type of the symmetry operation representation, e.g. a 3x3 matrix.
-S = TypeVar('S') # The corresponging state that the symmetry operation acts on, e.g. a 3D vector.
+S = TypeVar('S') # The corresponding state that the symmetry operation acts on, e.g. a 3D vector.
 
 
 @dataclass(frozen=True)

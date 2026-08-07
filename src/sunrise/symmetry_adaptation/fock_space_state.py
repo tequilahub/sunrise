@@ -8,7 +8,7 @@ from tequila import Molecule
 import numpy
 from pandas import DataFrame
 from sunrise.symmetry_adaptation.irrep_provider import IrrepProvider
-
+from functools import cached_property
 from itertools import combinations
 
 def _fixed_popcount_bitstrings(n_qubits: int, n_ones: int) -> Generator[str, None, None]:
@@ -27,9 +27,11 @@ class FockSpaceState:
 	mol: Molecule
 	wavefunction: tequila.QubitWaveFunction
 	irrep_provider: IrrepProvider
+	_S2: float | None = None
+	_irrep: str | None = None
 
 
-	def __init__(self, mol: Molecule, wavefunction: str | tequila.QubitWaveFunction, provider: IrrepProvider):
+	def __init__(self, mol: Molecule, wavefunction: str | tequila.QubitWaveFunction, provider: IrrepProvider, S2=None, irrep=None):
 		self.mol = mol
 
 		if isinstance(wavefunction, str):
@@ -37,6 +39,8 @@ class FockSpaceState:
 		else:
 			self.wavefunction = wavefunction
 		self.irrep_provider = provider
+		self._S2 = S2
+		self._irrep = irrep
 
 
 	@property
@@ -45,41 +49,52 @@ class FockSpaceState:
 		return len([x for x in self.wavefunction.items()]) != 1
 	
 
-	@property
+	@cached_property
 	def bitstring(self) -> str:
 		return str(self.wavefunction)[9:-2] if not self.is_superposition else None
 
 
-	@property
-	def mo_occ(self) -> list[int]:
-		"""Returns the occupation numbers of the molecular orbitals corresponding to the state."""
+	@cached_property
+	def mo_occ(self) -> list[float]:
+		"""Returns the expectation value of the occupation numbers of the molecular orbitals corresponding to the state."""
 
-		if self.is_superposition:
-			return None
-		
-		n_orbitals = len(self.bitstring) // 2
+		n_orbitals = self.mol.n_orbitals
 		mo_occ = [0.0] * n_orbitals
 
-		for i in range(n_orbitals):
-			# Each MO has two qubits: qubit 2*i (alpha) and qubit 2*i+1 (beta)
-			mo_occ[i] = int(self.bitstring[2*i]) + int(self.bitstring[2*i + 1])
+		if not self.is_superposition:
+			for i in range(n_orbitals):
+				# Each MO has two qubits: qubit 2*i (alpha) and qubit 2*i+1 (beta)
+				mo_occ[i] = float(int(self.bitstring[2*i]) + int(self.bitstring[2*i + 1]))
+			return mo_occ
 
-		return mo_occ
+		# For superpositions, compute the weighted average (expectation value)
+		n_qubits = 2 * n_orbitals
+		for bs, coef in self.wavefunction.items():
+			# Format the bitstring to ensure it has the correct leading zeros
+			bs_str = format(int(bs), f'0{n_qubits}b')
+			weight = abs(coef)**2
+			
+			for i in range(n_orbitals):
+				mo_occ[i] += weight * (int(bs_str[2*i]) + int(bs_str[2*i + 1]))
+
+		return [round(x, 4) for x in mo_occ]
 
 	
-	@property
+	@cached_property
 	def m_s(self) -> numpy.float64:
 		"""Returns the total spin projection (m_s or ⟨S_z⟩) of the state."""
 		return numpy.round(self.wavefunction.inner(self.mol.make_sz_op()(self.wavefunction)).real, decimals=10)
 		
 	
-	@property
-	def S2(self) -> numpy.float64:
-		"""Returns the expectation value of the total spin squared operator (⟨S^2⟩) for the state."""
-		return numpy.round(self.wavefunction.inner(self.mol.make_s2_op()(self.wavefunction)).real, decimals=10)
+	@cached_property
+	def S2(self):
+		if self._S2 is not None:
+			return self._S2
+		return numpy.round(self.wavefunction.inner(
+			self.mol.make_s2_op()(self.wavefunction)).real, decimals=10)
 
 
-	@property
+	@cached_property
 	def spin_multiplicity(self) -> int:
 		"""Returns the spin multiplicity of the state, defined by 2S + 1 as string."""
 		
@@ -88,9 +103,10 @@ class FockSpaceState:
 		return spin_type
 
 
-	@property
-	def irrep(self) -> str:
-		"""Returns the irreducible representation of the state as a string."""
+	@cached_property
+	def irrep(self):
+		if self._irrep is not None:
+			return self._irrep
 		return self.irrep_provider.get_irrep(self)
 
 
