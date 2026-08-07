@@ -12,6 +12,16 @@ from .point_group_representation import PointGroupRepresentation
 from .fock_space_state import FockSpaceState
 from .qcircuit_representation_builder import QCircuitRepresentationBuilder
 
+@dataclass
+class SymmetrizationProcedure(ABC):
+
+	mol: Molecule
+
+	@abstractmethod
+	def symmetrize(self, states: pd.DataFrame) -> pd.DataFrame:
+		"""Given a state in Fock space, returns a new state that is a symmetry-adapted linear combination of the original state and its images under the symmetry operations of the point group."""
+		pass
+
 def _get_connected_components(matrix, tol=1e-10):
     """Finds the connected components of a block-diagonal matrix."""
     n = matrix.shape[0]
@@ -31,17 +41,6 @@ def _get_connected_components(matrix, tol=1e-10):
                         stack.append(neighbor)
             components.append(component)
     return components
-
-@dataclass
-class SymmetrizationProcedure(ABC):
-
-	mol: Molecule
-
-	@abstractmethod
-	def symmetrize(self, states: pd.DataFrame) -> pd.DataFrame:
-		"""Given a state in Fock space, returns a new state that is a symmetry-adapted linear combination of the original state and its images under the symmetry operations of the point group."""
-		pass
-
 
 @dataclass
 class SpinSymmetrizationProcedure(SymmetrizationProcedure):
@@ -81,23 +80,25 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 					mini_matrix[i, j] = val
 					mini_matrix[j, i] = numpy.conj(val)  # Hermitian
 
-			# for i, state1 in enumerate(sub_states):
-			# 	for j, state2 in enumerate(sub_states):
-			# 		val = state1.wavefunction.inner(self.mol.make_s2_op()(state2.wavefunction))
-			# 		mini_matrix[i, j] = val
-
 			mini_matrix = numpy.round(mini_matrix, decimals=10)
 
 			# Diagonalize each connected component separately to prevent
 			# degenerate states from different spatial irreps from mixing
+			# It looks at where the non-zero matrix elements are, and since
+			# the off-diagonal blocks are zero, it naturally separates states from different irreps
 			components = _get_connected_components(mini_matrix, tol=1e-10)
 
 			for component in components:
 				sub_matrix = mini_matrix[numpy.ix_(component, component)]
 				eigvals, eigvecs = numpy.linalg.eigh(sub_matrix)
 
+				# Compute irrep ONCE for the entire component
+				# Use the first state in the component as representative
+				component_irrep = sub_states[component[0]].irrep
+
 				for k in range(len(eigvals)):
 					eigvec = eigvecs[:, k]
+					s2_value = float(numpy.round(eigvals[k], decimals=10))
 
 					new_wfn = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals*2)
 					for coef, idx in zip(eigvec, component):
@@ -106,7 +107,9 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 					diagonalised_states.append(FockSpaceState(
 						mol=self.mol,
 						wavefunction=new_wfn,
-						provider=irrep_provider
+						provider=irrep_provider,
+						S2=s2_value,
+						irrep=component_irrep,  # Pass irrep directly
 					))
 		if is_dataframe:
 			return FockSpaceState.dataframe(diagonalised_states)
@@ -133,6 +136,79 @@ def _salc_key(wfn: tequila.QubitWaveFunction, decimals: int = 8) -> tuple:
 		for bitstring, coef in items
     )
 
+def _apply_spatial_permutation_bitstring(
+    wfn: tequila.QubitWaveFunction, 
+    perm: list[int], 
+    n_orbitals: int
+) -> tequila.QubitWaveFunction:
+    """
+    Apply a spatial orbital permutation directly to bitstrings.
+    
+    Parameters
+    ----------
+    wfn : QubitWaveFunction
+        Input wavefunction.
+    perm : list[int]
+        Spatial orbital permutation. perm[i] = j means orbital i maps to orbital j.
+    n_orbitals : int
+        Number of spatial orbitals.
+    """
+    n_qubits = 2 * n_orbitals
+    result_terms = {}
+    
+    for bitstring, coef in wfn.items():
+        # Get the bitstring as a string of 0s and 1s
+        bs_int = int(bitstring)
+        bs_str = format(bs_int, f'0{n_qubits}b')
+        
+        # Apply spatial permutation and track occupied spin-orbitals
+        new_bits = [0] * n_qubits
+        occupied_original = []
+        occupied_new = []
+        
+        for i in range(n_orbitals):
+            alpha = int(bs_str[2*i])
+            beta = int(bs_str[2*i+1])
+            j = perm[i]
+            
+            if alpha:
+                new_bits[2*j] = 1
+                occupied_original.append(2*i)
+                occupied_new.append(2*j)
+            if beta:
+                new_bits[2*j+1] = 1
+                occupied_original.append(2*i+1)
+                occupied_new.append(2*j+1)
+        
+        # Compute fermionic sign: parity of permutation needed to sort occupied_new
+        # Count inversions in occupied_new
+        inversions = 0
+        for a in range(len(occupied_new)):
+            for b in range(a+1, len(occupied_new)):
+                if occupied_new[a] > occupied_new[b]:
+                    inversions += 1
+        
+        sign = (-1) ** inversions
+        
+        # Build new bitstring integer
+        new_bs_int = 0
+        for k, bit in enumerate(new_bits):
+            if bit:
+                new_bs_int |= (1 << (n_qubits - 1 - k))
+        
+        # Accumulate
+        new_bs_str = format(new_bs_int, f'0{n_qubits}b')
+        result_terms[new_bs_str] = result_terms.get(new_bs_str, 0) + sign * coef
+    
+    # Build result wavefunction
+    result = tequila.QubitWaveFunction(n_qubits=n_qubits)
+    for bs_str, c in result_terms.items():
+        if abs(c) > 1e-15:
+            result += c * tequila.QubitWaveFunction.from_string(f"|{bs_str}>")
+    
+    return result
+
+
 @dataclass
 class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 	"""A symmetrization procedure that symmetrizes states by constructing symmetry-adapted linear combinations."""
@@ -143,6 +219,13 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 	def __post_init__(self):
 		if self.pgr is None:
 			self.pgr = QCircuitRepresentationBuilder(self.mol, self.pg).build_qcircuit_representation()
+		
+		# Pre-compute spatial permutations for fast bitstring application
+		ao_repr = QCircuitRepresentationBuilder(self.mol, self.pg).build_ao_permutation_representation()
+		self._spatial_perms = {
+			label: list(numpy.argmax(ao_repr.operations[label], axis=1))
+			for label in self.pg.character_table.operation_symbols
+		}
 
 	def symmetrize(self, states: list[FockSpaceState] | pd.DataFrame) -> list[FockSpaceState] | pd.DataFrame:
 		is_dataframe = isinstance(states, pd.DataFrame)
@@ -158,14 +241,19 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 
 		# assumes the representation as quantum circuit
 		SALC_list: list[tequila.QubitWaveFunction] = []
+		
+		# Get number of orbitals once outside the loop
+		n_orbitals = self.mol.n_orbitals
 
 		for state in state_list:
 			# assumes a consistent ordering of the operations
 			resulting_state_list: list[tequila.QubitWaveFunction] = []
 
-			# apply all symmetry operations to the state
-			for op_label, op in self.pgr.operations.items():
-				resulting_state_list.append(self.pgr.apply(op, state.wavefunction))
+			# apply all symmetry operations using fast bitstring permutations
+			# (Iterating over operation_symbols also guarantees strict alignment with the character table)
+			for op_label in self.pg.character_table.operation_symbols:
+				perm = self._spatial_perms[op_label]
+				resulting_state_list.append(_apply_spatial_permutation_bitstring(state.wavefunction, perm, n_orbitals))
 
 			for j, irrep in enumerate(self.pg.character_table.dict.keys()):
 				state_SALC = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals * 2)
