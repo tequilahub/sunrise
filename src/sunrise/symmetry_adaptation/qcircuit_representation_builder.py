@@ -545,11 +545,15 @@ class QCircuitRepresentationBuilder:
 				return False
 			return tequila.QubitWaveFunction.isclose(state1, state2)
 
-		def _apply(op, state):
-			assert op.n_qubits == state.n_qubits, f"Operation and state have different number of qubits: {op.n_qubits} vs {state.n_qubits}"
-			return tequila.simulate(op, initial_state=state)
+		def _apply(compiled_op, state):
+			return compiled_op(initial_state=state)
+
+		# Compile each operation's circuit ONCE here, not per-state in _apply.
+		compiled_operations: dict[str, tequila.BaseBackendCircuit] = {
+			l: tequila.compile(U) for l, U in qcircuit_representation_operations.items()
+		}
 
 		return PointGroupRepresentation(
 			application_function=_apply,
 			is_close_function=_is_close,
-			operations=qcircuit_representation_operations)
+			operations=compiled_operations)

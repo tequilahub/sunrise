@@ -5,7 +5,7 @@ import numpy
 from .point_group import PointGroup
 
 T = TypeVar('T') # The type of the symmetry operation representation, e.g. a 3x3 matrix.
-S = TypeVar('S') # The corresponging state that the symmetry operation acts on, e.g. a 3D vector.
+S = TypeVar('S') # The corresponding state that the symmetry operation acts on, e.g. a 3D vector.
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,10 @@ class PointGroupRepresentation(Generic[T, S]):
 		operations in the representation. These are assumed to be either 1 or -1 here.
 		"""
 
-		return numpy.array([ 1 if self.is_close_function(self.apply(op, state), state) else -1 for op in self.operations.values() ])
+		# Compute the expectation value <state | op | state> for each operation.
+		# For 1D irreps the eigenvalues are ±1, so rounding cleanly handles
+		# numerical noise and global phases from compiled circuits.
+		return numpy.array([ numpy.round(state.inner(self.apply(op, state)).real) for op in self.operations.values() ])
 
 
 	@classmethod
