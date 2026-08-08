@@ -107,6 +107,13 @@ class FockSpaceState:
 	def irrep(self):
 		if self._irrep is not None:
 			return self._irrep
+		if not isinstance(self.irrep_provider, IrrepProvider):
+			raise ValueError(
+				f"Cannot determine the irrep of this FockSpaceState: irrep_provider is "
+				f"{self.irrep_provider!r}, not an IrrepProvider. Construct the state with a real "
+				f"IrrepProvider (e.g. LocalizedIrrepProvider or PySCFCanonicalIrrepProvider) if irrep "
+				f"information is needed."
+			)
 		return self.irrep_provider.get_irrep(self)
 
 

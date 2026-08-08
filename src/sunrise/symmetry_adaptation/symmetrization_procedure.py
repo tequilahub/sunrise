@@ -55,10 +55,9 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 		else:
 			state_list = list(states)
 
-		# assume the IrrepProvider is the same for all states
+		# assume the IrrepProvider is the same for all states; it is not used in the S2
+		# diagonalization below, only propagated to the output states.
 		irrep_provider = state_list[0].irrep_provider
-		if irrep_provider is None or not isinstance(irrep_provider, IrrepProvider):
-			raise ValueError(f"IrrepProvider is an illegal argument: {irrep_provider}.")
 
 		# Create an empty dataframe with the same columns as df
 		diagonalised_states: list[FockSpaceState] = []
@@ -234,10 +233,10 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		else:
 			state_list = list(states)
 
-		# assume the IrrepProvider is the same for all states
+		# assume the IrrepProvider is the same for all states; the SALC construction below
+		# uses self.pg's character table, not irrep_provider, which is only propagated to
+		# the output states.
 		irrep_provider = state_list[0].irrep_provider
-		if irrep_provider is None or not isinstance(irrep_provider, IrrepProvider):
-			raise ValueError(f"IrrepProvider is an illegal argument: {irrep_provider}.")
 
 		# assumes the representation as quantum circuit
 		SALC_list: list[tequila.QubitWaveFunction] = []
