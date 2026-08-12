@@ -4,9 +4,10 @@ import tequila as tq
 from numpy.ma.core import shape
 from tequila import QubitWaveFunction, TequilaException
 from tequila.objective.objective import Objective, Variables, Variable
-
-import fqe
-
+try:
+    import fqe
+except ImportError:
+    pass
 from sunrise.expval.fqe_utils import *
 from sunrise.expval.fermionic_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
@@ -534,7 +535,7 @@ def apply_phase(braket: FQEBraKet, exct, exct_variable, variable, index_internal
 
 
 
-def set_init_state(wfn: fqe.Wavefunction, n_ele, n_orb,
+def set_init_state(wfn: 'fqe.Wavefunction', n_ele, n_orb,
                    init_state: Union[List[Union[Tuple[str, int], QubitWaveFunction, np.array]], QubitWaveFunction],
                    bin_dict: dict) -> None:
     coeff = wfn.get_coeff((n_ele, 0))
