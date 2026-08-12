@@ -3,7 +3,7 @@ from pyscf.tools import cubegen
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase
 from sunrise.miscellaneous.bar import giuseppe_bar
 import sys
-from numpy import ndarray,zeros,ix_,einsum
+from numpy import ndarray,zeros,ix_
 
 def plot_MO(molecule:QuantumChemistryBase, filename:str = None, orbital:list[int] = None, use_active:bool = True, print_orbital:bool = True, density:bool = False, mep:bool = False, rdm1:ndarray = None, exclude_core:bool = False):
     """
@@ -46,7 +46,7 @@ def plot_MO(molecule:QuantumChemistryBase, filename:str = None, orbital:list[int
             if not rdm1.shape[0] == molecule.integral_manager.orbital_coefficients.shape[1]: # already provided on frozen_core = False
                 assert rdm1.shape[0] == molecule.n_orbitals, f"RDM1 provided with unexpected shape ({rdm1.shape}), expected either the number of active orbitals ({molecule.n_orbitals})\n or the number of total orbitals ({molecule.integral_manager.orbital_coefficients.shape[1]})"
                 rdm = zeros(shape = (mo_coeff.shape[1], mo_coeff.shape[1])) # rectangular mo_coeffs
-                if not use_active:
+                if not exclude_core:
                     for i in molecule.integral_manager.active_space.frozen_reference_orbitals:
                         rdm[i,i] = 2 # NOTE: Experimental. Including contribution only from the active orbitals, expected to be more useful on density than mep
                 rdm[ix_(molecule.integral_manager.active_space.active_orbitals, molecule.integral_manager.active_space.active_orbitals)] = rdm1
