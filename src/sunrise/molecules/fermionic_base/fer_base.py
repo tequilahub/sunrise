@@ -4,8 +4,8 @@ from tequila import TequilaException, BitString, TequilaWarning
 from tequila.hamiltonian import QubitHamiltonian
 from sunrise.fermionic_operations import FCircuit
 from sunrise.fermionic_operations import gates
-from tequila.objective.objective import Variable, Variables,Objective
-from tequila import QTensor
+from tequila.objective.objective import Variable, Variables, Objective
+from tequila import QTensor, QubitWaveFunction
 
 # from tequila.simulators.simulator_api import simulate
 from ...expval.minimize import simulate
@@ -463,8 +463,8 @@ class FermionicBase(QuantumChemistryBase):
         assert len(active) + len(core) == len(self.integral_manager.orbitals)
         if "reference_orbitals" in kwargs:
             reference_orbitals = kwargs["reference_orbitals"]
-            kwargs.pop()
-            assert len(reference_orbitals) == len(self.parameters.total_n_electrons)//2,f'Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons//2}, received {len(reference_orbitals)}'
+            kwargs.pop("reference_orbitals")
+            assert len(reference_orbitals) == self.parameters.total_n_electrons//2,f'Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons//2}, received {len(reference_orbitals)}'
         else:
             reference_orbitals = [i.idx_total for i in self.integral_manager.reference_orbitals]
         to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
@@ -621,9 +621,11 @@ class FermionicBase(QuantumChemistryBase):
         n_state = [0]*len(state)
         for i in range(len(state)):
             n_state[d[i]] = state[i]
-        n_state = prepare_product_state(BitString.from_array(n_state)) 
+        w = QubitWaveFunction(n_qubits=2*self.n_orbitals,dense=False)
+        w[BitString.from_array(n_state)] = 1.
+        # n_state = prepare_product_state(BitString.from_array(n_state)) 
         U = FCircuit()
-        U.initial_state = n_state
+        U.initial_state = w
         # prevent trace out in direct wfn simulation
         U.n_qubits = self.n_orbitals * 2
         return U
@@ -949,7 +951,7 @@ class FermionicBase(QuantumChemistryBase):
 
         U = FCircuit()
         if include_reference_ansatz:
-            U.initial_state = self.prepare_reference().initial_state
+            U = self.prepare_reference()
 
         amplitudes = initial_amplitudes
         if hasattr(initial_amplitudes, "lower"):
