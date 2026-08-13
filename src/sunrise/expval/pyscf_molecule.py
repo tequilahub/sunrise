@@ -33,7 +33,8 @@ def from_tequila(molecule:QuantumChemistryBase,**kwargs)->pyscf.gto.Mole: #TODO:
     else:
         mol.symmetry = True
     mol.symmetry = False
-
+    if 'cart' in kwargs:
+        mol.cart = kwargs['cart']
     mol.build(parse_arg=False)
     mol.ao2mo(mo_coeffs=molecule.integral_manager.orbital_coefficients)
     mol.build()
