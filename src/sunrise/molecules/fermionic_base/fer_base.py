@@ -5,7 +5,7 @@ from tequila.hamiltonian import QubitHamiltonian
 from sunrise.fermionic_operations import FCircuit
 from sunrise.fermionic_operations import gates
 from tequila.objective.objective import Variable, Variables, Objective
-from tequila import QTensor, QubitWaveFunction
+from tequila import QTensor, QubitWaveFunction, BitNumbering
 
 # from tequila.simulators.simulator_api import simulate
 from ...expval.minimize import simulate
@@ -621,7 +621,7 @@ class FermionicBase(QuantumChemistryBase):
         n_state = [0]*len(state)
         for i in range(len(state)):
             n_state[d[i]] = state[i]
-        w = QubitWaveFunction(n_qubits=2*self.n_orbitals,dense=False)
+        w = QubitWaveFunction(n_qubits=2*self.n_orbitals,dense=False, numbering=BitNumbering.LSB)
         w[BitString.from_array(n_state)] = 1.
         # n_state = prepare_product_state(BitString.from_array(n_state)) 
         U = FCircuit()

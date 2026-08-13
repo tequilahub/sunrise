@@ -1,7 +1,7 @@
 from __future__ import annotations
 from tequila.circuit._gates_impl import assign_variable
 from tequila.circuit.gates import QubitExcitationImpl,X,Phase
-from tequila import Variable,BitString
+from tequila import Variable,BitString,BitNumbering
 from tequila.quantumchemistry.chemistry_tools import FermionicGateImpl
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase
 from tequila.utils.exceptions import TequilaException, TequilaWarning
@@ -479,7 +479,7 @@ class FCircuit:
         if n_orb:
             include_reference = True
             n_state = [0]*2*n_orb
-            reference = QubitWaveFunction(n_qubits=2*n_orb, dense=False)
+            reference = QubitWaveFunction(n_qubits=2*n_orb, dense=False,numbering=BitNumbering.LSB)
         else: 
             include_reference = False
             reference = None

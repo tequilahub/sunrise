@@ -4,10 +4,7 @@ import tequila as tq
 from numpy.ma.core import shape
 from tequila import QubitWaveFunction, TequilaException
 from tequila.objective.objective import Objective, Variables, Variable
-try:
-    import fqe
-except ImportError:
-    pass
+import fqe
 from sunrise.expval.fqe_utils import *
 from sunrise.expval.fermionic_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
