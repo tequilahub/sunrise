@@ -102,7 +102,7 @@ class PointGroup:
 #	sv	sy
 #	sd	sx
 
-PointGroup.D2h: PointGroup = PointGroup(
+PointGroup.D2h = PointGroup(
 		schoenflies_label="D2h",
 		character_table=CharacterTable([IrreducibleRepresentation(x, numpy.array(y)) for (x, y) in [
 				("Ag",  [1,  1,  1,  1,  1,  1,  1,  1]),
@@ -115,7 +115,7 @@ PointGroup.D2h: PointGroup = PointGroup(
 				("B3u",	[1, -1,  1, -1, -1,  1,  1, -1]),
 			]],	operation_symbols=["E", "C2", "C2\'", "C2\"", "i", "sh", "sv", "sd"]))
 
-PointGroup.C2h: PointGroup = PointGroup(
+PointGroup.C2h = PointGroup(
 		schoenflies_label="C2h",
 		character_table=CharacterTable([IrreducibleRepresentation(x, numpy.array(y)) for (x, y) in [
 				("Ag",	[1,  1,  1,  1]),
@@ -124,7 +124,7 @@ PointGroup.C2h: PointGroup = PointGroup(
 				("Bu",	[1, -1, -1,  1]),
 			]],	operation_symbols=["E", "C2", "i", "sh"]))
 
-PointGroup.C2v: PointGroup = PointGroup(
+PointGroup.C2v = PointGroup(
 		schoenflies_label="C2v",
 		character_table=CharacterTable([IrreducibleRepresentation(x, numpy.array(y)) for (x, y) in [
 				("A1",	[1,  1,  1,  1]),
@@ -133,7 +133,7 @@ PointGroup.C2v: PointGroup = PointGroup(
 				("B2",	[1, -1, -1,  1]),
 			]],	operation_symbols=["E", "C2", "sv", "sd"]))
 
-PointGroup.D2: PointGroup = PointGroup(
+PointGroup.D2 = PointGroup(
 		schoenflies_label="D2",
 		character_table=CharacterTable([IrreducibleRepresentation(x, numpy.array(y)) for (x, y) in [
 				("A",	[1, 1, 1, 1]),
@@ -142,28 +142,28 @@ PointGroup.D2: PointGroup = PointGroup(
 				("B3",	[1, -1,  1, -1]),
 			]],	operation_symbols=["E", "C2", "C2\'", "C2\""]))
 
-PointGroup.Cs: PointGroup = PointGroup(
+PointGroup.Cs = PointGroup(
 		schoenflies_label="Cs",
 		character_table=CharacterTable([IrreducibleRepresentation(x, numpy.array(y)) for (x, y) in [
 				("A'", [1, 1]),
 				("A\"", [1, -1]),
 			]],	operation_symbols=["E", "sh"]))
 
-PointGroup.Ci: PointGroup = PointGroup(
+PointGroup.Ci = PointGroup(
 		schoenflies_label="Ci",
 		character_table=CharacterTable([IrreducibleRepresentation(x, numpy.array(y)) for (x, y) in [
 				("Ag", [1, 1]),
 				("Au", [1, -1]),
 			]],	operation_symbols=["E", "i"]))
 
-PointGroup.C2: PointGroup = PointGroup(
+PointGroup.C2 = PointGroup(
 		schoenflies_label="C2",
 		character_table=CharacterTable([IrreducibleRepresentation(x, numpy.array(y)) for (x, y) in [
 				("A", [1, 1]),
 				("B", [1, -1]),
 			]],	operation_symbols=["E", "C2"]))
 
-PointGroup.C1: PointGroup = PointGroup(
+PointGroup.C1 = PointGroup(
 		schoenflies_label="C1",
 		character_table=CharacterTable([IrreducibleRepresentation(x, numpy.array(y)) for (x, y) in [
 				("A", [1]),

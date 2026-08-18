@@ -14,7 +14,7 @@ class IrrepProviderBase(ABC):
 	pg: PointGroup
 	
 	@abstractmethod
-	def get_irrep(self, state: 'FockSpaceState') -> str:
+	def get_irrep(self, state) -> str:
 		pass
 
 
@@ -40,7 +40,7 @@ class LocalizedIrrepProvider(IrrepProviderBase):
 	def representation(self) -> PointGroupRepresentation[tequila.QCircuit, tequila.QubitWaveFunction]:
 		return self._representation
 
-	def get_irrep(self, state: 'FockSpaceState') -> str | None:
+	def get_irrep(self, state) -> str | None:
 		# Use fast bitstring permutation instead of compiled circuits
 		from .symmetrization_procedure import SymmetryAdaptedLinearCombintationSymmetrization
 
@@ -101,7 +101,7 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 		return self._mol_irreps
 	
 
-	def get_irrep(self, state: 'FockSpaceState') -> str | None:
+	def get_irrep(self, state) -> str | None:
 		if state.mo_occ is None:
 			return None
 
