@@ -350,9 +350,10 @@ class FermionicSWAP:
 		------
 		Francisco Javier Del Arco Santos
 		"""
-		U = self.mol.make_excitation_gate(indices=(i,j),angle=numpy.pi)
-		return U 
-		#return tequila.gates.CNOT(target=i, control=j) + tequila.gates.CNOT(target=j, control=i) + tequila.gates.Rz(target=i, angle=pi) + tequila.gates.CNOT(target=i, control=j)
+		# TODO: check if fswap is used
+		# U = self.mol.make_excitation_gate(indices=(i,j),angle=numpy.pi)
+		# return U 
+		return tequila.gates.CNOT(target=i, control=j) + tequila.gates.CNOT(target=j, control=i) + tequila.gates.Rz(target=i, angle=numpy.pi) + tequila.gates.CNOT(target=i, control=j)
 
 
 	def f_swap(self, i: int, j: int) -> tequila.QCircuit:
@@ -460,6 +461,22 @@ class QCircuitRepresentationBuilder:
 
 		from pyscf import gto, scf
 
+		def get_number_of_core_electrons(n):
+			result =  0
+			if n > 2:
+				result += 2
+			if n > 10:
+				result += 10 - 2
+			if n > 18:
+				result += 18 - 10
+			if n > 36:
+				result += 36 - 18
+			if n > 54:
+				result += 54 - 36
+			if n > 86:
+				result += 86 - 54
+			return result
+
 		atomic_permutation_representation = self.build_atomic_permutation_representation()
 
 		# This can be presumed as an NDArray
@@ -473,26 +490,7 @@ class QCircuitRepresentationBuilder:
 			pyscf_mol = gto.M(atom=f'{atom} 0 0 0', basis=self.mol.parameters.basis_set, spin=None, verbose=0)
 			mf = scf.UHF(pyscf_mol).run() # NOTE: check if RHF works equally well
 
-			# Compute integrals manually
-			mo_coeff = mf.mo_coeff[0]  # alpha MOs for UHF
-			h_ao = pyscf_mol.intor("int1e_kin") + pyscf_mol.intor("int1e_nuc")
-			g_ao = pyscf_mol.intor("int2e", aosym="s1")
-			S   = pyscf_mol.intor_symmetric("int1e_ovlp")
-
-			# Pass them to tequila, bypassing the internal mol build
-			# the attributes are the same to the constructor in tequila
-			tq_mol = tequila.Molecule(
-				geometry=f'{atom} 0 0 0',
-				basis_set=self.mol.parameters.basis_set,
-				one_body_integrals=h_ao,
-				two_body_integrals=tequila.quantumchemistry.NBodyTensor(elems=g_ao, ordering="mulliken"),
-				overlap_integrals=S,
-				orbital_coefficients=mo_coeff,
-				nuclear_repulsion=pyscf_mol.energy_nuc(),
-				frozen_core=self.mol.parameters.frozen_core
-			)
-
-			atom_num_aos.append(tq_mol.n_orbitals)
+			atom_num_aos.append(mf.mo_coeff.shape[1] - get_number_of_core_electrons(pyscf_mol.atom_charges()[0])//2)
 
 		# Alternative: statically determine the number of active spatial orbitals for STO-3G based on num_active_spatial_orbitals
 		#atom_num_aos: list[int] = GeometricTransformationHelper.num_active_spatial_orbitals([gto.charge(atom) for atom in GeometricTransformationHelper.atoms_from_molecule(self.mol)[0]])

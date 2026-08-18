@@ -3,7 +3,7 @@ import sunrise as sun
 import numpy as np
 import pytest
 
-from sunrise.symmetry_adaptation import PointGroup, QCircuitRepresentationBuilder, FockSpaceState, PySCFCanonicalIrrepProvider, LocalizedIrrepProvider, SymmetryAdaptedLinearCombintationSymmetrization, SpinSymmetrizationProcedure
+from sunrise.symmetry_adaptation import PointGroup, QCircuitRepresentationBuilder, FockSpaceState, IrrepProvider, SymmetryAdaptedLinearCombintationSymmetrization, SpinSymmetrizationProcedure
 
 
 
@@ -36,7 +36,7 @@ def test_point_group_correctness() -> None:
 def test_representation_builder(molecule_pointgroup) -> None:
 	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
 	pg = PointGroup.from_pyscf(molecule_pointgroup[0])
-	provider_canonical = PySCFCanonicalIrrepProvider(mol, pg)
+	provider_canonical = IrrepProvider(mol, pg, "canon")
 	states = FockSpaceState.non_ionic_states(mol, provider_canonical)
 
 	rep_ao = QCircuitRepresentationBuilder(mol, pg).build_ao_permutation_representation()
@@ -82,7 +82,7 @@ def test_spin_symmetrization(molecule_pointgroup) -> None:
 	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf(molecule_pointgroup[0])
 
-	provider_canonical = PySCFCanonicalIrrepProvider(mol, pg)
+	provider_canonical = IrrepProvider(mol, pg, "canon")
 	states_list = FockSpaceState.non_ionic_states(mol, provider_canonical)
 	
 	symm_list = SpinSymmetrizationProcedure(mol).symmetrize(states_list)
@@ -96,7 +96,7 @@ def test_spin_symmetrization(molecule_pointgroup) -> None:
 def test_spin_symmetrization_correctness() -> None:
 	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("D2h")
-	provider_canonical = PySCFCanonicalIrrepProvider(mol, pg)
+	provider_canonical = IrrepProvider(mol, pg, "canon")
 	states_list = FockSpaceState.non_ionic_states(mol, provider_canonical)
 	symm_list = SpinSymmetrizationProcedure(mol).symmetrize(states_list)
 	rep_qcircuit = QCircuitRepresentationBuilder(mol, pg).build_qcircuit_representation()
@@ -123,7 +123,7 @@ def test_SALC_symmetrization(molecule_pointgroup) -> None:
 	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf(molecule_pointgroup[0])
 
-	provider_localized = LocalizedIrrepProvider(mol, pg)
+	provider_localized = IrrepProvider(mol, pg, "loc")
 	states_list = FockSpaceState.non_ionic_states(mol, provider_localized)
 	
 	symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol, pg).symmetrize(states_list)
@@ -137,7 +137,7 @@ def test_SALC_symmetrization_correctness() -> None:
 	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("D2h")
 
-	provider_localized = LocalizedIrrepProvider(mol, pg)
+	provider_localized = IrrepProvider(mol, pg, "loc")
 	states_list = FockSpaceState.non_ionic_states(mol, provider_localized)
 	
 	symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol, pg).symmetrize(states_list)

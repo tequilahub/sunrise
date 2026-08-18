@@ -9,7 +9,7 @@ from .qcircuit_representation_builder import QCircuitRepresentationBuilder
 
 
 @dataclass
-class IrrepProvider(ABC):
+class IrrepProviderBase(ABC):
 	mol: Molecule
 	pg: PointGroup
 	
@@ -18,7 +18,7 @@ class IrrepProvider(ABC):
 		pass
 
 
-class LocalizedIrrepProvider(IrrepProvider):
+class LocalizedIrrepProvider(IrrepProviderBase):
 	"""
 	An irrep provider that determines the irreducible representation of a state by directly
 	comparing the effect of the symmetry operations on the state to the character table.
@@ -60,7 +60,7 @@ class LocalizedIrrepProvider(IrrepProvider):
 	
 
 
-class PySCFCanonicalIrrepProvider(IrrepProvider):
+class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 	"""
 	An irrep provider that uses PySCF to determine the irreducible representation of a state in the canonical molecular orbital basis.
 	"""
@@ -112,3 +112,23 @@ class PySCFCanonicalIrrepProvider(IrrepProvider):
 		
 		irrep = self.pg.character_table.vec_to_str(character_vector)
 		return irrep if irrep is not None else None
+
+
+
+SUPPORTED_IRREP_PROVIDERS = ["loc", "canon"]
+INSTALLED_IRREP_PROVIDERS = {"loc": LocalizedIrrepProvider, "canon": PySCFCanonicalIrrepProvider}
+def show_available_modules():
+    print("Available Irrep Providers")
+    for k in INSTALLED_IRREP_PROVIDERS.keys():
+        print(k)
+
+def show_supported_modules():
+    print(SUPPORTED_IRREP_PROVIDERS)
+
+# TODO: change "provider" with a better keyword
+def IrrepProvider(mol: Molecule, pg: PointGroup, provider:str="canon", *args, **kwargs) -> IrrepProviderBase:
+    r'''
+    ADD SOMETHING
+    '''
+    #any kwargs and circuit form should be managed inside each class
+    return INSTALLED_IRREP_PROVIDERS[provider.lower()](mol=mol, pg=pg, *args,**kwargs) 

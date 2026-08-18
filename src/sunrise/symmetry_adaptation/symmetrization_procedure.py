@@ -6,7 +6,7 @@ from tequila import Molecule
 import pandas as pd
 from itertools import groupby, combinations
 import numpy
-from .irrep_provider import IrrepProvider
+from .irrep_provider import IrrepProviderBase
 from .point_group import PointGroup
 from .point_group_representation import PointGroupRepresentation
 from .fock_space_state import FockSpaceState
@@ -55,7 +55,7 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 		else:
 			state_list = list(states)
 
-		# assume the IrrepProvider is the same for all states; it is not used in the S2
+		# assume the IrrepProviderBase is the same for all states; it is not used in the S2
 		# diagonalization below, only propagated to the output states.
 		irrep_provider = state_list[0].irrep_provider
 
@@ -233,7 +233,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		else:
 			state_list = list(states)
 
-		# assume the IrrepProvider is the same for all states; the SALC construction below
+		# assume the IrrepProviderBase is the same for all states; the SALC construction below
 		# uses self.pg's character table, not irrep_provider, which is only propagated to
 		# the output states.
 		irrep_provider = state_list[0].irrep_provider

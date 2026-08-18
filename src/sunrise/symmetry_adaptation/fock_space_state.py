@@ -7,7 +7,7 @@ import tequila
 from tequila import Molecule
 import numpy
 from pandas import DataFrame
-from sunrise.symmetry_adaptation.irrep_provider import IrrepProvider
+from sunrise.symmetry_adaptation.irrep_provider import IrrepProviderBase
 from functools import cached_property
 from itertools import combinations
 
@@ -26,12 +26,12 @@ class FockSpaceState:
 
 	mol: Molecule
 	wavefunction: tequila.QubitWaveFunction
-	irrep_provider: IrrepProvider
+	irrep_provider: IrrepProviderBase
 	_S2: float | None = None
 	_irrep: str | None = None
 
 
-	def __init__(self, mol: Molecule, wavefunction: str | tequila.QubitWaveFunction, provider: IrrepProvider, S2=None, irrep=None):
+	def __init__(self, mol: Molecule, wavefunction: str | tequila.QubitWaveFunction, provider: IrrepProviderBase, S2=None, irrep=None):
 		self.mol = mol
 
 		if isinstance(wavefunction, str):
@@ -107,11 +107,11 @@ class FockSpaceState:
 	def irrep(self):
 		if self._irrep is not None:
 			return self._irrep
-		if not isinstance(self.irrep_provider, IrrepProvider):
+		if not isinstance(self.irrep_provider, IrrepProviderBase):
 			raise ValueError(
 				f"Cannot determine the irrep of this FockSpaceState: irrep_provider is "
-				f"{self.irrep_provider!r}, not an IrrepProvider. Construct the state with a real "
-				f"IrrepProvider (e.g. LocalizedIrrepProvider or PySCFCanonicalIrrepProvider) if irrep "
+				f"{self.irrep_provider!r}, not an IrrepProviderBase. Construct the state with a real "
+				f"IrrepProviderBase (e.g. LocalizedIrrepProvider or PySCFCanonicalIrrepProvider) if irrep "
 				f"information is needed."
 			)
 		return self.irrep_provider.get_irrep(self)
@@ -127,21 +127,21 @@ class FockSpaceState:
 		)
 	
 	@classmethod
-	def all_states(cls, mol: Molecule, provider: IrrepProvider) -> list['FockSpaceState']:
+	def all_states(cls, mol: Molecule, provider: IrrepProviderBase) -> list['FockSpaceState']:
 		"""Generates all possible Fock space states for a given molecule."""
 		return cls.by_filter(mol, provider)
 	
 	@classmethod
-	def non_ionic_states(cls, mol: Molecule, provider: IrrepProvider) -> list['FockSpaceState']:
+	def non_ionic_states(cls, mol: Molecule, provider: IrrepProviderBase) -> list['FockSpaceState']:
 		"""Generates all non-ionic Fock space states for a given molecule."""
 		n_qubits = 2 * mol.n_orbitals
 		gen = _fixed_popcount_bitstrings(n_qubits, mol.n_electrons)
 		return cls.by_filter(mol, provider, bitstring_generator=gen)
 	
 	@classmethod
-	def by_filter(cls, mol: Molecule, provider: IrrepProvider, mo_occ: list[int] | None = None, m_s: int | None = None, S2: int | None = None, spin_multiplicity: str | None = None, irrep: str | None = None, non_ionic: bool = False, max_count: int | None = None, bitstring_generator: Generator[str, None, None] | None = None) -> list['FockSpaceState']:
+	def by_filter(cls, mol: Molecule, provider: IrrepProviderBase, mo_occ: list[int] | None = None, m_s: int | None = None, S2: int | None = None, spin_multiplicity: str | None = None, irrep: str | None = None, non_ionic: bool = False, max_count: int | None = None, bitstring_generator: Generator[str, None, None] | None = None) -> list['FockSpaceState']:
 		"""Efficiently generates Fock space states for a given molecule taking various filters into account."""
-		import pyscf
+		# import pyscf
 
 		def mo_occ_bitstring_generator(values: list[int]) -> Generator[str, Any, None]:
 			"""
