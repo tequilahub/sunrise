@@ -3,8 +3,7 @@ import sunrise as sun
 import numpy as np
 import pytest
 
-from sunrise.symmetry_adaptation import PointGroup, QCircuitRepresentationBuilder, FockSpaceState, IrrepProvider, SymmetryAdaptedLinearCombintationSymmetrization, SpinSymmetrizationProcedure, SpinCGSymmetrizationProcedure
-
+from sunrise.symmetry_adaptation import PointGroup, QCircuitRepresentationBuilder, FockSpaceState, IrrepProvider, SymmetryAdaptedLinearCombintationSymmetrization, SpinSymmetrizationProcedure
 
 
 HAS_PYSCF = "pyscf" in tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
@@ -182,56 +181,3 @@ def test_fragment_states() -> None:
 			if i not in fragment_orbitals:
 				assert abs(full_occ[i]) < 1e-6
 
-
-# Tests that the Clebsch-Gordan CSF basis spans the same space as the determinant basis
-@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
-@pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
-def test_spin_CG_symmetrization(molecule_pointgroup) -> None:
-	mol = tq.Molecule(geometry=molecule_pointgroup[1], basis_set='sto-3g', backend="pyscf")
-	pg = sun.symmetry_adaptation.PointGroup.from_pyscf(molecule_pointgroup[0])
-	provider_canonical = IrrepProvider(mol, pg, "canon")
-
-	det_states = FockSpaceState.non_ionic_states(mol, provider_canonical)
-	csf_states = SpinCGSymmetrizationProcedure(mol).symmetrize(det_states)
-
-	# the CSF basis must span the same space as the determinant basis
-	assert len(csf_states) == len(det_states)
-
-	# every CSF is a spin eigenfunction (never "mixed")
-	for state in csf_states:
-		assert state.spin_multiplicity is not None
-		assert state.spin_multiplicity != "mixed"
-
-
-# Statically tests the fully-open-shell H4 singlets against the paper's O_{4,1}^{0,0} and O_{4,2}^{0,0} (Appendix A)
-@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
-def test_spin_CG_symmetrization_correctness() -> None:
-	mol = tq.Molecule(geometry="H 1. -1. 0. \n H 1. 1. 0. \n H -1. 1. 0. \n H -1. -1. 0.", basis_set='sto-3g', backend="pyscf").use_native_orbitals()
-	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("C2h")
-	provider = IrrepProvider(mol, pg, "loc")
-
-	det_states = FockSpaceState.non_ionic_states(mol, provider)
-	csf_states = SpinCGSymmetrizationProcedure(mol).symmetrize(det_states)
-
-	# Expected fully-open-shell singlets (bit order: qubit 2i = alpha_i, 2i+1 = beta_i)
-	# O_{4,2}^{0,0} = 1/2(|αβαβ> - |αββα> - |βααβ> + |βαβα>)          (Eq. A4)
-	O42 = tq.QubitWaveFunction.from_string(
-		"+0.5 |10011001> -0.5 |01101001> -0.5 |10010110> +0.5 |01100110>").normalize()
-	# O_{4,1}^{0,0} = 1/√3(|ααββ>+|ββαα>) - 1/(2√3)(|αβαβ>+|βαβα>+|αββα>+|βααβ>)  (Eq. A3)
-	O41 = tq.QubitWaveFunction.from_string(
-		"+0.5773502692 |10100101> +0.5773502692 |01011010> "
-		"-0.2886751346 |10011001> -0.2886751346 |01100110> "
-		"-0.2886751346 |01101001> -0.2886751346 |10010110>").normalize()
-
-	# Isolate the fully-open-shell singlets (mo_occ = [1,1,1,1], m_s = 0)
-	open_shell_singlets = [
-		s for s in csf_states
-		if s.spin_multiplicity == "singlet"
-		and abs(s.m_s) < 1e-6
-		and all(abs(o - 1.0) < 1e-6 for o in s.mo_occ)
-	]
-	assert len(open_shell_singlets) == 2
-
-	# Each expected CSF must appear (overlap ≈ 1, phase-invariant)
-	for expected in (O41, O42):
-		assert any(abs(expected.inner(s.wavefunction)) > 1 - 1e-4 for s in open_shell_singlets)
