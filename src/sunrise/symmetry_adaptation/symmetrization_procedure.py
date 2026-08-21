@@ -83,7 +83,7 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 					mini_matrix[i, j] = val
 					mini_matrix[j, i] = numpy.conj(val)  # Hermitian
 
-			mini_matrix = numpy.round(mini_matrix, decimals=10)
+			mini_matrix = numpy.round(mini_matrix, decimals=6)
 
 			# Diagonalize each connected component separately to prevent
 			# degenerate states from different spatial irreps from mixing
@@ -97,7 +97,12 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 
 				for k in range(len(eigvals)):
 					eigvec = eigvecs[:, k]
-					s2_value = float(numpy.round(eigvals[k], decimals=10))
+					s2_value = float(eigvals[k])
+					snapped = round(s2_value * 4) / 4
+					if abs(s2_value - snapped) < 1e-4:
+						s2_value = snapped
+					if abs(s2_value) < 1e-10:
+						s2_value = 0.0
 
 					new_wfn = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals*2)
 					for coef, idx in zip(eigvec, component):
@@ -296,3 +301,286 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 			return FockSpaceState.dataframe(result_objects)
 		return result_objects
 
+
+@dataclass
+class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
+    """
+    Generates spin-adapted Configuration State Functions (CSFs) using 
+    Clebsch-Gordan coupling. 
+    
+    Workflows:
+    1. `symmetrize(det_states)`: Takes a list of determinant FockSpaceStates 
+       and returns a complete basis of CSFs across all occupation sectors.
+    2. `build_physical_state(...)`: Directly constructs a specific spin-coupled 
+       state based on physical intuition and returns a FockSpaceState.
+    """
+    irrep_provider: IrrepProviderBase | None = None
+    fragment_orbitals: list[int] | None = None
+
+    # =========================================================================
+    # 1. INTERNAL: CLEBSCH-GORDAN ENGINE
+    # =========================================================================
+    @staticmethod
+    def _cg(j12: int, m12: int, j3: int, m3: int, J2: int, M2: int) -> float:
+        """Clebsch-Gordan <j1 m1 j2 m2 | J M>, all arguments doubled (integers)."""
+        if m12 + m3 != M2: return 0.0
+        if abs(m12) > j12 or abs(m3) > j3 or abs(M2) > J2: return 0.0
+        if abs(j12 - j3) > J2 or j12 + j3 < J2: return 0.0
+        
+        f = math.factorial
+        d1, d2, d3 = (j12+j3-J2)//2, (j12-j3+J2)//2, (-j12+j3+J2)//2
+        if d1 < 0 or d2 < 0 or d3 < 0: return 0.0
+        
+        pref_sq = (J2 + 1) * f(d1)*f(d2)*f(d3) / f((j12+j3+J2)//2 + 1)
+        for x in (j12+m12, j12-m12, j3+m3, j3-m3, J2+M2, J2-M2):
+            pref_sq *= f(x//2)
+        pref = math.sqrt(pref_sq)
+
+        z_min = max(0, -((J2-j3+m12)//2), -((J2-j12-m3)//2))
+        z_max = min((j12+j3-J2)//2, (j12-m12)//2, (j3+m3)//2)
+        s = sum(((-1)**z) / (f(z) * f(d1 - z) * f((j12-m12)//2 - z)
+               * f((j3+m3)//2 - z) * f((J2-j3+m12)//2 + z) * f((J2-j12-m3)//2 + z))
+               for z in range(z_min, z_max + 1))
+        return pref * s
+
+    @classmethod
+    def _coupling_paths(cls, n: int, S2: int) -> list[tuple[int, ...]]:
+        """All genealogical intermediate-spin paths (doubled values) to total S."""
+        paths: list[tuple[int, ...]] = []
+        def rec(step: int, j: int, path: tuple[int, ...]):
+            if step == n:
+                if j == S2: paths.append(path)
+                return
+            for j_next in range(abs(j - 1), j + 2, 2):
+                rec(step + 1, j_next, path + (j_next,))
+        rec(1, 1, ())
+        return paths
+
+    @staticmethod
+    def _occupation_patterns(n_orbitals: int, n_electrons: int) -> list[list[int]]:
+        """All unique occupation patterns for n_electrons in n_orbitals."""
+        patterns: list[list[int]] = []
+        def recurse(idx: int, remaining: int, current: list[int]):
+            if idx == n_orbitals:
+                if remaining == 0: patterns.append(list(current))
+                return
+            for occ in range(min(remaining, 2) + 1):
+                current.append(occ)
+                recurse(idx + 1, remaining - occ, current)
+                current.pop()
+        recurse(0, n_electrons, [])
+        return patterns
+
+    def _build_spin_function(self, orbitals, S2, M2, path, closed_shell_orbitals=None):
+        """Builds a CSF wavefunction using sequential genealogical coupling."""
+        n = len(orbitals)
+        n_qubits = 2 * self.mol.n_orbitals
+        terms: dict[int, float] = {}
+
+        closed_shell_mask = 0
+        if closed_shell_orbitals:
+            for orb in closed_shell_orbitals:
+                closed_shell_mask |= (1 << (2*orb)) | (1 << (2*orb + 1))
+
+        def recurse(idx, j_so_far, m_so_far, det, coef):
+            if coef == 0: return
+            if idx == n:
+                if m_so_far == M2:
+                    terms[det | closed_shell_mask] = terms.get(det | closed_shell_mask, 0.0) + coef
+                return
+            orb = orbitals[idx]
+            for s2 in (0, 1):
+                m_e = 2*s2 - 1
+                new_det = det | (1 << (2*orb + (1 - s2)))
+                if idx == 0:
+                    recurse(1, 1, m_so_far + m_e, new_det, coef)
+                else:
+                    j_next = path[idx - 1]
+                    c = self._cg(j_so_far, m_so_far, 1, m_e, j_next, m_so_far + m_e)
+                    if c != 0: recurse(idx + 1, j_next, m_so_far + m_e, new_det, coef * c)
+
+        recurse(0, 0, 0, 0, 1.0)
+        wfn = tequila.QubitWaveFunction(n_qubits=n_qubits)
+        for det, coef in terms.items():
+            wfn += coef * tequila.QubitWaveFunction.from_string(f"|{format(det, f'0{n_qubits}b')}>")
+        return wfn.normalize()
+
+    def _build_spin_function_from_tree(self, orbitals, S2, M2, coupling_tree, closed_shell_orbitals=None):
+        """Builds a CSF wavefunction using an arbitrary binary coupling tree."""
+        n = len(orbitals)
+        n_qubits = 2 * self.mol.n_orbitals
+        terms = {}
+
+        closed_shell_mask = 0
+        if closed_shell_orbitals:
+            for orb in closed_shell_orbitals:
+                closed_shell_mask |= (1 << (2*orb)) | (1 << (2*orb + 1))
+
+        def spin_of(tree): return 1 if isinstance(tree, int) else tree[2]
+        def electrons_of(tree):
+            if isinstance(tree, int): return [tree]
+            return electrons_of(tree[0]) + electrons_of(tree[1])
+        def coeff_of(tree, m2):
+            if isinstance(tree, int): return 1.0
+            left, right, s2_int = tree
+            mL = sum(m2[e] for e in electrons_of(left))
+            mR = sum(m2[e] for e in electrons_of(right))
+            if abs(mL) > spin_of(left) or abs(mR) > spin_of(right): return 0.0
+            cg = self._cg(spin_of(left), mL, spin_of(right), mR, s2_int, mL + mR)
+            return cg * coeff_of(left, m2) * coeff_of(right, m2) if cg != 0 else 0.0
+
+        for choices in iproduct((1, -1), repeat=n):
+            if sum(choices) != M2: continue
+            m2 = {i: choices[i] for i in range(n)}
+            c = coeff_of(coupling_tree, m2)
+            if abs(c) > 1e-12:
+                det = closed_shell_mask
+                for i in range(n):
+                    det |= 1 << (2*orbitals[i] + (0 if choices[i] == 1 else 1))
+                terms[det] = terms.get(det, 0.0) + c
+
+        wfn = tequila.QubitWaveFunction(n_qubits=n_qubits)
+        for det, c in terms.items():
+            wfn += c * tequila.QubitWaveFunction.from_string(f"|{format(det, f'0{n_qubits}b')}>")
+        return wfn.normalize()
+
+    # =========================================================================
+    # 2. INTERNAL: TREE BUILDERS (Physics -> Tree)
+    # =========================================================================
+    @staticmethod
+    def _tree_from_groups(atom_groups: list[list[int]], total_S2: int) -> tuple:
+        """Hund's rule: high spin within groups, then couple groups."""
+        def couple_group(electrons):
+            if len(electrons) == 1: return electrons[0]
+            tree = (electrons[0], electrons[1], 2)
+            s2 = 2
+            for e in electrons[2:]:
+                s2 += 1
+                tree = (tree, e, s2)
+            return tree
+
+        group_trees = [couple_group(g) for g in atom_groups]
+        tree = group_trees[0]
+        for gt in group_trees[1:]:
+            tree = (tree, gt, None) 
+        
+        def fill_root(t, s2):
+            if isinstance(t, int): return t
+            l, r, s = t
+            return (l, r, s2) if s is None else (l, r, s)
+        return fill_root(tree, total_S2)
+
+    @staticmethod
+    def _tree_singlet_pairs(n_pairs: int) -> tuple:
+        """Couples adjacent electrons into singlets, then combines them."""
+        if n_pairs == 1: return (0, 1, 0)
+        tree = ((0, 1, 0), (2, 3, 0), 0)
+        for k in range(2, n_pairs):
+            tree = (tree, (2*k, 2*k + 1, 0), 0)
+        return tree
+
+    # =========================================================================
+    # 3. USER API: TARGETED GENERATION (Returns FockSpaceState)
+    # =========================================================================
+    def build_physical_state(
+        self, 
+        open_shell_orbitals: list[int], 
+        S: float, 
+        m_s: float, 
+        coupling: str | tuple | dict,
+        closed_shell_orbitals: list[int] | None = None
+    ) -> FockSpaceState:
+        """
+        Builds a specific spin-coupled state and returns a FockSpaceState.
+        
+        Parameters:
+        - open_shell_orbitals: Orbitals with 1 electron.
+        - S, m_s: Target total spin and projection.
+        - coupling: 
+            • "singlet_pairs" (pairs coupled to singlets)
+            • {"type": "high_spin", "groups": [[0,1,2], [3,4,5]]} (Hund's rule)
+            • A raw tree tuple ((0,1,0), (2,3,0), 0)
+        """
+        # --- Validation ---
+        n_orb = self.mol.n_orbitals
+        for orb in open_shell_orbitals:
+            if orb < 0 or orb >= n_orb:
+                raise ValueError(
+                    f"Orbital index {orb} out of range. "
+                    f"Molecule has {n_orb} orbitals (indices 0–{n_orb - 1})."
+                )
+        if closed_shell_orbitals:
+            for orb in closed_shell_orbitals:
+                if orb < 0 or orb >= n_orb:
+                    raise ValueError(
+                        f"Closed-shell orbital index {orb} out of range. "
+                        f"Molecule has {n_orb} orbitals (indices 0–{n_orb - 1})."
+                    )
+        S2, M2 = int(2 * S), int(2 * m_s)
+        
+        # --- named patterns ---
+        if isinstance(coupling, str) and coupling == "singlet":
+            tree = (0, 1, 0)
+        elif isinstance(coupling, str) and coupling == "triplet":
+            tree = (0, 1, 2)
+        elif isinstance(coupling, str) and coupling == "singlet_pairs":
+            tree = self._tree_singlet_pairs(len(open_shell_orbitals) // 2)
+        elif isinstance(coupling, dict) and coupling.get("type") == "high_spin":
+            tree = self._tree_from_groups(coupling["groups"], S2)
+        elif isinstance(coupling, tuple):
+            tree = coupling
+        else:
+            raise ValueError(f"Unknown coupling scheme: {coupling}")
+                    
+        wfn = self._build_spin_function_from_tree(
+            open_shell_orbitals, S2, M2, tree, closed_shell_orbitals
+        )
+        
+        all_orbitals = sorted(list(set((closed_shell_orbitals or []) + open_shell_orbitals)))
+        
+        return FockSpaceState(
+            mol=self.mol, 
+            wavefunction=wfn, 
+            provider=self.irrep_provider, 
+            S2=float(S * (S + 1)), 
+            m_s=float(m_s),
+            fragment_orbitals=all_orbitals
+        )
+
+    # =========================================================================
+    # 4. USER API: FULL BASIS GENERATION (Returns list[FockSpaceState])
+    # =========================================================================
+    def symmetrize(self, states: list[FockSpaceState] | pd.DataFrame) -> list[FockSpaceState] | pd.DataFrame:
+        """
+        Generates all spin-adapted CSFs across every occupation sector 
+        of the provided determinant states.
+        """
+        is_dataframe = isinstance(states, pd.DataFrame)
+        state_list = list(states.itertuples(index=False, name="FockSpaceState")) if is_dataframe else list(states)
+
+        n_orb = len(state_list[0].mo_occ)  # derive from the actual input state
+        fragment_orbitals = getattr(state_list[0], '_fragment_orbitals', None) or self.fragment_orbitals or list(range(n_orb))
+        irrep_provider = state_list[0].irrep_provider or self.irrep_provider
+        n_electrons = int(round(sum(state_list[0].mo_occ[i] for i in fragment_orbitals)))
+
+        all_states: list[FockSpaceState] = []
+        for mo_occ in self._occupation_patterns(len(fragment_orbitals), n_electrons):
+            open_shell   = [fragment_orbitals[i] for i, occ in enumerate(mo_occ) if occ == 1]
+            closed_shell = [fragment_orbitals[i] for i, occ in enumerate(mo_occ) if occ == 2]
+
+            if not open_shell:
+                det = sum((1 << (2*orb)) | (1 << (2*orb + 1)) for orb in closed_shell)
+                wfn = tequila.QubitWaveFunction.from_string(f"|{format(det, f'0{2*self.mol.n_orbitals}b')}>")
+                state = FockSpaceState(self.mol, wfn, irrep_provider, S2=0.0, m_s=0.0, fragment_orbitals=fragment_orbitals)
+                state.coupling_path = ()
+                all_states.append(state)
+            else:
+                for M2 in range(-len(open_shell), len(open_shell) + 1, 2):
+                    for S2 in range(abs(M2), len(open_shell) + 1, 2):
+                        for path in self._coupling_paths(len(open_shell), S2):
+                            wfn = self._build_spin_function(open_shell, S2, M2, path, closed_shell)
+                            state = FockSpaceState(self.mol, wfn, irrep_provider, S2=float((S2/2) * (S2/2 + 1)), m_s=M2/2, fragment_orbitals=fragment_orbitals)
+                            state.coupling_path = tuple(p / 2 for p in path)
+                            all_states.append(state)
+
+        return FockSpaceState.dataframe(all_states) if is_dataframe else all_states
