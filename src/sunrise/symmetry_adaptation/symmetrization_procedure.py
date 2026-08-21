@@ -471,8 +471,6 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
             • {"type": "high_spin", "groups": [[0,1,2], [3,4,5]]} (Hund's rule)
             • A raw tree tuple ((0,1,0), (2,3,0), 0)
         """
-        if n_open == 0:
-            raise ValueError("open_shell_orbitals cannot be empty.")
         # --- Validation ---
         n_orb = self.mol.n_orbitals
         for orb in open_shell_orbitals:
@@ -491,6 +489,8 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
 
         # --- Validate electron count vs coupling scheme ---
         n_open = len(open_shell_orbitals)
+        if n_open == 0:
+            raise ValueError("open_shell_orbitals cannot be empty.")
         if isinstance(coupling, str):
             if coupling in ("singlet", "triplet") and n_open != 2:
                 raise ValueError(
