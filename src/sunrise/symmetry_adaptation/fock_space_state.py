@@ -39,11 +39,12 @@ def _fragment_bitstrings(mol: Molecule, fragment_orbitals: list[int], fragment_e
 
     for n_e in electron_counts:
         for fragment_bs in _fixed_popcount_bitstrings(n_fragment_qubits, n_e):
+            frag_int = int(fragment_bs, 2)
             full_int = 0
             for idx, sp in enumerate(fragment_orbitals):
-                if fragment_bs[2*idx] == '1':
+                if (frag_int >> (2*idx)) & 1:
                     full_int |= (1 << (2*sp))
-                if fragment_bs[2*idx+1] == '1':
+                if (frag_int >> (2*idx + 1)) & 1:
                     full_int |= (1 << (2*sp + 1))
             yield format(full_int, f'0{2 * n_spatial}b')
 
