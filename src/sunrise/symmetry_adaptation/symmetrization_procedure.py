@@ -167,71 +167,36 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		perm: list[int], 
 		n_orbitals: int
 	) -> tequila.QubitWaveFunction:
-		"""
-		Apply a spatial orbital permutation directly to bitstrings.
-		
-		Parameters
-		----------
-		wfn : QubitWaveFunction
-			Input wavefunction.
-		perm : list[int]
-			Spatial orbital permutation. perm[i] = j means orbital i maps to orbital j.
-		n_orbitals : int
-			Number of spatial orbitals.
-		"""
+		"""Apply a spatial orbital permutation directly to bitstrings using LSB-first bitwise math."""
 		n_qubits = 2 * n_orbitals
 		result_terms = {}
 		
 		for bitstring, coef in wfn.items():
-			# Get the bitstring as a string of 0s and 1s
-			bs_int = int(bitstring)
-			bs_str = format(bs_int, f'0{n_qubits}b')
-			
-			# Apply spatial permutation and track occupied spin-orbitals
-			new_bits = [0] * n_qubits
-			occupied_original = []
-			occupied_new = []
+			bs_int = int(bitstring)  # <--- Cast BitString to int here
+			new_bs = 0
+			singly_occ = []
 			
 			for i in range(n_orbitals):
-				alpha = int(bs_str[2*i])
-				beta = int(bs_str[2*i+1])
-				j = perm[i]
-				
-				if alpha:
-					new_bits[2*j] = 1
-					occupied_original.append(2*i)
-					occupied_new.append(2*j)
-				if beta:
-					new_bits[2*j+1] = 1
-					occupied_original.append(2*i+1)
-					occupied_new.append(2*j+1)
+				# Extract the 2-bit block (alpha + beta) for spatial orbital i
+				block = (bs_int >> (2 * i)) & 3
+				if block:
+					j = perm[i]
+					# Shift the entire 2-bit block to the new spatial orbital j
+					new_bs |= (block << (2 * j))
+					# Track for fermionic sign only if exactly 1 electron (alpha or beta)
+					if block in (1, 2):
+						singly_occ.append(j)
 			
-			# Compute fermionic sign: parity of permutation needed to sort occupied_new
-			# Count inversions in occupied_new
-			inversions = 0
-			for a in range(len(occupied_new)):
-				for b in range(a+1, len(occupied_new)):
-					if occupied_new[a] > occupied_new[b]:
-						inversions += 1
+			# Fermionic sign is the parity of inversions among singly occupied orbitals
+			inv = sum(1 for a in range(len(singly_occ)) for b in range(a + 1, len(singly_occ)) if singly_occ[a] > singly_occ[b])
+			sign = -1 if inv % 2 else 1
 			
-			sign = (-1) ** inversions
-			
-			# Build new bitstring integer
-			new_bs_int = 0
-			for k, bit in enumerate(new_bits):
-				if bit:
-					new_bs_int |= (1 << (n_qubits - 1 - k))
-			
-			# Accumulate
-			new_bs_str = format(new_bs_int, f'0{n_qubits}b')
-			result_terms[new_bs_str] = result_terms.get(new_bs_str, 0) + sign * coef
-		
-		# Build result wavefunction
+			result_terms[new_bs] = result_terms.get(new_bs, 0) + sign * coef
+
 		result = tequila.QubitWaveFunction(n_qubits=n_qubits)
-		for bs_str, c in result_terms.items():
+		for bs, c in result_terms.items():
 			if abs(c) > 1e-15:
-				result += c * tequila.QubitWaveFunction.from_string(f"|{bs_str}>")
-		
+				result += c * tequila.QubitWaveFunction.from_string(f"|{format(bs, f'0{n_qubits}b')}>")
 		return result
 
 	def symmetrize(self, states: list[FockSpaceState] | pd.DataFrame) -> list[FockSpaceState] | pd.DataFrame:
@@ -450,6 +415,11 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
     @staticmethod
     def _tree_from_groups(atom_groups: list[list[int]], total_S2: int) -> tuple:
         """Hund's rule: high spin within groups, then couple groups."""
+        if len(atom_groups) > 2:
+            raise NotImplementedError(
+                f"_tree_from_groups currently supports at most 2 groups, got {len(atom_groups)}. "
+                f"Coupling 3+ high-spin groups requires specifying intermediate spins explicitly."
+            )
         def couple_group(electrons):
             if len(electrons) == 1: return electrons[0]
             tree = (electrons[0], electrons[1], 2)
@@ -501,6 +471,8 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
             • {"type": "high_spin", "groups": [[0,1,2], [3,4,5]]} (Hund's rule)
             • A raw tree tuple ((0,1,0), (2,3,0), 0)
         """
+        if n_open == 0:
+            raise ValueError("open_shell_orbitals cannot be empty.")
         # --- Validation ---
         n_orb = self.mol.n_orbitals
         for orb in open_shell_orbitals:
@@ -516,6 +488,25 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
                         f"Closed-shell orbital index {orb} out of range. "
                         f"Molecule has {n_orb} orbitals (indices 0–{n_orb - 1})."
                     )
+
+        # --- Validate electron count vs coupling scheme ---
+        n_open = len(open_shell_orbitals)
+        if isinstance(coupling, str):
+            if coupling in ("singlet", "triplet") and n_open != 2:
+                raise ValueError(
+                    f"coupling='{coupling}' requires exactly 2 open-shell orbitals, got {n_open}."
+                )
+            if coupling == "singlet_pairs" and n_open % 2 != 0:
+                raise ValueError(
+                    f"coupling='singlet_pairs' requires an even number of open-shell orbitals, got {n_open}."
+                )
+        if isinstance(coupling, dict) and coupling.get("type") == "high_spin":
+            grouped = [e for g in coupling["groups"] for e in g]
+            if sorted(grouped) != list(range(n_open)):
+                raise ValueError(
+                    f"high_spin groups must cover exactly the indices 0..{n_open-1}. "
+                    f"Got {sorted(grouped)}."
+                )
         S2, M2 = int(2 * S), int(2 * m_s)
         
         # --- named patterns ---

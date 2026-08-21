@@ -105,11 +105,23 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 		if state.mo_occ is None:
 			return None
 
+		# Canonical irrep assignment only works for states with integer occupations
+		# (single determinants or superpositions within the same occupation sector).
+		# Fractional occupations indicate a superposition across sectors, which
+		# requires the LocalizedIrrepProvider's character-vector approach instead.
+		for i, occ in enumerate(state.mo_occ):
+			if abs(occ - round(occ)) > 1e-4:
+				raise ValueError(
+					f"PySCFCanonicalIrrepProvider cannot determine the irrep of a state "
+					f"with fractional occupation {occ:.4f} on orbital {i}. "
+					f"This typically means the state is a superposition across occupation "
+					f"sectors. Use IrrepProvider(mol, pg, 'loc') instead."
+				)
+
 		character_vector = numpy.ones(self.pg.order)
 		for occ, irrep in zip(state.mo_occ, self.mol_irreps):
 			chars = numpy.asarray(self.pg.character_table.dict[irrep], dtype=numpy.complex128)
-			character_vector = character_vector * numpy.power(chars, int(occ))
-		
+			character_vector = character_vector * numpy.power(chars, int(round(occ)))
 		irrep = self.pg.character_table.vec_to_str(character_vector)
 		return irrep if irrep is not None else None
 
