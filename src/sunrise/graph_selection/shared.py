@@ -212,7 +212,7 @@ def random_matching(num_atoms: int):
     random_edges = [(atoms[i], atoms[i + 1]) for i in range(0, num_atoms, 2)]
     return random_edges
 
-def matrix_scaling(distance_matrix: np.narray):
+def matrix_scaling(distance_matrix: np.ndarray):
     
     scaled_matrix = np.tanh(distance_matrix * np.pi/2)
     return scaled_matrix
