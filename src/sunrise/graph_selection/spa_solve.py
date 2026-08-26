@@ -1,6 +1,7 @@
 import numpy as np
 import tequila as tq
 
+
 def _qubit_map(H):
     qubits = sorted(H.qubits)
     return qubits, {q: k for k, q in enumerate(qubits)}
@@ -22,7 +23,7 @@ def hcb_model(H, n, pos):
         c = complex(coeff).real
         xy = []
         zs = []
-        for (q, p) in key:
+        for q, p in key:
             p = p.upper()
             k = pos[q]
             if p == "Z":
@@ -30,9 +31,9 @@ def hcb_model(H, n, pos):
             else:
                 xy.append((k, p))
 
-        if len(xy) == 0:                       # diagonal (identity / Z / ZZ)
+        if len(xy) == 0:  # diagonal (identity / Z / ZZ)
             if len(zs) == 0:
-                pass                           # constant, drops out of eps & U
+                pass  # constant, drops out of eps & U
             elif len(zs) == 1:
                 cZ[zs[0]] += c
             elif len(zs) == 2:
@@ -40,13 +41,13 @@ def hcb_model(H, n, pos):
                 cZZ[zs[1], zs[0]] += c
             else:
                 skipped += 1
-        elif len(xy) == 2 and len(zs) == 0:    # pair hop: XX or YY
+        elif len(xy) == 2 and len(zs) == 0:  # pair hop: XX or YY
             (a, pa), (b, pb) = xy
             if pa == pb:
                 hop[a, b] += c
                 hop[b, a] += c
             else:
-                skipped += 1                   # XY / YX: absent from a real H
+                skipped += 1  # XY / YX: absent from a real H
         else:
             skipped += 1
 
@@ -66,12 +67,14 @@ def spa_angles_for_graph(mol, graph, sweeps=2, warn=True):
     H = mol.make_hardcore_boson_hamiltonian()
     edges = [tuple(e) for e in graph]
     qubits, pos = _qubit_map(H)
-    n = len(qubits)                                   # = number of orbitals
+    n = len(qubits)  # = number of orbitals
 
     eps, U, hop, skipped = hcb_model(H, n, pos)
     if warn and skipped:
-        print("warning: {} Pauli term(s) outside the HCB structure "
-              "(eps/U/hop model may be incomplete)".format(skipped))
+        print(
+            "warning: {} Pauli term(s) outside the HCB structure "
+            "(eps/U/hop model may be incomplete)".format(skipped)
+        )
 
     I = np.array([e[0] for e in edges])
     J = np.array([e[1] for e in edges])

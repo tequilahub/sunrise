@@ -212,12 +212,15 @@ def random_matching(num_atoms: int):
     random_edges = [(atoms[i], atoms[i + 1]) for i in range(0, num_atoms, 2)]
     return random_edges
 
+
 def matrix_scaling(distance_matrix: np.ndarray):
-    
-    scaled_matrix = np.tanh(distance_matrix * np.pi/2)
+
+    scaled_matrix = np.tanh(distance_matrix * np.pi / 2)
     return scaled_matrix
 
+
 # brute force
+
 
 def generate_all_possible_edges(atoms: list[int]):
     """
@@ -632,6 +635,7 @@ def genetic_algorithm(
 
 # blossom
 
+
 def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
     """
     Solve optimal matching using Blossom algorithm.
@@ -669,4 +673,3 @@ def blossom_scaled(coordinates: np.ndarray, num_atoms: int):
 
     edges = nx.algorithms.matching.min_weight_matching(graph, weight="weight")
     return list(edges)
-
