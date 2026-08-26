@@ -133,7 +133,7 @@ def test_SALC_symmetrization(molecule_pointgroup) -> None:
 # Statically tests the values for H2 with localized MOs
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_SALC_symmetrization_correctness() -> None:
-	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
+	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf").use_native_orbitals()
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("D2h")
 
 	provider_localized = IrrepProvider(mol, pg, "loc")

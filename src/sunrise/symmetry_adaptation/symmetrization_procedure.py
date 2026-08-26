@@ -59,7 +59,7 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 		# assume the IrrepProviderBase is the same for all states; it is not used in the S2
 		# diagonalization below, only propagated to the output states.
 		irrep_provider = state_list[0].irrep_provider
-		fragment_orbitals = getattr(state_list[0], '_fragment_orbitals', None)
+		fragment_orbitals = getattr(state_list[0], 'fragment_orbitals', None)
 
 		# Create an empty dataframe with the same columns as df
 		diagonalised_states: list[FockSpaceState] = []
@@ -132,12 +132,11 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		if self.pgr is None:
 			self.pgr = QCircuitRepresentationBuilder(self.mol, self.pg).build_qcircuit_representation()
 		
-		# Pre-compute spatial permutations for fast bitstring application
-		ao_repr = QCircuitRepresentationBuilder(self.mol, self.pg).build_ao_permutation_representation()
-		self._spatial_perms = {
-			label: list(numpy.argmax(ao_repr.operations[label], axis=1))
-			for label in self.pg.character_table.operation_symbols
-		}
+		# Fetch the MO-specific permutations and phases
+		builder = QCircuitRepresentationBuilder(self.mol, self.pg)
+		self._spatial_perms, self._spatial_phases = builder._get_mo_perms_and_phases()
+		# for label in self.pg.character_table.operation_symbols:
+		# 	print(f"{label}: perm={self._spatial_perms[label]}, phases={self._spatial_phases[label]}")
 
 	@staticmethod
 	def _salc_key(wfn: tequila.QubitWaveFunction, decimals: int = 8) -> tuple:
@@ -165,33 +164,31 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 	def _apply_spatial_permutation_bitstring(
 		wfn: tequila.QubitWaveFunction, 
 		perm: list[int], 
-		n_orbitals: int
+		n_orbitals: int,
+		phases: list[float] | None = None # Add phase support
 	) -> tequila.QubitWaveFunction:
-		"""Apply a spatial orbital permutation directly to bitstrings using LSB-first bitwise math."""
+		if phases is None: phases = [1.0] * n_orbitals
 		n_qubits = 2 * n_orbitals
 		result_terms = {}
 		
 		for bitstring, coef in wfn.items():
-			bs_int = int(bitstring)  # <--- Cast BitString to int here
+			bs_int = int(bitstring)
 			new_bs = 0
 			singly_occ = []
+			phase = 1.0
 			
 			for i in range(n_orbitals):
-				# Extract the 2-bit block (alpha + beta) for spatial orbital i
 				block = (bs_int >> (2 * i)) & 3
 				if block:
 					j = perm[i]
-					# Shift the entire 2-bit block to the new spatial orbital j
 					new_bs |= (block << (2 * j))
-					# Track for fermionic sign only if exactly 1 electron (alpha or beta)
-					if block in (1, 2):
+					if block in (1, 2): # Only apply phase to singly occupied orbitals
 						singly_occ.append(j)
+						phase *= phases[i]
 			
-			# Fermionic sign is the parity of inversions among singly occupied orbitals
 			inv = sum(1 for a in range(len(singly_occ)) for b in range(a + 1, len(singly_occ)) if singly_occ[a] > singly_occ[b])
-			sign = -1 if inv % 2 else 1
-			
-			result_terms[new_bs] = result_terms.get(new_bs, 0) + sign * coef
+			sign = -1 if inv % 2 else 1 # Fermionic sign
+			result_terms[new_bs] = result_terms.get(new_bs, 0) + sign * phase * coef
 
 		result = tequila.QubitWaveFunction(n_qubits=n_qubits)
 		for bs, c in result_terms.items():
@@ -210,7 +207,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		# uses self.pg's character table, not irrep_provider, which is only propagated to
 		# the output states.
 		irrep_provider = state_list[0].irrep_provider
-		fragment_orbitals = getattr(state_list[0], '_fragment_orbitals', None)
+		fragment_orbitals = getattr(state_list[0], 'fragment_orbitals', None)
 
 		# assumes the representation as quantum circuit
 		SALC_list: list[tequila.QubitWaveFunction] = []
@@ -233,12 +230,12 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 
 		for state in state_list:
 			resulting_state_list: list[tequila.QubitWaveFunction] = []
-			op_indices: list[int] = []  # original index into the character table
+			op_indices: list[int] = []
 
-			# apply only the selected operations
 			for k, op_label in selected_ops:
 				perm = self._spatial_perms[op_label]
-				resulting_state_list.append(self._apply_spatial_permutation_bitstring(state.wavefunction, perm, n_orbitals))
+				phases = self._spatial_phases[op_label]  # Pass phases to the bitstring modifier
+				resulting_state_list.append(self._apply_spatial_permutation_bitstring(state.wavefunction, perm, n_orbitals, phases))
 				op_indices.append(k)
 
 			for j, irrep in enumerate(self.pg.character_table.dict.keys()):
@@ -458,18 +455,24 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         S: float, 
         m_s: float, 
         coupling: str | tuple | dict,
-        closed_shell_orbitals: list[int] | None = None
+        closed_shell_orbitals: list[int] | None = None,
+        symmetry_domain: list[int] | None = None
     ) -> FockSpaceState:
         """
         Builds a specific spin-coupled state and returns a FockSpaceState.
         
         Parameters:
         - open_shell_orbitals: Orbitals with 1 electron.
+        - closed_shell_orbitals: Orbitals with 2 electrons.
         - S, m_s: Target total spin and projection.
         - coupling: 
             • "singlet_pairs" (pairs coupled to singlets)
             • {"type": "high_spin", "groups": [[0,1,2], [3,4,5]]} (Hund's rule)
             • A raw tree tuple ((0,1,0), (2,3,0), 0)
+        - symmetry_domain: The subset of orbitals over which spatial symmetry 
+          operations are allowed to act. If None, the full molecular point group 
+          is used (excitations can delocalize). If a list is provided, only 
+          operations preserving that subset are used (fragment embedding).
         """
         # --- Validation ---
         n_orb = self.mol.n_orbitals
@@ -527,15 +530,19 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
             open_shell_orbitals, S2, M2, tree, closed_shell_orbitals
         )
         
+        # Inside build_physical_state, at the very end before returning:
         all_orbitals = sorted(list(set((closed_shell_orbitals or []) + open_shell_orbitals)))
         
+        # Fallback to all_orbitals if symmetry_domain is None to preserve old behavior
+        final_fragment = symmetry_domain if symmetry_domain is not None else all_orbitals
+
         return FockSpaceState(
             mol=self.mol, 
             wavefunction=wfn, 
             provider=self.irrep_provider, 
             S2=float(S * (S + 1)), 
             m_s=float(m_s),
-            fragment_orbitals=all_orbitals
+            fragment_orbitals=final_fragment
         )
 
     # =========================================================================
@@ -550,7 +557,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         state_list = list(states.itertuples(index=False, name="FockSpaceState")) if is_dataframe else list(states)
 
         n_orb = len(state_list[0].mo_occ)  # derive from the actual input state
-        fragment_orbitals = getattr(state_list[0], '_fragment_orbitals', None) or self.fragment_orbitals or list(range(n_orb))
+        fragment_orbitals = getattr(state_list[0], 'fragment_orbitals', None) or self.fragment_orbitals or list(range(n_orb))
         irrep_provider = state_list[0].irrep_provider or self.irrep_provider
         n_electrons = int(round(sum(state_list[0].mo_occ[i] for i in fragment_orbitals)))
 

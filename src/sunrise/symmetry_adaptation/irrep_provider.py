@@ -29,34 +29,47 @@ class LocalizedIrrepProvider(IrrepProviderBase):
 		super().__init__(mol, pg)
 		self._representation: PointGroupRepresentation[tequila.QCircuit, tequila.QubitWaveFunction] = QCircuitRepresentationBuilder(mol, pg).build_qcircuit_representation()
 
-		# Pre-compute spatial permutations for fast irrep evaluation
-		ao_repr = QCircuitRepresentationBuilder(mol, pg).build_ao_permutation_representation()
-		self._spatial_perms = {
-			label: list(numpy.argmax(ao_repr.operations[label], axis=1))
-			for label in pg.character_table.operation_symbols
-		}
+		# Fetch the MO-specific permutations and phases
+		builder = QCircuitRepresentationBuilder(mol, pg)
+		self._spatial_perms, self._spatial_phases = builder._get_mo_perms_and_phases()
 
 	@property
 	def representation(self) -> PointGroupRepresentation[tequila.QCircuit, tequila.QubitWaveFunction]:
 		return self._representation
 
 	def get_irrep(self, state) -> str | None:
-		# Use fast bitstring permutation instead of compiled circuits
 		from .symmetrization_procedure import SymmetryAdaptedLinearCombintationSymmetrization
 
 		n_orbitals = self.mol.n_orbitals
+		
+		fragment_orbitals = getattr(state, 'fragment_orbitals', None)
+		if fragment_orbitals is not None:
+			fragment_set = set(fragment_orbitals)
+			selected_ops = [
+				label for label in self.pg.character_table.operation_symbols
+				if all(self._spatial_perms[label][i] in fragment_set for i in fragment_orbitals)
+			]
+		else:
+			selected_ops = self.pg.character_table.operation_symbols
+
 		chars = []
-		for label in self.pg.character_table.operation_symbols:
+		for label in selected_ops:
 			perm = self._spatial_perms[label]
+			phases = self._spatial_phases[label]  
+			
 			transformed = SymmetryAdaptedLinearCombintationSymmetrization._apply_spatial_permutation_bitstring(
-				state.wavefunction, perm, n_orbitals
-				)
+				state.wavefunction, perm, n_orbitals, phases
+			)
 			expectation = state.wavefunction.inner(transformed).real
 			chars.append(numpy.round(expectation))
 		
 		character_vector = numpy.array(chars)
-		irrep = self.pg.character_table.vec_to_str(character_vector)
-		return irrep if irrep is not None else None
+		for irrep_name, irrep_chars in self.pg.character_table.dict.items():
+			expected = [irrep_chars[self.pg.character_table.operation_symbols.index(label)] for label in selected_ops]
+			if all(abs(c - e) < 0.5 for c, e in zip(character_vector, expected)):
+				return irrep_name
+				
+		return None
 	
 
 
@@ -126,9 +139,23 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 		return irrep if irrep is not None else None
 
 
+class MEAOIrrepProvider(LocalizedIrrepProvider):
+	"""
+	An irrep provider for MEAOs.
+	Inherits from LocalizedIrrepProvider but uses MO-basis permutations and phases.
+	"""
+	def __init__(self, mol: Molecule, pg: PointGroup):
+		# Skip parent __init__'s AO permutation logic
+		IrrepProviderBase.__init__(self, mol, pg)
+		self._representation = QCircuitRepresentationBuilder(mol, pg).build_qcircuit_representation()
 
-SUPPORTED_IRREP_PROVIDERS = ["loc", "canon"]
-INSTALLED_IRREP_PROVIDERS = {"loc": LocalizedIrrepProvider, "canon": PySCFCanonicalIrrepProvider}
+		builder = QCircuitRepresentationBuilder(mol, pg)
+		self._spatial_perms, self._spatial_phases = builder._get_mo_perms_and_phases()
+
+
+SUPPORTED_IRREP_PROVIDERS = ["loc", "canon", "meao"]
+INSTALLED_IRREP_PROVIDERS = {"loc": LocalizedIrrepProvider, "canon": PySCFCanonicalIrrepProvider, "meao": MEAOIrrepProvider}
+
 def show_available_modules():
     print("Available Irrep Providers")
     for k in INSTALLED_IRREP_PROVIDERS.keys():

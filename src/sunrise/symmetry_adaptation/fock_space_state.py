@@ -21,7 +21,7 @@ def _fixed_popcount_bitstrings(n_qubits: int, n_ones: int) -> Generator[str, Non
         yield format(val, f'0{n_qubits}b')
 
 def _fragment_bitstrings(mol: Molecule, fragment_orbitals: list[int], fragment_electrons: int | str | None = None) -> Generator[str, None, None]:
-    """Yields full-space bitstrings for a fragment, padding infragment orbitals with '00' (vacuum)."""
+    """Yields full-space bitstrings for a fragment, padding other orbitals with '00' (vacuum)."""
     n_spatial = mol.n_orbitals
     n_fragment_qubits = 2 * len(fragment_orbitals)
     
@@ -130,6 +130,11 @@ class FockSpaceState:
 			bits.append(str((bs_int >> (2 * i)) & 1))
 			bits.append(str((bs_int >> (2 * i + 1)) & 1))
 		return "".join(bits)
+
+	@property
+	def fragment_orbitals(self) -> list[int] | None:
+		"""Public accessor for the fragment orbitals."""
+		return getattr(self, '_fragment_orbitals', None)
 
 	@cached_property
 	def mo_occ(self) -> list[float]:

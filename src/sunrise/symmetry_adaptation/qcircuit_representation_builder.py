@@ -555,3 +555,89 @@ class QCircuitRepresentationBuilder:
 			application_function=_apply,
 			is_close_function=_is_close,
 			operations=compiled_operations)
+
+	def _get_exact_ao_transformation_matrix(self, R_3x3: NDArray[numpy.float64]) -> NDArray[numpy.float64]:
+		"""
+		Builds the exact AO transformation matrix U_AO for a given 3x3 rotation/reflection matrix.
+		Correctly handles sign flips of p-orbitals under rotation.
+		"""
+		import pyscf
+		pyscf_mol = pyscf.gto.M(atom=str(self.mol.parameters.geometry), basis=self.mol.parameters.basis_set, verbose=0)
+		coords = pyscf_mol.atom_coords()
+		center = numpy.mean(coords, axis=0)
+		coords_rot = (coords - center) @ R_3x3.T + center
+		aoslice = pyscf_mol.aoslice_by_atom()
+		n_ao = pyscf_mol.nao_nr()
+		U_AO = numpy.zeros((n_ao, n_ao))
+
+		for i, c_rot in enumerate(coords_rot):
+			dists = numpy.linalg.norm(coords - c_rot, axis=1)
+			j = numpy.argmin(dists)
+			if dists[j] > 1e-4:
+				raise ValueError(f"Atom {i} does not map to any atom under rotation.")
+
+			sh0_A, sh1_A, _, _ = aoslice[i]
+			sh0_B, sh1_B, _, _ = aoslice[j]
+
+			for sh_A, sh_B in zip(range(sh0_A, sh1_A), range(sh0_B, sh1_B)):
+				l = pyscf_mol.bas_angular(sh_A)
+				ao_s_A, ao_e_A = pyscf_mol.ao_loc[sh_A], pyscf_mol.ao_loc[sh_A+1]
+				ao_s_B, ao_e_B = pyscf_mol.ao_loc[sh_B], pyscf_mol.ao_loc[sh_B+1]
+
+				if l == 0:
+					U_AO[ao_s_B:ao_e_B, ao_s_A:ao_e_A] = 1.0
+				elif l == 1:
+					U_AO[ao_s_B:ao_e_B, ao_s_A:ao_e_A] = R_3x3
+				else:
+					raise NotImplementedError(f"Angular momentum l={l} not supported.")
+		return U_AO
+
+	def _get_mo_perms_and_phases(self):
+		"""Projects geometric symmetry operations into the current MO basis using exact AO rotation matrices."""
+		import pyscf
+		from scipy.optimize import linear_sum_assignment
+
+		geom_repr = PointGroupRepresentation.get_geometric_representation(self.pg)
+		pyscf_mol = pyscf.gto.M(atom=str(self.mol.parameters.geometry), basis=self.mol.parameters.basis_set, verbose=0)
+		S_ao = pyscf_mol.intor('int1e_ovlp')
+
+		try:
+			C_all = numpy.asarray(self.mol.integral_manager.orbital_coefficients)
+			n_active = self.mol.n_orbitals
+			
+			# Slicing assumption: This grabs the last `n_active` columns. 
+			# This works perfectly if the injected matrix is ordered [active, virtual] 
+			# or if the active orbitals happen to be at the end. 
+			# If you inject a full matrix ordered as [core, active, virtual], 
+			# you may need to adjust this slice to C_all[:, n_core : n_core + n_active].
+			C_mo = C_all[:, -n_active:].copy()
+			
+		except Exception:
+			C_mo = pyscf.scf.RHF(pyscf_mol).run().mo_coeff[:, :self.mol.n_orbitals].copy()
+
+		# Canonicalize global signs to prevent arbitrary sign flips
+		for i in range(C_mo.shape[1]):
+			max_idx = numpy.argmax(numpy.abs(C_mo[:, i]))
+			if C_mo[max_idx, i] < 0:
+				C_mo[:, i] *= -1.0
+
+		perms, phases = {}, {}
+		for label, R_3x3 in geom_repr.operations.items():
+			U_AO = self._get_exact_ao_transformation_matrix(R_3x3)
+			S_mo = C_mo.T @ S_ao @ U_AO @ C_mo
+
+			# Hungarian algorithm for guaranteed 1-to-1 mapping
+			row_ind, col_ind = linear_sum_assignment(-numpy.abs(S_mo))
+			perm = [0] * self.mol.n_orbitals
+			for r, c in zip(row_ind, col_ind):
+				perm[c] = r
+			perms[label] = perm
+
+			phases_list = []
+			for j in range(self.mol.n_orbitals):
+				i = perm[j]
+				phase = numpy.sign(S_mo[i, j])
+				phases_list.append(float(phase if phase != 0 else 1.0))
+			phases[label] = phases_list
+
+		return perms, phases
