@@ -8,7 +8,7 @@ from itertools import groupby, combinations, product as iproduct
 import numpy
 from .irrep_provider import IrrepProviderBase
 from .point_group import PointGroup
-from .point_group_representation import PointGroupRepresentation
+from .point_group import PointGroup, PointGroupRepresentation
 from .fock_space_state import FockSpaceState
 from .qcircuit_representation_builder import QCircuitRepresentationBuilder
 import math

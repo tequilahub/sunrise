@@ -3,8 +3,7 @@ from dataclasses import dataclass
 import tequila
 from tequila import Molecule
 import numpy
-from .point_group import PointGroup
-from .point_group_representation import PointGroupRepresentation
+from .point_group import PointGroup, PointGroupRepresentation
 from .qcircuit_representation_builder import QCircuitRepresentationBuilder
 
 

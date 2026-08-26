@@ -1,5 +1,4 @@
-from .point_group import PointGroup
-from .point_group_representation import PointGroupRepresentation
+from .point_group import PointGroup, PointGroupRepresentation
 from .qcircuit_representation_builder import QCircuitRepresentationBuilder
 from sunrise.symmetry_adaptation.fock_space_state import FockSpaceState
 from sunrise.symmetry_adaptation.irrep_provider import IrrepProvider

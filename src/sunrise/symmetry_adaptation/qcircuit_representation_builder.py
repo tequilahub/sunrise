@@ -3,8 +3,7 @@ from numpy.typing import NDArray
 from tequila import Molecule
 import tequila
 import numpy
-from .point_group import PointGroup
-from .point_group_representation import PointGroupRepresentation
+from .point_group import PointGroup, PointGroupRepresentation
 
 
 class GeometricTransformationHelper:
