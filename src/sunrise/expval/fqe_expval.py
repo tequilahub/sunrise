@@ -375,7 +375,7 @@ class FQEBraKet:
 
         g=0
         for idx,v in enumerate(self.ket_angles):
-            if isinstance(v, Variable):
+            if isinstance(v, Variable) or isinstance(v, Objective):
                 if variable in v.extract_variables():
                     g += apply_phase(deepcopy(self), self.ket_original_obj.extract_indices()[idx], v, variable,
                                      idx, ket=True, p0sign=True)

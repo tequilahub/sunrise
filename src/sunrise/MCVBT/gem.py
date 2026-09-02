@@ -11,7 +11,7 @@ from tequila.quantumchemistry import QuantumChemistryBase
 from sunrise.MCVBT.QulacsBraKet import BraKetQulacs
 
 
-def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
+def geminal_equation(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
     """
 
     """

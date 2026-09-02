@@ -3,15 +3,12 @@ from copy import deepcopy
 import tequila as tq
 import scipy
 import numpy as np
-from sunrise.MCVBT.gem import gem_fast
+from sunrise.MCVBT.gem import geminal_equation
 from tequila.quantumchemistry import QuantumChemistryBase
-
+from tequila.objective.objective import FixedVariable
 import sunrise as sn
 from sunrise.MCVBT.Big_Exp import BigExpVal
-try:
-    from sunrise.expval.fqe_expval import FQEBraKet
-except ImportError:
-    pass
+from sunrise.expval.fqe_expval import FQEBraKet
 
 from typing import Dict
 import csv
@@ -36,14 +33,13 @@ class mcvbt:
         self.silent = silent
 
         if overwrite_file and os.path.isfile(self.csvfile_name):
-           os.remove(self.csvfile_name)
+            os.remove(self.csvfile_name)
 
         if self.circuits is not None:
             if len(self.circuits) != len(self.graphs):
                 raise ValueError("Number of circuits must be equal to number of graphs")
 
-
-    def calculate_groundstate(self,init_strategy: str = "pre-optimize"):
+    def calculate_groundstate(self, init_strategy: str = "pre-optimize"):
 
         if self.circuits is None:
             self.__create_circuits()
@@ -63,16 +59,15 @@ class mcvbt:
             variables_preopt = {}
             for circ in self.circuits:
                 for v in circ.variables:
-                    variables_preopt[v] = np.random.uniform(0, 2*np.pi)
+                    variables_preopt[v] = np.random.uniform(0, 2 * np.pi)
             self.results[(1, 0)] = None
         else:
             raise ValueError("Unknown init_strategy {}".format(init_strategy))
 
-
         # self.strategy="shift" #todo check strategy
         if self.strategy is not None:
             self.__add_delocalization(variables_preopt=variables_preopt)
-        
+
         if not self.silent:
             with open(self.csvfile_name, mode="a", newline="") as file:
                 writer = csv.writer(file)
@@ -80,10 +75,11 @@ class mcvbt:
 
         if not self.silent: print("Start G(N,M)  optimization")
         N = len(self.circuits)
-        for n in range(2, N+1):
+        for n in range(2, N + 1):
             if not self.silent: print("Start G({},0) optimization".format(n))
             print("variables preopt", variables_preopt)
-            v, _ = gem_fast(circuits=self.circuits[:n], solver=self.solver, variables=variables_preopt, mol=self.mol, silent=self.silent)
+            v, _ = geminal_equation(circuits=self.circuits[:n], solver=self.solver, variables=variables_preopt,
+                                    mol=self.mol, silent=self.silent)
             if not self.silent: print("End G({},0)   optimization".format(n))
             self.results[(n, 0)] = v[0]
         self.final_variables = self.variables_preopt
@@ -91,23 +87,22 @@ class mcvbt:
 
         variables = {**variables_preopt}
         start = 2
-        for m in range(1,N+1):
+        for m in range(1, N + 1):
             if m > start:
                 start = m
-            for n in range(start, N+1):
+            for n in range(start, N + 1):
                 if not self.silent:
                     with open(self.csvfile_name, mode="a", newline="") as file:
                         writer = csv.writer(file)
-                        writer.writerow(["G({},{})".format(n,m)])
-                if not self.silent: print("Start G({},{}) optimization".format(n,m))
+                        writer.writerow(["G({},{})".format(n, m)])
+                if not self.silent: print("Start G({},{}) optimization".format(n, m))
                 v, _, variables = GNM(circuits=self.circuits[:n], variables=variables, solver=self.solver,
-                                      mol=self.mol,filename=self.csvfile_name, M=m, max_iter=10, silent=self.silent)
-                if not self.silent: print("End G({},{})   optimization".format(n,m))
+                                      mol=self.mol, filename=self.csvfile_name, M=m, max_iter=10, silent=self.silent)
+                if not self.silent: print("End G({},{})   optimization".format(n, m))
                 self.results[(n, m)] = v[0]
                 self.final_variables = variables
 
         return self.results
-
 
     def compare_to_fci(self):
 
@@ -117,8 +112,7 @@ class mcvbt:
         for k, v in self.results.items():
 
             error = fci - v
-            print("G({},{}): {:+2.5f} Ha".format(k[0], k[1], error))
-
+            print("G({},{}): {:+2.5f} Ha".format(k[0], k[1], error), "calc: {} fci: {}".format(v, fci))
 
     def __preoptimize_variables(self):
 
@@ -127,19 +121,19 @@ class mcvbt:
             if self.solver == "FQE":
                 E_preopt = FQEBraKet(ket=preopt_circuit, molecule=self.mol)
 
-                variables = preopt_circuit.variables
-                init_vars = {vs: 0 for vs in variables}
+                variables = preopt_circuit.extract_variables()
+                init_vars = {vs: 0.0 for vs in variables}
 
                 for vs in init_vars:
                     if "R" in str(vs):
-                        init_vars[vs] = np.pi/2
+                        init_vars[vs] = np.pi / 2
 
                 x0 = list(init_vars.values())
 
                 r = scipy.optimize.minimize(fun=E_preopt, x0=x0, jac="2-point", method="l-bfgs-b",
-                                            options={"finite_diff_rel_step": 1.e-5, "disp": False})
+                                            options={"finite_diff_rel_step": 1.e-5, "disp": True})
                 energies.append(r.fun)
-
+                print(r.fun, r.x)
                 r_variabales = {vs: r.x[i].real for i, vs in enumerate(init_vars)}
 
                 # r = sn.minimize(objective=E_preopt, initial_values = init_vars)
@@ -163,11 +157,9 @@ class mcvbt:
 
                 self.variables_preopt = {**self.variables_preopt, **result.variables}
 
-
         self.results[(1, 0)] = min(energies)
 
         return self.variables_preopt, energies
-
 
     def __create_circuits(self):
 
@@ -190,13 +182,11 @@ class mcvbt:
                     U += self.mol.UR(i=e[0], j=e[1], label="R{}_{}".format(i, j))
                 self.circuits.append(U)
 
+    def __add_delocalization(self, variables_preopt: Dict[tq.Variable, float]):
 
-    def __add_delocalization(self, variables_preopt:Dict[tq.Variable, float]):
-
-        aux_circuits=[]
+        aux_circuits = []
         for i, circ in enumerate(self.circuits):
             if self.strategy == "shift":
-
 
                 flat = [x for tup in self.graphs[i] for x in tup]
 
@@ -208,11 +198,12 @@ class mcvbt:
                 shifted_graph = [tuple(shifted[i:i + tuple_size]) for i in range(0, len(shifted), tuple_size)]
 
                 for edge in shifted_graph:
+
                     circ += sn.gates.FermionicExcitation(indices=[(2 * edge[0], 2 * edge[1])],
-                                                          variables="shift{}_{}".format(i, edge))
+                                                         variables="shift{}_{}".format(i, edge))
 
                     circ += sn.gates.FermionicExcitation(indices=[(2 * edge[0] + 1, 2 * edge[1] + 1)],
-                                                          variables="shift{}_{}".format(i, edge))
+                                                         variables="shift{}_{}".format(i, edge))
 
 
             elif self.strategy == "triangle":
@@ -221,14 +212,13 @@ class mcvbt:
                 raise NotImplementedError
 
             aux_circuits.append(circ)
-            filtered_variables= [x for x in circ.variables if x not in variables_preopt]
+            filtered_variables = [x for x in circ.variables if x not in variables_preopt]
             for v in filtered_variables:
                 variables_preopt[v] = 0.0
 
         self.circuits = aux_circuits
 
         return variables_preopt
-
 
     def get_final_variables(self):
         return self.final_variables
@@ -241,7 +231,7 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
     if M is None:
         M = len(circuits)
 
-    for i in range(M, N): #map pre opt variables to current circuit set and overrite old circuits
+    for i in range(M, N):  # map pre opt variables to current circuit set and overrite old circuits
         U = deepcopy(circuits[i])
         U = U.map_variables(variables)
         circuits[i] = U
@@ -250,9 +240,10 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
     for U in circuits:
         vkeys += U.extract_variables()
 
+
     variables = {**{k: 0.0 for k in vkeys if k not in variables}, **variables}
 
-    v, vv = gem_fast(circuits=circuits, variables=variables, mol=mol, solver=solver)
+    E, c_i = geminal_equation(circuits=circuits, variables=variables, mol=mol, solver=solver)
     x0 = {k: variables[k] for k in vkeys}
 
 
@@ -260,19 +251,23 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
     for i in range(len(circuits)):
         c = tq.Variable(("c", i))
         coeffs.append(c)
-        x0[c] = vv[i, 0]
+        x0[c] = c_i[i, 0]
         vkeys.append(c)
 
-    energy = 1.0
+    variables_without_c = [v for v in vkeys if v not in coeffs]
+
+    energy = E[0]
+    previous_c_i = np.array(c_i, copy=True)
 
     callback_energies = []
+
     def callback(x):
 
         energy = mcvbt_exp(x)
         if not silent:
             print("current energy: {:+2.4f}".format(energy))
         callback_energies.append(energy)
-        
+
         if not silent:
             with open(filename, mode="a", newline="") as file:
                 writer = csv.writer(file)
@@ -281,35 +276,38 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
 
     mcvbt_exp = BigExpVal(circuits=circuits, coefficcents=coeffs, mol=mol, solver=solver, H=mol.make_hamiltonian())
     disp = not silent
-    for i in range(max_iter):
-        if not silent: print("iteration {}".format(i))
+    for iteration in range(max_iter):
+        if not silent: print("iteration {}".format(iteration))
         if solver.lower() == 'qulacs':
             result = scipy.optimize.minimize(mcvbt_exp, x0=list(x0.values()), jac="2-point", method="bfgs",
-                                         options={ "disp": disp, "maxiter": 100},
-                                          callback=callback) #wtf slsqp
+                                             options={"disp": disp, "maxiter": 100},
+                                             callback=callback)
             x0 = {vkeys[i]: result.x[i] for i in range(len(result.x))}
 
         else:
-            result = sn.minimize(tq.Objective(args=[mcvbt_exp]), initial_values=x0,  method="bfgs",silent=silent,
-                                             callback=callback)
+
+            result = sn.minimize(tq.Objective(args=[mcvbt_exp]), initial_values=x0, method="bfgs", silent=silent,
+                                 variables=variables_without_c, callback=callback)
             x0 = deepcopy(result.variables)
         # print("x0",x0)
-        v, vv = gem_fast(circuits=circuits, variables=x0, mol=mol, solver=solver)
+        E, c_i = geminal_equation(circuits=circuits, variables=x0, mol=mol, solver=solver)
 
-        for i in range(len(coeffs)):
-            x0[coeffs[i]] = vv[i, 0]
+        for j in range(len(coeffs)):
+            x0[coeffs[j]] = c_i[j, 0]
 
-        if not np.isclose(energy, v[0], atol=1.e-4):
-            if not silent: print("not converged")
-            if not silent: print(energy)
-            if not silent: print(v[0])
-            energy = v[0]
+        coefficients_converged = (
+            np.allclose(previous_c_i, c_i, atol=1.e-4)
+            or np.allclose(previous_c_i, -c_i, atol=1.e-4)
+        )
+        if not coefficients_converged:
+            if not silent: print("not converged with coefficients {} {}".format(previous_c_i[:, 0], c_i[:, 0]))
+            previous_c_i = np.array(c_i, copy=True)
+
         else:
-            if not silent: print("converged after {} iterations with energy {}".format(i,energy))
-            energy = v[0]
+            if not silent: print("converged after {} iterations with coefficients {}".format(iteration, c_i[:, 0]))
             break
 
     for k in vkeys:
         variables[k] = x0[k]
 
-    return v, vv, variables
+    return E, c_i, variables
