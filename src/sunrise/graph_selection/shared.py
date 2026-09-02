@@ -635,7 +635,6 @@ def genetic_algorithm(
 
 # blossom
 
-
 def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
     """
     Solve optimal matching using Blossom algorithm.
@@ -662,8 +661,20 @@ def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
     return list(edges)
 
 
-def blossom_scaled(coordinates: np.ndarray, num_atoms: int):
+def blossom_scaled(num_atoms: int, coordinates: np.ndarray):
+    """
+    Solve optimal matching using Blossom algorithm based on a scaled distance matrix.
 
+    Parameters
+    ----------
+    num_atoms : int
+    coordinates : np.ndarray
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        Optimal matching.
+    """
     distance_matrix = squareform(pdist(coordinates))
     scaled_matrix = matrix_scaling(distance_matrix)
     graph = nx.Graph()
