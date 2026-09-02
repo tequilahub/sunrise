@@ -4,21 +4,23 @@ import math
 import pandas as pd
 import itertools
 import random
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 
 from scipy.spatial.distance import squareform, pdist
 from quanti_gin.data_generator import DataGenerator
 
 
-def ant_colony_opt(num_atoms: int, 
-                   coordinates: np.ndarray, 
-                   num_ants = 10, 
-                   num_iter = 10,
-                   alpha = 1,
-                   beta = 2,
-                   evaporation = 0.5,
-                   Q = 100):
-    
+def ant_colony_opt(
+    num_atoms: int,
+    coordinates: np.ndarray,
+    num_ants=10,
+    num_iter=10,
+    alpha=1,
+    beta=2,
+    evaporation=0.5,
+    Q=100,
+):
+
     distance_matrix = squareform(pdist(coordinates))
     heuristic = np.ones((num_atoms, num_atoms))
     pheromone = np.ones((num_atoms, num_atoms))
@@ -31,10 +33,10 @@ def ant_colony_opt(num_atoms: int,
             heuristic[j][i] = heuristic[i][j]
 
     heuristic += 1e-12
-        
+
     best_matching = None
     best_cost = float("inf")
-    
+
     for _ in range(num_iter):
         ant_matchings = []
         for _ in range(num_ants):
@@ -48,7 +50,7 @@ def ant_colony_opt(num_atoms: int,
                 probs = []
 
                 for j in candidates:
-                    val = (pow(pheromone[i][j], alpha) * pow(heuristic[i][j], beta))
+                    val = pow(pheromone[i][j], alpha) * pow(heuristic[i][j], beta)
                     probs.append(val)
 
                 probs = np.array(probs)
@@ -71,7 +73,7 @@ def ant_colony_opt(num_atoms: int,
                 best_cost = cost
                 best_matching = matching
 
-        pheromone *= (1 - evaporation)
+        pheromone *= 1 - evaporation
 
         for matching in ant_matchings:
             cost = sum(distance_matrix[i][j] for i, j in matching)
@@ -81,5 +83,5 @@ def ant_colony_opt(num_atoms: int,
             for i, j in matching:
                 pheromone[i][j] += deposit
                 pheromone[j][i] += deposit
-    
+
     return best_matching

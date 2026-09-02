@@ -15,13 +15,16 @@ from scipy.spatial.distance import pdist, squareform
 def total_distance(edges: list[tuple[int, int]], coordinates: np.ndarray):
     return sum(np.linalg.norm(coordinates[i] - coordinates[j]) for i, j in edges)
 
+
 def random_matching(num_atoms: int):
     atoms = list(range(num_atoms))
     random.shuffle(atoms)
     random_edges = [(atoms[i], atoms[i + 1]) for i in range(0, num_atoms, 2)]
     return random_edges
 
-#genetic algorithm for best n solutions
+
+# genetic algorithm for best n solutions
+
 
 def crossover(
     parent_a: list[tuple[int, int]], parent_b: list[tuple[int, int]], num_atoms: int
@@ -146,7 +149,7 @@ def genetic_algorithm_best_n_solutions(
         [(total_distance(edge, coordinates=coordinates), edge) for edge in population],
         key=lambda x: x[0],
     )
-    #print(ranked[:best_n_solutions])
+    # print(ranked[:best_n_solutions])
     return [edge for _, edge in ranked[:best_n_solutions]]
 
 
@@ -175,7 +178,9 @@ def random_neighbour(edges: list[tuple[int, int]]):
 
     return new_edges
 
-#simulated annealing for best n solutions
+
+# simulated annealing for best n solutions
+
 
 def simulated_annealing_best_n_solutions(
     num_atoms: int,
@@ -204,7 +209,6 @@ def simulated_annealing_best_n_solutions(
         Best found configuration.
     """
 
-    
     starting_edges = random_matching(num_atoms)
 
     current_edges = starting_edges[:]
@@ -246,7 +250,14 @@ def simulated_annealing_best_n_solutions(
     best = sorted(solutions.values(), key=lambda x: x[0])
     return [edge for _, edge in best[:best_n_solutions]]
 
-def two_opt_best_n_solutions(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10, max_iter=1000, restart=1000):
+
+def two_opt_best_n_solutions(
+    num_atoms: int,
+    coordinates: np.ndarray,
+    best_n_solutions=10,
+    max_iter=1000,
+    restart=1000,
+):
 
     solutions = {}
     for _ in range(restart):
@@ -261,13 +272,19 @@ def two_opt_best_n_solutions(num_atoms: int, coordinates: np.ndarray, best_n_sol
             for i in range(len(edges)):
                 for j in range(i + 1, len(edges)):
                     a, b = edges[i]
-                    c, d = edges[j] 
+                    c, d = edges[j]
 
                     candiate_edges = [
-                        edges[:i] + edges[i+1:j] + edges[j+1:] + [(a, c), (b, d)], 
-                        edges[:i] + edges[i+1:j] + edges[j+1:] + [(a, d), (b, c)]
-                        ]
-                    
+                        edges[:i]
+                        + edges[i + 1 : j]
+                        + edges[j + 1 :]
+                        + [(a, c), (b, d)],
+                        edges[:i]
+                        + edges[i + 1 : j]
+                        + edges[j + 1 :]
+                        + [(a, d), (b, c)],
+                    ]
+
                     for edge in candiate_edges:
                         new_distance = total_distance(edge, coordinates=coordinates)
                         if new_distance < current_distance:
@@ -284,22 +301,23 @@ def two_opt_best_n_solutions(num_atoms: int, coordinates: np.ndarray, best_n_sol
         solutions[key] = (current_distance, edges[:])
 
     rank = sorted(solutions.values(), key=lambda x: x[0])
-    #print(len(rank))
+    # print(len(rank))
     return [edge for _, edge in rank[:best_n_solutions]]
+
 
 # blossom for best n solutions
 def random_blossom(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10):
     sol = []
 
     excluded_edges = set()
-    
+
     distance_matrix = squareform(pdist(coordinates))
 
     for _ in range(best_n_solutions):
 
         graph = nx.Graph()
         for i in range(num_atoms):
-            for j in range(i+1, num_atoms):
+            for j in range(i + 1, num_atoms):
                 edge = (i, j)
 
                 if edge in excluded_edges:
@@ -307,7 +325,7 @@ def random_blossom(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10)
 
                 graph.add_edge(i, j, weight=distance_matrix[i][j])
 
-        matching = nx.algorithms.matching.min_weight_matching(graph, weight = "weight")
+        matching = nx.algorithms.matching.min_weight_matching(graph, weight="weight")
         matching = list(matching)
         sol.append(matching)
 
@@ -316,18 +334,19 @@ def random_blossom(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10)
         excluded_edges = {excluded_edges}
     return sol
 
+
 def random_blossom_scaled(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10):
     sol = []
 
     excluded_edges = set()
-    
+
     distance_matrix = squareform(pdist(coordinates))
     scaled_matrix = matrix_scaling(distance_matrix)
     for _ in range(best_n_solutions):
 
         graph = nx.Graph()
         for i in range(num_atoms):
-            for j in range(i+1, num_atoms):
+            for j in range(i + 1, num_atoms):
                 edge = (i, j)
 
                 if edge in excluded_edges:
@@ -335,7 +354,7 @@ def random_blossom_scaled(num_atoms: int, coordinates: np.ndarray, best_n_soluti
 
                 graph.add_edge(i, j, weight=scaled_matrix[i][j])
 
-        matching = nx.algorithms.matching.min_weight_matching(graph, weight = "weight")
+        matching = nx.algorithms.matching.min_weight_matching(graph, weight="weight")
         matching = list(matching)
         sol.append(matching)
 
@@ -344,57 +363,55 @@ def random_blossom_scaled(num_atoms: int, coordinates: np.ndarray, best_n_soluti
         excluded_edges = {excluded_edges}
     return sol
 
+
 heuristics = {
     "genetic_algorithm": genetic_algorithm_best_n_solutions,
     "simulated_annealing": simulated_annealing_best_n_solutions,
     "2-opt": two_opt_best_n_solutions,
     "blossom": random_blossom,
-    "scaled blossom": random_blossom_scaled
+    "scaled blossom": random_blossom_scaled,
 }
 
 if __name__ == "__main__":
-    #run_benchmark(num_atoms=6, num_jobs=5)
+    # run_benchmark(num_atoms=6, num_jobs=5)
     results = []
-    
-    jobs = DataGenerator.generate_jobs(
-        number_of_jobs=5, number_of_atoms=12
-    )
-    
+
+    jobs = DataGenerator.generate_jobs(number_of_jobs=5, number_of_atoms=12)
+
     for job in jobs:
         print("new molecule")
-        
+
         coordinates = job.coordinates
         geometry = job.geometry
-      
+
         mol = tq.Molecule(geometry=geometry, basis_set="sto-3g")
 
         for name, function in heuristics.items():
             print(f"Running {name}...")
             edges = function(num_atoms=12, coordinates=coordinates)
-            #print(edges)
+            # print(edges)
             for rank, edge in enumerate(edges, start=1):
                 print("new edge", edge)
                 result = DataGenerator.run_spa_optimization(
-                                molecule=mol, coordinates=coordinates, edges=edge
-                            )
+                    molecule=mol, coordinates=coordinates, edges=edge
+                )
 
                 ground_state_energy = mol.compute_energy("fci")
                 energy = result["energy"]
                 energy_gab = energy - ground_state_energy
-                #print(energy)
+                # print(energy)
 
                 results.append(
-                            {
-                                "molecule_id": job.id,
-                                "method": name,
-                                "rank": rank,
-                                "energy": energy,
-                                "edges": edge,
-                                "ground state energy": ground_state_energy,
-                                "energy gab": energy_gab,
-                            }
-                        )
-        
+                    {
+                        "molecule_id": job.id,
+                        "method": name,
+                        "rank": rank,
+                        "energy": energy,
+                        "edges": edge,
+                        "ground state energy": ground_state_energy,
+                        "energy gab": energy_gab,
+                    }
+                )
+
     data = pd.DataFrame(results)
     data.to_csv(f"benchmark_results_{12}_spa_angles.csv", index=False)
-

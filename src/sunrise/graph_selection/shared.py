@@ -635,6 +635,7 @@ def genetic_algorithm(
 
 # blossom
 
+
 def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
     """
     Solve optimal matching using Blossom algorithm.
