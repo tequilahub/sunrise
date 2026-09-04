@@ -199,6 +199,44 @@ class FockSpaceState:
 		spin_type = {0: "singlet", 0.75: "doublet", 2: "triplet", 3.75: "quartet", 6: "quintet", 8.75: "sextet", 12: "septet", 15.75: "octet", 20: "nonet"}.get(rounded_eigval, "mixed")
 		return spin_type
 
+	@staticmethod
+	def _seniority_of_bitstring(bs_int: int, n_orbitals: int) -> int:
+		"""Number of singly occupied spatial orbitals of a determinant."""
+		return sum(
+			1 for i in range(n_orbitals)
+			if ((bs_int >> (2 * i)) & 1) + ((bs_int >> (2 * i + 1)) & 1) == 1
+		)
+
+	@cached_property
+	def seniority(self) -> int | None:
+		"""
+		Seniority = number of singly occupied orbitals, in the orbital basis
+		of self.wavefunction.
+
+		Returns an int iff the state is an eigenstate of the seniority operator
+		(all determinants share the same seniority); None for superpositions
+		across seniority sectors.
+		"""
+		n = self.mol.n_orbitals
+		values = {
+			self._seniority_of_bitstring(int(bs), n)
+			for bs, coef in self.wavefunction.items()
+			if abs(coef) > 1e-12
+		}
+		return values.pop() if len(values) == 1 else None
+
+	@cached_property
+	def seniority_expectation(self) -> float:
+		"""<Ω> = Σ_det |c|² · seniority(det).  (Informational; can be non-integer.)"""
+		n = self.mol.n_orbitals
+		return float(sum(
+			abs(coef) ** 2 * self._seniority_of_bitstring(int(bs), n)
+			for bs, coef in self.wavefunction.items()
+		))
+
+	@cached_property
+	def n_determinants(self):
+		return sum(1 for _, c in self.wavefunction.items() if abs(c) > 1e-8)
 
 	@cached_property
 	def irrep(self):
