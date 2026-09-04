@@ -113,6 +113,7 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 						wavefunction=new_wfn,
 						provider=irrep_provider,
 						S2=s2_value,
+                        m_s=ms_val,
 						fragment_orbitals=fragment_orbitals
 					))
 		if is_dataframe:
@@ -210,9 +211,8 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		fragment_orbitals = getattr(state_list[0], 'fragment_orbitals', None)
 
 		# assumes the representation as quantum circuit
-		SALC_list: list[tequila.QubitWaveFunction] = []
-		# Get number of orbitals once outside the loop
 		n_orbitals = self.mol.n_orbitals
+		n_qubits = 2 * n_orbitals
 
 		# select which operations to apply
 		# For an fragment-space fragment, only operations that map the fragment orbital
@@ -228,19 +228,25 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		else:
 			selected_ops = list(enumerate(self.pg.character_table.operation_symbols))
 
+		# Group projected SALCs by (irrep, S2, m_s) to preserve spin purity!
+		SALC_by_sector: dict[tuple, list[tequila.QubitWaveFunction]] = {}
+
 		for state in state_list:
+			# Extract spin quantum numbers from the seed state (O(1) since they are cached)
+			s2_val = state.S2
+			ms_val = state.m_s
+
 			resulting_state_list: list[tequila.QubitWaveFunction] = []
 			op_indices: list[int] = []
 
 			for k, op_label in selected_ops:
 				perm = self._spatial_perms[op_label]
-				phases = self._spatial_phases[op_label]  # Pass phases to the bitstring modifier
+				phases = self._spatial_phases[op_label]
 				resulting_state_list.append(self._apply_spatial_permutation_bitstring(state.wavefunction, perm, n_orbitals, phases))
 				op_indices.append(k)
 
 			for j, irrep in enumerate(self.pg.character_table.dict.keys()):
-				state_SALC = tequila.QubitWaveFunction(n_qubits=self.mol.n_orbitals * 2)
-				# look up characters by the ORIGINAL op index
+				state_SALC = tequila.QubitWaveFunction(n_qubits=n_qubits)
 				for idx, k in enumerate(op_indices):
 					character = self.pg.character_table.dict[irrep][k]
 					if character != 0:
@@ -248,20 +254,98 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 
 				norm_sq = state_SALC.inner(state_SALC).real
 				if norm_sq > 1e-10:
-					SALC_list.append(state_SALC.normalize())
+					sector = (irrep, s2_val, ms_val)
+					if sector not in SALC_by_sector:
+						SALC_by_sector[sector] = []
+					SALC_by_sector[sector].append(state_SALC.normalize())
 
-		SALC_list_unique: list[tequila.QubitWaveFunction] = []
-		seen_keys: set[tuple] = set()
-		for state in SALC_list:
-			key = self._salc_key(state)
-			if key not in seen_keys:
-				seen_keys.add(key)
-				SALC_list_unique.append(state)
+		result_objects = []
 
-		result_objects = [FockSpaceState(self.mol, SALC, irrep_provider, fragment_orbitals=fragment_orbitals) for SALC in SALC_list_unique]
+		for (irrep, s2_val, ms_val), wfn_list in SALC_by_sector.items():
+			if not wfn_list:
+				continue
+
+			# Deduplicate exact copies within this sector
+			unique_wfns = []
+			seen_keys = set()
+			for wfn in wfn_list:
+				key = self._salc_key(wfn)
+				if key not in seen_keys:
+					seen_keys.add(key)
+					unique_wfns.append(wfn)
+
+			# Orthogonalize within this sector
+			orthonormal_wfns = self._orthonormalize_wavefunctions(
+				unique_wfns,
+				n_qubits=n_qubits,
+				tol=1e-8
+			)
+
+			# Create FockSpaceState objects
+			for wfn in orthonormal_wfns:
+				result_objects.append(
+					FockSpaceState(
+						mol=self.mol,
+						wavefunction=wfn,
+						provider=irrep_provider,
+						irrep=irrep,
+						S2=s2_val,
+						m_s=ms_val,
+						fragment_orbitals=fragment_orbitals
+					)
+				)
+
 		if is_dataframe:
 			return FockSpaceState.dataframe(result_objects)
 		return result_objects
+
+	@staticmethod
+	def _orthonormalize_wavefunctions(
+		wfns: list[tequila.QubitWaveFunction],
+		n_qubits: int,
+		tol: float = 1e-8
+	) -> list[tequila.QubitWaveFunction]:
+		"""
+		Canonical / Löwdin-style orthonormalization of a list of wavefunctions.
+		Removes linear dependencies with overlap eigenvalues below tol.
+		"""
+		if len(wfns) == 0:
+			return []
+
+		n = len(wfns)
+		S = numpy.zeros((n, n), dtype=complex)
+
+		for i in range(n):
+			for j in range(i, n):
+				val = wfns[i].inner(wfns[j])
+				S[i, j] = val
+				S[j, i] = numpy.conj(val)
+
+		S = 0.5 * (S + S.conj().T)
+
+		eigvals, U = numpy.linalg.eigh(S)
+		keep = eigvals > tol
+
+		if not numpy.any(keep):
+			return []
+
+		U_keep = U[:, keep]
+		eig_keep = eigvals[keep]
+
+		orthonormal_wfns = []
+
+		for a in range(U_keep.shape[1]):
+			coeffs = U_keep[:, a] / numpy.sqrt(eig_keep[a])
+
+			new_wfn = tequila.QubitWaveFunction(n_qubits=n_qubits)
+
+			for coeff, old_wfn in zip(coeffs, wfns):
+				if abs(coeff) > 1e-14:
+					new_wfn += coeff * old_wfn
+
+			orthonormal_wfns.append(new_wfn.normalize())
+
+		return orthonormal_wfns
 
 
 @dataclass
