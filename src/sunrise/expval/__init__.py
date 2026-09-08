@@ -4,7 +4,7 @@ from openfermion import FermionOperator
 from tequila import TequilaException
 
 SUPPORTED_FERMIONIC_BACKENDS = ["tequila", "fqe", "tcc"]
-INSTALLED_FERMIONIC_BACKENDS = {"tequila": TequilaBraket}
+INSTALLED_FERMIONIC_BACKENDS = {}
 
 try:
     from sunrise.expval.tcc_expval import TCCBraket
@@ -16,6 +16,8 @@ try:
     INSTALLED_FERMIONIC_BACKENDS["fqe"] = FQEBraKet
 except ImportError:
     pass
+
+INSTALLED_FERMIONIC_BACKENDS["tequila"] = TequilaBraket
 
 def show_available_modules():
     print("Available Fermionic Modules:")

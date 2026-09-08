@@ -1,7 +1,7 @@
 from __future__ import annotations
 from tequila.circuit._gates_impl import assign_variable
 from tequila.circuit.gates import QubitExcitationImpl,X,Phase
-from tequila import Variable,BitString
+from tequila import Variable,BitString,BitNumbering
 from tequila.quantumchemistry.chemistry_tools import FermionicGateImpl
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase
 from tequila.utils.exceptions import TequilaException, TequilaWarning
@@ -88,7 +88,6 @@ class FCircuit:
         else: n_qubits_is_double = False
         gU = sunrise.graphical.GraphicalCircuit.from_circuit(U=U, n_qubits_is_double=n_qubits_is_double)
         gU.export_to(filename=filename,*args,**kwargs)
-        
 
     @property
     def initial_state(self)->QubitWaveFunction:
@@ -117,6 +116,7 @@ class FCircuit:
             initial_state._n_qubits = self.n_qubits
             self._initial_state = initial_state
             self._verify_state()
+
     @property
     def depth(self):
         """
@@ -219,7 +219,7 @@ class FCircuit:
         ----------
         positions: list of int:
             the positions at which the gates should be added. Always refer to the positions in the original circuit
-        circuits: list or QCircuit:
+        circuits: list or FCircuit:
             the gates to add at the corresponding positions
         replace: list of bool: (Default value: None)
             Default is None which corresponds to all true
@@ -261,8 +261,9 @@ class FCircuit:
 
         new_gatelist += self.gates[last_idx + 1 :]
 
-        result = QCircuit(gates=new_gatelist)
+        result = FCircuit(gates=new_gatelist)
         result.n_qubits = max(result.n_qubits, self.n_qubits)
+        result.initial_state = deepcopy(self.initial_state)
         return result
 
     def insert_gates(self, positions, gates):
@@ -371,7 +372,7 @@ class FCircuit:
         self._min_n_qubits = max(self._min_n_qubits, other._min_n_qubits)
         if self._initial_state is None:
             self._initial_state = other._initial_state
-        elif other._initial_state is not None and other._initial_state != self._initial_state:
+        elif other._initial_state is not None:# and other._initial_state != self._initial_state:
             raise TequilaException(f"FermionicCircuit + FermionicCircuit with two different initial states:\n{self._initial_state}, {other._initial_state}")
         return self
 
@@ -387,7 +388,7 @@ class FCircuit:
         initial_state = self.initial_state
         if self._initial_state is None:
                 initial_state = other._initial_state
-        elif other._initial_state is not None and other._initial_state != self._initial_state:
+        elif other._initial_state is not None: #  and other._initial_state != self._initial_state:
             raise TequilaException(f"FermionicCircuit + FermionicCircuit with two different initial states:\n{self._initial_state}, {other._initial_state}")
         result.initial_state = initial_state
         return result
@@ -409,6 +410,7 @@ class FCircuit:
         for i,gate in enumerate(self.gates):
             if gate != other.gates[i]:
                 return False
+        return True # IDEA avoiding initial state comparations to avoid
         if len(self.initial_state.to_array()) != len(other.initial_state.to_array()):
             return False
         if self.initial_state.numbering != other.initial_state.numbering:
@@ -476,13 +478,15 @@ class FCircuit:
         operations = FCircuit()
         if n_orb:
             include_reference = True
-            reference = I(target=[i for i in range(n_orb*2)])  # to set n_qubits
+            n_state = [0]*2*n_orb
+            reference = QubitWaveFunction(n_qubits=2*n_orb, dense=False,numbering=BitNumbering.LSB)
         else: 
             include_reference = False
             reference = None
         for edge in edges:
             if include_reference:
-                reference += X([edge[0],edge[0]+n_orb])
+                n_state[edge[0]] = 1
+                n_state[edge[0]+n_orb] = 1
             previous = edge[0]
             for i in edge[1:]:
                 angle = Variable(((previous,i),'D',label))
@@ -491,6 +495,8 @@ class FCircuit:
                 operations += sunrise.gates.UC(i=previous,j=i,variables=angle)
                 if ladder:
                     previous = i
+        if include_reference:
+            reference[BitString.from_array(n_state)] = 1.
         return cls(gates=operations._gates,initial_state=reference)
 
     @staticmethod
@@ -598,7 +604,7 @@ class FCircuit:
             U = U.to_udud(molecule.n_orbitals)
             molecule.transformation.upthendown = True
             if self.initial_state is not None:
-                idx = where(array(self._initial_state.to_array())>1.e-6)[0]
+                idx = where(array(self._initial_state.to_array())>1.e-6)[0] #TODO change to dict
                 if not len(idx):
                     pass
                 elif len(idx)>1:
@@ -622,14 +628,16 @@ class FCircuit:
             raise TequilaException("No Possible to transform from FCircuit to QCircuit without further information")
     
     def _verify_state(self):
-        state = self._initial_state.to_array()
-        indices = where(array(state)>1.e-6)[0]
-        nozero = [bin(i)[2:] for i in indices]
-        ne = nozero[0].count('1')
-        if not all([st.count('1')==ne for st in nozero]):
-            raise TequilaException('The Initial State is not Particle-conserving')
-        if not all([isclose(state[i].imag,0.,atol=1.e-6) for i in indices]):
-            raise TequilaException('No Imaginary states for Chemistry States')
+        if  isinstance(self.initial_state._state,dict):
+            nozero = [bin(i)[2:] for i in self._initial_state._state.keys()]
+            ne = nozero[0].count('1')
+            if not all([st.count('1')==ne for st in nozero]):
+                raise TequilaException('The Initial State is not Particle-conserving')
+            if not all([isclose(i.imag,0.,atol=1.e-6) for i in self._initial_state._state.values()]):
+                raise TequilaException('No Imaginary states for Chemistry States')
+        else:
+            return True # Since dense QubitWavefunction scales 2^N, it becomes quickly intractable
+        
     
 
 if __name__ == '__main__':

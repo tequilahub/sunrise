@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 from sunrise.spafastprototype import decompose
 from copy import deepcopy
+import re
 ## Example of protocol presented on http://arxiv.org/abs/2606.26882, using many tools already presented on this package examples.
 
 sys.setrecursionlimit(100000)
@@ -21,6 +22,29 @@ H	-0.0929010	-2.6229830	-0.4467250
 H	0.5293470	-1.1571020	-1.4380990
 '''
 file_name = 'butadiene_spa.data'
+
+def get_madness_sort_key(item):
+    original_idx, label_str = item
+    parts = label_str.split()
+    atom_idx = int(parts[0])
+    orbital_part = parts[2]
+    
+    match = re.match(r"(\d+)([spdfgh])(.*)", orbital_part)
+    n = int(match.group(1))
+    l_str = match.group(2)
+    comp = match.group(3)
+    
+    l_map = {'s': 0, 'p': 1, 'd': 2, 'f': 3, 'g': 4}
+    l = l_map[l_str]
+    
+    comp_order = {
+        'x': 0, 'y': 1, 'z': 2,
+        'xx': 0, 'xy': 1, 'xz': 2, 'yy': 3, 'yz': 4, 'zz': 5,
+        '': 0
+    }
+    c_idx = comp_order.get(comp, 0)
+    
+    return (atom_idx, n, l, c_idx)
 
 def step1():
     '''
@@ -165,12 +189,27 @@ def orbital_refinement():
                 break
     mol:sn.molecules.hybrid_base.HybridBase = objects[0]
     edges = [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9), (10, 11), (12, 13), (14, 15), (16, 17), (18, 19), (20, 21)]
-    C = mol.integral_manager.orbital_coefficients.copy()
+    
+    ## For this particular case the following block of code doesn't matter
+    ## But pyscf uses spherical coordinates meanwhile madness does on cartesians, important for d shells and further
+    mol_sph = sn.from_tequila(mol,cart=False)
+    c2s = mol_sph.cart2sph_coeff(normalized='sp') 
+    mo_coeff_cart_pyscf_order = np.dot(c2s, mol.integral_manager.orbital_coefficients)
+
+    ## A further issue is the shell ordering, pyscf orders by angular momentum (l) (first all s orbs, then all p...) 
+    ## meanwhile madness does following natural filling: (...  3s 3p 3d (if populated) 4s 4p)
+    mol_cart = sn.from_tequila(mol,cart=True)
+    pyscf_labels = mol_cart.ao_labels()
+    indexed_labels = list(enumerate(pyscf_labels))
+    sorted_labels = sorted(indexed_labels, key=get_madness_sort_key)
+    madness_row_order = [idx for idx, label in sorted_labels]
+    mo_coeff_madness = mo_coeff_cart_pyscf_order[madness_row_order, :]
+    
     bp = AtomicBasisProjector(world, geometry, units="a", aobasis="sto-3g")
     basis = bp.get_orbitals()
     
     integrals=fe.Integrals(world)
-    orbitals = integrals.transform(basis, C) #transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+    orbitals = integrals.transform(basis, mo_coeff_madness) #transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
     orbitals = integrals.orthonormalize(orbitals=orbitals)
     core = [orbitals[i.idx_total] for i in mol.integral_manager.orbitals if i.idx is None]
     active = [orbitals[i.idx_total] for i in mol.integral_manager.orbitals if i.idx is not None]
@@ -184,7 +223,7 @@ def orbital_refinement():
     grouping = 12
     max_iter = 20
     print("="*10, " Starting Orbital Refination ","="*10)
-    while not converged or iteration < max_iter:
+    while not converged and iteration <= max_iter:
         G = integrals.compute_two_body_integrals(active,ordering='chem')
         FC_int = integrals.compute_frozen_core_interaction(core, active)
         T = integrals.compute_kinetic_integrals(active)
@@ -219,6 +258,8 @@ def orbital_refinement():
         else: 
             energy = result.energy
             iteration += 1
+    print('Constant term = ',c)
+    fe.cleanup(globals())
         
 
 def plot_refined():
@@ -227,16 +268,18 @@ def plot_refined():
     except ImportError:
         pass
     world = fe.MadWorld(thresh=1e-6,ndims=3)
+    geo = fe.MolecularGeometry(geometry=geometry,units='a',silent=True)
     core = []
     for i in range(4):
         core.append(fe.SavedFct3D(f"cor_SPA_orb{i}.data"))
     for i in range(4):
-        world.cube_plot(f"cor_HF_orb{i}",core[i],geometry,zoom=5)
+        world.cube_plot(f"cor_HF_orb{i}",core[i],geo,zoom=5)
     active = []
     for i in range(22):
         active.append(fe.SavedFct3D(f"act_SPA_orb{i}.data"))
     for i in range(22):
-        world.cube_plot(f"act_SPA_orb{i}",active[i],geometry,zoom=5)
+        world.cube_plot(f"act_SPA_orb{i}",active[i],geo,zoom=5)
+    fe.cleanup(globals())
 
 def spa_refined():
     objects = []
@@ -273,6 +316,31 @@ def spa_refined():
     E_spaplus = decompose(H=H,U=U_spaplus,grouping=[qpi_list,qcc_list,qch_list])
     respaplus = tq.minimize(E_spaplus,silent=True, gradient="2-point",method_options={"finite_diff_rel_step":1.e-4},initial_values=respa.angles)
     print("SPA+ ",respaplus.energy) 
+
+    if True:
+        try:
+            import frayedends as fe
+        except ImportError:
+            pass
+        world = fe.MadWorld(thresh=1e-6,ndims=3)
+        integrals=fe.Integrals(world)
+        geo = fe.MolecularGeometry(geometry=geometry,units='a',silent=True)
+        active = []
+        for i in range(22):
+            active.append(fe.SavedFct3D(f"act_SPA_orb{i}.data"))
+        mUR = deepcopy(UR)
+        mUR = mUR.map_variables({d:0 for d in mUR.extract_variables()})
+        rot = sn.measurement.gates_to_orb_rot(mUR,len(active),core=0)
+        trans = integrals.transform(active, rot) #transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+        for i in [2,3,10,11]:
+            world.cube_plot(f"back_to_native{i}",trans[i],geo,zoom=5)
+
+        mUR = deepcopy(UR+UR1)
+        mUR = mUR.map_variables({d:0 for d in mUR.extract_variables()})
+        rot = sn.measurement.gates_to_orb_rot(mUR,len(active),core=0)
+        trans = integrals.transform(active, rot) #transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+        for i in [2,3,10,11]:
+            world.cube_plot(f"2nd_graph{i}",trans[i],geo,zoom=5)
 
 step1()
 plot()
