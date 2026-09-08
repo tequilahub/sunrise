@@ -42,7 +42,6 @@ class BigExpVal:
 
         self.SS:Objective = SS
         self.EE:Objective = EE
-        self.coeffs = coefficcents
 
         variables = {}
         for U in circuits:
