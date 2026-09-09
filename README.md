@@ -216,28 +216,49 @@ The cubefile generation may take some time. Here we provided a tq.Molecule but i
 ##  Circuit Visualizer
 Improved circuit visualizer which creates the circuit qpic file with improved circuit structures in common chemistry building blocks as the electronic excitation gates. It creates gates in molecular orbitals picture, halving the number of qubits displayed.
 
-### Automatized way
 ```python
 import tequila as tq
 import sunrise as sun
+import numpy as np
+from math import pi
 
-mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1.",basis_set="sto-3g")
-U = tq.QCircuit()
-U += tq.gates.Y(2) # Generic gate
-U += mol.make_excitation_gate(indices=[(0,2),(1,3)],angle="a") # Double excitation
-U += mol.make_excitation_gate(indices=[(4,6)],angle="b") # Single excitation
-U += tq.gates.QubitExcitation(target=[5,7],angle="c") # Qubit excitation
-U += tq.gates.Trotterized(generator=mol.make_excitation_generator(indices=[(0,2)]),angle="d") # Trotterized rotation
-U += mol.make_excitation_gate(indices=[(4,6)],angle="b")
-U += mol.make_excitation_gate(indices=[(5,7)],angle="b") # Paired single excitation
-U += mol.UR(0,1,1) # Orbital rotator
-U += mol.UC(1,2,2) # Pair correlator
+# --- 1. Basic Circuit Setup & Reference State ---
+geom = "H 0 0 0\nH 0 0 1\nH 0 0 2\nH 0 0 3"
+snmol = sun.Molecule(geometry=geom, basis_set='sto-3g', nature='f', units='a')
+circuit = sun.FCircuit()
+circuit += snmol.prepare_reference()
 
-visual_circuit = sun.graphical.GCircuit.from_circuit(U, n_qubits_is_double=False) # Translate tq.QCircuit in renderable Circuit
+# --- 2. Gate Types Showcase ---
+# Single, Paired Double, and Unpaired Double Excitations
+circuit += sun.gates.FermionicExcitation(indices=[(1, 7)], variables="a")          # Single
+circuit += sun.gates.FermionicExcitation(indices=[(0, 4), (1, 7)], variables=2.0)  # Paired Double
+circuit += sun.gates.FermionicExcitation(indices=[(0, 2), (3, 5)], variables="b")  # Unpaired Double
 
-visual_circuit.export_qpic("from_circuit_example") # Create qpic file
-visual_circuit.export_to("from_circuit_example.pdf") # Create pdf file
-visual_circuit.export_to("from_circuit_example.png") # Create png file
+# Special Fermionic Gates
+circuit += sun.gates.UR(0, 1, variables="c")  # Orbital Rotator
+circuit += sun.gates.UC(1, 3, variables="d")  # Pair Correlator
+
+# Raw Tequila Gate
+circuit += tq.gates.Y([0, 3])
+
+# --- 3. Basic Spatial Orbitals View ---
+circuit.export_to("basic_spatial_view.pdf", show_spatial_orbitals=True)
+
+# --- 4. Hybrid Wire Selection (Bosonic vs Fermionic) ---
+select = {0: "B", 1: "F", 2: "F", 3: "B"}
+circuit.export_to("basic_hybrid_spatial.pdf", show_spatial_orbitals=True, select=select)
+
+# --- 5. Variable Assignment & Color Ranges ---
+# Plot the symbolic circuit (triggers parametrized marking)
+circuit.export_to("basic_symbolic.pdf", style={'parametrized': 'blue'})
+
+# Map variables to numeric values and plot with a color range
+variables = {"a": 0, "b": pi / 4, "c": pi / 2, "d": pi}
+numeric_circuit = circuit.map_variables(variables)
+numeric_circuit.export_to("basic_numeric.pdf", style={'color_range': ["#00FF6A", 'red']})
+
+# --- 6. Spatial vs Spin Views ---
+circuit.export_to("basic_spin_view.pdf", show_spatial_orbitals=False)
 ```
 Similarly, the same protocol can be followed for FCircuits.
 

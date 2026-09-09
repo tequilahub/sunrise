@@ -71,24 +71,7 @@ class FCircuit:
             self._parameter_map = parameter_map
         self.initial_state = initial_state 
         self.verify()
-
-    def export_to(self, filename: str,*args, **kwargs):
-        """
-        Export to png, pdf, qpic, tex with qpic backend
-        Parameters
-        """
-        U = deepcopy(self)
-        if 'n_orb' in kwargs:
-            n_orb = kwargs['n_orb']
-        else: n_orb = self.n_qubits//2
-        U.to_udud(n_orb)
-        if 'n_qubits_is_double' in kwargs:
-            n_qubits_is_double = kwargs['n_qubits_is_double']
-            kwargs.pop('n_qubits_is_double')
-        else: n_qubits_is_double = False
-        gU = sunrise.graphical.GraphicalCircuit.from_circuit(U=U, n_qubits_is_double=n_qubits_is_double)
-        gU.export_to(filename=filename,*args,**kwargs)
-
+    
     @property
     def initial_state(self)->QubitWaveFunction:
         return self._initial_state
@@ -420,27 +403,39 @@ class FCircuit:
     def __repr__(self):
         return self.__str__()
 
-    def to_upthendown(self,norb)->FCircuit:
+    def to_upthendown(self, norb) -> "FCircuit":
         '''
         Initial State can't be reordered, it must always be on upthendown
         '''
         u = []
         for gate in self.gates:
-            g = deepcopy(gate).to_upthendown(norb)
-            g.reordered = True
+            g = deepcopy(gate)
+            if hasattr(g, "to_upthendown"):
+                g = g.to_upthendown(norb)
+                g.reordered = True
             u.append(g)
-        return FCircuit(gates=u,parameter_map=self._parameter_map,initial_state=self.initial_state)
+        return FCircuit(
+            gates=u,
+            parameter_map=self._parameter_map,
+            initial_state=self.initial_state
+        )
 
-    def to_udud(self,norb)->FCircuit:
+    def to_udud(self, norb) -> "FCircuit":
         '''
         Initial State can't be reordered, it must always be on upthendown
         '''
         u = []
         for gate in self.gates:
-            g = deepcopy(gate).to_udud(norb)
-            g.reordered = False
+            g = deepcopy(gate)
+            if hasattr(g, "to_udud"):
+                g = g.to_udud(norb)
+                g.reordered = False
             u.append(g)
-        return FCircuit(gates=u,parameter_map=self._parameter_map,initial_state=self.initial_state)
+        return FCircuit(
+            gates=u,
+            parameter_map=self._parameter_map,
+            initial_state=self.initial_state
+        )
 
     @classmethod
     def from_Qcircuit(cls,circuit:QCircuit,**kwargs):
@@ -638,7 +633,158 @@ class FCircuit:
         else:
             return True # Since dense QubitWavefunction scales 2^N, it becomes quickly intractable
         
+
+    def _is_upthendown(self):
+        """True if the gates currently carry upthendown indices."""
+        return any(getattr(g, 'reordered', False) for g in self.gates)
+
+    def _is_mixed_ordering(self):
+        """True if the circuit contains both reordered and non-reordered fermionic gates."""
+        flags = set(getattr(g, 'reordered', False) for g in self.gates if hasattr(g, '_render'))
+        return len(flags) > 1
+        
+    def render(self, state, style, show_spatial_orbitals=True):
+        # Inline initial wires logic
+        iw = set()
+        if self.initial_state is not None:
+            from numpy import where, abs as nabs, argmax
+            arr = nabs(self.initial_state.to_array())
+            idx = where(arr > 1e-6)[0]
+            if len(idx) != 1: idx = [int(argmax(arr))]
+            n_state = self.initial_state.n_qubits
+            n = max(n_state, self.n_qubits)
+            bits = format(int(idx[0]), f'0{n_state}b').ljust(n, '0')
+            norb = n // 2
+            occ = [q for q, b in enumerate(bits) if b == '1']
+            
+            is_upthendown = any(getattr(g, 'reordered', False) for g in self.gates if hasattr(g, '_render'))
+            if show_spatial_orbitals: iw = set(q if q < norb else q - norb for q in occ)
+            elif is_upthendown: iw = set(occ)
+            else: iw = set(2 * (q % norb) + (q >= norb) for q in occ)
+
+        chunks = []
+        if iw:
+            chunks.append(" ".join(f"a{q}" for q in sorted(iw)) + " G I ")
+            
+        pending = []
+        for gate in self.gates:
+            if hasattr(gate, "_render"):
+                if pending:
+                    chunks.append(" ".join(f"a{q}" for q in sorted(set(pending))) + " G G ")
+                    pending = []
+                chunks.append(gate._render(state, style, show_spatial_orbitals))
+            else:
+                pending += list(gate.qubits)
+                
+        if pending:
+            chunks.append(" ".join(f"a{q}" for q in sorted(set(pending))) + " G G ")
+            
+        out = "\n".join(chunks) + "\n"
+        if style.group_together:
+            out += "\n" + state.all_names() + " TOUCH\n"
+        return out
     
+    def export_qpic(self, filename, filepath=None, style={}, show_spatial_orbitals=True,
+                    labels={}, colors={}, wire_colors={}, select=None, **kwargs):
+        from sunrise.graphical.core.state import CircuitState
+        from sunrise.graphical.core.color import DefaultColors
+        from sunrise.graphical.core.style import parse_circuit_style
+        from os import path
+
+        if not len(wire_colors) and select is not None:
+            wire_colors = dict(wire_colors)
+            for s in select:
+                if select[s] == 'B': wire_colors[s] = "red"
+
+        result = ""
+        style_obj, colors = parse_circuit_style(style, colors)
+
+        for color, rgb in DefaultColors.items():
+            result += f"COLOR {color} {rgb.r} {rgb.g} {rgb.b}\n"
+        for color, rgb in colors.items():
+            result += f"COLOR {color} {rgb.r} {rgb.g} {rgb.b}\n"
+
+        # Inline _used_wires and _initial_wires logic
+        norb = self.n_qubits // 2
+        wires = set()
+        if self.initial_state is not None:
+            from numpy import where, abs as nabs, argmax
+            arr = nabs(self.initial_state.to_array())
+            idx = where(arr > 1e-6)[0]
+            if len(idx) != 1: idx = [int(argmax(arr))]
+            n_state = self.initial_state.n_qubits
+            n = max(n_state, self.n_qubits)
+            bits = format(int(idx[0]), f'0{n_state}b').ljust(n, '0')
+            occ = [q for q, b in enumerate(bits) if b == '1']
+            is_upthendown = any(getattr(g, 'reordered', False) for g in self.gates if hasattr(g, '_render'))
+            if show_spatial_orbitals: wires.update(q if q < norb else q - norb for q in occ)
+            elif is_upthendown: wires.update(occ)
+            else: wires.update(2 * (q % norb) + (q >= norb) for q in occ)
+
+        for g in self.gates:
+            if hasattr(g, "_render"):
+                if not show_spatial_orbitals: wires.update(g.qubits)
+                elif getattr(g, "reordered", False): wires.update(q if q < norb else q - norb for q in g.qubits)
+                else: wires.update(q // 2 for q in g.qubits)
+            else:
+                wires.update(g.qubits)
+
+        if not wires: wires = {0}
+        max_wire = max(wires)
+
+        for wire in range(max_wire + 1):
+            label = labels.get(wire, str(wire))
+            color = wire_colors.get(wire, "black")
+            result += f"color={color} a{wire} W {label}\n"
+        for wire in range(max_wire + 1):
+            result += f"a{wire} /\n"
+
+        state_obj = CircuitState(self.n_qubits // 2)
+        result += self.render(state_obj, style_obj, show_spatial_orbitals) + "\n"
+
+        ext = "" if filename.endswith(".qpic") else ".qpic"
+        final_path = path.join(filepath, filename + ext) if filepath else filename + ext
+        with open(final_path, "w") as file:
+            file.write(result)
+
+    def export_to(self, filename: str, *args, **kwargs):
+        from copy import deepcopy
+        from tequila import TequilaException
+        from sunrise.graphical.qpic_visualization import qpic_to_pdf, qpic_to_png
+
+        U = deepcopy(self)
+        n_orb = kwargs.pop("n_orb", self.n_qubits // 2)
+        if "n_qubits_is_double" in kwargs:
+            show_spatial_orbitals = not kwargs.pop("n_qubits_is_double")
+        else:
+            show_spatial_orbitals = kwargs.pop("show_spatial_orbitals", True)
+        filepath = kwargs.get("filepath", None)
+
+        # Inline _is_mixed_ordering check
+        flags = set(getattr(g, 'reordered', False) for g in U.gates if hasattr(g, '_render'))
+        if len(flags) > 1:
+            try: U = U.to_upthendown(n_orb)
+            except AttributeError: pass
+
+        if show_spatial_orbitals:
+            try: U = U.to_udud(n_orb)
+            except AttributeError: pass
+
+        filename_tmp = filename.split(".")
+        if len(filename_tmp) == 1: ftype, fname = "pdf", filename
+        else: ftype, fname = filename_tmp[-1], ".".join(filename_tmp[:-1])
+
+        if ftype == "qpic":
+            U.export_qpic(fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs)
+        elif ftype == "pdf":
+            U.export_qpic(fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs)
+            qpic_to_pdf(filename=fname, filepath=filepath)
+        elif ftype == "png":
+            U.export_qpic(fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs)
+            qpic_to_png(filename=fname, filepath=filepath)
+        else:
+            raise TequilaException(f"Extension {ftype} not supported directly.")
+
 
 if __name__ == '__main__':
     import tequila as tq
