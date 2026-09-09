@@ -19,11 +19,11 @@ a5 /
 a6 /
 a7 /
 a0 a1 a2 a3 G I 
- a1 P:fill=unia:shape=-3 \textcolor{black}{}  a7 P:fill=unia:shape=-3 \textcolor{black}{} 
- a0 P:fill=blue!31!red:shape=3 \textcolor{white}{}  a4 P:fill=blue!31!red:shape=3 \textcolor{white}{}  a1 P:fill=blue!31!red:shape=-3 \textcolor{white}{}  a7 P:fill=blue!31!red:shape=-3 \textcolor{white}{} 
- a0 P:fill=unia:shape=3 \textcolor{black}{}  a2 P:fill=unia:shape=3 \textcolor{black}{}  a3 P:fill=unia:shape=-3 \textcolor{black}{}  a5 P:fill=unia:shape=-3 \textcolor{black}{} 
- a0 P:fill=unia:shape=3 \textcolor{black}{}  a2 P:fill=unia:shape=3 \textcolor{black}{} 
- a1 P:fill=unia:shape=-3 \textcolor{black}{}  a3 P:fill=unia:shape=-3 \textcolor{black}{} 
- a2 P:fill=unia:shape=3 \textcolor{black}{}  a6 P:fill=unia:shape=3 \textcolor{black}{}  a3 P:fill=unia:shape=-3 \textcolor{black}{}  a7 P:fill=unia:shape=-3 \textcolor{black}{} 
+ a1 P:fill=unia!80!white:shape=-3 \textcolor{black}{}  a7 P:fill=unia!90!black:shape=-3 \textcolor{black}{} 
+ a0 P:fill=blue!31!red!80!white:shape=3 \textcolor{black}{}  a4 P:fill=blue!31!red!90!black:shape=3 \textcolor{white}{}  a1 P:fill=blue!31!red!80!white:shape=-3 \textcolor{black}{}  a7 P:fill=blue!31!red!90!black:shape=-3 \textcolor{white}{} 
+ a0 P:fill=unia!80!white:shape=3 \textcolor{black}{}  a2 P:fill=unia!90!black:shape=3 \textcolor{black}{}  a3 P:fill=unia!80!white:shape=-3 \textcolor{black}{}  a5 P:fill=unia!90!black:shape=-3 \textcolor{black}{} 
+ a0 P:fill=unia!80!white:shape=3 \textcolor{black}{}  a2 P:fill=unia!90!black:shape=3 \textcolor{black}{} 
+ a1 P:fill=unia!80!white:shape=-3 \textcolor{black}{}  a3 P:fill=unia!90!black:shape=-3 \textcolor{black}{} 
+ a2 P:fill=unia!80!white:shape=3 \textcolor{black}{}  a6 P:fill=unia!90!black:shape=3 \textcolor{black}{}  a3 P:fill=unia!80!white:shape=-3 \textcolor{black}{}  a7 P:fill=unia!90!black:shape=-3 \textcolor{black}{} 
 a0 a3 G G 
 

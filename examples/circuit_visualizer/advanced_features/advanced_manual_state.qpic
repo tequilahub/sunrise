@@ -11,7 +11,7 @@ a1 /
 a2 /
 a3 /
 a0 a2 G I 
- a0 P:fill=unia:shape=2 \textcolor{black}{}  a1 P:fill=unia:shape=2 \textcolor{black}{} 
- a2 P:fill=unia:shape=2 \textcolor{black}{}  a3 P:fill=unia:shape=2 \textcolor{black}{} 
- a1 P:fill=unia:shape=6 \textcolor{black}{}  a2 P:fill=unia:shape=6 \textcolor{black}{} 
+ a0 P:fill=unia!80!white:shape=2 \textcolor{black}{}  a1 P:fill=unia!90!black:shape=2 \textcolor{black}{} 
+ a2 P:fill=unia!80!white:shape=2 \textcolor{black}{}  a3 P:fill=unia!90!black:shape=2 \textcolor{black}{} 
+ a1 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a2 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
 

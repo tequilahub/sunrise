@@ -202,8 +202,12 @@ class FermionicExcitationImpl(FGateImpl):
                 tcol = style.personalized[kind].text_color
             return gcol, tcol
 
-        def place(q, shape, gcol, tcol):
-            return f" a{q} P:fill={gcol}:shape={shape} \\textcolor{{{tcol.name}}}{{}} "
+        # Brighter (Start) and Darker (End) using TikZ color mixing
+        def place_start(q, shape, gcol, tcol):
+            return f" a{q} P:fill={gcol}!80!white:shape={shape} \\textcolor{{black}}{{}} "
+
+        def place_end(q, shape, gcol, tcol):
+            return f" a{q} P:fill={gcol}!90!black:shape={shape} \\textcolor{{{tcol.name}}}{{}} "
 
         result = ""
         for group in self._indices:
@@ -216,18 +220,18 @@ class FermionicExcitationImpl(FGateImpl):
                 spi_i, spi_j, spi_k, spi_l = spin_of(i), spin_of(j), spin_of(k), spin_of(l)
 
                 if si == sk and sj == sl:
-                    result += place(si, hexagon, gcol, tcol) + place(sj, hexagon, gcol, tcol)
+                    result += place_start(si, hexagon, gcol, tcol) + place_end(sj, hexagon, gcol, tcol)
                 elif si == sk:
-                    result += place(si, hexagon, gcol, tcol) + place(sj, spin[spi_j], gcol, tcol) + place(sl, spin[spi_l], gcol, tcol)
+                    result += place_start(si, hexagon, gcol, tcol) + place_end(sj, spin[spi_j], gcol, tcol) + place_end(sl, spin[spi_l], gcol, tcol)
                 elif sj == sl:
-                    result += place(si, spin[spi_i], gcol, tcol) + place(sk, spin[spi_k], gcol, tcol) + place(sj, hexagon, gcol, tcol)
+                    result += place_start(si, spin[spi_i], gcol, tcol) + place_start(sk, spin[spi_k], gcol, tcol) + place_end(sj, hexagon, gcol, tcol)
                 else:
-                    result += place(si, spin[spi_i], gcol, tcol) + place(sj, spin[spi_j], gcol, tcol)
-                    result += place(sk, spin[spi_k], gcol, tcol) + place(sl, spin[spi_l], gcol, tcol)
+                    result += place_start(si, spin[spi_i], gcol, tcol) + place_end(sj, spin[spi_j], gcol, tcol)
+                    result += place_start(sk, spin[spi_k], gcol, tcol) + place_end(sl, spin[spi_l], gcol, tcol)
             else:
                 for i, j in group:
-                    result += place(spatial_of(i), spin[spin_of(i)], gcol, tcol)
-                    result += place(spatial_of(j), spin[spin_of(j)], gcol, tcol)
+                    result += place_start(spatial_of(i), spin[spin_of(i)], gcol, tcol)
+                    result += place_end(spatial_of(j), spin[spin_of(j)], gcol, tcol)
         return result
 
 class URImpl(FGateImpl):
@@ -248,7 +252,7 @@ class URImpl(FGateImpl):
             assert 2*len(self._variables) == len(self._indices)
 
     def _render(self, state, style, show_spatial_orbitals=True):
-        norb = state.n_orbitals  # Moved to top
+        norb = state.n_orbitals  
         
         def spatial_of(q):
             if not show_spatial_orbitals: return q
@@ -265,16 +269,16 @@ class URImpl(FGateImpl):
 
         if show_spatial_orbitals:
             i, j = self._indices[0][0]
-            return (f" a{spatial_of(i)} P:fill={gcol}:shape=2 \\textcolor{{{tcol.name}}}{{}} "
-                    f" a{spatial_of(j)} P:fill={gcol}:shape=2 \\textcolor{{{tcol.name}}}{{}} ")
+            return (f" a{spatial_of(i)} P:fill={gcol}!80!white:shape=2 \\textcolor{{black}}{{}} "
+                    f" a{spatial_of(j)} P:fill={gcol}!90!black:shape=2 \\textcolor{{{tcol.name}}}{{}} ")
                     
         spin = SPIN_SHAPES
         lines = []
         for group in self._indices:
             line = ""
             for i, j in group:
-                line += f" a{i} P:fill={gcol}:shape={spin[spin_of(i)]} \\textcolor{{{tcol.name}}}{{}} "
-                line += f" a{j} P:fill={gcol}:shape={spin[spin_of(j)]} \\textcolor{{{tcol.name}}}{{}} "
+                line += f" a{i} P:fill={gcol}!80!white:shape={spin[spin_of(i)]} \\textcolor{{black}}{{}} "
+                line += f" a{j} P:fill={gcol}!90!black:shape={spin[spin_of(j)]} \\textcolor{{{tcol.name}}}{{}} "
             lines.append(line)
         return "\n".join(lines)
 
@@ -284,7 +288,7 @@ class UCImpl(FGateImpl):
         self._name = 'UC'
 
     def _render(self, state, style, show_spatial_orbitals=True):
-        norb = state.n_orbitals  # Moved to top
+        norb = state.n_orbitals  
         
         def spatial_of(q):
             if not show_spatial_orbitals: return q
@@ -303,15 +307,15 @@ class UCImpl(FGateImpl):
         if show_spatial_orbitals:
             shape = Polygon(6)
             i, j = self._indices[0][0]
-            result += f" a{spatial_of(i)} P:fill={gcol}:shape={shape} \\textcolor{{{tcol.name}}}{{}} "
-            result += f" a{spatial_of(j)} P:fill={gcol}:shape={shape} \\textcolor{{{tcol.name}}}{{}} "
+            result += f" a{spatial_of(i)} P:fill={gcol}!80!white:shape={shape} \\textcolor{{black}}{{}} "
+            result += f" a{spatial_of(j)} P:fill={gcol}!90!black:shape={shape} \\textcolor{{{tcol.name}}}{{}} "
         else:
             spin = SPIN_SHAPES
             for group in self._indices:
                 for pair in group:
                     i, j = pair
-                    result += f" a{spatial_of(i)} P:fill={gcol}:shape={spin[spin_of(i)]} \\textcolor{{{tcol.name}}}{{}} "
-                    result += f" a{spatial_of(j)} P:fill={gcol}:shape={spin[spin_of(j)]} \\textcolor{{{tcol.name}}}{{}} "
+                    result += f" a{spatial_of(i)} P:fill={gcol}!80!white:shape={spin[spin_of(i)]} \\textcolor{{black}}{{}} "
+                    result += f" a{spatial_of(j)} P:fill={gcol}!90!black:shape={spin[spin_of(j)]} \\textcolor{{{tcol.name}}}{{}} "
         return result
     
 class PhaseImpl(FGateImpl):

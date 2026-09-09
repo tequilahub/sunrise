@@ -16,28 +16,28 @@ a3 /
 a4 /
 a5 /
 a0 a1 G I 
- a0 P:fill=unia:shape=6 \textcolor{black}{}  a2 P:fill=unia:shape=6 \textcolor{black}{} 
- a0 P:fill=unia:shape=6 \textcolor{black}{}  a3 P:fill=unia:shape=6 \textcolor{black}{} 
- a0 P:fill=unia:shape=6 \textcolor{black}{}  a4 P:fill=unia:shape=6 \textcolor{black}{} 
- a0 P:fill=unia:shape=6 \textcolor{black}{}  a5 P:fill=unia:shape=6 \textcolor{black}{} 
- a1 P:fill=unia:shape=6 \textcolor{black}{}  a2 P:fill=unia:shape=6 \textcolor{black}{} 
- a1 P:fill=unia:shape=6 \textcolor{black}{}  a3 P:fill=unia:shape=6 \textcolor{black}{} 
- a1 P:fill=unia:shape=6 \textcolor{black}{}  a4 P:fill=unia:shape=6 \textcolor{black}{} 
- a1 P:fill=unia:shape=6 \textcolor{black}{}  a5 P:fill=unia:shape=6 \textcolor{black}{} 
- a0 P:fill=red:shape=3 \textcolor{white}{}  a2 P:fill=red:shape=3 \textcolor{white}{} 
- a0 P:fill=red:shape=-3 \textcolor{white}{}  a2 P:fill=red:shape=-3 \textcolor{white}{} 
- a0 P:fill=red:shape=3 \textcolor{white}{}  a3 P:fill=red:shape=3 \textcolor{white}{} 
- a0 P:fill=red:shape=-3 \textcolor{white}{}  a3 P:fill=red:shape=-3 \textcolor{white}{} 
- a0 P:fill=red:shape=3 \textcolor{white}{}  a4 P:fill=red:shape=3 \textcolor{white}{} 
- a0 P:fill=red:shape=-3 \textcolor{white}{}  a4 P:fill=red:shape=-3 \textcolor{white}{} 
- a0 P:fill=red:shape=3 \textcolor{white}{}  a5 P:fill=red:shape=3 \textcolor{white}{} 
- a0 P:fill=red:shape=-3 \textcolor{white}{}  a5 P:fill=red:shape=-3 \textcolor{white}{} 
- a1 P:fill=red:shape=3 \textcolor{white}{}  a2 P:fill=red:shape=3 \textcolor{white}{} 
- a1 P:fill=red:shape=-3 \textcolor{white}{}  a2 P:fill=red:shape=-3 \textcolor{white}{} 
- a1 P:fill=red:shape=3 \textcolor{white}{}  a3 P:fill=red:shape=3 \textcolor{white}{} 
- a1 P:fill=red:shape=-3 \textcolor{white}{}  a3 P:fill=red:shape=-3 \textcolor{white}{} 
- a1 P:fill=red:shape=3 \textcolor{white}{}  a4 P:fill=red:shape=3 \textcolor{white}{} 
- a1 P:fill=red:shape=-3 \textcolor{white}{}  a4 P:fill=red:shape=-3 \textcolor{white}{} 
- a1 P:fill=red:shape=3 \textcolor{white}{}  a5 P:fill=red:shape=3 \textcolor{white}{} 
- a1 P:fill=red:shape=-3 \textcolor{white}{}  a5 P:fill=red:shape=-3 \textcolor{white}{} 
+ a0 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a2 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
+ a0 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a3 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
+ a0 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a4 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
+ a0 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a5 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
+ a1 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a2 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
+ a1 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a3 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
+ a1 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a4 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
+ a1 P:fill=unia!80!white:shape=6 \textcolor{black}{}  a5 P:fill=unia!90!black:shape=6 \textcolor{black}{} 
+ a0 P:fill=red!80!white:shape=3 \textcolor{black}{}  a2 P:fill=red!90!black:shape=3 \textcolor{white}{} 
+ a0 P:fill=red!80!white:shape=-3 \textcolor{black}{}  a2 P:fill=red!90!black:shape=-3 \textcolor{white}{} 
+ a0 P:fill=red!80!white:shape=3 \textcolor{black}{}  a3 P:fill=red!90!black:shape=3 \textcolor{white}{} 
+ a0 P:fill=red!80!white:shape=-3 \textcolor{black}{}  a3 P:fill=red!90!black:shape=-3 \textcolor{white}{} 
+ a0 P:fill=red!80!white:shape=3 \textcolor{black}{}  a4 P:fill=red!90!black:shape=3 \textcolor{white}{} 
+ a0 P:fill=red!80!white:shape=-3 \textcolor{black}{}  a4 P:fill=red!90!black:shape=-3 \textcolor{white}{} 
+ a0 P:fill=red!80!white:shape=3 \textcolor{black}{}  a5 P:fill=red!90!black:shape=3 \textcolor{white}{} 
+ a0 P:fill=red!80!white:shape=-3 \textcolor{black}{}  a5 P:fill=red!90!black:shape=-3 \textcolor{white}{} 
+ a1 P:fill=red!80!white:shape=3 \textcolor{black}{}  a2 P:fill=red!90!black:shape=3 \textcolor{white}{} 
+ a1 P:fill=red!80!white:shape=-3 \textcolor{black}{}  a2 P:fill=red!90!black:shape=-3 \textcolor{white}{} 
+ a1 P:fill=red!80!white:shape=3 \textcolor{black}{}  a3 P:fill=red!90!black:shape=3 \textcolor{white}{} 
+ a1 P:fill=red!80!white:shape=-3 \textcolor{black}{}  a3 P:fill=red!90!black:shape=-3 \textcolor{white}{} 
+ a1 P:fill=red!80!white:shape=3 \textcolor{black}{}  a4 P:fill=red!90!black:shape=3 \textcolor{white}{} 
+ a1 P:fill=red!80!white:shape=-3 \textcolor{black}{}  a4 P:fill=red!90!black:shape=-3 \textcolor{white}{} 
+ a1 P:fill=red!80!white:shape=3 \textcolor{black}{}  a5 P:fill=red!90!black:shape=3 \textcolor{white}{} 
+ a1 P:fill=red!80!white:shape=-3 \textcolor{black}{}  a5 P:fill=red!90!black:shape=-3 \textcolor{white}{} 
 
