@@ -24,7 +24,6 @@ from itertools import product
 from sunrise.fermionic_operations.givens_rotations import get_givens_circuit as __get_givens_circuit
 from sunrise.fermionic_operations.givens_rotations import n_rotation as __n_rotation
 from sunrise.fermionic_operations.givens_rotations import reconstruct_matrix_from_circuit
-from sunrise.hybridization.hybridization import Graph
 
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase
 try:
@@ -1551,234 +1550,54 @@ class FermionicBase(QuantumChemistryBase):
             f += f'{at[0]} {at[1][0]} {at[1][1]} {at[1][2]}\n'
         return f
 
-    def graph(self):
-        return Graph.parse_xyz(self.get_xyz())
-    
-    def get_spa_edges(self,collapse:bool=True,strip_orbitals:bool=None):
-        if strip_orbitals  is None:
+    def get_spa_edges(self, collapse: bool = True, strip_orbitals: bool = None, **kwargs):
+        """
+        Generates SPA edges using the pure Python JANPA CLPO algorithm.
+        """
+        from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
+        if strip_orbitals is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
-        return self.graph().get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals)
-    
-    def get_spa_guess(self,strip_orbitals:bool=None):
-        if strip_orbitals  is None:
+        
+        _, edges = generate_CLPO_molecule_edges(self, use_active=strip_orbitals, silent=True, **kwargs)
+        return edges
+
+    def get_spa_guess(self, strip_orbitals: bool = None, **kwargs):
+        """
+        Generates the initial guess orbital coefficient matrix using the pure Python JANPA HAO algorithm.
+        """
+        from sunrise.CLPO.orbital_transformation import generate_HAO_molecule
+        if strip_orbitals is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
-        return self.graph().get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
+            
+        hao_mol = generate_HAO_molecule(self, use_active=strip_orbitals, silent=True, **kwargs)
+        return hao_mol.integral_manager.orbital_coefficients
 
-    def get_spa_edges_and_guess(self,collapse:bool=True,strip_orbitals:bool=None):
-        if strip_orbitals  is None:
+    def get_spa_edges_and_guess(self, collapse: bool = True, strip_orbitals: bool = None, **kwargs):
+        """
+        Generates both SPA edges (via CLPO) and the initial guess matrix (via HAO).
+        """
+        from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges, generate_HAO_molecule
+        if strip_orbitals is None:
             strip_orbitals = not self.integral_manager.active_space_is_trivial()
-        g = self.graph()
-        return g.get_spa_edges(collapse=collapse,strip_orbitals=strip_orbitals),g.get_orbital_coefficient_matrix(strip_orbitals=strip_orbitals)
-   
-    def get_HAO_orbitals_coeff(self,sp_list:typing.Union[typing.List[int],typing.List[str],dict,None]=None)->numpy.ndarray:
+            
+        _, edges = generate_CLPO_molecule_edges(self, use_active=strip_orbitals, silent=True, **kwargs)
+        hao_mol = generate_HAO_molecule(self, use_active=strip_orbitals, silent=True, **kwargs)
+        
+        return edges, hao_mol.integral_manager.orbital_coefficients
+
+    def use_HAO_orbitals(self, inplace=False, core: typing.Optional[list[int]] = None, sp_list=None, *args, **kwargs):
         """
-        Parameters
-        ----------
-            sp_list:
-                Optional. List of integrers/strigs of int corresponding to the spX hybridization of each atoms. By default None, they are chosen by
-                geometrical considerations. If dont want to define all atoms, "Auto" will be chosen by geometry.
-                Also can be passed a dict as {atom_idx:sp}, if not atom on the dictionary, will be set to Auto.
-                
-        Returns
-        -------
-        Matrix of the Hybrid Atomic Orbitals
+        Transforms the molecule to use Hybrid Atomic Orbitals (HAO) computed by the pure Python JANPA pipeline.
+        Note: `sp_list` is ignored because JANPA automatically determines the optimal hybridization 
+        directly from the 3D molecular geometry.
         """
-        n_atoms = len(self.parameters.get_atoms())
-        if isinstance(sp_list,list):
-            if len(sp_list) <= n_atoms:
-                sp_list += (n_atoms-len(sp_list))*['Auto']
-            else:
-                TequilaWarning(f'{len(sp_list)} hybridization passed, but only expected {n_atoms}. Only the first {n_atoms} will be employed.')
-                sp_list = sp_list[:n_atoms]
-        elif isinstance(sp_list,dict):
-            new_sp_list = ['Auto']*n_atoms
-            for i in sp_list.keys():
-                new_sp_list[i] = sp_list[i]
-            sp_list = new_sp_list
-        return self.graph().get_HAO_orbitals(sp_list=sp_list)
-
-    def use_HAO_orbitals(self, inplace=False, core: typing.Optional[list[int]] = None, sp_list: typing.Union[list[int],list[str],dict,None] = None, *args, **kwargs):
-        """
-        Parameters
-        ----------
-            inplace:
-                update current molecule or return a new instance
-            core:
-                list of core orbital indices (optional) — orbitals will be frozen and treated as doubly occupied. The orbitals correspond to
-                the currently used orbitals of the molecule (default is usually canonical HF), see mol.print_basis_info() if unsure. Providing core
-                orbitals is optional; the default is inherited from the active space set in self.integral_manager. If core is provided, the
-                corresponding active native orbitals will be chosen based on their overlap with the core orbitals.
-            active(in kwargs):
-                list the active orbital indices (optional, in kwargs) - on the Native Orbital schema. Default: All orbitals, if core (see above) is provided,
-                then the default is to automatically select the active orbitals based on their overlap with the provided core orbitals (selectint the N-|core|
-                orbitals that have smallest overlap with coree).
-                As an example, Assume the input geometry was H, He, H. active=[0,1,2] is selecting the (orthonormalized) atomic 1s (left H), 1s (He), 1s (right H).
-                If core=[0] and active is not set, then active=[0,2] will be selected automatically (as the 1s He atomic orbital will have the largest overlap
-                with the lowest energy HF orbital).
-            sp_list:
-                Optional. List of integrers corresponding to the spX hybridization of each atoms. By default None, they are chosen by
-                geometrical considerations. If dont want to define all atoms, "Auto" will be chosen by geometry.
-                Also can be passed a dict as {atom_idx:sp}, if not atom on the dictionary, will be set to Auto.
-        Returns
-        -------
-        New molecule in the native (orthonormalized) basis given
-        e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
-        """
-        c = copy.deepcopy(self.integral_manager.orbital_coefficients)
-        s = self.integral_manager.overlap_integrals
-        d = self.get_HAO_orbitals_coeff(sp_list=sp_list).T
-        def inner(a, b, s):
-            return numpy.sum(numpy.multiply(numpy.outer(a, b), s))
-
-        def orthogonalize(c, d, s):
-            """
-            :return: orthogonalized orbitals with core HF orbitals and active Orthongonalized Native orbitals.
-            """
-            ### Computing Core-Active overlap Matrix
-            # sbar_{ki} = \langle \phi_k | \varphi_i \rangle = \sum_{m,n} c_{nk}d_{mi}\langle \chi_n | \chi_m \rangle
-            # c_{nk} = HF coeffs, d_{mi} = nat orb coef s_{mn} = Atomic Overlap Matrix
-            # k \in active orbs, i \in core orbs, m,n \in basis coeffs
-            # sbar = np.einsum('nk,mi,nm->ki', c, d, s) #only works if active == to_active
-            c = c.T
-            d = d.T
-            sbar = numpy.zeros(shape=s.shape)
-            n_basis = len(d)
-            ov = numpy.zeros(shape=(n_basis))
-            for i in core:
-                for j in range(n_basis):
-                    ov[j] += numpy.abs(inner(c[i], d[j], s))
-            co = {}
-            for i in core:
-                idx = numpy.argmax(ov)
-                co[i] = idx
-                ov[idx] = 0
-            active = [i for i in range(n_basis) if i not in co.values()]
-            to_active =  [i for i in range(n_basis) if  i not in co.keys()]
-            to_active = {active[i]:to_active[i] for i in range(len(active))}
-            reference_orbitals = [*co.keys()]
-            i =0
-            while len(reference_orbitals)<self.parameters.total_n_electrons//2:
-                if i not in reference_orbitals:
-                    reference_orbitals.append(i)
-                i += 1
-            sbar = numpy.zeros(shape=s.shape)
-            for k in active:
-                for i in core:
-                    sbar[i][to_active[k]] = inner(c[i], d[k], s)
-            dbar = numpy.zeros(shape=s.shape)
-
-            for j in active:
-                dbar[to_active[j]] = d[j]
-                for i in core:
-                    temp = sbar[i][to_active[j]] * c[i]
-                    dbar[to_active[j]] -= temp
-            for i in to_active.values():
-                norm = numpy.sqrt(inner(dbar[i], dbar[i], s.T))
-                if not numpy.isclose(norm, 0):
-                    dbar[i] = dbar[i] / norm
-            for j in to_active.values():
-                c[j] = dbar[j]
-            sprima = numpy.eye(len(c))
-            for idx, i in enumerate(to_active.values()):
-                for j in [*to_active.values()][idx:]:
-                    sprima[i][j] = inner(c[i], c[j], s)
-                    sprima[j][i] = sprima[i][j]
-            lam_s, l_s = numpy.linalg.eigh(sprima)
-            lam_s = lam_s * numpy.eye(len(lam_s))
-            lam_sqrt_inv = numpy.sqrt(numpy.clip(numpy.linalg.inv(lam_s), a_min=1.e-8, a_max=None)) #safety
-            symm_orthog = numpy.dot(l_s, numpy.dot(lam_sqrt_inv, l_s.T))
-            return symm_orthog.dot(c).T
-
-        def get_active(core):
-            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
-            for i in core:
-                for j in range(len(d)):
-                    ov[j] += numpy.abs(inner(c.T[i], d.T[j], s))
-            act = []
-            for i in range(len(self.integral_manager.orbitals) - len(core)):
-                idx = numpy.argmin(ov)
-                act.append(idx)
-                ov[idx] = 1 * len(core)
-            act.sort()
-            return act
-
-        def get_core(active):
-            ov = numpy.zeros(shape=(len(self.integral_manager.orbitals)))
-            for i in active:
-                for j in range(len(d)):
-                    ov[j] += numpy.abs(inner(d.T[i], c.T[j], s))
-            co = []
-            for i in range(len(self.integral_manager.orbitals) - len(active)):
-                idx = numpy.argmin(ov)
-                co.append(idx)
-                ov[idx] = 1 * len(active)
-            co.sort()
-            return co
-
-        active = None
-        if not self.integral_manager.active_space_is_trivial() and core is None:
-            core = [i.idx_total for i in self.integral_manager.orbitals if i.idx is None]
-        if "active" in kwargs:
-            active = kwargs["active"]
-            kwargs.pop("active")
-            if core is None:
-                core = get_core(active)
-        else:
-            if active is None:
-                if core is None:
-                    core = []
-                    active = [i for i in range(len(self.integral_manager.orbitals))]
-                else:
-                    if isinstance(core, int):
-                        core = [core]
-                    active = get_active(core)
-        assert len(active) + len(core) == len(self.integral_manager.orbitals)
-        to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
-        to_active = {active[i]: to_active[i] for i in range(len(active))}
-        if len(core):
-            coeff = orthogonalize(c, d, s)
-            if inplace:
-                self.integral_manager = self.initialize_integral_manager(
-                    one_body_integrals=self.integral_manager.one_body_integrals,
-                    two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term,
-                    active_orbitals=[*to_active.values()],
-                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals],
-                    frozen_orbitals=core,
-                    orbital_coefficients=coeff,
-                    overlap_integrals=s,
-                    orbital_type="HAO",
-                )
-                return self
-            else:
-                integral_manager = self.initialize_integral_manager(
-                    one_body_integrals=self.integral_manager.one_body_integrals,
-                    two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term,
-                    active_orbitals=[*to_active.values()],
-                    reference_orbitals=[i.idx_total for i in self.integral_manager.reference_orbitals],
-                    frozen_orbitals=core,
-                    orbital_coefficients=coeff,
-                    overlap_integrals=s,
-                    orbital_type="HAO",
-                )
-                parameters = copy.deepcopy(self.parameters)
-                result = FermionicBase(
-                    parameters=parameters,
-                    integral_manager=integral_manager,
-                    active_orbitals=[*to_active.values()],
-                )
-                return result
-        # can not be an instance of a specific backend (otherwise we get inconsistencies with classical methods in the backend)
+        from sunrise.CLPO.orbital_transformation import generate_HAO_molecule
+        
+        use_active = not self.integral_manager.active_space_is_trivial()
+        hao_mol = generate_HAO_molecule(self, use_active=use_active, silent=True, **kwargs)
+        
         if inplace:
-            self.integral_manager.orbital_coefficients = d
-            self.integral_manager._orbital_type = "HAO"
+            self.integral_manager = hao_mol.integral_manager
             return self
         else:
-            integral_manager = copy.deepcopy(self.integral_manager)
-            integral_manager.orbital_coefficients = d
-            integral_manager._orbital_type = "HAO"
-            result = FermionicBase(
-                parameters=self.parameters, integral_manager=integral_manager, fermionic_backend= self.fermionic_backend
-            )
-            return result
+            return hao_mol

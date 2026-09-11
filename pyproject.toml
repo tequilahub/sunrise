@@ -30,6 +30,7 @@ dependencies = [
     "setuptools",
     "qpic",
     "pyscf",
+    "janpa @ git+https://github.com/davibinco/janpa-py.git@main",
 ]
 
 classifiers = [

@@ -1,209 +1,200 @@
 from __future__ import annotations
-from tequila.quantumchemistry.pyscf_interface import QuantumChemistryPySCF
 import os
-import numpy
-from pyscf import scf, mp
-from pyscf.tools import molden
+import contextlib
+import tempfile
+import numpy as np
 from copy import deepcopy
-import subprocess
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
-import numpy
-from copy import deepcopy
-from typing import Tuple
+from warnings import warn
+from typing import Tuple, List, Optional, Any
 from numbers import Number
-from .binary_interface import *
-from sunrise import from_tequila
+
+from pyscf import scf, mp
+from pyscf.tools import molden as pyscf_molden
+
+from tequila.quantumchemistry.pyscf_interface import QuantumChemistryPySCF
+from tequila.quantumchemistry.qc_base import QuantumChemistryBase
 from tequila import TequilaException
+
+from sunrise import from_tequila
 from sunrise.molecules.utils_orbital_transformation import transform, orthogonalize
 
-def __get_MP2_occ(mol:QuantumChemistryBase) -> Tuple[list[Number], list[Number]]:
-    ''''
-    Small helper function, given a tequila molecule returns the MP2 orbital occupation and orbital energy
-    '''
+from janpa.io.molden import MoldenFile
+from janpa.npa.npa import run_npa
+from janpa.clpo.lpo import create_clpos, CLPOOptions
+from janpa.clpo.lodesc import LO_TYPE_RY, LO_TYPE_LP, LO_TYPE_BD, LO_TYPE_NB
+
+def __get_MP2_occ(mol: QuantumChemistryBase) -> Tuple[list, list]:
     fr = [2 for _ in range(mol.parameters.get_number_of_core_electrons()//2)]
     molx = QuantumChemistryPySCF.from_tequila(mol)
     hf = molx._get_hf()
     rdm1 = mp.MP2(hf).run().make_rdm1()
-    return fr + numpy.diag(rdm1).tolist(), hf.mo_energy
+    return fr + np.diag(rdm1).tolist(), hf.mo_energy
 
-def generate_molden(mol:QuantumChemistryBase, filename:str = None, output_dir:str = None, mo_occ:list = None, mo_energy:list = None, use_mp2:bool = False, option1:bool = True, use_active:bool = True):
-    '''
-    Interface with pyscf.tools molden file generation
-
-    :param mol: Any kind of tequila/sunrise Molecule
-    :param filename: The moldenfile will be saved as filename.molden. If None, the molecule.parameters.name is employed
-    :param output_dir: default None = working file.
-    :param mo_occ: Molecular Orbital electronic occupation. If None, hf or mp2 are used depending on use_mp2
-    :param mo_energy: Molecular Orbital energy. If None, hf or mp2 are used depending on use_mp2
-    :param use_mp2: Whether to us mp2 or hf if no mo_occ and mo_energy are provided
-    :param option1: Whether to use the first or second molden generation alternatives propsed by pyscf. See 
-                    https://github.com/pyscf/pyscf/blob/master/examples/tools/02-molden.py for more info
-    :param use_active: Whether to include only the active orbitals.
-    '''
-
-    assert (mo_occ == None) and (mo_energy == None)
-    size_basis = len(mol.integral_manager._orbital_coefficients)
-    active = mol.integral_manager.active_space.active_orbitals
-    pfmol = from_tequila(mol)
-    if output_dir is None:
-        output_dir = os.getcwd()
-    if mo_occ is None:
-        if use_mp2:
-            mo_occ, mo_energy = __get_MP2_occ(mol)
-        else:
-            mf = scf.RHF(pfmol).run()
-            mo_occ = mf.mo_occ
-            mo_energy = mf.mo_energy
-    else:
-        assert len(mo_occ) == len(mo_energy)
-        if (use_active and len(mo_occ) == len(active) or len(mo_occ) == len(size_basis)) or (not use_active and len(mo_occ) == len(size_basis)):
-            pass
-        else:
-            raise TequilaException(f"{len(mo_occ)} Molecular Orbital Occupation but it doesn't fit not the total space size ({size_basis}) nor the active space size ({len(active)}). Use_active={use_active}") 
+def extract_clpo_graph(npa_res, clpo_res) -> List[Tuple[int, ...]]:
+    """Extracts the CLPO graph (edges) directly from janpa-py results."""
+    Q = clpo_res.clpo.nao_to_hybrids @ clpo_res.clpo.lo_to_hybrids.T
+    sds_clpo = Q.T @ npa_res.sds_nao @ Q
+    occupancies = np.diag(sds_clpo)
+    lo_types = clpo_res.clpo.lo_types
     
-    if filename is None: filename=mol.parameters.name
+    nodes = []
+    n_lo = len(occupancies)
+    i = 0
+    while i < n_lo:
+        lo_type = lo_types[i]
+        occ = round(occupancies[i], 5)
+        
+        if lo_type == LO_TYPE_LP:
+            if 0.5 < occ < 1.5:
+                warn(f'Lone Pair {i} found with occupation close to 1 => {occ:.5f}, take care.')
+            if occ < 1.0:
+                i += 1
+                continue
+            nodes.append((i,))
+            i += 1
+            
+        elif lo_type == LO_TYPE_RY:
+            i += 1
+            
+        elif lo_type == LO_TYPE_BD:
+            if i + 1 >= n_lo or lo_types[i+1] != LO_TYPE_NB:
+                raise ValueError(f"BD orbital {i} without following NB orbital")
+            bd_occ = occ
+            nb_occ = round(occupancies[i+1], 5)
+            if bd_occ + nb_occ < 1.7:
+                warn(f'Bond pair orbitals [{i},{i+1}] population expected under expected 2e-, predicted: {bd_occ + nb_occ:.5f}, take care with predicted edges.')
+            nodes.append((i, i + 1))
+            i += 2
+            
+        else:
+            i += 1
+            
+    return nodes
 
-
-    mo_coeff = mol.integral_manager.orbital_coefficients.copy()
-    if use_active:
-        if len(mo_occ) == size_basis:
-            mo_occ = [mo_occ[i] for i in active]
-            mo_energy = [mo_energy[i] for i in active]
-        mo_coeff = mo_coeff[:, active]
-
-    if option1:
-        ### OPTION 1
-        with open(f'{output_dir}/{filename}.molden', 'w') as f1:
-            molden.header(pfmol, f1) 
-            molden.orbital_coeff(pfmol, f1, mo_coeff, ene=mo_energy, occ=mo_occ)
-    else:
-        ### OPTION 2
+def _run_janpa_pipeline(pfmol, mo_coeff, mo_occ, mo_energy, thres=1e-9, silent=True, custom_edges=None):
+    """Internal helper to run the JANPA pipeline entirely in memory/tempfiles."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        molden_in = os.path.join(tmpdir, "temp.molden")
+        devnull = open(os.devnull, 'w')
+        ctx = contextlib.redirect_stdout(devnull) if silent else contextlib.nullcontext()
+        
         try:
-            molden.from_mo(pfmol, f'{output_dir}/{filename}.molden',mo_coeff, ene=mo_energy, occ=mo_occ)
-        except RuntimeError:
-            print('    Found l=5 in basis.')
-            molden.from_mo(pfmol, f'{output_dir}/{filename}.molden', mo_coeff, ene=mo_energy, occ=mo_occ, ignore_h=True)
+            with ctx:
+                pyscf_molden.from_mo(pfmol, molden_in, mo_coeff, occ=mo_occ, ene=mo_energy)
+                molden_file = MoldenFile.load(molden_in)
+                molden_file.coords_to_au()
+                molden_file.to_unnormalized_primitive_coefs()
+                
+                npa_res = run_npa(molden_file)
+                
+                clpo_opts = CLPOOptions(hybr_opt_conv_thresh=thres, hybr_opt_max_iter=1000)
+                if custom_edges is not None:
+                    clpo_opts.edges = str(custom_edges) 
+                
+                clpo_res = create_clpos(npa_res.sds_nao, npa_res.nao, molden_file.centers, clpo_opts)
+                graph = extract_clpo_graph(npa_res, clpo_res)
+                
+                # CRITICAL: These matrices have shape (n_orb, n_ao) where ROWS are orbitals.
+                # Tequila expects (n_ao, n_orb) where COLUMNS are orbitals.
+                # We transpose here so callers can assign directly to integral_manager.
+                aho_to_ao = clpo_res.clpo.nao_to_hybrids.T @ npa_res.nao_to_ao
+                clpo_to_ao = clpo_res.clpo.lo_to_hybrids @ aho_to_ao
+                
+                # Transpose: (n_orb, n_ao) -> (n_ao, n_orb) to match Tequila/PySCF convention
+                aho_to_ao = aho_to_ao.T
+                clpo_to_ao = clpo_to_ao.T
+                
+        finally:
+            if silent:
+                devnull.close()
+                
+    return aho_to_ao, clpo_to_ao, graph
 
-def generate_CLPO_molecule_edges(mol:QuantumChemistryBase, edges:list[tuple[int]] = None, output_dir:str = None, thres:Number = 1.e-12, silent:bool = True, use_active:bool = True, rm_files:bool = True, **kwargs) -> Tuple[QuantumChemistryBase,list]:
-    '''
-    Temporal function for generating a molecule with CLPO orbitals (10.1002/qua.25798) until integrated in Sunrise molecules
-    
-    :param mol: Any kind of Tequila/Sunrise Molecules.
-    :param edges: optional edges to built the molecule. Default (None) will try to replicate the reference wvf (see generate_molden).
-                    not needed to pass all edges, not provided will be get from the reference wvf
-    :param output_dir: default None = working file.
-    :param thres: -HybrOptOccConvThresh from Janpa. Default 1.e-9.
-    :param use_active: Whether to respect input molecule frozen/active space, letting frozen as HF
-    :param kwargs: keywords accepted by 'generate_molden', see above.
+def generate_molden(mol: QuantumChemistryBase, filename: str = None, output_dir: str = None, 
+                    mo_occ: list = None, mo_energy: list = None, use_mp2: bool = False, 
+                    option1: bool = True, use_active: bool = True):
+    pass
 
-    Return modified Molecule and SPA edges
-    '''
-    if 'filename' in kwargs:
-        filename = kwargs['filename']
-        kwargs.pop('filename')
-    else: filename = mol.parameters.name
+def generate_CLPO_molecule_edges(mol: QuantumChemistryBase, edges: list = None, output_dir: str = None, 
+                                 thres: Number = 1.e-12, silent: bool = True, use_active: bool = True, 
+                                 rm_files: bool = True, **kwargs) -> Tuple[QuantumChemistryBase, list]:
     if output_dir is None:
         output_dir = os.getcwd()
-    generate_molden(mol = mol, filename = filename, output_dir = output_dir, use_active=False, **kwargs) #TODO: Janpa CLPO is bug for active space only, working on 
-    call_molden2aim(moldenfile = filename+'.molden', output_dir = output_dir)
-    call_molden2molden(command = f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent, output_dir = output_dir)
-    c = f'-i {filename}.molden -CLPO_Molden_File {filename}_CLPO.molden -HybrOptOccConvThresh {thres} '
+        
+    pfmol = from_tequila(mol)
+    mf_full = scf.RHF(pfmol).run()
+    
+    custom_edges = None
     if edges is not None:
         if use_active:
-            _, to_active = generate_HAO_molecule(deepcopy(mol), output_dir = output_dir, thres = thres, silent = True, use_active = True, rm_files = False, to_active = True) 
-            d = {i.idx:i.idx_total for i in mol.integral_manager.active_orbitals} # We need the correspondence between active space indices and complete basis
-            to_active = {v:k for k,v in to_active.items()} # to_active keeps track of reordering on active space (frozen orbitals are kept at the begining) 
-            edges = [tuple([to_active[d[e]] for e in edge]) for edge in edges] # Therefore the edges are transformed by: edges_in_active -> edges_in_complete_basis -> edges_in_complete_basis_non_active_space_order
-            # to_active is taken between from HAO bcs it may differ from HAO to CLPO to_active, but we want the pairing on the HAO basis  
+            _, to_active = generate_HAO_molecule(deepcopy(mol), output_dir=output_dir, thres=thres, silent=True, use_active=True, rm_files=False, to_active=True)
+            d = {i.idx: i.idx_total for i in mol.integral_manager.active_orbitals}
+            to_active_inv = {v: k for k, v in to_active.items()}
+            # Cast to native int to avoid np.int64 string representation issues
+            custom_edges = [tuple([int(to_active_inv[d[e]]) for e in edge]) for edge in edges]
         else:
-            edges = [tuple([e for e in edge]) for edge in edges]
-        c += f' -edges {edges}'
-    call_janpa(command = c, silent = silent)
-    mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_CLPO.molden")
-    if not use_active:
-        mo_matrix = orthogonalize(mo_matrix, mol.integral_manager.overlap_integrals)
-    if rm_files:
-        subprocess.call(f'rm {output_dir}/m2a.ini', shell=True)
-        subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True) 
-        subprocess.call(f'rm {output_dir}/{filename}_new.molden', shell=True)
-        subprocess.call(f'rm {output_dir}/{filename}_CLPO.molden', shell=True)
-    nmol = deepcopy(mol)
-    nmol.integral_manager.orbital_coefficients = mo_matrix
-    if use_active:
-        mol, to_active = transform(original = mol, modified = nmol, orbital_type = 'CLPO')
-    else:
-        mol = nmol
-        mol.integral_manager._orbital_type = 'CLPO'
-    graph = extract_clpo_graph(f"{output_dir}/graph")
-    if use_active:
-        ncore = len(mol.integral_manager.orbital_coefficients) - mol.n_orbitals
-        graph = [tuple([to_active[i] - ncore for i in edge if i in to_active.keys()]) for edge in graph]
-        graph = [g for g in graph if len(g)]
-    if rm_files:
-        subprocess.call(f'rm {output_dir}/graph', shell=True)
-    return mol,graph
+            # Cast to native int to avoid np.int64 string representation issues
+            custom_edges = [tuple([int(e) for e in edge]) for edge in edges]
 
-def generate_HAO_molecule(mol:QuantumChemistryBase, output_dir:str = None, thres:Number = 1.e-9, silent:bool = True, use_active:bool = True, rm_files:bool = True,**kwargs) -> QuantumChemistryBase:
-    '''
-    Temporal function for generating a molecule with Hybrid Atomic Orbitals via janpa (10.1002/qua.25798) until integrated in Sunrise molecules
+    # clpo_to_ao is now (n_ao, n_clpo) after the transpose fix in _run_janpa_pipeline
+    _, clpo_to_ao_full, graph_full = _run_janpa_pipeline(
+        pfmol, mf_full.mo_coeff, mf_full.mo_occ, mf_full.mo_energy,
+        thres=thres, silent=silent, custom_edges=custom_edges
+    )
     
-    :param mol: Any kind of Tequila/Sunrise Molecules.
-    :param output_dir: default None = working file.
-    :param thres: -HybrOptOccConvThresh from Janpa. Default 1.e-9.
-    :param use_active: Whether to respect input molecule frozen/active space, letting frozen as HF
-    :param kwargs: keywords accepted by 'generate_molden', see above.
+    if use_active:
+        nmol_full = deepcopy(mol)
+        nmol_full.integral_manager.orbital_coefficients = clpo_to_ao_full
+        nmol_full.integral_manager._orbital_type = 'CLPO'
+        
+        mol_out, to_active = transform(original=mol, modified=nmol_full, orbital_type='CLPO')
+        
+        ncore = len(mol_out.integral_manager.orbital_coefficients) - mol_out.n_orbitals
+        graph = [tuple([to_active[i] - ncore for i in edge if i in to_active.keys()]) for edge in graph_full]
+        graph = [g for g in graph if len(g)]
+    else:
+        mo_matrix = orthogonalize(clpo_to_ao_full, mol.integral_manager.overlap_integrals)
+        mol_out = deepcopy(mol)
+        mol_out.integral_manager.orbital_coefficients = mo_matrix
+        mol_out.integral_manager._orbital_type = 'CLPO'
+        graph = graph_full
 
-    Return modified Molecule and SPA edges
-    '''
-    if 'filename' in kwargs:
-        filename = kwargs['filename']
-        kwargs.pop('filename')
-    else: filename = mol.parameters.name
-    if 'to_active' in kwargs:  # Internal use, thats why not mentioned on funtion description
-        ret2act = kwargs['to_active']
-        kwargs.pop('to_active')
-    else: ret2act = False
+    return mol_out, graph
 
+def generate_HAO_molecule(mol: QuantumChemistryBase, output_dir: str = None, thres: Number = 1.e-9, 
+                          silent: bool = True, use_active: bool = True, rm_files: bool = True, **kwargs) -> QuantumChemistryBase:
     if output_dir is None:
         output_dir = os.getcwd()
-
-    generate_molden(mol = mol, filename = filename, output_dir = output_dir, use_active = False, **kwargs)
-    call_molden2aim(moldenfile = filename+'.molden', output_dir = output_dir)
-    call_molden2molden(command = f'-NormalizeBF -cart2pure  -i {filename}.molden -o {filename}.molden', silent = silent, output_dir = output_dir)
-    call_janpa(command=f'-i {filename}.molden -AHO_Molden_File {filename}_HAO.molden -HybrOptOccConvThresh {thres}', silent = silent, output_dir = output_dir)
-    mo_matrix = read_molden_mo_matrix(f"{output_dir}/{filename}_HAO.molden")
-    if not use_active:
-        mo_matrix = orthogonalize(mo_matrix, mol.integral_manager.overlap_integrals)
-    if rm_files:
-        subprocess.call(f'rm {output_dir}/m2a.ini', shell=True)
-        subprocess.call(f'rm {output_dir}/{filename}.molden', shell=True)
-        subprocess.call(f'rm {output_dir}/{filename}_new.molden', shell=True)
-        subprocess.call(f'rm {output_dir}/{filename}_HAO.molden', shell=True)
-        subprocess.call(f'rm {output_dir}/graph', shell=True)
-    nmol = deepcopy(mol)
-    nmol.integral_manager.orbital_coefficients = mo_matrix
-    if use_active:
-        mol, to_active = transform(original = mol, modified = nmol, orbital_type = 'HAO')
-    else:
-        mol = nmol
-        mol.integral_manager._orbital_type = "HAO"
-    if ret2act:
-        return mol, to_active
-    return mol
-
-def generate_CLPO_molecule(mol:QuantumChemistryBase, edges:list[tuple[int]] = None, output_dir:str = None, thres:Number = 1.e-12, silent:bool = True, use_active:bool = True, rm_files:bool = True, **kwargs) -> QuantumChemistryBase:
-    '''
-    Temporal function for generating a molecule with CLPO orbitals (10.1002/qua.25798) until integrated in Sunrise molecules
+        
+    pfmol = from_tequila(mol)
+    mf_full = scf.RHF(pfmol).run()
     
-    :param mol: Any kind of Tequila/Sunrise Molecules.
-    :param edges: optional edges to built the molecule. Default (None) will try to replicate the reference wvf (see generate_molden).
-                    not needed to pass all edges, not provided will be get from the reference wvf
-    :param output_dir: default None = working file.
-    :param thres: -HybrOptOccConvThresh from Janpa. Default 1.e-9.
-    :param use_active: Whether to respect input molecule frozen/active space, letting frozen as HF
-    :param kwargs: keywords accepted by 'generate_molden', see above.
+    ret2act = kwargs.get('to_active', False)
+    
+    # aho_to_ao_full is now (n_ao, n_hyb) after the transpose fix in _run_janpa_pipeline
+    aho_to_ao_full, _, _ = _run_janpa_pipeline(
+        pfmol, mf_full.mo_coeff, mf_full.mo_occ, mf_full.mo_energy,
+        thres=thres, silent=silent
+    )
+    
+    if use_active:
+        nmol_full = deepcopy(mol)
+        nmol_full.integral_manager.orbital_coefficients = aho_to_ao_full
+        nmol_full.integral_manager._orbital_type = "HAO"
+        
+        mol_out, to_active = transform(original=mol, modified=nmol_full, orbital_type='HAO')
+        if ret2act:
+            return mol_out, to_active
+        return mol_out
+    else:
+        mo_matrix = orthogonalize(aho_to_ao_full, mol.integral_manager.overlap_integrals)
+        mol_out = deepcopy(mol)
+        mol_out.integral_manager.orbital_coefficients = mo_matrix
+        mol_out.integral_manager._orbital_type = "HAO"
+        return mol_out
 
-    Return modified Molecule and SPA edges
-    '''
-    mol, edges = generate_CLPO_molecule_edges(mol, edges, output_dir, thres, silent, use_active, rm_files, **kwargs)
-    return mol
+def generate_CLPO_molecule(mol: QuantumChemistryBase, edges: list = None, output_dir: str = None, 
+                           thres: Number = 1.e-12, silent: bool = True, use_active: bool = True, 
+                           rm_files: bool = True, **kwargs) -> QuantumChemistryBase:
+    mol_out, _ = generate_CLPO_molecule_edges(mol, edges, output_dir, thres, silent, use_active, rm_files, **kwargs)
+    return mol_out
