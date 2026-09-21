@@ -1,1 +1,0 @@
-This is an illustrative example on how to build hybridized orbitals in a sunrise molecule.
