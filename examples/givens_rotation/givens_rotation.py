@@ -6,12 +6,11 @@ from copy import deepcopy
 geometry = 'H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2.\n H 0. 0. 3.'
 mol = sn.Molecule(geometry=geometry, basis_set='sto-3g',nature='f',backend='pyscf').use_native_orbitals()
 ref = mol.compute_energy('fci')
-edges = mol.get_spa_edges() # Since H4 at equal separated distance, it will be [(0,1),(2,3)]
-initial_guess = mol.use_HAO_orbitals().integral_manager.orbital_coefficients.T
+mol, edges = mol.use_CLPO_orbitals_and_edges() # Since H4 at equal separated distance, edges will be [(0,1),(2,3)]
 U = sn.FCircuit.from_edges(n_orb=mol.n_orbitals, edges=edges)
 
-# First we optimize the native orbitals
-opt = sn.optimize_orbitals(circuit=U, molecule=mol,silent=True,backend='tcc',initial_guess=initial_guess)
+# First we optimize the CLPO orbitals
+opt = sn.optimize_orbitals(circuit=U, molecule=mol,silent=True,backend='tcc')
 sn.plot_MO(opt.molecule,filename='first_graph_orbitals')
 omol = opt.molecule
 a = tq.Variable('UR(0,1)')

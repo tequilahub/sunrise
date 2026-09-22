@@ -38,9 +38,8 @@ def Pipek_Mezey(mol):
     # sun.plot_MO(tqmol,filename='Pipek_Mezey')
     smol = HybridBase.from_tequila(tqmol)
     edges = smol.get_spa_edges()
-    guess = smol.use_HAO_orbitals().integral_manager.orbital_coefficients.T #Obv doesnt work, but dont want to do edges and guess by hand
     U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,initial_guess=guess,use_hcb=True,silent=True)
+    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
     # sun.plot_MO(opt.molecule,filename='Pipek_Mezey_SPA')
     return opt.energy
 
@@ -60,9 +59,8 @@ def Foster_Boys(mol):
     sun.plot_MO(tqmol,filename='Foster_Boys')
     smol = HybridBase.from_tequila(tqmol)
     edges = smol.get_spa_edges()
-    guess = smol.use_HAO_orbitals().integral_manager.orbital_coefficients.T #Obv doesnt work, but dont want to do edges and guess by hand
     U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,initial_guess=guess,use_hcb=True,silent=True)
+    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
     # sun.plot_MO(opt.molecule,filename='Foster_Boys_SPA')
     return opt.energy
 
@@ -82,9 +80,8 @@ def Edmiston_Ruedenberg(mol):
     sun.plot_MO(tqmol,filename='Edmiston_Ruedenberg')
     smol = HybridBase.from_tequila(tqmol)
     edges = smol.get_spa_edges()
-    guess = smol.use_HAO_orbitals().integral_manager.orbital_coefficients.T #Obv doesnt work, but dont want to do edges and guess by hand
     U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,initial_guess=guess,use_hcb=True,silent=True)
+    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
     # sun.plot_MO(opt.molecule,filename='Edmiston_Ruedenberg_SPA')
     return opt.energy
 
@@ -93,9 +90,8 @@ def Tequila(mol):
     mol = mol.use_native_orbitals()
     smol = HybridBase.from_tequila(mol)
     edges = smol.get_spa_edges()
-    guess = smol.use_HAO_orbitals().integral_manager.orbital_coefficients.T
     U = mol.make_ansatz("HCB-SPA",edges=edges)
-    opt = tq.chemistry.optimize_orbitals(molecule=mol,circuit=U,initial_guess=guess,use_hcb=True,silent=True)
+    opt = tq.chemistry.optimize_orbitals(molecule=mol,circuit=U,use_hcb=True,silent=True)
     # sun.plot_MO(opt.molecule,filename='SPA')
     return opt.energy
 

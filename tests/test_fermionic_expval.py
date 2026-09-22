@@ -85,13 +85,14 @@ def test_optimize_orbitals(geom,backend,use_hcb):
     if backend == "fqe":
         pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
-    edges = snmol.get_spa_edges()
-    initial_guess = snmol.use_HAO_orbitals().integral_manager.orbital_coefficients.T
+    snmol, edges = snmol.use_CLPO_orbitals_and_edges()
     tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
+    # same CLPO starting orbitals on the tequila side, so both optimizations start from the same point
+    tqmol = sn.CLPO.generate_CLPO_molecule(tqmol,use_active=not tqmol.integral_manager.active_space_is_trivial())
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
-    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,initial_guess=initial_guess,use_hcb=use_hcb)
-    tqopt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True,initial_guess=initial_guess)
+    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,use_hcb=use_hcb)
+    tqopt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True)
     assert isclose(snopt.energy,tqopt.energy)
 
 #TODO: recursion limit problem on tequila, return when fixed
