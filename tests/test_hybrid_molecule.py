@@ -1,6 +1,7 @@
 import tequila as tq
 import pytest
 import numpy
+from copy import deepcopy
 import sunrise as sn
 @pytest.mark.parametrize("system",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize("select",["FBFBFFBFBFBFB","BBFFBBFFBBFF"])
@@ -23,10 +24,10 @@ def test_hamiltonian(system,select,two_qubit):
 @pytest.mark.parametrize("transformation",["Jordan-Wigner","reordered-Jordan-Wigner"])
 def test_opt_SPA(two_qubit,transformation):
     mol= sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",basis_set="sto-6g",select="BBFFBBFFBBFF",backend='pyscf',two_qubit=two_qubit,transformation=transformation,nature='hybrid') #could be any select
-    tqmol=tq.Molecule(basis_set="sto-6g",geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",backend='pyscf',transformation=transformation)
     mol, edges = mol.use_CLPO_orbitals_and_edges()
-    # same CLPO starting orbitals on the tequila side, so both optimizations start from the same point
-    tqmol = sn.CLPO.generate_CLPO_molecule(tqmol,use_active=not tqmol.integral_manager.active_space_is_trivial())
+    # both sides share this one CLPO run: the edges only match the orbitals they were computed with, and a
+    # second, independent run can order degenerate orbitals differently (the edges then pair the wrong ones)
+    tqmol = tq.quantumchemistry.QuantumChemistryBase(parameters=mol.parameters,integral_manager=deepcopy(mol.integral_manager),transformation=transformation)
     tqopt = tq.quantumchemistry.optimize_orbitals(molecule=tqmol,circuit=tqmol.make_ansatz("HCB-SPA",edges=edges),silent=True,use_hcb=True)
     opt = sn.optimize_orbitals(molecule=mol,circuit=mol.make_ansatz("SPA",edges=edges),silent=True)
     assert numpy.isclose(tqopt.energy,opt.energy,10**-5)

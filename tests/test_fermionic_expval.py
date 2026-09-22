@@ -5,6 +5,7 @@ import sunrise as sn
 from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS,Braket
 from numpy import isclose
 import random
+from copy import deepcopy
 from datetime import datetime
 
 HAS_TCC = "tcc" in INSTALLED_FERMIONIC_BACKENDS
@@ -86,9 +87,9 @@ def test_optimize_orbitals(geom,backend,use_hcb):
         pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f')
     snmol, edges = snmol.use_CLPO_orbitals_and_edges()
-    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner')
-    # same CLPO starting orbitals on the tequila side, so both optimizations start from the same point
-    tqmol = sn.CLPO.generate_CLPO_molecule(tqmol)
+    # both sides share this one CLPO run: the edges only match the orbitals they were computed with, and a
+    # second, independent run can order degenerate orbitals differently (the edges then pair the wrong ones)
+    tqmol = tq.quantumchemistry.QuantumChemistryBase(parameters=snmol.parameters,integral_manager=deepcopy(snmol.integral_manager),transformation='reordered-jordan-wigner')
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
     snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,use_hcb=use_hcb)
