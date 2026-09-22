@@ -7,7 +7,7 @@ import sunrise as sn
 @pytest.mark.parametrize("two_qubit",[True,False])
 def test_hamiltonian(system,select,two_qubit):
     mol= sn.Molecule(geometry=system,basis_set="sto-6g",select=select,backend='pyscf',two_qubit=two_qubit,nature='hybrid')
-    tqmol=tq.Molecule(basis_set="sto-6g",geometry=system,backend='pyscf')
+    tqmol=sn.Molecule(basis_set="sto-6g",geometry=system,backend='pyscf')
     edges = mol.get_spa_edges()
     U1=tqmol.make_ansatz("SPA",edges=edges)
     H1 = tqmol.make_hamiltonian()
@@ -23,10 +23,10 @@ def test_hamiltonian(system,select,two_qubit):
 @pytest.mark.parametrize("transformation",["Jordan-Wigner","reordered-Jordan-Wigner"])
 def test_opt_SPA(two_qubit,transformation):
     mol= sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",basis_set="sto-6g",select="BBFFBBFFBBFF",backend='pyscf',two_qubit=two_qubit,transformation=transformation,nature='hybrid') #could be any select
-    tqmol=tq.Molecule(basis_set="sto-6g",geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",backend='pyscf',transformation=transformation)
+    tqmol=sn.Molecule(basis_set="sto-6g",geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",backend='pyscf',transformation=transformation)
     edges = mol.get_spa_edges()
     initial_guess = mol.get_spa_guess().T
-    tqopt = tq.quantumchemistry.optimize_orbitals(molecule=tqmol,circuit=tqmol.make_ansatz("HCB-SPA",edges=edges),silent=True,initial_guess=initial_guess,use_hcb=True)
+    tqopt = sn.quantumchemistry.optimize_orbitals(molecule=tqmol,circuit=tqmol.make_ansatz("HCB-SPA",edges=edges),silent=True,initial_guess=initial_guess,use_hcb=True)
     opt = sn.optimize_orbitals(molecule=mol,circuit=mol.make_ansatz("SPA",edges=edges),silent=True,initial_guess=initial_guess)
     assert numpy.isclose(tqopt.energy,opt.energy,10**-5)
 @pytest.mark.parametrize("system",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
@@ -34,7 +34,7 @@ def test_opt_SPA(two_qubit,transformation):
 @pytest.mark.parametrize("excit",[ [(0,4)] , [(2,4),(3,5)], [(2,6),(3,7),(1,5)] , [(2,4),(3,5),(1,7),(0,6)] ])
 def test_exc_gate(system,select,excit):
     mol_mix = sn.Molecule(geometry=system, basis_set="sto-6g", select=select,condense=False,backend='pyscf',nature='hybrid')
-    mol_jw = tq.Molecule(basis_set="sto-6g", geometry=system,backend='pyscf')
+    mol_jw = sn.Molecule(basis_set="sto-6g", geometry=system,backend='pyscf')
 
     U_jw = mol_jw.prepare_reference()
     U_mix = mol_mix.prepare_reference()
@@ -64,7 +64,7 @@ def test_exc_gate(system,select,excit):
 @pytest.mark.parametrize("order",[1, 2])
 def test_UpCCGD_BOS(system,hcb_optimization,order):
     mol = sn.Molecule(geometry=system,basis_set="sto-6g",select="",condense=False,backend="pyscf",nature='hybrid')
-    tqmol = tq.Molecule(geometry=system,basis_set="sto-6g",backend="pyscf")
+    tqmol = sn.Molecule(geometry=system,basis_set="sto-6g",backend="pyscf")
 
     H = mol.make_hamiltonian()
     tqH = tqmol.make_hamiltonian()
@@ -84,7 +84,7 @@ def test_UpCCGD_BOS(system,hcb_optimization,order):
 @pytest.mark.parametrize("hcb_optimization",[True, False])
 def test_UpCCGSD_FER(system,hcb_optimization):
     mol = sn.Molecule(geometry=system, basis_set="sto-6g", select="FFFFFFFFFFFFFFFFFFFFF", condense=False,backend='pyscf',nature='hybrid')
-    tqmol = tq.Molecule(geometry=system, basis_set="sto-6g",backend='pyscf')
+    tqmol = sn.Molecule(geometry=system, basis_set="sto-6g",backend='pyscf')
 
     H = mol.make_hamiltonian()
     tqH = tqmol.make_hamiltonian()
@@ -105,7 +105,7 @@ def test_UpCCGSD_FER(system,hcb_optimization):
 #    Take care, expensive test
 #    '''
 #    mol = sn.Molecule(geometry="H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2", basis_set="sto-6g", select="FFFFFFFFFFFFFFFFFFFFF", condense=False,backend='pyscf',nature='hybrid')
-#    tqmol = tq.Molecule(geometry="H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2", basis_set="sto-6g",backend='pyscf')
+#    tqmol = sn.Molecule(geometry="H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2", basis_set="sto-6g",backend='pyscf')
 #
 #    H = mol.make_hamiltonian()
 #    tqH = tqmol.make_hamiltonian()

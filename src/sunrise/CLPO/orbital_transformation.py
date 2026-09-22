@@ -1,12 +1,12 @@
 from __future__ import annotations
-from tequila.quantumchemistry.pyscf_interface import QuantumChemistryPySCF
+from sunrise.molecules.qubit_base.pyscf_interface import QuantumChemistryPySCF
 import os
 import numpy
 from pyscf import scf, mp
 from pyscf.tools import molden
 from copy import deepcopy
 import subprocess
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 import numpy
 from copy import deepcopy
 from typing import Tuple

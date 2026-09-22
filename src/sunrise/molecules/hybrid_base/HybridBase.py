@@ -8,14 +8,14 @@ from tequila.objective.objective import Variable, Variables, ExpectationValue
 
 from tequila.simulators.simulator_api import simulate
 from tequila.utils import to_float
-from tequila.quantumchemistry.chemistry_tools import prepare_product_state, \
+from sunrise.molecules.qubit_base.chemistry_tools import prepare_product_state, \
     ParametersQC, NBodyTensor
-from tequila.quantumchemistry import optimize_orbitals
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase as qc_base
+from sunrise.molecules.qubit_base import optimize_orbitals
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as qc_base
 import typing, numpy
 from itertools import product
 from sunrise.molecules.hybrid_base.encodings import known_encodings
-from tequila.quantumchemistry.encodings import EncodingBase
+from sunrise.molecules.qubit_base.encodings import EncodingBase
 from sunrise.molecules.hybrid_base.FermionicGateImpl import FermionicGateImpl
 from openfermion import FermionOperator
 import copy
@@ -279,20 +279,20 @@ class HybridBase(qc_base):
                 else:
                     if isinstance(core, int):
                         core = [core]
-                    active = get_active(c, d, s, [i.idx_total for i in self.integral_manager.active_orbitals])
+                    active = get_active(c, d, s, [i for i in range(len(self.integral_manager.orbitals)) if i not in core])
         assert len(active) + len(core) == len(self.integral_manager.orbitals)
         if "reference_orbitals" in kwargs:
             reference_orbitals = kwargs["reference_orbitals"]
-            kwargs.pop()
-            assert len(reference_orbitals) == len(self.parameters.total_n_electrons)//2,f'Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons//2}, received {len(reference_orbitals)}'
+            kwargs.pop("reference_orbitals")
+            assert len(reference_orbitals) == self.parameters.total_n_electrons//2,f'Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons//2}, received {len(reference_orbitals)}'
         else:
             reference_orbitals = [i.idx_total for i in self.integral_manager.reference_orbitals]
         to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
         to_active = {active[i]: to_active[i] for i in range(len(active))}
         if len(core):
-            c_combined = numpy.zeros(shape=c.shape)
-            for i,idx in enumerate(core):
-                c_combined[:, i] = c[:, idx]
+            # keep the core orbitals at their own indices (`core` is passed as
+            # frozen_idx below) and only replace the active columns
+            c_combined = c.copy()
             for act_idx in active:
                 c_combined[:, to_active[act_idx]] = d[:, act_idx]
             coeff = orthogonalize_active_space(c_combined, s, core, [*to_active.values()])
@@ -301,8 +301,9 @@ class HybridBase(qc_base):
             if len(active) == len(self.select):
                 new_select = {i: self.select[i] for i in range(len(active))}
             else:
-                s = {i: self.select[i] for i in self.select.keys() if i not in core}
-                new_select = {i: s[[*s.keys()][i]] for i in range(len(s))}
+                # do not shadow `s` (the overlap integrals) - still needed below
+                remaining = {i: self.select[i] for i in self.select.keys() if i not in core}
+                new_select = {i: remaining[[*remaining.keys()][i]] for i in range(len(remaining))}
             if inplace:
                 self.integral_manager = self.initialize_integral_manager(
                     one_body_integrals=self.integral_manager.one_body_integrals,
@@ -885,10 +886,10 @@ class HybridBase(qc_base):
     
     def optimize_orbitals(self,molecule, circuit:QCircuit=None, vqe_solver=None, pyscf_arguments=None, silent=False, vqe_solver_arguments=None, initial_guess=None, return_mcscf=False, use_hcb = False, molecule_factory=None,molecule_arguments=None ,restrict_to_active_space = True,*args, **kwargs):
         """
-        Interface with tq.quantumchemistry.optimize_orbitals
+        Interface with sun.chemistry.optimize_orbitals
         Parameters
         ----------
-        molecule: The tequila molecule whose orbitals are to be optimized
+        molecule: The molecule whose orbitals are to be optimized
         circuit: The circuit that defines the ansatz to the wavefunction in the VQE
                  can be None, if a customized vqe_solver is passed that can construct a circuit
         vqe_solver: The VQE solver (the default - vqe_solver=None - will take the given circuit and construct an expectationvalue out of molecule.make_hamiltonian and the given circuit)
@@ -1278,7 +1279,7 @@ class HybridBase(qc_base):
     
     def make_ansatz(self, name: str, *args, **kwargs) -> QCircuit:
         """
-        Automatically calls the right subroutines to construct ansatze implemented in tequila.chemistry
+        Automatically calls the right subroutines to construct ansatze implemented in sunrise.chemistry
         name: namne of the ansatz, examples are: UpCCGSD, UpCCD, SPA, UCCSD, SPA+UpCCD, SPA+GS
         """
         name = name.lower()
@@ -1697,7 +1698,7 @@ class HybridBase(qc_base):
             Returns
             -------
         """
-        from tequila import Molecule as mol
+        from sunrise.molecules.qubit_base import Molecule as mol
         c, h, g = self.get_integrals()
         BOS_L = self.BOS_MO
         NBOS_L = self.FER_MO

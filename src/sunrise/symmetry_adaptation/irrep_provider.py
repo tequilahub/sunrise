@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import tequila
-from tequila import Molecule
+from sunrise.molecules.qubit_base import Molecule
 import numpy
 from .point_group import PointGroup, PointGroupRepresentation
 from .qcircuit_representation_builder import QCircuitRepresentationBuilder

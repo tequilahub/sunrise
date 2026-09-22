@@ -1,5 +1,5 @@
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
-from tequila.quantumchemistry.chemistry_tools import ParametersQC,NBodyTensor,OrbitalData
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC,NBodyTensor,OrbitalData
 import pyscf
 from pyscf.gto import Mole
 from numpy import ndarray

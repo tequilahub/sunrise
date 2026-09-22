@@ -6,7 +6,7 @@ import warnings
 from .fast_rdm import fast_rdm
 from .fast_qtensor import fast_qtensor
 from .decompose import decompose, make_decomposed_clusters
-from tequila.quantumchemistry.orbital_optimizer import OptimizeOrbitalsResult
+from sunrise.molecules.qubit_base.orbital_optimizer import OptimizeOrbitalsResult
 from tequila import TequilaWarning
 from typing import Union
 

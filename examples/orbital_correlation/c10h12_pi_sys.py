@@ -35,7 +35,7 @@ H 6.495727 -0.342292 0.000000
 """
 
 mol = sun.Molecule(geometry=geometry, basis_set='sto-3g', nature='f', active_orbitals=[30,32,33,34,35,36,37,38,39,40]).use_native_orbitals()
-# mol = tq.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[30,32,33,34,35,36,37,38,39,40]).use_native_orbitals() # for fast-spa
+# mol = sun.chemistry.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[30,32,33,34,35,36,37,38,39,40]).use_native_orbitals() # for fast-spa
 edges = [(0,1),(2,3),(4,5),(6,7),(8,9)]
 # initial_guess = np.array([
 #     [1, 1, 0, 0, 0, 0, 0, 0, 0, 0],

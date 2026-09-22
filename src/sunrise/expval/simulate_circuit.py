@@ -1,7 +1,8 @@
 from sunrise.fermionic_operations import FCircuit
 from tequila.objective.objective import Variables
 from tequila.objective import format_variable_dictionary
-from tequila import QubitWaveFunction,TequilaException,Molecule
+from tequila import QubitWaveFunction, TequilaException
+from sunrise.molecules.qubit_base import Molecule
 from tequila import simulate as tq_simulate
 from typing import Union
 from numpy import zeros

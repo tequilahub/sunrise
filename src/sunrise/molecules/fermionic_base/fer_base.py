@@ -10,7 +10,7 @@ from tequila import QTensor, QubitWaveFunction, BitNumbering
 # from tequila.simulators.simulator_api import simulate
 from ...expval.minimize import simulate
 from ...expval import Braket
-from tequila.quantumchemistry.chemistry_tools import (
+from sunrise.molecules.qubit_base.chemistry_tools import (
     prepare_product_state,
     ClosedShellAmplitudes,
     Amplitudes,
@@ -26,7 +26,7 @@ from sunrise.fermionic_operations.givens_rotations import n_rotation as __n_rota
 from sunrise.fermionic_operations.givens_rotations import reconstruct_matrix_from_circuit
 from sunrise.hybridization.hybridization import Graph
 
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 try:
     # if you are experiencing import errors you need to update openfermion
     # required is version >= 1.0
@@ -47,7 +47,7 @@ OPTIMIZED_ORDERING = "Optimized"
 class FermionicBase(QuantumChemistryBase):
     """
     Base Class for tequila chemistry functionality
-    This is what is initialized with tq.Molecule(...)
+    This is what is initialized with sun.Molecule(...)
     We try to define all main methods here and only implemented specializations in the derived classes
     Derived classes interface specific backends (e.g. Psi4, PySCF and Madness). See PACKAGE_interface.py for more
     """
@@ -459,7 +459,7 @@ class FermionicBase(QuantumChemistryBase):
                 else:
                     if isinstance(core, int):
                         core = [core]
-                    active = get_active(c, d, s, [i.idx_total for i in self.integral_manager.active_orbitals])
+                    active = get_active(c, d, s, [i for i in range(len(self.integral_manager.orbitals)) if i not in core])
         assert len(active) + len(core) == len(self.integral_manager.orbitals)
         if "reference_orbitals" in kwargs:
             reference_orbitals = kwargs["reference_orbitals"]
@@ -470,9 +470,9 @@ class FermionicBase(QuantumChemistryBase):
         to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
         to_active = {active[i]: to_active[i] for i in range(len(active))}
         if len(core):
-            c_combined = numpy.zeros(shape=c.shape)
-            for i,idx in enumerate(core):
-                c_combined[:, i] = c[:, idx]
+            # keep the core orbitals at their own indices (`core` is passed as
+            # frozen_idx below) and only replace the active columns
+            c_combined = c.copy()
             for act_idx in active:
                 c_combined[:, to_active[act_idx]] = d[:, act_idx]
             coeff = orthogonalize_active_space(c_combined, s, core, [*to_active.values()])
@@ -691,7 +691,7 @@ class FermionicBase(QuantumChemistryBase):
 
     def make_ansatz(self, name: str, *args, **kwargs)->FCircuit:
         """
-        Automatically calls the right subroutines to construct ansatze implemented in tequila.chemistry
+        Automatically calls the right subroutines to construct ansatze implemented in sunrise.chemistry
         name: namne of the ansatz, examples are: UpCCGSD, UpCCD, SPA, UCCSD, SPA+UpCCD, SPA+GS
         """
         name = name.lower()
@@ -1485,7 +1485,7 @@ class FermionicBase(QuantumChemistryBase):
 
             return minimize(objective=E, *args, **kwargs).energy
         else:
-            from tequila.quantumchemistry import INSTALLED_QCHEMISTRY_BACKENDS
+            from sunrise.molecules.qubit_base import INSTALLED_QCHEMISTRY_BACKENDS
 
             if "pyscf" not in INSTALLED_QCHEMISTRY_BACKENDS:
                 raise TequilaException(

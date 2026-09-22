@@ -1,8 +1,8 @@
 from sunrise import FCircuit
 from tequila import QCircuit,TequilaException
 from . import Braket
-from tequila.quantumchemistry import optimize_orbitals as tq_opt_orbs
-from tequila.quantumchemistry.orbital_optimizer import OptimizeOrbitalsResult
+from sunrise.molecules.qubit_base import optimize_orbitals as tq_opt_orbs
+from sunrise.molecules.qubit_base.orbital_optimizer import OptimizeOrbitalsResult
 from ..molecules.fermionic_base.fer_base import FermionicBase
 from ..molecules.hybrid_base.HybridBase import HybridBase
 from .minimize import minimize
@@ -15,10 +15,10 @@ def optimize_orbitals(molecule,circuit=Union[FCircuit,QCircuit],backend:str='teq
 
     Parameters
     ----------
-    molecule: The tequila molecule whose orbitals are to be optimized
+    molecule: The molecule whose orbitals are to be optimized
     circuit: The FCircuit that defines the ansatz to the wavefunction in the VQE
              can be None, if a customized vqe_solver is passed that can construct a circuit
-    backend: Fermionic Backend, will be created a tequila.chemistry.optimize_orbitals with custom vqe_solver
+    backend: Fermionic Backend, will be created a sunrise.chemistry.optimize_orbitals with custom vqe_solver
     pyscf_arguments: Arguments for the MCSCF structure of PySCF, if None, the defaults are {"max_cycle_macro":10, "max_cycle_micro":3} (see here https://pyscf.org/pyscf_api_docs/pyscf.mcscf.html)
     silent: silence printout
     vqe_solver_arguments: Optional arguments for a customized selected backed
