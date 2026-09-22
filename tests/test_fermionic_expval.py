@@ -7,8 +7,6 @@ from numpy import isclose
 import random
 from datetime import datetime
 
-
-
 HAS_TCC = "tcc" in INSTALLED_FERMIONIC_BACKENDS
 HAS_FQE = "fqe" in INSTALLED_FERMIONIC_BACKENDS
 
@@ -118,6 +116,8 @@ def test_optimize_orbitals(geom,backend,use_hcb):
 def test_gradient(geom,backend):
     if backend == "tequila":
         pytest.skip("Tequila backend requires a Qubit-based molecule")
+    if backend == "spex":
+        pytest.skip("Gradient not implemented for the spex backend")
     tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a').use_native_orbitals()
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     random.seed(datetime.now().timestamp())

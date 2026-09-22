@@ -18,6 +18,9 @@ from sunrise.expval.simulate_circuit import simulate_fcircuit
 def minimize(objective,method: str = "bfgs",variables: list = None,initial_values: Union[dict, Number, Callable] = 0.0,maxiter: int = None,silent:bool=True,*args,**kwargs):
     if type(objective).__name__ == 'TequilaBraket':
         return tminimize(objective=objective.build(),method=method,variables=variables,initial_values=initial_values,maxiter=maxiter,silent=silent,args=args,kwargs=kwargs)
+    if type(objective).__name__ == 'SpexExpval':
+        objective = Objective([objective])
+        return tminimize(objective=objective,gradient='2-point',method=method,variables=variables,initial_values=initial_values,maxiter=maxiter,silent=silent,args=args,kwargs=kwargs)
     if type(objective).__name__ in  ['TCCBraket','FQEBraKet']:
         objective = Objective([objective])
     if hasattr(objective,'args') and any([type(arg).__name__ in  ['TCCBraket','FQEBraKet','BigExpVal'] for arg in objective.args]):
@@ -305,7 +308,7 @@ def simulate(
     
     if isinstance(objective,list):
         return [simulate(op,variables,samples,backend,noise,device,initial_state,*args,**kwargs) for op in objective]
-    if type(objective).__name__ in ['TCCBraket','FQEBraKet','BigExpVal']:
+    if type(objective).__name__ in ['TCCBraket','FQEBraKet','BigExpVal','SpexExpval']:
         return objective(variables=variables)
     if type(objective).__name__ == 'TequilaBraket':
         return simulate(objective=objective.build(),variables=variables,samples=samples,backend=backend,noise=noise,device=device,initial_state=initial_state,*args,**kwargs)

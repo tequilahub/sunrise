@@ -3,7 +3,7 @@ from typing import Union,List
 from openfermion import FermionOperator
 from tequila import TequilaException
 
-SUPPORTED_FERMIONIC_BACKENDS = ["tequila", "fqe", "tcc"]
+SUPPORTED_FERMIONIC_BACKENDS = ["tequila", "fqe", "tcc", "spex"]
 INSTALLED_FERMIONIC_BACKENDS = {}
 
 try:
@@ -15,6 +15,11 @@ try:
     from sunrise.expval.fqe_expval import FQEBraKet
     INSTALLED_FERMIONIC_BACKENDS["fqe"] = FQEBraKet
 except ImportError:
+    pass
+try:
+    from .spex_expval import SpexExpval
+    INSTALLED_FERMIONIC_BACKENDS["spex"] = SpexExpval
+except (ImportError, AttributeError):
     pass
 
 INSTALLED_FERMIONIC_BACKENDS["tequila"] = TequilaBraket

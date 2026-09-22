@@ -7,3 +7,4 @@ pytest
 setuptools
 qpic
 pyscf
+spex-tequila @ git+https://github.com/tequilahub/spex.git@main

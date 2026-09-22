@@ -7,7 +7,7 @@ from typing import Union
 from numpy import zeros
 from tequila import SUPPORTED_BACKENDS
 
-SUPPORTED_FERMIONIC_BACKENDS = ["fqe", "tcc"]
+SUPPORTED_FERMIONIC_BACKENDS = ["fqe", "tcc", "spex"]
 INSTALLED_FERMIONIC_BACKENDS = {}
 
 try:
@@ -19,6 +19,11 @@ try:
     from sunrise.expval.fqe_circuit_sim import fqe_circuit_simulatorU
     INSTALLED_FERMIONIC_BACKENDS["fqe"] = fqe_circuit_simulatorU
 except ImportError:
+    pass
+try:
+    from .spex_expval import spex_circuit_simulator
+    INSTALLED_FERMIONIC_BACKENDS["spex"] = spex_circuit_simulator
+except (ImportError, AttributeError):
     pass
 
 def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='tcc',**kwargs) -> QubitWaveFunction:
@@ -39,7 +44,13 @@ def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='
             )
         )
     backend = backend.strip().lower()
-    if 'tequila' in backend.lower() or backend in SUPPORTED_BACKENDS:
+    if backend in SUPPORTED_FERMIONIC_BACKENDS:
+        if backend in INSTALLED_FERMIONIC_BACKENDS:
+            simulator = INSTALLED_FERMIONIC_BACKENDS[backend]
+            return simulator(U=U,variables=variables,**kwargs)
+        else:
+            raise TequilaException(f'Backend {backend} not installed.')
+    elif 'tequila' in backend.lower() or backend in SUPPORTED_BACKENDS:
         if backend.lower()== 'tequila':
             backend = None
         elif 'tequila-' in backend.lower() and not backend.find('tequila-'):
@@ -66,12 +77,6 @@ def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='
         else:
             raise TequilaException(f'Not Fermionic Backend selected ({backend}) and no manner of compiling to qubit provided.')
         return tq_simulate(U,backend=backend,variables=variables,**kwargs)
-    elif backend in SUPPORTED_FERMIONIC_BACKENDS:
-        if backend in INSTALLED_FERMIONIC_BACKENDS:
-            simulator = INSTALLED_FERMIONIC_BACKENDS[backend]
-            return simulator(U=U,variables=variables,**kwargs)
-        else:
-            raise TequilaException(f'Backend {backend} not installed.')
     else:
         raise TequilaException(f'Not recognised backed: {backend}.')
 
