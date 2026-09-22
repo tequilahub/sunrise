@@ -21,7 +21,7 @@ def make_fermionic_hamiltonian(one_body_integrals, two_body_integrals, constant,
 
 
 def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]], form: str = 'fermionic')-> openfermion.FermionOperator:
-    """
+    r"""
     Notes
     ----------
     Creates the transformed hermitian generator of UCC type unitaries:
@@ -115,7 +115,6 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
     
     if number_op:
         op = openfermion.FermionOperator(tuple(ofi), 1)
-      
     return op
 
 

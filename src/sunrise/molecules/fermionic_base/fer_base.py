@@ -1399,13 +1399,13 @@ class FermionicBase(QuantumChemistryBase):
             backend = self.fermionic_backend
         if evaluate:
             if rdm_trafo is None:
-                evals = simulate(Braket(H=qops, U=U, shape=[len(qops)],backend=backend,molecule=self), variables=variables)
+                evals = simulate(Braket(operator=qops, ket=U, shape=[len(qops)], molecule=self), backend=backend, variables=variables)
             else:
                 qops = [rdm_trafo.dagger() * qops[i] * rdm_trafo for i in range(len(qops))]
-                evals = simulate(Braket(H=qops, U=U, shape=[len(qops)],backend=backend,molecule=self), variables=variables)
+                evals = simulate(Braket(operator=qops, ket=U, shape=[len(qops)], molecule=self), backend=backend, variables=variables)
         else:
             if rdm_trafo is None:
-                evals = [Braket(H=x, U=U,backend=backend,molecule=self) for x in qops]
+                evals = [Braket(operator=x, ket=U, molecule=self) for x in qops]
                 N = n_MOs if spin_free else n_SOs
                 rdm1 = QTensor(shape=[N, N])
                 rdm2 = QTensor(shape=[N, N, N, N])
@@ -1480,7 +1480,7 @@ class FermionicBase(QuantumChemistryBase):
                 H = self.make_hardcore_boson_hamiltonian()
             else:
                 H = self.make_hamiltonian()
-            E = Braket(H=H, U=U)
+            E = Braket(operator=H, ket=U, mol=self)
             from sunrise import minimize
 
             return minimize(objective=E, *args, **kwargs).energy
