@@ -7,7 +7,7 @@ geometry = 'H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2.\n H 0. 0. 3.'
 mol = sn.Molecule(geometry=geometry, basis_set='sto-3g',nature='f',backend='pyscf').use_native_orbitals()
 ref = mol.compute_energy('fci')
 edges = mol.get_spa_edges() # Since H4 at equal separated distance, it will be [(0,1),(2,3)]
-initial_guess = mol.get_spa_guess().T
+initial_guess = mol.use_HAO_orbitals().integral_manager.orbital_coefficients.T
 U = sn.FCircuit.from_edges(n_orb=mol.n_orbitals, edges=edges)
 
 # First we optimize the native orbitals

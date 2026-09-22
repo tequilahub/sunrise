@@ -25,7 +25,7 @@ def test_opt_SPA(two_qubit,transformation):
     mol= sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",basis_set="sto-6g",select="BBFFBBFFBBFF",backend='pyscf',two_qubit=two_qubit,transformation=transformation,nature='hybrid') #could be any select
     tqmol=tq.Molecule(basis_set="sto-6g",geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",backend='pyscf',transformation=transformation)
     edges = mol.get_spa_edges()
-    initial_guess = mol.get_spa_guess().T
+    initial_guess = mol.use_HAO_orbitals().integral_manager.orbital_coefficients.T
     tqopt = tq.quantumchemistry.optimize_orbitals(molecule=tqmol,circuit=tqmol.make_ansatz("HCB-SPA",edges=edges),silent=True,initial_guess=initial_guess,use_hcb=True)
     opt = sn.optimize_orbitals(molecule=mol,circuit=mol.make_ansatz("SPA",edges=edges),silent=True,initial_guess=initial_guess)
     assert numpy.isclose(tqopt.energy,opt.energy,10**-5)

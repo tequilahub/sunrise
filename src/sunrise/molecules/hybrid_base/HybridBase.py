@@ -1787,30 +1787,6 @@ class HybridBase(qc_base):
         _, edges = generate_CLPO_molecule_edges(self, use_active=strip_orbitals, silent=True, **kwargs)
         return edges
 
-    def get_spa_guess(self, strip_orbitals: bool = None, **kwargs):
-        """
-        Generates the initial guess orbital coefficient matrix using the pure Python JANPA HAO algorithm.
-        """
-        from sunrise.CLPO.orbital_transformation import generate_HAO_molecule
-        if strip_orbitals is None:
-            strip_orbitals = not self.integral_manager.active_space_is_trivial()
-            
-        hao_mol = generate_HAO_molecule(self, use_active=strip_orbitals, silent=True, **kwargs)
-        return hao_mol.integral_manager.orbital_coefficients
-
-    def get_spa_edges_and_guess(self, collapse: bool = True, strip_orbitals: bool = None, **kwargs):
-        """
-        Generates both SPA edges (via CLPO) and the initial guess matrix (via HAO).
-        """
-        from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges, generate_HAO_molecule
-        if strip_orbitals is None:
-            strip_orbitals = not self.integral_manager.active_space_is_trivial()
-            
-        _, edges = generate_CLPO_molecule_edges(self, use_active=strip_orbitals, silent=True, **kwargs)
-        hao_mol = generate_HAO_molecule(self, use_active=strip_orbitals, silent=True, **kwargs)
-        
-        return edges, hao_mol.integral_manager.orbital_coefficients
-
     def use_HAO_orbitals(self, inplace=False, core: typing.Optional[list[int]] = None, sp_list=None, *args, **kwargs):
         """
         Transforms the molecule to use Hybrid Atomic Orbitals (HAO) computed by the pure Python JANPA pipeline.
@@ -1829,3 +1805,43 @@ class HybridBase(qc_base):
             return self
         else:
             return hao_mol
+
+    def use_CLPO_orbitals(self, inplace=False, core: typing.Optional[list[int]] = None, edges: list = None, *args, **kwargs):
+        """
+        Transforms the molecule to use Chemist's Localized Property-optimized Orbitals (CLPO) computed by the
+        pure Python JANPA pipeline.
+        Note: `core` is ignored because JANPA determines the orbitals directly from the 3D molecular geometry.
+
+        Parameters
+        ----------
+        inplace: update current molecule or return a new instance
+        edges: list of edges the CLPO algorithm is restricted to. If not given, they are determined by JANPA
+
+        Returns
+        -------
+        New molecule in the CLPO basis
+        """
+        clpo_mol, _ = self.use_CLPO_orbitals_and_edges(*args, inplace=inplace, core=core, edges=edges, **kwargs)
+        return clpo_mol
+
+    def use_CLPO_orbitals_and_edges(self, inplace=False, core: typing.Optional[list[int]] = None, edges: list = None, *args, **kwargs):
+        """
+        Same as `use_CLPO_orbitals`, but the SPA edges determined by the same CLPO run are returned along
+        with the molecule, so that the JANPA pipeline is only executed once.
+
+        Returns
+        -------
+        Tuple of the molecule in the CLPO basis and the corresponding list of SPA edges
+        """
+        from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
+
+        use_active = not self.integral_manager.active_space_is_trivial()
+        clpo_mol, clpo_edges = generate_CLPO_molecule_edges(self, edges=edges, use_active=use_active, silent=True, **kwargs)
+
+        if inplace:
+            self.integral_manager = clpo_mol.integral_manager
+            self.transformation = clpo_mol.transformation
+            self.update_select(clpo_mol.select)
+            return self, clpo_edges
+        else:
+            return clpo_mol, clpo_edges

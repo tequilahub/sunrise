@@ -88,7 +88,7 @@ def test_optimize_orbitals(geom,backend,use_hcb):
         pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     edges = snmol.get_spa_edges()
-    initial_guess = snmol.get_spa_guess().T
+    initial_guess = snmol.use_HAO_orbitals().integral_manager.orbital_coefficients.T
     tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
