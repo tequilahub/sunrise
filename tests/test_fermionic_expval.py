@@ -84,11 +84,11 @@ def test_optimize_orbitals(geom,backend,use_hcb):
         pytest.skip("Tequila backend requires a Qubit-based molecule")
     if backend == "fqe":
         pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
-    snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f')
+    snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     snmol, edges = snmol.use_CLPO_orbitals_and_edges()
-    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner')
+    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     # same CLPO starting orbitals on the tequila side, so both optimizations start from the same point
-    tqmol = sn.CLPO.generate_CLPO_molecule(tqmol)
+    tqmol = sn.CLPO.generate_CLPO_molecule(tqmol,use_active=not tqmol.integral_manager.active_space_is_trivial())
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
     snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,use_hcb=use_hcb)
