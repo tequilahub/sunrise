@@ -4,7 +4,7 @@ try:
     from sunrise.expval.fqe_expval import FQEBraKet
 except ImportError:
     pass
-from tequila.quantumchemistry import QuantumChemistryBase
+from sunrise.molecules.qubit_base import QuantumChemistryBase
 from sunrise.MCVBT.QulacsBraKet import BraKetQulacs
 from sunrise.expval.minimize import simulate,grad
 from sunrise.expval import Braket

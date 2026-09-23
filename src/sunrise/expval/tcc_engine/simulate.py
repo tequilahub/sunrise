@@ -2,7 +2,7 @@ from tequila import Variable,Objective,simulate,QubitWaveFunction,TequilaWarning
 from tequila.objective.objective import Variables
 from sunrise.expval.tcc_expval import TCCBraket
 from sunrise.fermionic_operations import FCircuit
-from tequila import Molecule
+from sunrise.molecules.qubit_base import Molecule
 import numpy as np
 from warnings import warn
 

@@ -1,4 +1,6 @@
 import tequila as tq
+from sunrise.molecules.qubit_base import Molecule as QubitMolecule
+from sunrise.molecules.qubit_base import NBodyTensor
 from .decompose import make_decomposed_circuits
 import numpy
 from ._compute_rdms import compute_rdms, _assemble_rdm2, _assemble_rdm1
@@ -85,7 +87,7 @@ def fast_rdm(U, mol, clusters, variables, test=False,backend='qulacs'):
     evals_1, evals_2 = evals[:len_1], evals[len_1:]
     rdm1 = _assemble_rdm1(evals_1, n_MOs)
     rdm2 = _assemble_rdm2(evals_2, n_MOs)
-    rdm2 = tq.quantumchemistry.NBodyTensor(elems=rdm2, ordering="dirac", verify=False)
+    rdm2 = NBodyTensor(elems=rdm2, ordering="dirac", verify=False)
     rdm2 = rdm2.reorder(to="dirac").elems
 
     return rdm1, rdm2
@@ -99,7 +101,7 @@ if __name__ == "__main__":
         for i in range(n_atoms):
             geometry += f'H 0. 0. {i}.\n'
 
-        mol = tq.Molecule(geometry=geometry, basis_set='sto-3g', backend='pyscf', transformation="ReorderedJordanWigner").use_native_orbitals()
+        mol = QubitMolecule(geometry=geometry, basis_set='sto-3g', backend='pyscf', transformation="ReorderedJordanWigner").use_native_orbitals()
         clusters = [[i for i in range(n_atoms // 2)], [i for i in range(n_atoms // 2, n_atoms)]]
         if n_atoms == 16: clusters = [[0, 1, 2, 3],[ 4, 5, 6, 7],[8,9,10,11], [12,13,14,15]]
 

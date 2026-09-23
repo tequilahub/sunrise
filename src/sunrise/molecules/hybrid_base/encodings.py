@@ -9,7 +9,7 @@ from tequila.circuit.gates import X
 from tequila.hamiltonian.paulis import Sp,Sm,Z
 from tequila import QubitHamiltonian
 import openfermion
-from tequila.quantumchemistry.encodings import EncodingBase as EB
+from sunrise.molecules.qubit_base.encodings import EncodingBase as EB
 from copy import deepcopy
 def known_encodings():
     # convenience for testing and I/O

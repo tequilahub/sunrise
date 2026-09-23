@@ -19,7 +19,7 @@ H	0.0000090	-1.1293150	-1.5343900
 """
 
 # We select only the pi system, so it behaves like H4
-mol = tq.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[13,14,15,16]).use_native_orbitals()
+mol = sun.chemistry.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[13,14,15,16]).use_native_orbitals()
 reorder = np.array([ # reorder the orbitals because when doing natives they get mixed
     [0, 0, 0, 1],
     [0, 1, 0, 0],
@@ -34,7 +34,7 @@ guess[0] = [1.0, 1.0, 0.0, 0.0]
 guess[1] = [1.0, -1., 0.0, 0.0]
 guess[2] = [0.0, 0.0, 1.0, 1.0]
 guess[3] = [0.0, 0.0, 1.0, -1.]
-opt = tq.chemistry.optimize_orbitals(mol, circuit=U, initial_guess=guess.T, silent=True)
+opt = sun.chemistry.optimize_orbitals(mol, circuit=U, initial_guess=guess.T, silent=True)
 UR = mol.get_givens_circuit(opt.mo_coeff)
 U += UR.dagger()
 E = tq.ExpectationValue(U,H)

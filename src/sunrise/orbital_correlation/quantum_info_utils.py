@@ -1,7 +1,7 @@
 import tequila as tq
 from tequila import QCircuit,QubitWaveFunction,QubitHamiltonian
 from tequila.objective.objective import Variables
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase as tqMolecule
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as tqMolecule
 import numpy as np
 from scipy.linalg import logm, eigh
 import itertools
@@ -496,7 +496,7 @@ def get_classical_diagonal_guess(rho):
     return states, np.array(x0)
 
 def two_orbs_entanglement(
-    mol: tq.Molecule, 
+    mol: sun.Molecule, 
     circuit: tq.QCircuit = None, 
     variables = None, 
     initial_state = None, 
