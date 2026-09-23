@@ -36,15 +36,14 @@ def test_mixed_objective(backend, braket, same_variables):
         ref_term = tq.ExpectationValue(H=refmol.make_hamiltonian(), U=refU["ket"])
         tq_term = tq.ExpectationValue(H=tqmol.make_hamiltonian(), U=tqU["ket"])
 
-    # tq.BraKet is complex valued: cast to float as Objective.to_float() of tequila PR #472 does,
-    # which raises if the imaginary part does not vanish
-    objective = (sn_term + tq_term).wrap(to_float)
+    objective = sn_term + tq_term
     assert len(objective.extract_variables()) == len(sn_term.extract_variables()) * (1 if same_variables else 2)
 
     rng = np.random.default_rng(42)
     variables = {v: rng.uniform(-np.pi, np.pi) for v in objective.extract_variables()}
-    reference = tq.simulate((ref_term + tq_term).wrap(to_float), variables=variables)
+    reference = tq.simulate(ref_term + tq_term, variables=variables)
     result = sn.simulate(objective, variables=variables, backend=backend)
+    # tq.BraKet is complex valued: isclose compares the whole complex number, so an imaginary part would fail
     assert isclose(result, reference)
 
 
