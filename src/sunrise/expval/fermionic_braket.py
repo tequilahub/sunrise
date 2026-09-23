@@ -7,7 +7,7 @@ from tequila.objective.objective import Variable, identity, FixedVariable
 from tequila.quantumchemistry.qc_base import QuantumChemistryBase #TODO modify when migrated
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.fermionic_operations.fgateimpl import FGateImpl
-from sunrise.fermionic_operations.gates import FermionicExcitation, Phase
+from sunrise.fermionic_operations.gates import FermionicExcitation
 from copy import deepcopy
 from math import pi
 from tequila.objective.quantum_arg import QuantumArg
@@ -261,10 +261,8 @@ def _grad_shift_rule(g:FGateImpl, i:int, variable:Variable, expval: FermBraketIm
     for gate in g.indices:
         p0sing = s[len(gate)%2]
         for (idx,jdx) in gate:
-            # U0 += Phase(idx,-p0sing*pi,reordered=g.reordered)
-            # U0 += Phase(jdx,-p0sing*pi,reordered=g.reordered)
             p0.extend([(idx,idx),(jdx,jdx)])
-        U0 += FermionicExcitation(indices=p0,variables=p0sing*pi,reordered=g.reordered)
+        U0 += FermionicExcitation(indices=p0,variables=p0sing*pi/2,reordered=g.reordered)
     if bra:
         fbra = deepcopy(expval.bra)
         fbra.gates[i].variables = fbra.gates[i].variables + s[bra]*pi
@@ -280,7 +278,7 @@ def _grad_shift_rule(g:FGateImpl, i:int, variable:Variable, expval: FermBraketIm
         else:
             expval.ket = fket
         gradient += s[not bra]*inner_grad*Objective(args=[expval,],transformation=identity)
-    return  0.5*gradient
+    return  -0.5*gradient
 
 def _grad_phase(arg, variable):
     """
