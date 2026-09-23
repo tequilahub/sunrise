@@ -5,8 +5,8 @@ from sunrise.graphical.qpic_visualization import qpic_to_pdf,qpic_to_png
 from sunrise.graphical import draw
 from sunrise import measurement
 from sunrise.fermionic_operations.orb_rotation_qubit import OrbitalRotation
-from sunrise.miscellaneous.giuseppe import giuseppe
-from sunrise.miscellaneous.bar import giuseppe_bar
+from sunrise.utils.giuseppe import giuseppe
+from sunrise.utils.bar import giuseppe_bar
 from sunrise.expval import Braket,show_available_modules,show_supported_modules
 from sunrise.fermionic_operations import gates
 from sunrise.fermionic_operations.circuit import FCircuit
@@ -15,7 +15,7 @@ from sunrise.expval.minimize import grad,minimize,simulate
 from sunrise.expval.optimize import optimize_orbitals
 from sunrise import graphical
 from sunrise.expval import Braket as Expval
-from sunrise.CLPO import call_janpa,call_molden2aim
 from sunrise import CLPO
+from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges, generate_HAO_molecule
 from sunrise.MCVBT.GNM import mcvbt
 from sunrise import spafastprototype as SPAFP
