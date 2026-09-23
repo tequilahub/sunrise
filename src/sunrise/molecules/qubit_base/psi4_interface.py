@@ -2,9 +2,9 @@ from tequila import TequilaException, TequilaWarning
 
 from tequila.circuit import QCircuit
 from tequila.objective.objective import Variables
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
-from tequila.quantumchemistry.chemistry_tools import ClosedShellAmplitudes, Amplitudes
-from tequila.quantumchemistry import ParametersQC, NBodyTensor
+from .qc_base import QuantumChemistryBase
+from .chemistry_tools import ClosedShellAmplitudes, Amplitudes
+from .chemistry_tools import ParametersQC, NBodyTensor
 
 from .chemistry_tools import ActiveSpaceData, OrbitalData
 

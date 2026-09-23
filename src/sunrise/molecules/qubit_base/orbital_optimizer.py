@@ -59,7 +59,7 @@ def optimize_orbitals(
 
     Parameters
     ----------
-    molecule: The tequila molecule whose orbitals are to be optimized
+    molecule: The molecule whose orbitals are to be optimized
     circuit: The circuit that defines the ansatz to the wavefunction in the VQE
              can be None, if a customized vqe_solver is passed that can construct a circuit
     vqe_solver: The VQE solver (the default - vqe_solver=None - will take the given circuit and construct an expectationvalue out of molecule.make_hamiltonian and the given circuit)

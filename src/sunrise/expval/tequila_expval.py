@@ -1,9 +1,10 @@
 import tequila as tq
 from tequila import BraKet,QCircuit,QubitHamiltonian,ExpectationValue
-from tequila.quantumchemistry.chemistry_tools import NBodyTensor
+from sunrise.molecules.qubit_base.chemistry_tools import NBodyTensor
 from tequila import TequilaException
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
-from tequila import TequilaException,Molecule,simulate,Variable,Objective,grad
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+from tequila import TequilaException, simulate, Variable, Objective, grad
+from sunrise.molecules.qubit_base import Molecule
 from tequila.objective.objective import Variables
 from numpy import argwhere
 from pyscf.gto import Mole

@@ -4,7 +4,7 @@ import tequila as tq
 import scipy
 import numpy as np
 from sunrise.MCVBT.gem import geminal_equation
-from tequila.quantumchemistry import QuantumChemistryBase
+from sunrise.molecules.qubit_base import QuantumChemistryBase
 from tequila.objective.objective import FixedVariable
 import sunrise as sn
 from sunrise.MCVBT.Big_Exp import BigExpVal

@@ -1,6 +1,7 @@
 
 
 import tequila as tq
+import sunrise as sun
 from sunrise.MCVBT.GNM import mcvbt
 
 import time
@@ -11,7 +12,7 @@ warnings.filterwarnings("ignore", category=tq.TequilaWarning)
 
 #define molecule
 geometry = "H 1.5 0.0 0.0\nH 0.0 0.0 0.0\nH 1.5 0.0 1.5\nH 0.0 0.0 1.5"
-mol = tq.Molecule(geometry=geometry, basis_set="sto-6g")
+mol = sun.chemistry.Molecule(geometry=geometry, basis_set="sto-6g")
 mol = mol.use_native_orbitals()
 
 #define edges

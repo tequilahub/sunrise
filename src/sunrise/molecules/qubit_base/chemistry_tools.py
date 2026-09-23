@@ -1178,7 +1178,7 @@ class IntegralManager:
             two_body_integrals = two_body_integrals.reorder(to="chem")
         except Exception as E:
             raise TequilaException(
-                "{}\ntwo_body_integrals given in wrong format. Needs to be a tq.chemistry.NBodyTensor in chem ordering.\n{} with ordering={}".format(
+                "{}\ntwo_body_integrals given in wrong format. Needs to be a sun.chemistry.NBodyTensor in chem ordering.\n{} with ordering={}".format(
                     str(E), str(type(two_body_integrals)), str(two_body_integrals.ordering)
                 )
             )

@@ -7,7 +7,7 @@ try:
 except ImportError:
     pass
 from sunrise.expval import Braket
-from tequila.quantumchemistry import QuantumChemistryBase
+from sunrise.molecules.qubit_base import QuantumChemistryBase
 from sunrise.MCVBT.QulacsBraKet import BraKetQulacs
 
 

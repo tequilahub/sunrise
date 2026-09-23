@@ -3,7 +3,7 @@ from tequila.hamiltonian import QubitHamiltonian
 from tequila.hamiltonian.paulis import Sp, Sm, Zero
 from tequila.objective.objective import ExpectationValue
 from tequila.simulators.simulator_api import simulate
-from tequila.quantumchemistry import NBodyTensor
+from sunrise.molecules.qubit_base import NBodyTensor
 import warnings
 import numpy
 from itertools import product

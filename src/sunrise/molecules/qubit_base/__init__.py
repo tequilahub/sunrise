@@ -143,7 +143,7 @@ def Molecule(
             backend = "base"
 
     if backend not in SUPPORTED_QCHEMISTRY_BACKENDS:
-        raise Exception(str(backend) + " is not (yet) supported by tequila")
+        raise Exception(str(backend) + " is not (yet) supported by sunrise")
 
     if backend not in INSTALLED_QCHEMISTRY_BACKENDS:
         raise Exception(str(backend) + " was not found on your system")
@@ -193,7 +193,7 @@ def MoleculeFromOpenFermion(
     molecule, transformation: typing.Union[str, typing.Callable] = None, backend: str = None, *args, **kwargs
 ) -> QuantumChemistryBase:
     """
-    Initialize a tequila Molecule directly from an openfermion molecule object
+    Initialize a sunrise Molecule directly from an openfermion molecule object
     Parameters
     ----------
     molecule
@@ -204,7 +204,7 @@ def MoleculeFromOpenFermion(
         The quantum chemistry backend, can be None in this case
     Returns
     -------
-        The tequila molecule
+        The sunrise molecule
     """
     if backend is None:
         return QuantumChemistryBase.from_openfermion(molecule=molecule, transformation=transformation, *args, **kwargs)

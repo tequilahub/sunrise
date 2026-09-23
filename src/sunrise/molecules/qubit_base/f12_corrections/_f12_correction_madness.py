@@ -1,8 +1,8 @@
 import tequila as tq
 from tequila import TequilaException, TequilaWarning
 
-from tequila.quantumchemistry import NBodyTensor
-from tequila.quantumchemistry.f12_corrections._f12_correction_base import ExplicitCorrelationCorrection
+from ..chemistry_tools import NBodyTensor
+from ._f12_correction_base import ExplicitCorrelationCorrection
 
 import numpy
 from itertools import product

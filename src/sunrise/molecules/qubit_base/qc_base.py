@@ -50,7 +50,7 @@ OPTIMIZED_ORDERING = "Optimized"
 class QuantumChemistryBase:
     """
     Base Class for tequila chemistry functionality
-    This is what is initialized with tq.Molecule(...)
+    This is what is initialized with sun.Molecule(...)
     We try to define all main methods here and only implemented specializations in the derived classes
     Derived classes interface specific backends (e.g. Psi4, PySCF and Madness). See PACKAGE_interface.py for more
     """
@@ -710,98 +710,11 @@ class QuantumChemistryBase:
         New molecule in the native (orthonormalized) basis given
         e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
         """
+        from sunrise.molecules.utils_orbital_transformation import get_active, get_core, orthogonalize_active_space
+
         c = self.integral_manager.orbital_coefficients.copy()
         s = self.integral_manager.overlap_integrals.copy()
         d = self.integral_manager.get_orthonormalized_orbital_coefficients().copy()
-
-        def orthogonalize_active_space(
-            c: numpy.ndarray, s: numpy.ndarray, frozen_idx: list[int], active_idx: list[int]
-        ) -> numpy.ndarray:
-            """
-            Symmetrically orthogonalize orbital coefficients defined by colums with indices 'active_idx' while keeping untouched those defined by 'frozen_idx'.
-            c: (basis_functions, orbitals)
-            s: (basis_functions, basis_functions)
-            frozen_idx: list of orbitals to left untoched
-            active_idx: list of orbitals to orthogonalize
-            """
-            c_f = c[:, frozen_idx]
-            c_a = c[:, active_idx]
-
-            sf = c_f.T @ s @ c_f
-            cross = c_f.T @ s @ c_a
-
-            proj = c_f @ numpy.linalg.solve(sf, cross)
-            c_a_proj = c_a - proj
-
-            sa = c_a_proj.T @ s @ c_a_proj
-            e, U = numpy.linalg.eigh(sa)
-            e = numpy.maximum(e, 1e-12)
-            X = U @ numpy.diag(1.0 / numpy.sqrt(e)) @ U.T
-
-            c_new = c.copy()
-            c_new[:, active_idx] = c_a_proj @ X
-            return c_new
-
-        def get_active(
-            c_orig: numpy.ndarray, d_orig: numpy.ndarray, s: numpy.ndarray, active_idx_c: list[int]
-        ) -> list[int]:
-            """
-            Safely identifies active orbitals in d_orig by projecting them into the entire active subspace of c_orig.
-            c_orig: original orbital matrix which will be frozen (typicall HF)
-            d_orig: original orbital matrix to look for active w.r.t. c_orig (i.e. native orbital matrix or CLPO matrix before active space considerations)
-            s: overlap_integrals
-            active_idx_c: subspace from c_orig to  look for the active indices for d_orig
-            """
-            n_fr = d_orig.shape[1] - len(active_idx_c)
-            # 1. Extract the entire reference active space block from c_orig
-            c_active = c_orig[:, active_idx_c]
-
-            # 2. Compute the full overlap matrix between reference active and all d_orig orbitals
-            # Shape will be (n_active_ref, n_total_orbitals_d)
-            overlap_matrix = c_active.T @ s @ d_orig
-
-            # 3. Sum of squares along the reference axis gives the total "active character"
-            # Shape will be (n_total_orbitals_d,)
-            active_weights = numpy.sum(overlap_matrix**2, axis=0)
-
-            # 4. Sort all orbital indices of d_orig by weight in descending order
-            sorted_d_indices = numpy.argsort(active_weights)
-
-            # 5. Select the top N orbitals that match the active space best
-            chosen_active_idx = sorted_d_indices[:n_fr]
-
-            return sorted(chosen_active_idx)
-
-        def get_core(c_orig: numpy.ndarray, d_orig: numpy.ndarray, s: numpy.ndarray, active_idx_d: list[int]):
-            """
-            Given the active space indices of d_orig, finds which occupied orbitals in c_orig should be frozen (core orbitals).
-
-            Parameters:
-            -----------
-            c_orig: original orbital matrix which will be frozen (typicall HF)
-            d_orig: original orbital matrix to look for active w.r.t. c_orig (i.e. native orbital matrix or CLPO matrix before active space considerations)
-            s: overlap_integrals
-            active_idx_d: The indices of the active space orbitals in d_orig.
-            """
-            n_occ_c = d_orig.shape[1] - len(active_idx_d)
-
-            # 1. Extract the active subspace block from d_orig
-            d_active = d_orig[:, active_idx_d]
-
-            # 2. Compute the overlap between all c_orig orbitals and the d_orig active subspace
-            # Shape will be (n_total_orbitals_c, n_active_d)
-            overlap_matrix = c_orig.T @ s @ d_active
-
-            # 3. Sum of squares along the d_active axis gives the "active character" of each c_orig orbital
-            active_weights = numpy.sum(overlap_matrix**2, axis=1)
-
-            # 4. Sort the orbitals by their active weight in ASCENDING order
-            # The orbitals with the LOWEST active weight are your core (frozen) orbitals!
-            sorted_fr_indices = numpy.argsort(active_weights)
-
-            chosen_fr_idx = sorted_fr_indices[:n_occ_c]
-
-            return sorted(chosen_fr_idx)
 
         active = None
         if not self.integral_manager.active_space_is_trivial() and core is None:
@@ -819,12 +732,12 @@ class QuantumChemistryBase:
                 else:
                     if isinstance(core, int):
                         core = [core]
-                    active = get_active(c, d, s, core)
+                    active = get_active(c, d, s, [i for i in range(len(self.integral_manager.orbitals)) if i not in core])
         assert len(active) + len(core) == len(self.integral_manager.orbitals)
         if "reference_orbitals" in kwargs:
             reference_orbitals = kwargs["reference_orbitals"]
-            kwargs.pop()
-            assert len(reference_orbitals) == len(self.parameters.total_n_electrons) // 2, (
+            kwargs.pop("reference_orbitals")
+            assert len(reference_orbitals) == self.parameters.total_n_electrons // 2, (
                 f"Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons // 2}, received {len(reference_orbitals)}"
             )
         else:
@@ -832,9 +745,9 @@ class QuantumChemistryBase:
         to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
         to_active = {active[i]: to_active[i] for i in range(len(active))}
         if len(core):
-            c_combined = numpy.zeros(shape=c.shape)
-            for i, idx in enumerate(core):
-                c_combined[:, i] = c[:, idx]
+            # keep the core orbitals at their own indices (`core` is passed as
+            # frozen_idx below) and only replace the active columns
+            c_combined = c.copy()
             for act_idx in active:
                 c_combined[:, to_active[act_idx]] = d[:, act_idx]
             coeff = orthogonalize_active_space(c_combined, s, core, [*to_active.values()])
@@ -1464,7 +1377,7 @@ class QuantumChemistryBase:
 
     def make_ansatz(self, name: str, *args, **kwargs):
         """
-        Automatically calls the right subroutines to construct ansatze implemented in tequila.chemistry
+        Automatically calls the right subroutines to construct ansatze implemented in sunrise.chemistry
         name: namne of the ansatz, examples are: UpCCGSD, UpCCD, SPA, UCCSD, SPA+UpCCD, SPA+GS
         """
         name = name.lower()
@@ -1960,14 +1873,14 @@ class QuantumChemistryBase:
 
             return minimize(objective=E, *args, **kwargs).energy
         else:
-            from tequila.quantumchemistry import INSTALLED_QCHEMISTRY_BACKENDS
+            from . import INSTALLED_QCHEMISTRY_BACKENDS
 
             if "pyscf" not in INSTALLED_QCHEMISTRY_BACKENDS:
                 raise TequilaException(
                     "PySCF needs to be installed to compute {}/{}".format(method, self.parameters.basis_set)
                 )
             else:
-                from tequila.quantumchemistry import QuantumChemistryPySCF
+                from .pyscf_interface import QuantumChemistryPySCF
 
                 molx = QuantumChemistryPySCF.from_tequila(self)
                 return molx.compute_energy(method=method, **kwargs)

@@ -4,8 +4,8 @@ from sunrise.fermionic_operations.circuit import FCircuit
 
 from tequila import TequilaException, QubitWaveFunction, Variable, QubitHamiltonian
 from tequila.objective.objective import Variables
-from tequila.quantumchemistry.chemistry_tools import NBodyTensor
-from tequila.quantumchemistry import qc_base
+from sunrise.molecules.qubit_base.chemistry_tools import NBodyTensor
+from sunrise.molecules.qubit_base import qc_base
 from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
 from numpy import eye, ndarray, array, complex128, real, argwhere
 from openfermion import FermionOperator

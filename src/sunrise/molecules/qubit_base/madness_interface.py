@@ -1,5 +1,5 @@
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase, TequilaException, TequilaWarning, QCircuit, gates
-from tequila.quantumchemistry import ParametersQC, NBodyTensor
+from .qc_base import QuantumChemistryBase, TequilaException, TequilaWarning, QCircuit, gates
+from .chemistry_tools import ParametersQC, NBodyTensor
 from tequila import ExpectationValue
 from .chemistry_tools import OrbitalData
 import typing
@@ -10,14 +10,14 @@ import shutil
 
 
 # Examples how to initialize the madness backend
-# tq.Molecule(geometry="...") will initialize a molecule with n_qubits=n_electrons (n_electrons//2 HF orbitals + n_electrons//2 PNOs)
-# tq.Molecule(geometry="...", n_pno="read") will read in files (name is auto-generated from geometry)
-# tq.Molecule(geometry="...", name="X", n_pno="read") will read in files X_htensor.npy, X_gtensor.npy, X_pnoinfo.txt
-# tq.Molecule(geometry="...", name="X", datadir="asd/Y/", n_pno="read") reads in files from directory asd/Y/
+# sun.Molecule(geometry="...") will initialize a molecule with n_qubits=n_electrons (n_electrons//2 HF orbitals + n_electrons//2 PNOs)
+# sun.Molecule(geometry="...", n_pno="read") will read in files (name is auto-generated from geometry)
+# sun.Molecule(geometry="...", name="X", n_pno="read") will read in files X_htensor.npy, X_gtensor.npy, X_pnoinfo.txt
+# sun.Molecule(geometry="...", name="X", datadir="asd/Y/", n_pno="read") reads in files from directory asd/Y/
 # control madness input sections with dictionaries
-# tq.Molecule(geometry="...", pno={"maxrank":10, "freeze":0}, dft={"k":9, "L":25.0})
+# sun.Molecule(geometry="...", pno={"maxrank":10, "freeze":0}, dft={"k":9, "L":25.0})
 # compute more orbitals
-# tq.Molecule(geometry="...", n_pno=10) # computes 10 PNOs additional to the occupied HF orbitals
+# sun.Molecule(geometry="...", n_pno=10) # computes 10 PNOs additional to the occupied HF orbitals
 
 
 class TequilaMadnessException(TequilaException):
@@ -714,7 +714,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
 
         if maxrank <= 0:
             warnings.warn(
-                'maxrank={} in tequila madness backend! No PNOs will be computed. Set the value when initializing the Molecule as tq.Molecule(..., pno={"maxrank":1, ...})'.format(
+                'maxrank={} in tequila madness backend! No PNOs will be computed. Set the value when initializing the Molecule as sun.Molecule(..., pno={"maxrank":1, ...})'.format(
                     maxrank
                 ),
                 TequilaWarning,

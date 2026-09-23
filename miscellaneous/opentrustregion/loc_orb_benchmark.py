@@ -39,7 +39,7 @@ def Pipek_Mezey(mol):
     smol = HybridBase.from_tequila(tqmol)
     edges = smol.get_spa_edges()
     U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
+    opt = sun.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
     # sun.plot_MO(opt.molecule,filename='Pipek_Mezey_SPA')
     return opt.energy
 
@@ -60,7 +60,7 @@ def Foster_Boys(mol):
     smol = HybridBase.from_tequila(tqmol)
     edges = smol.get_spa_edges()
     U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
+    opt = sun.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
     # sun.plot_MO(opt.molecule,filename='Foster_Boys_SPA')
     return opt.energy
 
@@ -81,7 +81,7 @@ def Edmiston_Ruedenberg(mol):
     smol = HybridBase.from_tequila(tqmol)
     edges = smol.get_spa_edges()
     U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
+    opt = sun.chemistry.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
     # sun.plot_MO(opt.molecule,filename='Edmiston_Ruedenberg_SPA')
     return opt.energy
 
@@ -91,7 +91,7 @@ def Tequila(mol):
     smol = HybridBase.from_tequila(mol)
     edges = smol.get_spa_edges()
     U = mol.make_ansatz("HCB-SPA",edges=edges)
-    opt = tq.chemistry.optimize_orbitals(molecule=mol,circuit=U,use_hcb=True,silent=True)
+    opt = sun.chemistry.optimize_orbitals(molecule=mol,circuit=U,use_hcb=True,silent=True)
     # sun.plot_MO(opt.molecule,filename='SPA')
     return opt.energy
 

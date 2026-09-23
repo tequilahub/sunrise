@@ -1,7 +1,7 @@
 from tequila import TequilaException, QubitWaveFunction, BitNumbering
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
-from tequila.quantumchemistry.encodings import JordanWigner
-from tequila.quantumchemistry import ParametersQC, NBodyTensor
+from .qc_base import QuantumChemistryBase
+from .encodings import JordanWigner
+from .chemistry_tools import ParametersQC, NBodyTensor
 import pyscf
 from pyscf import fci
 

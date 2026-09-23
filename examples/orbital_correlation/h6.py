@@ -1,9 +1,10 @@
 import tequila as tq
+import sunrise as sun
 import numpy as np
 from sunrise.orbital_correlation.density_matrix_utils import *
 from sunrise.orbital_correlation.quantum_info_utils import *
 
-mol = tq.Molecule("H 0 0 0\nH 0 0 1.5\nH 0 0 3\nH 0 0 4.5\nH 0 0 6\nH 0 0 7.5", "sto-3g")
+mol = sun.chemistry.Molecule("H 0 0 0\nH 0 0 1.5\nH 0 0 3\nH 0 0 4.5\nH 0 0 6\nH 0 0 7.5", "sto-3g")
 mol = mol.use_native_orbitals()
 H = mol.make_hamiltonian()
 U = mol.make_ansatz(name="SPA", edges=[(0,1),(2,3),(4,5)])
@@ -14,7 +15,7 @@ guess[2] = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
 guess[3] = [0.0, 0.0, 1.0, -1., 0.0, 0.0]
 guess[4] = [0.0, 0.0, 0.0, 0.0, 1.0, -1.]
 guess[5] = [0.0, 0.0, 0.0, 0.0, 1.0, -1.]
-opt = tq.chemistry.optimize_orbitals(mol, circuit=U, initial_guess=guess.T, silent=True)
+opt = sun.chemistry.optimize_orbitals(mol, circuit=U, initial_guess=guess.T, silent=True)
 UR = mol.get_givens_circuit(opt.mo_coeff)
 U = U + UR.dagger()
 E = tq.ExpectationValue(U,H)
