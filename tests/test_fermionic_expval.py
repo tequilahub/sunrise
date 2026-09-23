@@ -7,8 +7,6 @@ from numpy import isclose
 import random
 from datetime import datetime
 
-
-
 HAS_TCC = "tcc" in INSTALLED_FERMIONIC_BACKENDS
 HAS_FQE = "fqe" in INSTALLED_FERMIONIC_BACKENDS
 
@@ -86,14 +84,15 @@ def test_optimize_orbitals(geom,backend,use_hcb):
         pytest.skip("Tequila backend requires a Qubit-based molecule")
     if backend == "fqe":
         pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
-    snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
-    edges = snmol.get_spa_edges()
-    initial_guess = snmol.get_spa_guess().T
-    tqmol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
+    snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f')
+    snmol, edges = snmol.use_CLPO_orbitals_and_edges()
+    tqmol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner')
+    # same CLPO starting orbitals on the tequila side, so both optimizations start from the same point
+    tqmol = sn.CLPO.generate_CLPO_molecule(tqmol)
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
-    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,initial_guess=initial_guess,use_hcb=use_hcb)
-    tqopt = sn.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True,initial_guess=initial_guess)
+    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,use_hcb=use_hcb)
+    tqopt = sn.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True)
     assert isclose(snopt.energy,tqopt.energy)
 
 #TODO: recursion limit problem on tequila, return when fixed
@@ -118,6 +117,8 @@ def test_optimize_orbitals(geom,backend,use_hcb):
 def test_gradient(geom,backend):
     if backend == "tequila":
         pytest.skip("Tequila backend requires a Qubit-based molecule")
+    if backend == "spex":
+        pytest.skip("Gradient not implemented for the spex backend")
     tqmol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a').use_native_orbitals()
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     random.seed(datetime.now().timestamp())

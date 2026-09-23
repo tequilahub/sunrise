@@ -1,7 +1,7 @@
 from pyscf import gto, scf
 from pyscf.tools import cubegen
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.miscellaneous.bar import giuseppe_bar
+from sunrise.utils.bar import giuseppe_bar
 import sys
 from numpy import ndarray,zeros,ix_
 
