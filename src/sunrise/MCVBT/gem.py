@@ -1,17 +1,14 @@
 import numpy as np
 import scipy
-
-
-try:
-    from sunrise.expval.fqe_expval import FQEBraKet
-except ImportError:
-    pass
-from sunrise.expval import Braket
+from sunrise.expval import Braket, Overlap
 from tequila.quantumchemistry import QuantumChemistryBase
-from sunrise.MCVBT.QulacsBraKet import BraKetQulacs
+from tequila import BraKet as tqBraket
+from tequila import Overlap as tqOverlap
+from tequila.utils import to_float
+from sunrise import simulate
+from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS
 
-
-def geminal_equation(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
+def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
     """
 
     """
@@ -21,27 +18,21 @@ def geminal_equation(circuits, solver, variables, mol: QuantumChemistryBase, sil
 
     for i in range(len(circuits)):
         for j in range(i,len(circuits)):
-
-            if solver == "TCC":
-                transition_element = Braket(ket=circuits[j], bra=circuits[i], molecule=mol, backend='tcc')
-                overlap_element = Braket(ket=circuits[j], bra=circuits[i], backend='tcc', molecule=mol, operator='I')
-
-            elif solver == "FQE":
-                transition_element = FQEBraKet(ket_fcircuit=circuits[i], bra_fcircuit=circuits[j], molecule=mol)
-                overlap_element    = FQEBraKet(ket_fcircuit=circuits[i], bra_fcircuit=circuits[j],
-                                               n_ele=mol.n_electrons, n_orbitals=mol.n_orbitals)
-            elif solver == "Qulacs":
+            if solver.lower() in SUPPORTED_FERMIONIC_BACKENDS:
+                transition_element = Braket(ket=circuits[j], bra=circuits[i], mol=mol)
+                overlap_element = Overlap(ket=circuits[j], bra=circuits[i], mol=mol)
+                transition_element = simulate(transition_element, variables=variables, backend=solver)
+                overlap_element = simulate(overlap_element, variables=variables, backend=solver)
+            elif solver.lower() == "qulacs":
                 H = mol.make_hamiltonian()
-                transition_element  = BraKetQulacs(circuits[i], circuits[j], H)
-                overlap_element     = BraKetQulacs(circuits[i], circuits[j], H=None)
-
+                transition_element  = simulate(tqBraket(circuits[i], circuits[j], H),variables)
+                overlap_element     = simulate(tqOverlap(circuits[i], circuits[j]),variables)
             else:
                 raise ValueError("Unknown solver {}".format(solver))
-
-            transition_matrix[i,j] = transition_element(variables)
+            transition_matrix[i,j] = to_float(transition_element)
             transition_matrix[j,i] = transition_matrix[i,j]
 
-            overlap_matrix[i,j] = overlap_element(variables)
+            overlap_matrix[i,j] = to_float(overlap_element)
             overlap_matrix[j,i] = overlap_matrix[i,j]
 
     if silent is False:
