@@ -9,7 +9,7 @@ from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.fermionic_operations.fgateimpl import FGateImpl
 from sunrise.fermionic_operations.gates import FermionicExcitation
 from copy import deepcopy
-from math import pi
+from math import pi, sqrt
 from tequila.objective.quantum_arg import QuantumArg
 
 
@@ -193,6 +193,10 @@ class FermBraketImpl(QuantumArg):
     def __str__(self) -> str:
         return self.__repr__()
 
+_C1 = 0.25 * (sqrt(2) + 1) / sqrt(2)
+_C2 = 0.25 * (sqrt(2) - 1) / sqrt(2)
+_SHIFTS = [(pi / 2, _C1), (-pi / 2, -_C1), (3 * pi / 2, -_C2), (-3 * pi / 2, _C2)]
+
 def _grad_FermBraket(objective: "FermBraketImpl", variable:Variable = None) -> Objective:
         if variable is None:
             # None means that all components are created
@@ -204,7 +208,7 @@ def _grad_FermBraket(objective: "FermBraketImpl", variable:Variable = None) -> O
 
             for k in variables:
                 assert k is not None
-                result[k] = grad_FermBraket(braket,k)
+                result[k] = _grad_FermBraket(braket,k)
             return result
         else:
             variable = assign_variable(variable)
@@ -212,21 +216,23 @@ def _grad_FermBraket(objective: "FermBraketImpl", variable:Variable = None) -> O
         if variable not in objective.extract_variables():
             return 0.
 
-        bra = Objective()
-        if not objective.is_diagonal:
-            for i,gate in enumerate(objective.bra.gates):
-                if variable in gate.extract_variables():
-                    g = deepcopy(gate)
-                    bra += _grad_shift_rule(g=g, i=i, variable=variable, expval=objective, bra=True)
-                    bra += _grad_shift_rule(g=g, i=i, variable=variable, expval=objective, bra=False)
-        ket = Objective()
-        for i,gate in enumerate(objective.ket.gates):
-            if variable in gate.extract_variables():
-                g = deepcopy(gate)
-                ket += _grad_shift_rule(g=g, i=i, variable=variable, expval=objective, bra=True)
-                ket += _grad_shift_rule(g=g, i=i, variable=variable, expval=objective, bra=False)
-                    
-        return bra + ket
+        dO = Objective()
+        for is_bra, U in [(True, objective.bra), (False, objective.ket)]:
+            for i, gate in enumerate(U.gates):
+                if variable not in gate.extract_variables():
+                    continue
+                inner = _grad_phase(gate.variables, variable)
+                for shift, w in _SHIFTS:
+                    Us = deepcopy(U)
+                    Us.gates[i].variables = Us.gates[i].variables + shift
+                    e = deepcopy(objective)
+                    if is_bra:
+                        e.bra = Us
+                    else:
+                        e.bra = deepcopy(objective.bra)  # pin the bra, otherwise a diagonal braket shifts both
+                        e.ket = Us
+                    dO += w * inner * Objective(args=[e], transformation=identity)
+        return dO
 
 def _grad_shift_rule(g:FGateImpl, i:int, variable:Variable, expval: FermBraketImpl, bra:bool) -> Objective:
     """
