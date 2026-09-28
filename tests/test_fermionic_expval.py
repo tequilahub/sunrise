@@ -7,6 +7,7 @@ from numpy import isclose
 import random
 from datetime import datetime
 
+HAS_TCC = 'tcc' in INSTALLED_FERMIONIC_BACKENDS
 
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
@@ -140,3 +141,21 @@ def test_circuit_simulate(geom,backend):
     sn_wfn = sn.simulate(snU,variables=variables,n_orb=snmol.n_orbitals,backend=backend)
     
     assert isclose(tq_wfn.inner(sn_wfn),1)
+
+@pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
+@pytest.mark.parametrize('backend',["statevector", "civector","civector-large","pyscf","tensornetwork"])
+@pytest.mark.skipif(condition=not HAS_TCC, reason="test specific for tcc")
+def test_tcc_backends_grandients(geom,backend):
+    import tencirchem
+    if not hasattr(tencirchem.utils.misc, "get_null_projector_active_mask"):
+        pytest.skip("Main tcc installation detected, this test is only for our custom one.")
+    mol = tq.Molecule(geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner").use_native_orbitals()
+    snmol = sn.Molecule(geometry=geom, basis_set="sto-3g",nature='f').use_native_orbitals()
+    H = mol.make_hamiltonian()
+    tqO = tq.ExpectationValue(H=H,U=mol.make_ansatz('UpCCSD',hcb_optimization=False))
+    snO = sn.ExpectationValue(U=snmol.make_ansatz('UpCCSD'),mol=mol)
+    variables = tqO.extract_variables()
+    point = {d:random()*np.pi for d in variables}
+    tqgrad = [np.real(tq.simulate(tq.grad(tqO, v), variables=point)) for v in variables]
+    sngrad = [np.real(sn.simulate(sn.grad(snO, v), variables=point, backend='tcc', backend_kwargs={"engine":backend})) for v in variables]
+    assert np.allclose(tqgrad, sngrad, atol=1.-6)

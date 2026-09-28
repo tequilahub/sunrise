@@ -179,7 +179,7 @@ def compile(
             for arg in argset:
                 if type(arg).__name__ == "FermBraketImpl":
                     if id(arg) not in expectationvalues:
-                        compiled_expval = compile_fexpval(objective=arg, backend=fbackend)
+                        compiled_expval = compile_fexpval(objective=arg, backend=fbackend, *args, **kwargs)
                         if fbackend == 'tequila':
                             compiled_expval = tq_compile(objective=compiled_expval, variables=variables, samples=samples, 
                                                          simulate_density=simulate_density,backend=backend, noise=noise,
