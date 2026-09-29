@@ -27,14 +27,15 @@ class FQEBraKet:
         bra = braket.bra
         mol = braket.molecule
         operator = braket.operator
+        self.n_ele = mol.n_electrons
+        self.n_orbitals = mol.n_orbitals
+
 
         if isinstance(operator, str):
             if operator.lower() == "h" or operator.lower() == "hamiltonian":
                 c, h, g = mol.get_integrals()
                 h_of = make_fermionic_hamiltonian(one_body_integrals=h, two_body_integrals=g.elems, constant=c)
-                self.n_orbitals = mol.n_orbitals
                 self.h_fqe = fqe.get_hamiltonian_from_openfermion(h_of, norb=self.n_orbitals)
-                n_ele = mol.n_electrons
             elif operator.lower() == "i" or operator.lower() == "identity":
                 self.h_fqe = None
             else:
@@ -46,8 +47,6 @@ class FQEBraKet:
             self.h_fqe = fqe.get_hamiltonian_from_openfermion(operator, norb=mol.n_orbitals)
         else:
             raise TequilaException("Not recognized format {}".format(operator))
-
-        self.n_ele = n_ele
 
         bin_dict = generate_of_binary_dict(self.n_orbitals, self.n_ele // 2)
 
