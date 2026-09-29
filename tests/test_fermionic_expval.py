@@ -155,7 +155,7 @@ def test_tcc_backends_grandients(geom,backend):
     tqO = tq.ExpectationValue(H=H,U=mol.make_ansatz('UpCCSD',hcb_optimization=False))
     snO = sn.ExpectationValue(U=snmol.make_ansatz('UpCCSD'),mol=mol)
     variables = tqO.extract_variables()
-    point = {d:random()*np.pi for d in variables}
+    point = {d:random.random()*np.pi for d in variables}
     tqgrad = [np.real(tq.simulate(tq.grad(tqO, v), variables=point)) for v in variables]
     sngrad = [np.real(sn.simulate(sn.grad(snO, v), variables=point, backend='tcc', backend_kwargs={"engine":backend})) for v in variables]
-    assert np.allclose(tqgrad, sngrad, atol=1.-6)
+    assert np.allclose(tqgrad, sngrad, atol=1.e-6)

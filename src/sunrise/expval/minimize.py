@@ -47,7 +47,7 @@ def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_com
     """
 
     if hasattr(objective,'args') and any([type(arg).__name__ == "FermBraketImpl" for arg in objective.args]):
-        return tqgrad(objective=objective, variable=variable, no_compile=True, *args, **kwargs) #TODO: What happens if mixture 
+        return tqgrad(objective=objective, variable=variable, no_compile=True, *args, **kwargs)
     else:
         return tqgrad(objective=objective, variable=variable, no_compile=no_compile, *args, **kwargs)
 
