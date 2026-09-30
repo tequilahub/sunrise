@@ -208,7 +208,7 @@ def _grad_FermBraket(objective: "FermBraketImpl", variable:Variable = None) -> O
 
             for k in variables:
                 assert k is not None
-                result[k] = _grad_FermBraket(braket,k)
+                result[k] = _grad_FermBraket(objective,k)
             return result
         else:
             variable = assign_variable(variable)
