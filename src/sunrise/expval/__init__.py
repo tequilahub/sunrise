@@ -125,7 +125,7 @@ def Braket(
         bra = None
     if isinstance(operator,list):
         return [Braket(ket=ket, bra=bra, operator=op, mol=mol, *args, **kwargs) for op in operator]
-        return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
+        # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
     if bra is None and operator is None:
         return Objective() + 1.0
     return Objective(args=[FermBraketImpl(ket=ket, bra=bra, operator=operator, molecule=mol, *args, **kwargs)], transformation=identity)
