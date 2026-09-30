@@ -3,26 +3,21 @@ import spex_tequila as spex
 from sunrise.fermionic_operations.circuit import FCircuit
 
 from tequila import TequilaException, QubitWaveFunction, Variable, QubitHamiltonian
-from tequila.objective.objective import Variables
-from tequila.quantumchemistry.chemistry_tools import NBodyTensor
-from tequila.quantumchemistry import qc_base
+from tequila.objective.objective import Variables, Objective
 from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
-from numpy import eye, ndarray, array, complex128, real, argwhere
+from numpy import ndarray, array, complex128, real
 from openfermion import FermionOperator
 from numbers import Number
 from typing import Union, List, Callable
-
-
+from .fermionic_braket import FermBraketImpl
+from tequila.quantumchemistry.qc_base import QuantumChemistryBase # TODO change when migrated
 _ZERO_TOL = 1e-12
 
 
 class SpexExpval:
     def __init__(
         self,
-        bra: Union['FCircuit', None] = None,
-        ket: Union['FCircuit', None] = None,
-        operator: Union[str, FermionOperator, List[FermionOperator]] = None,
-        backend_kwargs: dict = {},
+        braket:"FermBraketImpl",
         *args,
         **kwargs,
     ):
@@ -33,7 +28,7 @@ class SpexExpval:
         self._ket = None
         self._bra = None
         self._name = None
-
+        self._molecule = None
         # Molecule Data
         self.norb: int = None
         self.n_alpha: int = None
@@ -48,160 +43,11 @@ class SpexExpval:
         self.basis = None
         self.active_space = None
 
-        if 'circuit' in kwargs:
-            if ket is not None:
-                raise TequilaException('Two circuits provided?')
-            ket = kwargs.pop('circuit')
-        if 'U' in kwargs:
-            if ket is not None:
-                raise TequilaException('Two circuits provided?')
-            ket = kwargs.pop('U')
-        if 'H' in kwargs:
-            if operator is not None:
-                raise TequilaException('Two operators provided?')
-            operator = kwargs.pop('H')
-        if 'mol' in kwargs:
-            if 'molecule' in kwargs and kwargs['molecule']:
-                raise TequilaException('Two molecules provided?')
-            kwargs['molecule'] = kwargs.pop('mol')
-
+        bra = braket.bra
+        ket = braket.ket
+        self.molecule = braket.molecule
+        operator = braket.operator
         run_hf = (bra is None or bra.initial_state is None) and (ket is None or ket.initial_state is None)
-
-        if 'molecule' in kwargs and kwargs['molecule']:
-            molecule = kwargs.pop('molecule')
-            if isinstance(molecule, qc_base.QuantumChemistryBase):
-                self.mo_coeff = molecule.integral_manager.orbital_coefficients
-                c, h, g = molecule.get_integrals()
-                g = g.reorder('chem').elems
-                self.core_energy = c
-                self.one_body_integrals = h
-                self.two_body_integrals = g
-                self.norb = molecule.n_orbitals
-                self.spin = (molecule.parameters.multiplicity - 1) / 2
-                self.n_alpha = int((molecule.n_electrons + 2 * self.spin) // 2)
-                self.n_beta = int((molecule.n_electrons - 2 * self.spin) // 2)
-                self.symmetry = getattr(molecule, 'point_group', None)
-                self.atom = molecule.parameters.get_geometry()
-                self.basis = molecule.parameters.basis_set
-                self.active_space = [i.idx_total for i in molecule.integral_manager.active_orbitals]
-            else:
-                raise TequilaException(f"No molecule type {type(molecule).__name__} supported")
-        elif 'integral_manager' in kwargs and 'parameters' in kwargs:
-            integral = kwargs.pop('integral_manager')
-            params = kwargs.pop('parameters')
-            self.mo_coeff = integral.orbital_coefficients
-            c, h, g = integral.get_integrals()
-            g = g.reorder('chem').elems
-            self.core_energy = c
-            self.one_body_integrals = h
-            self.two_body_integrals = g
-            self.norb = len(integral.active_orbitals)
-            self.spin = (params.multiplicity - 1) / 2
-            n_elec = getattr(params, 'total_n_electrons', None)
-            if n_elec is None:
-                n_elec = getattr(params, 'n_electrons', None)
-            if n_elec is None:
-                raise TequilaException('No manner of defining the amount of electrons provided')
-            self.n_alpha = int((n_elec + 2 * self.spin) // 2)
-            self.n_beta = int((n_elec - 2 * self.spin) // 2)
-            self.atom = params.get_geometry()
-            self.basis = params.basis_set
-            self.active_space = [i.idx_total for i in integral.active_orbitals]
-            if 'point_group' in kwargs:
-                self.symmetry = kwargs.pop('point_group')
-            elif 'symmetry' in kwargs:
-                self.symmetry = kwargs.pop('symmetry')
-        else:
-            int1e = None
-            int2e = None
-            int2e = None
-            e_core = None
-            mo_coeff = None
-            n_elec = None
-            n_alpha = None
-            n_beta = None
-            spin = 0
-            point_group = None
-            if "int1e" in kwargs:
-                int1e = kwargs.pop('int1e')
-            elif "one_body_integrals" in kwargs:
-                int1e = kwargs.pop('one_body_integrals')
-            elif "h" in kwargs:
-                int1e = kwargs.pop('h')
-            if 'int2e' in kwargs:
-                int2e = kwargs.pop('int2e')
-            elif 'two_body_integrals' in kwargs:
-                int2e = kwargs.pop('two_body_integrals')
-            elif 'g' in kwargs:
-                int2e = kwargs.pop('g')
-            if isinstance(int2e, NBodyTensor):
-                int2e = int2e.reorder('chem').elems
-            if 'e_core' in kwargs:
-                e_core = kwargs.pop('e_core')
-            elif 'constant_term' in kwargs:
-                e_core = kwargs.pop('constant_term')
-            elif 'constant' in kwargs:
-                e_core = kwargs.pop('constant')
-            elif 'c' in kwargs:
-                e_core = kwargs.pop('c')
-            else:
-                e_core = 0.0
-            if 'mo_coeff' in kwargs:
-                mo_coeff = kwargs.pop('mo_coeff')
-            elif 'orbital_coefficients' in kwargs:
-                mo_coeff = kwargs.pop('orbital_coefficients')
-            if 'spin' in kwargs:
-                spin = kwargs.pop('spin')
-            elif 'multiplicity' in kwargs:
-                spin = (kwargs.pop('multiplicity') - 1) / 2
-            if int1e is None:
-                raise TequilaException('Not enough molecular data provided')
-            if mo_coeff is None:
-                mo_coeff = eye(len(int1e))
-            if 'n_elec' in kwargs:
-                n_elec = kwargs.pop('n_elec')
-                n_alpha = int((n_elec + 2 * spin) // 2)
-                n_beta = int((n_elec - 2 * spin) // 2)
-            elif 'n_electrons' in kwargs:
-                n_elec = kwargs.pop('n_electrons')
-                n_alpha = int((n_elec + 2 * spin) // 2)
-                n_beta = int((n_elec - 2 * spin) // 2)
-            elif 'n_alpha' in kwargs and 'n_beta' in kwargs:
-                n_alpha = kwargs.pop('n_alpha')
-                n_beta = kwargs.pop('n_beta')
-                n_elec = n_alpha + n_beta
-            elif ket is not None and ket.initial_state is not None:
-                if isinstance(ket.initial_state._state, dict):
-                    n_elec = bin([*ket.initial_state._state.keys()][0])[2:].count('1')
-                else:
-                    n_elec = bin(argwhere(ket.initial_state._state > 1.e-6)[0][0])[2:].count('1')
-                n_alpha = int((n_elec + 2 * spin) // 2)
-                n_beta = int((n_elec - 2 * spin) // 2)
-            else:
-                raise TequilaException('No manner of defining the amount of electrons provided')
-            if n_alpha is None and n_elec is not None:
-                n_alpha = int(n_elec // 2)
-                n_beta = int(n_elec - n_alpha)
-            if 'point_group' in kwargs:
-                point_group = kwargs.pop('point_group')
-            elif 'symmetry' in kwargs:
-                point_group = kwargs.pop('symmetry')
-            self.core_energy = e_core
-            self.one_body_integrals = array(int1e, dtype=complex128)
-            self.two_body_integrals = array(int2e, dtype=complex128) if int2e is not None else None
-            self.mo_coeff = array(mo_coeff, dtype=complex128)
-            self.norb = len(int1e)
-            self.spin = spin
-            self.n_alpha = n_alpha
-            self.n_beta = n_beta
-            self.symmetry = point_group
-            self.atom = None
-            self.basis = None
-            self.active_space = [*range(len(int1e))]
-
-        if any(i is None for i in [self.two_body_integrals, self.one_body_integrals, self.n_alpha, self.n_beta]):
-            raise TequilaException('Not enough molecular data provided')
-
         self.hamiltonian = self._build_hamiltonian()
 
         if run_hf:
@@ -369,6 +215,17 @@ class SpexExpval:
 
     def simulate(self, variables: Union[list, dict, Variables] = None) -> float:
         variables = {} if variables is None else variables
+        check_variables = {k: k in variables for k in self.extract_variables()}
+        if not all(list(check_variables.values())):
+            raise TequilaException(
+                "Objective did not receive all variables:\n"
+                "You gave\n"
+                " {}\n"
+                " but the objective depends on\n"
+                " {}\n"
+                " missing values for\n"
+                " {}".format(variables, self.extract_variables(), [k for k, v in check_variables.items() if not v])
+            )
         if isinstance(variables, Variables):
             variables = variables.store
         if not isinstance(variables, dict):
@@ -422,6 +279,42 @@ class SpexExpval:
     def _apply_circuit(self, state: dict, circuit, dvars: dict) -> dict:
         return _apply_circuit_to_state(state, circuit, dvars)
 
+    def __str__(self):
+        res = ''
+        if self.is_diagonal:
+            res += f"{self._name} with indices: {self.ket} with variables {self.params_ket}"
+        else:
+            res += f"{self._name} with Bra= {self.bra} with variables {self.params_bra}\n"
+            res += f"{len(self._name)*' '} with Ket= {self.ket} with variables {self.params_ket}"
+        return res
+
+    def __repr__(self):
+        return self.__str__()
+
+    def count_measurements(self)->int:
+        return len(self.hamiltonian)
+
+    @property
+    def molecule(self) -> QuantumChemistryBase:
+        return self._molecule
+
+    @molecule.setter
+    def molecule(self, molecule:QuantumChemistryBase):
+        self._molecule = molecule
+        self.mo_coeff = molecule.integral_manager.orbital_coefficients
+        c, h, g = molecule.get_integrals()
+        g = g.reorder('chem').elems
+        self.core_energy = c
+        self.one_body_integrals = h
+        self.two_body_integrals = g
+        self.norb = molecule.n_orbitals
+        self.spin = (molecule.parameters.multiplicity - 1) / 2
+        self.n_alpha = int((molecule.n_electrons + 2 * self.spin) // 2)
+        self.n_beta = int((molecule.n_electrons - 2 * self.spin) // 2)
+        self.symmetry = getattr(molecule, 'point_group', None)
+        self.atom = molecule.parameters.get_geometry()
+        self.basis = molecule.parameters.basis_set
+        self.active_space = [i.idx_total for i in molecule.integral_manager.active_orbitals]
 
 def _qwvf_to_civect(wvf: QubitWaveFunction, n_qubits: int) -> dict:
     wvf.n_qubits = n_qubits
@@ -444,6 +337,7 @@ def _civect_to_qwvf(state_dict: dict, n_qubits: int) -> QubitWaveFunction:
 
 
 def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
+    from sunrise  import simulate
     # each gate maps to FermionTerm(creation_idx=[from...], annihilation_idx=[to...], 1j)
     state = {} if state is None else state
     result = {int(k): complex(v) for k, v in state.items() if abs(v) > _ZERO_TOL}
@@ -454,19 +348,13 @@ def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
         parameter = gate.variables
         if not indices:
             continue
+
         if isinstance(parameter, Variable):
-            name = getattr(parameter, 'name', None)
-            if name is not None and name in dvars:
-                value = dvars[name]
-            elif parameter in dvars:
-                value = dvars[parameter]
-            else:
-                value = parameter.map_variables(dvars)
-            if isinstance(value, Variable):
-                value = value.map_variables(dvars)
-            theta = float(value)
+            theta = float(parameter.map_variables(dvars))
+        elif isinstance(parameter, Objective):
+            theta = float(simulate(parameter, dvars))
         else:
-            theta = float(parameter)
+            theta = parameter
         for term_pairs in indices:
             creation = [p[0] for p in term_pairs]
             annihilation = [p[1] for p in term_pairs]

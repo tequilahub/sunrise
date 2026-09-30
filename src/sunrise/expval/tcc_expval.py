@@ -1,29 +1,33 @@
+from __future__ import annotations
+import numpy as np
+import tensorcircuit as tc
 import tencirchem as tcc
 from tencirchem.static.ci_utils import get_ci_strings
+from tencirchem.static.hamiltonian import get_h_fcifunc_from_integral
 from sunrise.expval.tcc_engine.braket import EXPVAL
+from sunrise.expval.tcc_engine.operator_builder import extract_restricted_integrals, build_sparse_ci_operator
 from ..fermionic_operations.circuit import FCircuit
-from tequila import TequilaException,Molecule,QubitWaveFunction,simulate,Variable,Objective,assign_variable,QubitHamiltonian
-from tequila import grad as tq_grad
+from tequila import TequilaException,QubitWaveFunction,simulate,Variable,Objective,assign_variable,QubitHamiltonian
 from tequila.objective.objective import Variables,FixedVariable
-from tequila.quantumchemistry.chemistry_tools import NBodyTensor
-from tequila.quantumchemistry import qc_base
 from tequila.utils.bitstrings import BitString, BitNumbering
 from numbers import Number
-from numpy import ceil,argwhere,pi,prod,eye,zeros,isclose,allclose
-from pyscf.gto import Mole
-from pyscf.scf import RHF
+from numpy import ceil,pi,prod,eye,zeros,allclose
 from sunrise.expval.pyscf_molecule import from_tequila
 from copy import deepcopy
 from typing import Union,List,Tuple,Callable
 from collections import defaultdict
 from openfermion import FermionOperator
-from openfermion.transforms import jordan_wigner
 from openfermion.transforms.opconversions.term_reordering import reorder
 from openfermion.utils.indexing import up_then_down
-
+from .fermionic_braket import FermBraketImpl
 class TCCBraket:
-    def __init__(self,bra:Union[FCircuit,None]=None,ket:Union[FCircuit,None]=None,operator:Union[str,FermionOperator,List[FermionOperator]]=None,backend_kwargs:dict={},*args,**kwargs):
+    def __init__(self,braket:"FermBraketImpl",*args,**kwargs):
         self.operator = None
+        if 'backend_kwargs' in kwargs:
+            backend_kwargs = kwargs['backend_kwargs']
+            kwargs.pop('backend_kwargs')
+        else:
+            backend_kwargs = {}
         if 'engine' in backend_kwargs:
             engine = backend_kwargs['engine']
             backend_kwargs.pop('engine')
@@ -36,139 +40,25 @@ class TCCBraket:
             tcc.set_dtype(backend_kwargs['dtype'])
             backend_kwargs.pop('dtype')
         
-        if 'circuit' in kwargs:
-            circuit = kwargs['circuit']
-            kwargs.pop('circuit')
-            if ket is not None:
-                raise TequilaException('Two circuits provided?')
-            else:
-                ket = circuit
-        if 'U' in kwargs:
-            U = kwargs['U']
-            kwargs.pop('U')
-            if ket is not None:
-                raise TequilaException('Two circuits provided?')
-            else:
-                ket = U
-        if 'H' in kwargs:
-            H = kwargs['H']
-            kwargs.pop('H')
-            if operator is not None:
-                raise TequilaException('Two operators provided?')
-            else:
-                operator = H
-        if 'mol' in kwargs:
-            if 'molecule' in kwargs and kwargs['molecule']:
-                raise TequilaException("Two molecules provided?")
-            kwargs['molecule'] = kwargs['mol']
-            kwargs.pop('mol')
-
+        bra = braket.bra
+        ket = braket.ket
+        molecule = braket.molecule
+        operator = braket.operator
+        if bra is not None:
+            bra = bra.to_upthendown(molecule)
+        if ket is not None:
+            ket = ket.to_upthendown(molecule)
         run_hf = (bra is None or bra.initial_state is None) and (ket is None or ket.initial_state is None)   
-        if 'molecule' in kwargs and kwargs['molecule']:
-            molecule = kwargs['molecule']
-            kwargs.pop('molecule')
-            if isinstance(molecule,qc_base.QuantumChemistryBase):
-                mo_coeff = molecule.integral_manager.orbital_coefficients 
-                aslst = [i.idx_total for i in molecule.integral_manager.active_orbitals]
-                active_space = (molecule.n_electrons,molecule.n_orbitals)
-                if allclose(mo_coeff,eye(len(mo_coeff))): #idea when initialized the molecule from integrals, the mo_coeff are setted to identity and the provided integral are saved on the place of the Atomic Integrals
-                    e_core,int1e,int2e = molecule.get_integrals()
-                    int2e = int2e.reorder('c').elems
-                    self.BK:EXPVAL = EXPVAL.from_integral(int1e=int1e, int2e=int2e,n_elec=molecule.n_electrons, e_core=e_core,mo_coeff=mo_coeff,init_method="zeros",engine=engine,run_hf= run_hf, run_mp2= False, run_ccsd= False, run_fci= False,**backend_kwargs)
-                else:
-                    molecule = from_tequila(molecule)
-                    self.BK:EXPVAL = EXPVAL(mol=molecule,run_hf= run_hf, run_mp2= False, run_ccsd= False, run_fci= False,init_method="zeros",aslst=aslst,active_space=active_space,engine=engine,mo_coeff=mo_coeff,**backend_kwargs)
-            elif isinstance(molecule,Mole):
-                mf = RHF(mol=molecule)
-                mo_coeff =mf.mo_coeff
-                aslst = [*range(molecule.nao_nr_range)]
-                active_space = (molecule.nelectron,molecule.nao_nr)
-                self.BK:EXPVAL = EXPVAL(mol=molecule,run_hf= run_hf, run_mp2= False, run_ccsd= False, run_fci= False,init_method="zeros",aslst=aslst,active_space=active_space,engine=engine,mo_coeff=mo_coeff,**backend_kwargs)
-        elif 'integral_manager' in kwargs and 'parameters' in kwargs:
-            integral = kwargs['integral_manager']
-            params = kwargs['parameters']
-            kwargs.pop('integral_manager')
-            kwargs.pop('parameters')
-            mo_coeff = integral.orbital_coefficients
-            molecule = Molecule(parameters=params,integral_manager=integral)
-            aslst = [i.idx_total for i in integral.active_orbitals]
-            active_space = (molecule.n_electrons,molecule.n_orbitals)
-            molecule = from_tequila(molecule)
-            self.BK:EXPVAL = EXPVAL(mol=molecule,run_hf= run_hf, aslst=aslst,active_space=active_space,run_mp2= False, run_ccsd= False, run_fci= False,init_method="zeros",engine=engine,mo_coeff=mo_coeff,**backend_kwargs)
+        mo_coeff = molecule.integral_manager.orbital_coefficients 
+        aslst = [i.idx_total for i in molecule.integral_manager.active_orbitals]
+        active_space = (molecule.n_electrons,molecule.n_orbitals)
+        if allclose(mo_coeff,eye(len(mo_coeff))): #idea when initialized the molecule from integrals, the mo_coeff are setted to identity and the provided integral are saved on the place of the Atomic Integrals
+            e_core,int1e,int2e = molecule.get_integrals()
+            int2e = int2e.reorder('c').elems
+            self.BK:EXPVAL = EXPVAL.from_integral(int1e=int1e, int2e=int2e,n_elec=molecule.n_electrons, e_core=e_core,mo_coeff=mo_coeff,init_method="zeros",engine=engine,run_hf= run_hf, run_mp2= False, run_ccsd= False, run_fci= False,**backend_kwargs)
         else:
-            int1e = None
-            int2e = None
-            e_core = None
-            mo_coeff = None
-            ovlp = None
-            if "int1e"  in kwargs:
-                int1e = kwargs['int1e']
-                kwargs.pop('int1e')
-            elif "one_body_integrals"  in kwargs:
-                int1e = kwargs['one_body_integrals']
-                kwargs.pop('one_body_integrals')
-            elif "h"  in kwargs:
-                int1e = kwargs['h']
-                kwargs.pop('h')
-            if 'int2e' in kwargs:
-                int2e = kwargs['int2e']
-                kwargs.pop('int2e')
-            elif 'two_body_integrals' in kwargs:
-                int2e = kwargs['two_body_integrals']
-                kwargs.pop('two_body_integrals')
-            elif 'g' in kwargs:
-                int2e = kwargs['g']
-                kwargs.pop('g')
-            if isinstance(int2e,NBodyTensor):
-                int2e = int2e.elems
-            if 'e_core' in kwargs:
-                e_core = kwargs['e_core']
-                kwargs.pop('e_core')
-            elif 'constant_term' in kwargs:
-                e_core = kwargs['constant_term']
-                kwargs.pop('constant_term')
-            elif 'constant' in kwargs:
-                e_core = kwargs['constant']
-                kwargs.pop('constant')
-            elif 'c' in kwargs:
-                e_core = kwargs['c']
-                kwargs.pop('c')    
-            else: e_core = 0.
-            # if 'mo_coeff' in kwargs:
-            #     mo_coeff = kwargs['mo_coeff']
-            #     kwargs.pop('mo_coeff')
-            # elif 'orbital_coefficients' in kwargs:
-            #     mo_coeff = kwargs['orbital_coefficients']
-            #     kwargs.pop('orbital_coefficients')
-            mo_coeff = eye(len(int1e)) #IDEA The intengrals refer to the MO, so the active space stuff is kept out of the braket 
-            if 'ovlp' in kwargs:
-                ovlp = kwargs['ovlp']
-                kwargs.pop('ovlp')
-            elif 'overlap_integrals' in kwargs:
-                ovlp = kwargs['overlap_integrals']
-                kwargs.pop('overlap_integrals')
-            elif 's' in kwargs:
-                ovlp = kwargs['s']
-                kwargs.pop('s')
-            if 'n_elec' in kwargs:
-                n_elec=kwargs['n_elec']
-                kwargs.pop('n_elec')
-            elif 'n_electrons' in kwargs: 
-                n_elec=kwargs['n_elec']
-                kwargs.pop('n_elec')
-            elif ket is not None and ket.init_state is not None:
-                if isinstance(ket.initial_state._state,dict):
-                    n_elec = bin([*ket.initial_state._state.keys()][0])[2:].count('1')
-                else:
-                    n_elec = bin(argwhere(ket.init_state._state>1.e-6)[0][0])[2:].count('1')
-            else:
-                raise TequilaException("No manner of defining the amount of electrons provided")
-            if all([i is not None for i in[int2e,int1e,mo_coeff]]):
-                if isinstance(int2e,NBodyTensor):
-                    int2e = int2e.reorder('chem').elems
-                self.BK:EXPVAL = EXPVAL.from_integral(int1e=int1e, int2e=int2e,n_elec= n_elec, e_core=e_core,ovlp=ovlp,mo_coeff=mo_coeff,init_method="zeros",engine=engine,run_hf= run_hf, run_mp2= False, run_ccsd= False, run_fci= False,**backend_kwargs)
-            else:
-                raise TequilaException('Not enough molecular data provided')
+            molecule = from_tequila(molecule)
+            self.BK:EXPVAL = EXPVAL(mol=molecule,run_hf= run_hf, run_mp2= False, run_ccsd= False, run_fci= False,init_method="zeros",aslst=aslst,active_space=active_space,engine=engine,mo_coeff=mo_coeff,**backend_kwargs)
         if ket is not None:
             self.ket = ket
         if bra is not None:
@@ -176,28 +66,12 @@ class TCCBraket:
         self.opt_res = defaultdict(None)
         if 'name' in kwargs:
             self._name = kwargs['name']
-        else: self._name = 'Expectation Value' if self.is_diagonal else "Transition Value"
+        else: self._name = 'Expectation Value' if braket.is_diagonal else "Transition Value"
         if isinstance(operator,str) and operator == 'I':
             self._name = 'Transition Element'
         if operator is not None:
             self.operator = self.build_operator(operator)
         
-    def minimize(self,**kwargs)->float:
-        if 'init_guess_bra' in kwargs:
-            self.init_guess_bra = kwargs['init_guess_bra']
-        if "init_guess_ket" in kwargs:
-            self.init_guess_ket = kwargs['init_guess_ket']
-        if "init_guess" in kwargs:
-            self.init_state = kwargs["init_guess"]
-        e = self.BK.kernel()
-        if self.BK.opt_res is not None:
-            self.opt_res = deepcopy(self.BK.opt_res)
-            self.opt_res.x = [-2*i for i in self.opt_res.x] #translating to tq
-            return self.BK.opt_res.e
-        else: 
-            self.opt_res['e'] = e
-            return e
-
     def __call__(self, variables:Union[list,dict]={}, *args, **kwargs) -> float:
         return self.simulate(variables=variables)
 
@@ -245,107 +119,6 @@ class TCCBraket:
             if i not in unique:
                 unique.append(i)
         return unique
-
-    def grad(self,variable:Variable = None)->Objective:
-        def apply_phase(braket: TCCBraket,exct:List[Tuple[int]],idx:int,variable,ket:bool=True,p0sign:bool=True)->Objective:
-            '''
-            braket: TCC object to modify
-            exct: Excitation indices on the tequila format [(0,2),(1,3),...] to which 
-                  apply the phase shift.
-            ket: If true it will be applied the phase on the ket side, bra otherwise
-            posing: it True: +pi, False: -Pi, correspond to the U0(\pm) not the actual sign implementation
-            '''
-            p0 = []
-            s = {True:+1,False:-1} 
-            for ind in exct:
-                p0.append((ind[0],ind[0]))
-                p0.append((ind[1],ind[1]))
-            braket._name = 'Gradient'
-            if ket:
-                if braket.is_diagonal: 
-                    k = deepcopy(braket.ket)
-                    v = deepcopy(braket.params_ket)
-                    braket.bra = deepcopy(k)
-                    braket.variables_bra = deepcopy(v)
-                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],(FixedVariable,Number,Variable)) else 1
-                    v[idx] +=  s[ket]*pi/2 
-                    for p in reversed(p0):
-                        k.insert(idx,[p])
-                        v.insert(idx,assign_variable(s[not p0sign]*pi))
-                    braket.ket = k
-                    braket.variables_ket = v
-                else:
-                    k = deepcopy(braket.ket)
-                    v = deepcopy(braket.params_ket)
-                    if exct not in k:
-                        return 0.
-                    ph = tq_grad(1*v[idx],variable) if not isinstance(v[idx],(FixedVariable,Number,Variable)) else 1
-                    v[idx] +=  s[ket]*pi/2
-                    for p in reversed(p0):
-                        k.insert(idx,[p])
-                        v.insert(idx,assign_variable(s[not p0sign]*pi)) 
-                    braket.ket = k
-                    braket.variables_ket = v
-            else: 
-                if braket.is_diagonal: 
-                    k = deepcopy(braket.ket)
-                    v = deepcopy(braket.params_ket)
-                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],(FixedVariable,Number,Variable)) else 1
-                    v[idx] +=  s[ket]*pi/2 
-                    for p in reversed(p0):
-                        k.insert(idx,[p])
-                        v.insert(idx,assign_variable(s[not p0sign]*pi)) 
-                    braket.bra = k
-                    braket.variables_bra = v
-                else:
-                    k = deepcopy(braket.bra)
-                    v = deepcopy(braket.params_bra)
-                    if exct not in k:
-                        return 0.
-                    ph = tq_grad(v[idx],variable) if not isinstance(v[idx],(FixedVariable,Number,Variable)) else 1
-                    v[idx] +=  s[ket]*pi/2
-                    for p in reversed(p0):
-                        k.insert(idx,[p])
-                        v.insert(idx,assign_variable(s[not p0sign]*pi)) 
-                    braket.bra = k
-                    braket.variables_bra = v
-            return s[ket]*s[(len(p0)//2)%2]*s[p0sign]*ph*Objective([braket]) #TODO: Check this correct
-        if variable is None:
-            # None means that all components are created
-            variables = self.extract_variables()
-            result = {}
-
-            if len(variables) == 0:
-                raise TequilaException("Error in gradient: Objective has no variables")
-
-            for k in variables:
-                assert k is not None
-                result[k] = self.grad(k)
-            return result
-        else:
-            variable = assign_variable(variable)
-        if variable not in self.extract_variables():
-            return 0.
-        if 'civector' in self.BK.engine:
-            try:
-                _,grad = self.BK.expval_and_grad(angles=variable)
-                return grad
-            except: raise TequilaException("For civector engine it doesn't work out P0 approach for gradient, try better the TCCBraket.minimize() or change to other engine")
-        pos = [variable in v.extract_variables() for v in self.params]
-        g = 0
-        for idx in range(len(pos)):
-            if not pos[idx]:
-                continue
-            if self.is_diagonal:
-                exct = self.ket[idx]
-            else:
-                p = self.bra + self.ket
-                exct = p[idx]
-            g +=apply_phase(braket=deepcopy(self),exct=exct,idx=idx,variable=variable,ket=True,p0sign=True) 
-            # g +=apply_phase(braket=deepcopy(self),exct=exct,idx=idx,variable=variable,ket=True,p0sign=False) #wfn always real for tcc 
-            g +=apply_phase(braket=deepcopy(self),exct=exct,idx=idx,variable=variable,ket=False,p0sign=True)
-            # g +=apply_phase(braket=deepcopy(self),exct=exct,idx=idx,variable=variable,ket=False,p0sign=False) #wfn always real for tcc
-        return 0.5*g
 
     @property
     def energy(self)->float:
@@ -618,9 +391,16 @@ class TCCBraket:
 
     def build_operator(self,operator:Union[str,FermionOperator,QubitHamiltonian,Number]=None)->Union[None,Callable]:
         '''
-        Build the expectation value operator. 
+        Build the expectation value operator.
         Even if it is accepted a QubitHamiltonian, we disencorage its use here since TCC works on fermionic states.
         It will be applied to the ci_vector and kept these results which doesn't leave the ci_vector space with REAL Coeff.
+
+        For a FermionOperator, the operator is applied directly in CI space: a spin-restricted
+        1-/2-body operator (e.g. most physical Hamiltonians/observables) is contracted via PySCF's
+        FCI machinery (:func:`get_h_fcifunc_from_integral`); any other operator (higher-body terms,
+        non-Hermitian excitation operators, ...) falls back to a Jordan-Wigner sparse matrix built
+        once and restricted to the CI-string basis. Both avoid ever materializing a dense
+        2**n_qubits qubit wavefunction, unlike the QubitHamiltonian path below.
         '''
         def from_string(operator:str):
             if operator.upper()=="I":
@@ -637,18 +417,30 @@ class TCCBraket:
                 pass
             else:
                 raise TequilaException(f"No operator str {operator} supported on TCC BraKet")
-        
+
         if operator is None:
             return None
         if isinstance(operator,str):
             from_string(operator)
             return None
         elif isinstance(operator,FermionOperator):
-            operator = reorder(operator=operator,order_function=up_then_down,num_modes=2*len(self.BK.aslst))
-            operator = jordan_wigner(operator)
-            operator.compress()
-            operator = QubitHamiltonian.from_openfermion(operator)
+            n_orb = len(self.BK.aslst)
+            operator = reorder(operator=operator,order_function=up_then_down,num_modes=2*n_orb)
             self.BK.e_core = 0
+            restricted = extract_restricted_integrals(operator, n_orb)
+            if restricted is not None:
+                int1e, int2e, constant = restricted
+                fci_func = get_h_fcifunc_from_integral(int1e, int2e, self.BK.n_elec)
+                if constant == 0.:
+                    return fci_func
+                return lambda ket: fci_func(ket) + constant * ket
+            ci_vec = get_ci_strings(n_elec_s=self.BK.n_elec,n_qubits=2*n_orb,mode='fermion')
+            H_ci = build_sparse_ci_operator(operator, n_qubits=2*n_orb, ci_strings=ci_vec)
+            def sparse_callable(ket):
+                ket_np = tc.backend.numpy(ket).astype(np.float64)
+                hket = np.asarray(H_ci @ ket_np, dtype=np.float64)
+                return tc.backend.convert_to_tensor(hket).astype(tc.rdtypestr)
+            return sparse_callable
         elif isinstance(operator,QubitHamiltonian):
             self.BK.e_core = 0
         elif isinstance(operator,Number):

@@ -48,7 +48,7 @@ def optimize_orbitals(molecule,circuit=Union[FCircuit,QCircuit],backend:str='teq
                 silent = vqe_solver_arguments['silent']
                 vqe_solver_arguments.pop('silent')
             else: silent = True
-            return minimize(Braket(backend=backend,molecule=molecule,circuit=self.U,**vqe_solver_arguments),silent=silent)
+            return minimize(Braket(molecule=molecule, ket=self.U, operator="H", **vqe_solver_arguments), backend=backend, silent=silent)
     
     if isinstance(molecule,HybridBase):
         use_hcb = False
