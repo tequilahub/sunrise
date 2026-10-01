@@ -70,7 +70,7 @@ U = U.map_variables(variables)
 # print(U)
 # print(sun.simulate(U))
 
-mol = sun.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[30,32,33,34,35,36,37,38,39,40], nature='t', transformation="reordered-jordan-wigner").use_native_orbitals()
+mol = sun.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[30,32,33,34,35,36,37,38,39,40], nature='q', transformation="reordered-jordan-wigner").use_native_orbitals()
 U = U.to_qcircuit(mol)
 pairs = [(i, j) for i in range(mol.n_orbitals) for j in range(i + 1, mol.n_orbitals)]
 for pair in pairs:
