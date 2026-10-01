@@ -17,7 +17,7 @@ from sunrise.fermionic_operations import gates
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.expval.pyscf_molecule import from_tequila,MoleculeFromPyscf
 from sunrise.expval.minimize import grad,minimize,simulate
-from sunrise.molecules.qubit_base.orbital_optimizer import optimize_orbitals_sunrise as optimize_orbitals
+from sunrise.expval.orbital_optimizer import optimize_orbitals
 from sunrise import graphical
 from sunrise.expval import Braket as Expval
 from sunrise import CLPO

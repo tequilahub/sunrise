@@ -39,7 +39,7 @@ def teardown_function(function):
 
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="you don't have psi4 or pyscf")
 def test_UR_and_UC():
-    mol = sun.chemistry.Molecule(geometry="h 0.0 0.0 0.0\nH 0.0 0.0 1.5", units="angstrom", basis_set="sto-3g")
+    mol = sun.Molecule(geometry="h 0.0 0.0 0.0\nH 0.0 0.0 1.5", units="angstrom", basis_set="sto-3g")
     mol = mol.use_native_orbitals()
     H = mol.make_hamiltonian()
     U = mol.prepare_reference()
@@ -68,7 +68,7 @@ def test_base(trafo):
     )
     np = 0.0
     n = 2
-    molecule = sun.chemistry.Molecule(
+    molecule = sun.Molecule(
         backend="base",
         geometry="he 0.0 0.0 0.0",
         units="angstrom",
@@ -92,14 +92,14 @@ def test_base(trafo):
 def test_prepare_reference(trafo):
     geometry = "Li 0.0 0.0 0.0\nH 0.0 0.0 1.5"
     basis_set = "sto-3g"
-    mol = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, transformation=trafo)
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, transformation=trafo)
     H = mol.make_hamiltonian()
     U = mol.prepare_reference()
     E = tq.ExpectationValue(H=H, U=U)
     energy = tq.simulate(E)
     hf_energy = mol.compute_energy("hf")
     assert numpy.isclose(energy, hf_energy, atol=1.0e-4)
-    mol = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, transformation=trafo)
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, transformation=trafo)
     H = mol.make_hamiltonian()
     U = mol.prepare_reference()
     E = tq.ExpectationValue(H=H, U=U)
@@ -111,9 +111,9 @@ def test_prepare_reference(trafo):
 def test_orbital_types():
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 2.0\nH 0.0 0.0 4.0\nH 0.0 0.0 6.0"
 
-    mol1 = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g")
-    mol2 = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", orbital_type="hf")
-    mol3 = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", orbital_type="native")
+    mol1 = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g")
+    mol2 = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", orbital_type="hf")
+    mol3 = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", orbital_type="native")
 
     energy = mol1.compute_energy("fci")
     for mol in [mol1, mol2, mol3]:
@@ -125,9 +125,9 @@ def test_orbital_types():
     # test initialization
     geometry = "Be 0.0 0.0 0.0\nH 0.0 0.0 2.0\nH 0.0 0.0 1.5"
 
-    mol1 = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g")
-    mol2 = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", orbital_type="hf")
-    mol3 = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", orbital_type="native")
+    mol1 = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g")
+    mol2 = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", orbital_type="hf")
+    mol3 = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", orbital_type="native")
 
 
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="you don't have psi4")
@@ -147,7 +147,7 @@ def test_orbital_types():
 )
 def test_transformations(trafo_args):
     geomstring = "H 0.0 0.0 0.0\nH 0.0 0.0 0.7"
-    molecule = sun.chemistry.Molecule(geometry=geomstring, units="angstrom", basis_set="sto-3g", **trafo_args)
+    molecule = sun.chemtry.Molecule(geometry=geomstring, units="angstrom", basis_set="sto-3g", **trafo_args)
     gs = numpy.linalg.eigvalsh(molecule.make_hamiltonian().to_matrix())[0]
     assert numpy.isclose(gs, -1.1361894540879054)
 
@@ -160,7 +160,7 @@ def test_dependencies():
 
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="no quantum chemistry backends installed")
 def test_interface():
-    molecule = sun.chemistry.Molecule(
+    molecule = sun.Molecule(
         basis_set="sto-3g", geometry="data/h2.xyz", units="angstrom", transformation="JordanWigner"
     )
 
@@ -308,9 +308,9 @@ def test_energies_psi4(method):
 
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found")
 def test_restart_psi4():
-    h2 = sun.chemistry.Molecule(geometry="data/h2.xyz", units="angstrom", basis_set="6-31g")
+    h2 = sun.Molecule(geometry="data/h2.xyz", units="angstrom", basis_set="6-31g")
     wfn = h2.logs["hf"].wfn
-    h2x = sun.chemistry.Molecule(geometry="data/h2x.xyz", units="angstrom", basis_set="6-31g", guess_wfn=wfn)
+    h2x = sun.Molecule(geometry="data/h2x.xyz", units="angstrom", basis_set="6-31g", guess_wfn=wfn)
     wfnx = h2x.logs["hf"].wfn
     # new psi4 version changed printout
     # can currently only test if it does not crash (no guarantee that it actually read in)
@@ -323,7 +323,7 @@ def test_restart_psi4():
     #     assert found
 
     wfnx.to_file("data/test_wfn.npy")
-    h2 = sun.chemistry.Molecule(
+    h2 = sun.Molecule(
         geometry="data/h2.xyz",
         units="angstrom",
         basis_set="6-31g",
@@ -342,7 +342,7 @@ def test_restart_psi4():
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found")
 @pytest.mark.parametrize("active", [{"A1": [2, 3]}, {"B2": [0], "B1": [0]}, {"A1": [0, 1, 2, 3]}, {"B1": [0]}])
 def test_psi4_active_spaces(active):
-    mol = sun.chemistry.Molecule(geometry="data/h2o.xyz", units="angstrom", basis_set="sto-3g", active_orbitals=active)
+    mol = sun.Molecule(geometry="data/h2o.xyz", units="angstrom", basis_set="sto-3g", active_orbitals=active)
     H = mol.make_hamiltonian()
     Uhf = mol.prepare_reference()
     hf = tequila.simulators.simulator_api.simulate(tq.ExpectationValue(U=Uhf, H=H))
@@ -376,7 +376,7 @@ def test_rdms_psi4():
 @pytest.mark.parametrize("geometry", ["H 0.0 0.0 0.0\nH 0.0 0.0 0.7"])
 @pytest.mark.parametrize("trafo", trafos)
 def test_upccgsd(geometry, trafo):
-    molecule = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", transformation=trafo)
+    molecule = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", transformation=trafo)
     if not molecule.supports_ucc():
         return
     energy = do_test_upccgsd(molecule)
@@ -388,7 +388,7 @@ def test_upccgsd(geometry, trafo):
 
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4 or pyscf not found")
 def test_upccgsd_singles():
-    molecule = sun.chemistry.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.7", units="angstrom", basis_set="6-31G")
+    molecule = sun.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.7", units="angstrom", basis_set="6-31G")
     H = molecule.make_hamiltonian()
     energy1 = numpy.linalg.eigvalsh(H.to_matrix())[0]
     energy2 = do_test_upccgsd(molecule)
@@ -427,7 +427,7 @@ def do_test_upccgsd(molecule, *args, **kwargs):
 @pytest.mark.parametrize("backend", tq.simulators.simulator_api.INSTALLED_SIMULATORS.keys())
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found")
 def test_hamiltonian_reduction(backend):
-    mol = sun.chemistry.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.7", units="angstrom", basis_set="6-31G")
+    mol = sun.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.7", units="angstrom", basis_set="6-31G")
     hf = mol.compute_energy("hf")
     U = mol.prepare_reference()
     H = mol.make_hamiltonian()
@@ -445,7 +445,7 @@ def test_hamiltonian_reduction(backend):
     "trafo", ["jordan_wigner", "bravyi_kitaev", "reordered_jordan_wigner", "TaperedBinary", "REORDEREDTAPEREDBINARY"]
 )
 def test_fermionic_gates(assume_real, trafo):
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry="H 0.0 0.0 0.7\nLi 0.0 0.0 0.0", units="angstrom", basis_set="sto-3g", transformation=trafo
     )
     U1 = mol.prepare_reference()
@@ -489,7 +489,7 @@ def test_fermionic_gates(assume_real, trafo):
 @pytest.mark.parametrize("trafo", trafos)
 def test_hcb(trafo):
     geomstring = "Be 0.0 0.0 0.0\n H 0.0 0.0 1.6\n H 0.0 0.0 -1.6"
-    mol1 = sun.chemistry.Molecule(
+    mol1 = sun.Molecule(
         geometry=geomstring,
         units="angstrom",
         active_orbitals=[1, 2, 3, 4, 5, 6],
@@ -503,7 +503,7 @@ def test_hcb(trafo):
     energy1 = tq.minimize(E).energy
     assert numpy.isclose(energy1, -15.527740838656282, atol=1.0e-3)
 
-    mol2 = sun.chemistry.Molecule(
+    mol2 = sun.Molecule(
         geometry=geomstring,
         units="angstrom",
         active_orbitals=[1, 2, 3, 4, 5, 6],
@@ -530,7 +530,7 @@ def test_hcb(trafo):
 )
 @pytest.mark.parametrize("basis_set", ["sto-3g"])
 def test_pyscf_methods(method, geometry, basis_set):
-    mol = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, backend="psi4")
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, backend="psi4")
 
     e1 = mol.compute_energy(method=method)
     mol = sun.MoleculeFromTequila(mol=mol, backend="pyscf")
@@ -538,7 +538,7 @@ def test_pyscf_methods(method, geometry, basis_set):
     e2 = mol.compute_energy(method)
     assert numpy.isclose(e1, e2, atol=1.0e-4)
 
-    mol = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, backend="pyscf")
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, backend="pyscf")
     e3 = mol.compute_energy(method)
     assert numpy.isclose(e1, e3, atol=1.0e-4)
 
@@ -553,7 +553,7 @@ def test_pyscf_methods(method, geometry, basis_set):
     ],
 )
 def test_wfn_fci(geometry):
-    mol = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", backend="pyscf")
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", backend="pyscf")
     H = mol.make_hamiltonian()
     v, vv = numpy.linalg.eigh(H.to_matrix())
 
@@ -571,7 +571,7 @@ def test_wfn_fci(geometry):
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_fci_guess_wfn():
     geometry = """H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"""
-    mol = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", backend="pyscf").use_native_orbitals()
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", backend="pyscf").use_native_orbitals()
 
     H = mol.make_hamiltonian()
     v, vv = numpy.linalg.eigh(H.to_matrix())
@@ -592,7 +592,7 @@ def test_fci_guess_wfn():
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_fci_nroots():
     geometry = """H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"""
-    mol = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", backend="pyscf")
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", backend="pyscf")
 
     nroots = 7
     H = mol.make_hamiltonian()
@@ -622,7 +622,7 @@ def test_fci_nroots():
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_fci_hcb():
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.0\nH 0.0 0.0 2.0\nH 0.0 0.0 3.0\nH 0.0 0.0 4.0\nH 0.0 0.0 5.0"
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry=geometry,
         units="angstrom",
         basis_set="sto-3g",
@@ -641,7 +641,7 @@ def test_fci_hcb():
 
     # HCB SPA
     U = mol.make_ansatz(name="HCB-SPA", edges=edges)
-    opt = sun.chemistry.optimize_orbitals(molecule=mol, circuit=U, initial_guess=guess.T, silent=True, use_hcb=True)
+    opt = sun.optimize_orbitals(molecule=mol, circuit=U, initial_guess=guess.T, silent=True, use_hcb=True)
     mol = opt.molecule
     H = mol.make_hardcore_boson_hamiltonian()
     E = tq.ExpectationValue(H=H, U=U)
@@ -654,7 +654,7 @@ def test_fci_hcb():
 
     # Fermionic SPA
     U = mol.make_ansatz(name="SPA", edges=edges)
-    opt = sun.chemistry.optimize_orbitals(molecule=mol, circuit=U, initial_guess=guess.T, silent=True)
+    opt = sun.optimize_orbitals(molecule=mol, circuit=U, initial_guess=guess.T, silent=True)
     mol = opt.molecule
     H = mol.make_hamiltonian()
     E = tq.ExpectationValue(H=H, U=U)
@@ -671,9 +671,9 @@ def test_fci_hcb():
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_orbital_optimization():
-    from sunrise.molecules.qubit_base import optimize_orbitals
+    from sunrise import optimize_orbitals
 
-    mol = sun.chemistry.Molecule(geometry="Li 0.0 0.0 0.0\nH 0.0 0.0 3.0", units="angstrom", basis_set="STO-3G")
+    mol = sun.Molecule(geometry="Li 0.0 0.0 0.0\nH 0.0 0.0 3.0", units="angstrom", basis_set="STO-3G")
 
     circuit = mol.make_upccgsd_ansatz(name="UpCCGD")
     mol2 = optimize_orbitals(molecule=mol, circuit=circuit).molecule
@@ -687,7 +687,7 @@ def test_orbital_optimization():
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_orbital_transformation():
-    mol0 = sun.chemistry.Molecule(
+    mol0 = sun.Molecule(
         geometry="Li 0.0 0.0 0.0\nH 0.0 0.0 0.75", units="angstrom", basis_set="STO-3G", frozen_core=False
     )
     mol0.print_basis_info()
@@ -707,7 +707,7 @@ def test_orbital_transformation():
     guess[1] = [0.001, 1.0, 1.0, 0.0, 0.0, 1.0]
     guess[2] = [0.001, 1.0, 1.0, 0.0, 0.0, -1.0]
     guess[5] = [0.000, 1.0, -1.0, 0.0, 0.0, 0.0]
-    opt = sun.chemistry.optimize_orbitals(circuit=U, molecule=mol1, initial_guess=guess, silent=True)
+    opt = sun.optimize_orbitals(circuit=U, molecule=mol1, initial_guess=guess, silent=True)
     print(opt.mo_coeff)
 
     mol2 = mol1.transform_orbitals(opt.mo_coeff)
@@ -727,9 +727,9 @@ def test_orbital_transformation():
 @pytest.mark.parametrize("core", [[], [0], [0, 1]])
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found")
 def test_native_active_space(system, core):
-    mol = sun.chemistry.Molecule(geometry=system, units="angstrom", basis_set="sto-3g", frozen_core=False, frozen_orbitals=core)
+    mol = sun.Molecule(geometry=system, units="angstrom", basis_set="sto-3g", frozen_core=False, frozen_orbitals=core)
     eival, eivect = numpy.linalg.eigh(mol.make_hamiltonian().to_matrix())
-    mol = sun.chemistry.Molecule(geometry=system, units="angstrom", basis_set="sto-3g", frozen_core=False).use_native_orbitals(
+    mol = sun.Molecule(geometry=system, units="angstrom", basis_set="sto-3g", frozen_core=False).use_native_orbitals(
         core=core
     )
     eival1, eivect1 = numpy.linalg.eigh(mol.make_hamiltonian().to_matrix())
@@ -740,8 +740,8 @@ def test_native_active_space(system, core):
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found")
 def test_crosscheck_mp2():
     # Be has issues with degeneracies and ordering (t1-t2 is not necessarily 0)
-    mol1 = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="psi4")
-    mol2 = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="pyscf")
+    mol1 = sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="psi4")
+    mol2 = sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="pyscf")
     t2_1, e1 = mol1.compute_mp2_amplitudes(return_energy=True)
     t2_2, e2 = mol2.compute_mp2_amplitudes(return_energy=True)
     assert numpy.isclose(e1, e2, atol=1.0e-4)
@@ -751,8 +751,8 @@ def test_crosscheck_mp2():
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found")
 def test_crosscheck_cis():
-    mol1 = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="psi4")
-    mol2 = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="pyscf")
+    mol1 = sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="psi4")
+    mol2 = sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="pyscf")
     r_1 = mol1.compute_cis_amplitudes()
     r_2 = mol2.compute_cis_amplitudes()
     for i in range(len(r_1.omegas)):
@@ -766,8 +766,8 @@ def test_crosscheck_cis():
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found")
 def test_crosscheck_cis_mp2_large():
     # only energies (degeneracies: orbitals change places)
-    mol1 = sun.chemistry.Molecule(geometry="be 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="psi4")
-    mol2 = sun.chemistry.Molecule(geometry="be 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="pyscf")
+    mol1 = sun.Molecule(geometry="be 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="psi4")
+    mol2 = sun.Molecule(geometry="be 0.0 0.0 0.0", units="angstrom", basis_set="6-31G", backend="pyscf")
     r_1 = mol1.compute_cis_amplitudes()
     r_2 = mol2.compute_cis_amplitudes()
     for i in range(len(r_1.omegas)):
@@ -787,7 +787,7 @@ def test_spa_ansatz_be():
     print(not HAS_PSI4 and not HAS_PYSCF)
     edges = [(0,), (1, 2, 3, 4)]
     # doing without frozen-core to test explicitly if single-orbital pairs work
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry="be 0.0 0.0 0.0",
         units="angstrom",
         basis_set="sto-3g",
@@ -800,7 +800,7 @@ def test_spa_ansatz_be():
     result = tq.minimize(E, silent=True)
     energy = result.energy
 
-    mol = sun.chemistry.Molecule(geometry="be 0.0 0.0 0.0", units="angstrom", basis_set="sto-3g", frozen_core=False)
+    mol = sun.Molecule(geometry="be 0.0 0.0 0.0", units="angstrom", basis_set="sto-3g", frozen_core=False)
     H = mol.make_hamiltonian()
     U0 = mol.make_ansatz(name="SPA", edges=edges)
     U1 = mol.make_ansatz(name="SPA", ladder=False, edges=edges)
@@ -824,7 +824,7 @@ def test_spa_ansatz_be():
 @pytest.mark.parametrize("transformation", trafos)
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found")
 def test_spa_consistency(geometry, name, optimize, transformation):
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry=geometry, units="angstrom", basis_set="sto-3g", transformation=transformation
     ).use_native_orbitals()
 
@@ -865,7 +865,7 @@ def test_spa_consistency(geometry, name, optimize, transformation):
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found")
 def test_variable_consistency():
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.0\nH 0.0 0.0 2.0\nH 0.0 0.0 3.0"
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry=geometry, units="angstrom", basis_set="sto-3g", transformation="ReorderedJordanWigner"
     ).use_native_orbitals()
     U = mol.make_ansatz("SPA", edges=[(0, 1), (2, 3)])
@@ -880,7 +880,7 @@ def test_variable_consistency():
     E = tq.ExpectationValue(H=H, U=U)
     E2 = tq.simulate(E, variables=variables)
 
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry=geometry, units="angstrom", basis_set="sto-3g", transformation="JordanWigner"
     ).use_native_orbitals()
     U = mol.make_ansatz("SPA", edges=[(0, 1), (2, 3)])
@@ -907,7 +907,7 @@ def test_variable_consistency():
 )
 @pytest.mark.parametrize("optimize", [True, False])
 def test_hcb_rdms(geometry, optimize):
-    mol1 = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", transformation="ReorderedJordanWigner")
+    mol1 = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", transformation="ReorderedJordanWigner")
     H = mol1.make_hamiltonian()
     HCB = mol1.make_hardcore_boson_hamiltonian()
 
@@ -952,7 +952,7 @@ def test_hcb_rdms(geometry, optimize):
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
 @pytest.mark.parametrize("geometry", ["Li 0.0 0.0 0.0\nH 0.0 0.0 3.0", "Be 0.0 0.0 0.0\nH 0.0 0.0 3.0\nH 0.0 0.0 -3.0"])
 def test_orbital_optimization_hcb(geometry):
-    mol = sun.chemistry.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g")
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g")
 
     if mol.n_electrons == 4:
         edges = [(0, 2, 5), (1, 3, 4)]
@@ -965,11 +965,11 @@ def test_orbital_optimization_hcb(geometry):
     import time
 
     start = time.time()
-    opt1 = sun.chemistry.optimize_orbitals(circuit=U1, molecule=mol, silent=True, use_hcb=True)
+    opt1 = sun.optimize_orbitals(circuit=U1, molecule=mol, silent=True, use_hcb=True)
     time1 = time.time() - start
     U2 = mol.make_ansatz(name="SPA", edges=edges)
     start = time.time()
-    opt2 = sun.chemistry.optimize_orbitals(circuit=U2, molecule=mol, silent=True)
+    opt2 = sun.optimize_orbitals(circuit=U2, molecule=mol, silent=True)
     time2 = time.time() - start
 
     assert numpy.isclose(opt1.energy, opt2.energy, atol=1.0e-5)
@@ -995,7 +995,7 @@ def test_givens_on_molecule(size, transformation):
     tg = numpy.einsum("xjkl, xi -> ijkl", tg, U, optimize="greedy")
 
     # original molecule/H
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry="He 0.0 0.0 0.0",
         units="angstrom",
         nuclear_repulsion=0.0,
@@ -1006,7 +1006,7 @@ def test_givens_on_molecule(size, transformation):
     )
     H = mol.make_hamiltonian()
     # transformed molecule/H
-    tmol = sun.chemistry.Molecule(
+    tmol = sun.Molecule(
         geometry="He 0.0 0.0 0.0",
         units="angstrom",
         nuclear_repulsion=0.0,
@@ -1051,7 +1051,7 @@ def test_givens_on_molecule():
     tg = numpy.einsum("xjkl, xi -> ijkl", tg, U, optimize="greedy")
 
     # original molecule/H
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry="He 0.0 0.0 0.0",
         units="angstrom",
         nuclear_repulsion=0.0,
@@ -1062,7 +1062,7 @@ def test_givens_on_molecule():
     )
     H = mol.make_hamiltonian()
     # transformed molecule/H
-    tmol = sun.chemistry.Molecule(
+    tmol = sun.Molecule(
         geometry="He 0.0 0.0 0.0",
         units="angstrom",
         nuclear_repulsion=0.0,
@@ -1110,9 +1110,9 @@ def test_givens_decomposition(size):
 
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="you don't have psi4 or pyscf")
 def test_ghost_atom_far():
-    mol = sun.chemistry.Molecule(geometry="H 0.0 0.0 0.0\nLi 0.0 0.0 1.", units="angstrom", basis_set="6-31G")
+    mol = sun.Molecule(geometry="H 0.0 0.0 0.0\nLi 0.0 0.0 1.", units="angstrom", basis_set="6-31G")
     fci0 = mol.compute_energy("fci")
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry="H 0.0 0.0 0.0\nLi 0.0 0.0 1.\n ghost:H 0. 0. 20.", units="angstrom", basis_set="6-31G"
     )
     fci1 = mol.compute_energy("fci")
@@ -1122,9 +1122,9 @@ def test_ghost_atom_far():
 
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="you don't have psi4 or pyscf")
 def test_ghost_atom():
-    mol = sun.chemistry.Molecule(geometry="H 0.0 0.0 0.0\nLi 0.0 0.0 1.", units="angstrom", basis_set="6-31G")
+    mol = sun.Molecule(geometry="H 0.0 0.0 0.0\nLi 0.0 0.0 1.", units="angstrom", basis_set="6-31G")
     fci0 = mol.compute_energy("fci")
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry="H 0.0 0.0 0.0\nLi 0.0 0.0 1.\n ghost:Li 0. 0.5 .5", units="angstrom", basis_set="6-31G"
     )
     fci1 = mol.compute_energy("fci")

@@ -31,7 +31,7 @@ def test_executable():
 def test_madness_he_data():
     # relies that he_xtensor.npy are present (x=g,h)
     geomstring = "He 0.0 0.0 0.0"
-    molecule = sun.chemistry.Molecule(name="he", geometry=geomstring, units="angstrom")
+    molecule = sun.Molecule(name="he", geometry=geomstring, units="angstrom")
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
@@ -55,7 +55,7 @@ def test_madness_full_he():
     # relies on madness being compiled and MAD_ROOT_DIR exported
     # or pno_integrals in the path
     geomstring = "He 0.0 0.0 0.0"
-    molecule = sun.chemistry.Molecule(geometry=geomstring, n_pno=1, units="angstrom")
+    molecule = sun.Molecule(geometry=geomstring, n_pno=1, units="angstrom")
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
@@ -68,14 +68,14 @@ def test_madness_full_he():
 
 @pytest.mark.skipif(executable is None, reason="madness was not found")
 def test_madness_data_io():
-    mol = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom")
-    mol = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", n_pno="read", units="angstrom")
+    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom")
+    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", n_pno="read", units="angstrom")
 
-    mol = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", units="angstrom")
-    mol = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", n_pno="read", units="angstrom")
+    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", units="angstrom")
+    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", n_pno="read", units="angstrom")
 
-    mol = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", units="angstrom")
-    mol = sun.chemistry.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", n_pno="read", units="angstrom")
+    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", units="angstrom")
+    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", n_pno="read", units="angstrom")
 
 
 @pytest.mark.skipif(executable is None, reason="madness was not found")
@@ -83,7 +83,7 @@ def test_madness_full_li_plus():
     # relies on madness being compiled and MAD_ROOT_DIR exported
     # or pno_integrals in the path
     geomstring = "Li 0.0 0.0 0.0"
-    molecule = sun.chemistry.Molecule(
+    molecule = sun.Molecule(
         name="li+", geometry=geomstring, units="angstrom", n_pno=1, charge=1, frozen_core=False
     )  # need to deactivate frozen_core, otherwise there is no active orbital
     H = molecule.make_hamiltonian()
@@ -231,11 +231,11 @@ def test_orbital_optimization(restrict_to_hcb):
     n_pno = None
     success = False
     for _ in range(10):
-        mol = sun.chemistry.Molecule(n_pno=n_pno, name=name.format(R=R))
+        mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
         U = mol.make_upccgsd_ansatz("SPA")
         if restrict_to_hcb:
             U = mol.make_upccgsd_ansatz("HCB-SPA")
-        opt_mol = sun.chemistry.optimize_orbitals(
+        opt_mol = sun.optimize_orbitals(
             molecule=mol,
             circuit=U,
             silent=False,
@@ -262,9 +262,9 @@ def test_orbital_optimization_adapt():
     n_pno = None
     success = False
     for _ in range(1):
-        mol = sun.chemistry.Molecule(n_pno=n_pno, name=name.format(R=R))
+        mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
         U = mol.make_upccgsd_ansatz("SPA")
-        operator_pool = tq.adapt.MolecularPool(molecule=mol, indices="UCCD")
+        operator_pool = sun.ADAPT.adapt.MolecularPool(molecule=mol, indices="UCCD")
 
         class AdaptWrapper:
             class ReturnWrapper:
@@ -278,12 +278,12 @@ def test_orbital_optimization_adapt():
                 self.spa = spa
 
             def __call__(self, H, circuit, molecule, *args, **kwargs):
-                solver = tq.adapt.Adapt(H=H, Upre=self.spa, operator_pool=self.operator_pool, maxiter=1)
+                solver = sun.adapt.Adapt(H=H, Upre=self.spa, operator_pool=self.operator_pool, maxiter=1)
                 result = solver(Upre=self.spa, operator_pool=self.operator_pool)
                 final_circuit = self.spa + result.U
                 return self.ReturnWrapper(circuit=final_circuit, variables=result.variables, energy=result.energy)
 
-        opt_mol = sun.chemistry.optimize_orbitals(
+        opt_mol = sun.optimize_orbitals(
             molecule=mol,
             circuit=U,
             silent=False,

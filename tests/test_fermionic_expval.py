@@ -92,7 +92,7 @@ def test_optimize_orbitals(geom,backend,use_hcb):
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
     snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,use_hcb=use_hcb)
-    tqopt = sn.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True)
+    tqopt = sn.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True)
     assert isclose(snopt.energy,tqopt.energy)
 
 #TODO: recursion limit problem on tequila, return when fixed

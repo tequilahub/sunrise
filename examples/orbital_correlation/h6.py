@@ -15,7 +15,7 @@ guess[2] = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
 guess[3] = [0.0, 0.0, 1.0, -1., 0.0, 0.0]
 guess[4] = [0.0, 0.0, 0.0, 0.0, 1.0, -1.]
 guess[5] = [0.0, 0.0, 0.0, 0.0, 1.0, -1.]
-opt = sun.chemistry.optimize_orbitals(mol, circuit=U, initial_guess=guess.T, silent=True)
+opt = sun.optimize_orbitals(mol, circuit=U, initial_guess=guess.T, silent=True)
 UR = mol.get_givens_circuit(opt.mo_coeff)
 U = U + UR.dagger()
 E = tq.ExpectationValue(U,H)

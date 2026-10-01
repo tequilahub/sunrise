@@ -12,7 +12,7 @@ HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 def test_correction_psi4_active():
     geomstring = "He 0.0 0.0 0.0"
     # This active space does not need to make sense
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry=geomstring, units="angstrom", basis_set="cc-pvqz", active_orbitals={"AG": [0, 1], "B1U": [0, 1]}
     )
     rdminfo = {"rdm__psi4_method": "detci"}
@@ -37,7 +37,7 @@ def test_correction_psi4_cabsplus():
     # Try to run CABS+, which as of now is only available via direct installation of personal fork
     # Choice of CABS also not sensible here
     geomstring = "He 0.0 0.0 0.0"
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         geometry=geomstring,
         units="angstrom",
         basis_set="cc-pvdz",
@@ -65,7 +65,7 @@ data_path = "data/f12/"
 @pytest.mark.parametrize("trafo", sun.chemistry.encodings.known_encodings())
 def test_correction_madness(trafo):
     geomstring = "He 0.0 0.0 0.0"
-    mol = sun.chemistry.Molecule(
+    mol = sun.Molecule(
         name="data/f12/he-f12",
         geometry=geomstring,
         units="angstrom",

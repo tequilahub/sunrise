@@ -27,7 +27,7 @@ def test_opt_SPA(two_qubit,transformation):
     mol, edges = mol.use_CLPO_orbitals_and_edges()
     # same CLPO starting orbitals on the tequila side, so both optimizations start from the same point
     tqmol = sn.CLPO.generate_CLPO_molecule(tqmol,use_active=not tqmol.integral_manager.active_space_is_trivial())
-    tqopt = sn.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqmol.make_ansatz("HCB-SPA",edges=edges),silent=True,use_hcb=True)
+    tqopt = sn.optimize_orbitals(molecule=tqmol,circuit=tqmol.make_ansatz("HCB-SPA",edges=edges),silent=True,use_hcb=True)
     opt = sn.optimize_orbitals(molecule=mol,circuit=mol.make_ansatz("SPA",edges=edges),silent=True)
     assert numpy.isclose(tqopt.energy,opt.energy,10**-5)
 @pytest.mark.parametrize("system",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
