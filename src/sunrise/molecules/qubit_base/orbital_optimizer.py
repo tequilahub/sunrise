@@ -4,7 +4,7 @@ import copy
 import warnings
 from dataclasses import dataclass, field
 
-from tequila import QCircuit, ExpectationValue, minimize, TequilaWarning
+from tequila import QCircuit, ExpectationValue, minimize, TequilaWarning, TequilaException
 from . import QuantumChemistryBase, ParametersQC, NBodyTensor
 
 """
@@ -324,18 +324,7 @@ class PySCFVQEWrapper:
         return result
 
 
-from sunrise import FCircuit
-from tequila import QCircuit,TequilaException
-from . import Braket
-from sunrise.molecules.qubit_base import optimize_orbitals as tq_opt_orbs
-from sunrise.molecules.qubit_base.orbital_optimizer import OptimizeOrbitalsResult
-from ..molecules.fermionic_base.fer_base import FermionicBase
-from ..molecules.hybrid_base.HybridBase import HybridBase
-from .minimize import minimize
-from typing import Union
-
-
-def optimize_orbitals(molecule,circuit=Union[FCircuit,QCircuit],backend:str='tequila',use_hcb=False,pyscf_arguments=None,silent=False,vqe_solver_arguments:dict=None,initial_guess=None,return_mcscf=False,
+def optimize_orbitals_sunrise(molecule,circuit=None,backend:str='tequila',use_hcb=False,pyscf_arguments=None,silent=False,vqe_solver_arguments:dict=None,initial_guess=None,return_mcscf=False,
     molecule_factory=None,molecule_arguments=None,restrict_to_active_space=True,*args,**kwargs)->OptimizeOrbitalsResult:
     """
 
@@ -365,6 +354,13 @@ def optimize_orbitals(molecule,circuit=Union[FCircuit,QCircuit],backend:str='teq
     -------
         Optimized Tequila Molecule
     """
+    # imported here to avoid circular imports (qubit_base is loaded before the rest of sunrise)
+    from sunrise.fermionic_operations.circuit import FCircuit
+    from sunrise.expval import Braket
+    from sunrise.expval.minimize import minimize as sun_minimize
+    from sunrise.molecules.fermionic_base.fer_base import FermionicBase
+    from sunrise.molecules.hybrid_base.HybridBase import HybridBase
+
     class solver:
         def __init__(self,backend:str='tequila',circuit:FCircuit=None):
             self.backend = backend
@@ -374,7 +370,7 @@ def optimize_orbitals(molecule,circuit=Union[FCircuit,QCircuit],backend:str='teq
                 silent = vqe_solver_arguments['silent']
                 vqe_solver_arguments.pop('silent')
             else: silent = True
-            return minimize(Braket(backend=backend,molecule=molecule,circuit=self.U,**vqe_solver_arguments),silent=silent)
+            return sun_minimize(Braket(backend=backend,molecule=molecule,circuit=self.U,**vqe_solver_arguments),silent=silent)
     
     if isinstance(molecule,HybridBase):
         use_hcb = False
@@ -415,7 +411,7 @@ def optimize_orbitals(molecule,circuit=Union[FCircuit,QCircuit],backend:str='teq
     else: #Plain tequila molecule
         if isinstance(circuit,FCircuit):
             circuit.to_qcircuit(molecule=molecule)
-    result = tq_opt_orbs(molecule=molecule,use_hcb=use_hcb,circuit=circuit,pyscf_arguments=pyscf_arguments,silent=silent,initial_guess=initial_guess,return_mcscf=return_mcscf,molecule_factory=molecule_factory,molecule_arguments=molecule_arguments,restrict_to_active_space=restrict_to_active_space,vqe_solver_arguments=vqe_solver_arguments,*args,**kwargs)
+    result = optimize_orbitals(molecule=molecule,use_hcb=use_hcb,circuit=circuit,pyscf_arguments=pyscf_arguments,silent=silent,initial_guess=initial_guess,return_mcscf=return_mcscf,molecule_factory=molecule_factory,molecule_arguments=molecule_arguments,restrict_to_active_space=restrict_to_active_space,vqe_solver_arguments=vqe_solver_arguments,*args,**kwargs)
     if isinstance(molecule,HybridBase):
         result.molecule = HybridBase(**molecule_arguments, integral_manager=result.molecule.integral_manager)
     elif isinstance(molecule,FermionicBase):
