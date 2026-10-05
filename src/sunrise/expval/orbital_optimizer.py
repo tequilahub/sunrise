@@ -5,7 +5,7 @@ import warnings
 from dataclasses import dataclass, field
 
 from tequila import QCircuit, ExpectationValue, TequilaWarning, TequilaException
-from . import QuantumChemistryBase, ParametersQC, NBodyTensor
+from ..molecules.qubit_base.qc_base import QuantumChemistryBase, ParametersQC, NBodyTensor
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.expval import Braket, INSTALLED_FERMIONIC_BACKENDS
 from sunrise.expval.minimize import minimize
@@ -175,7 +175,7 @@ def optimizer(
 ):
     try:
         from pyscf import mcscf, lib
-        from . import QuantumChemistryPySCF
+        from ..molecules.qubit_base.pyscf_interface import QuantumChemistryPySCF
     except Exception as exception:
         raise Exception("{}\noptimize_orbitals: Need pyscf to run (pip install pyscf)".format(str(exception)))
 
