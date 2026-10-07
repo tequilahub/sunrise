@@ -1,19 +1,12 @@
-import numpy as np
-
-try:
-    from sunrise.expval.fqe_expval import FQEBraKet
-except ImportError:
-    pass
 from sunrise.molecules.qubit_base import QuantumChemistryBase
-from sunrise.MCVBT.QulacsBraKet import BraKetQulacs
-from sunrise.expval.minimize import simulate,grad
-from sunrise.expval import Braket
-from  tequila.objective.objective import Objective,identity,Variable,assign_variable
+from sunrise.expval import Braket, Overlap
+from tequila import BraKet as tqBraket
+from tequila import Overlap as tqOverlap
 from tequila import TequilaException
 from typing import Union
 from tequila import QCircuit
 from sunrise import FCircuit
-from tequila import TequilaException
+from tequila import TequilaException, Objective
 from numpy import sign
 
 def BigExpVal(circuits:list[Union[QCircuit,FCircuit]], coefficcents:list[float], mol:QuantumChemistryBase, **kwargs) -> Objective:

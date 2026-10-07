@@ -3,9 +3,7 @@ import spex_tequila as spex
 from sunrise.fermionic_operations.circuit import FCircuit
 
 from tequila import TequilaException, QubitWaveFunction, Variable, QubitHamiltonian
-from tequila.objective.objective import Variables
-from sunrise.molecules.qubit_base.chemistry_tools import NBodyTensor
-from sunrise.molecules.qubit_base import qc_base
+from tequila.objective.objective import Variables, Objective
 from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
 from numpy import ndarray, array, complex128, real
 from openfermion import FermionOperator

@@ -241,7 +241,7 @@ class HybridBase(qc_base):
         )
     
     def use_native_orbitals(self, inplace=False, core: list = None, *args, **kwargs):
-        """
+        r"""
         Parameters
         ----------
         inplace: update current molecule or return a new instance
@@ -1075,7 +1075,7 @@ class HybridBase(qc_base):
                                   assume_real=assume_real, opt=opt, control=control, **kwargs))
 
     def make_excitation_generator(self, indices: typing.Iterable[typing.Tuple[int, int]], form: str = None, remove_constant_term: bool = True) -> QubitHamiltonian:
-        """
+        r"""
         Notes
         ----------
         Creates the transformed hermitian generator of UCC type unitaries:

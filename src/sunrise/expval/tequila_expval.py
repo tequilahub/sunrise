@@ -1,21 +1,11 @@
-import tequila as tq
-from tequila import BraKet,QCircuit,QubitHamiltonian,ExpectationValue
-from sunrise.molecules.qubit_base.chemistry_tools import NBodyTensor
-from tequila import TequilaException
+from tequila import BraKet, ExpectationValue, Objective
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from tequila import TequilaException, simulate, Variable, Objective, grad
-from sunrise.molecules.qubit_base import Molecule
-from tequila.objective.objective import Variables
-from numpy import argwhere
-from pyscf.gto import Mole
-from sunrise.expval.pyscf_molecule import MoleculeFromPyscf
-from ..fermionic_operations.circuit import FCircuit
-from typing import Union,List
 from openfermion import FermionOperator
 from .fermionic_braket import FermBraketImpl
+from sunrise.molecules.fermionic_base import FermionicBase
+from tequila.hamiltonian.paulis import from_string, I
 
 def TequilaBraket(braket:"FermBraketImpl", *args, **kwargs) -> Objective:
-    from sunrise.molecules.fermionic_base import FermionicBase
     mol = braket.molecule
     if isinstance(mol,FermionicBase):
         mol = QuantumChemistryBase(parameters=mol.parameters, transformation='REORDEREDJORDANWIGNER', integral_manager=mol.integral_manager)

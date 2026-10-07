@@ -6,7 +6,7 @@ from sunrise.molecules.qubit_base import Molecule
 from tequila import simulate as tq_simulate
 from typing import Union
 from numpy import zeros, ceil
-from tequila import SUPPORTED_BACKENDS
+from tequila import SUPPORTED_BACKENDS, QCircuit
 
 SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR = ["fqe", "tcc", "spex"]
 INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR = {}
