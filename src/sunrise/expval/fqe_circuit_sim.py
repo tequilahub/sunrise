@@ -1,14 +1,6 @@
-try:
-    import fqe
-except ImportError:
-    pass
 from tequila import Variable,Objective,simulate,QubitWaveFunction,TequilaWarning,BitNumbering
 from tequila.objective.objective import Variables
-from tequila import  BitString, BitStringLSB
-try:
-    from sunrise.expval.fqe_expval import FQEBraKet
-except ImportError:
-    pass
+from tequila import  BitStringLSB
 from sunrise.fermionic_operations import FCircuit
 from tequila import Molecule
 import numpy as np
@@ -17,8 +9,11 @@ try:
     from fqe.util import sort_configuration_keys
 except ImportError:
     pass
-def fqe_circuit_simulatorU(U:FCircuit,variables:Variables, n_orb:int,**backend_kwargs)->QubitWaveFunction:
-
+def fqe_circuit_simulatorU(U:FCircuit, variables:Variables, n_orb:int=None, **backend_kwargs) -> QubitWaveFunction:
+    from . import Braket
+    from .minimize import compile
+    if n_orb is None:
+        n_orb = int(np.ceil((U.max_qubit()+1)/2))
     res = QubitWaveFunction(n_qubits=2*n_orb,numbering=BitNumbering.MSB,dense=False)
 
     if U.n_electrons is None:
@@ -27,12 +22,10 @@ def fqe_circuit_simulatorU(U:FCircuit,variables:Variables, n_orb:int,**backend_k
 
     U = U.to_upthendown(norb=n_orb)
 
-    EV = FQEBraKet(ket=U, mol=__generate_dummy_mol(n_orb=n_orb, n_elec=U.n_electrons), backend_kwargs=backend_kwargs)
-
-    variables = [map_variables(x, variables) for x in EV.extract_variables()]
-
-    EV(variables=[i for i in variables])
-    EV.print_ket()
+    EV = Braket(ket=U, mol=__generate_dummy_mol(n_orb=n_orb, n_elec=U.n_electrons), backend_kwargs=backend_kwargs, operator=None)
+    EV = compile(EV, backend='fqe')
+    EV = EV.args[0]
+    _ = EV(variables)
     state = EV.ket_time_evolved
 
     config_in_order = sort_configuration_keys(state.sectors())
@@ -44,8 +37,7 @@ def fqe_circuit_simulatorU(U:FCircuit,variables:Variables, n_orb:int,**backend_k
                 beta_str = self._core.string_beta(indb)
 
                 wfn = BitStringLSB.from_binary(bin(alpha_str)[2:].zfill(n_orb)+bin(beta_str)[2:].zfill(n_orb),nbits=2*n_orb)
-                print(f'{self.coeff[inda, indb]}|{bin(wfn.to_integer(numbering=BitNumbering.MSB))[2:].zfill(2*n_orb)}>')
-                res._state[wfn.to_integer(numbering=BitNumbering.LSB)] = self.coeff[inda, indb]
+                res[wfn.to_integer(numbering=BitNumbering.LSB)] = self.coeff[inda, indb]
 
     return res
 

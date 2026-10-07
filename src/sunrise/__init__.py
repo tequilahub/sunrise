@@ -14,7 +14,7 @@ from sunrise.expval.pyscf_molecule import from_tequila,MoleculeFromPyscf
 from sunrise.expval.minimize import grad,minimize,simulate
 from sunrise.expval.optimize import optimize_orbitals
 from sunrise import graphical
-from sunrise.expval import Braket as Expval
+from sunrise.expval import Fidelity, Overlap, Braket, ExpectationValue, RealBraKet, ImagBraKet
 from sunrise import CLPO
 from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges, generate_HAO_molecule
 from sunrise.MCVBT.GNM import mcvbt
