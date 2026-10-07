@@ -13,10 +13,10 @@ def test_fast_spa_opt(geom, nature):
     snmol,snedges = sn.CLPO.generate_CLPO_molecule_edges(mol=snmol)
 
     tqU = tqmol.make_ansatz('SPA',edges=tqedges) + tqmol.UC(1,2,"a")
-    snU = snmol.make_ansatz('SPA',edges=tqedges) + snmol.UC(1,2,"a")
+    snU = snmol.make_ansatz('SPA',edges=snedges) + snmol.UC(1,2,"a")
 
     tqres = tq.minimize(tq.ExpectationValue(H=tqmol.make_hamiltonian(),U=tqU),silent=True)
-    snres = tq.minimize(sn.SPAFP.decompose(H=tqmol.make_hamiltonian(),U=tqU,grouping=4),silent=True, gradient="2-point",method_options={"finite_diff_rel_step":1.e-4})
+    snres = sn.minimize(sn.SPAFP.decompose(H=snmol.make_hamiltonian(),U=snU,grouping=4),silent=True, gradient="2-point",method_options={"finite_diff_rel_step":1.e-4})
 
     assert isclose(tqres.energy, snres.energy)
 

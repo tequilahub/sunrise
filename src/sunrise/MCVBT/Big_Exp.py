@@ -10,93 +10,33 @@ from sunrise.expval.minimize import simulate,grad
 from sunrise.expval import Braket
 from  tequila.objective.objective import Objective,identity,Variable,assign_variable
 from tequila import TequilaException
-from copy import deepcopy
+from typing import Union
+from tequila import QCircuit
+from sunrise import FCircuit
+from tequila import TequilaException
+from numpy import sign
 
-class BigExpVal:
-
-    def __init__(self, circuits, coefficcents, mol:QuantumChemistryBase, solver, **kwargs):
-        self.n = len(circuits)
-        self.solver = solver
-        SS = 0.
-        EE = 0.
-        for i in range(self.n):
-            for j in range(self.n): #oder n ?
-                if solver == "TCC":
-                    # raise NotImplementedError
-                    xEE = Braket(ket=circuits[j], bra=circuits[i], molecule=mol,backend='tcc')
-                    xSS = Braket(ket=circuits[j], bra=circuits[i],backend='tcc',molecule=mol,operator='I')
-                elif solver == "FQE":
-                    xEE = FQEBraKet(ket_fcircuit=circuits[j], bra_fcircuit=circuits[i], molecule=mol)
-                    xSS = FQEBraKet(ket_fcircuit=circuits[j], bra_fcircuit=circuits[i],
-                                    n_orbitals=mol.n_orbitals, n_ele=mol.n_electrons)
-                elif solver == "Qulacs":
+def BigExpVal(circuits:list[Union[QCircuit,FCircuit]], coefficcents:list[float], mol:QuantumChemistryBase, **kwargs) -> Objective:
+    n = len(circuits)
+    SS = 0.
+    EE = 0.
+    ferm = all([isinstance(circuits[i],FCircuit) for i in range(n)])
+    qub = all([isinstance(circuits[i],QCircuit) for i in range(n)])
+    if not ferm and not qub:
+        raise TequilaException("Mixture of Fermionic and Qubit Circuits provided, can't handle it.")
+    for i in range(n):
+        for j in range(n): #oder n ?
+            if ferm:
+                EE += (1*coefficcents[i])*(1*coefficcents[j])*Braket(ket=circuits[j], bra=circuits[i], mol=mol, operator="H")
+                SS += (1*coefficcents[i])*(1*coefficcents[j])*Overlap(ket=circuits[j], bra=circuits[i], mol=mol)
+            else:
+                if "H" in kwargs:
                     H = kwargs["H"]
-                    xEE = BraKetQulacs(circuits[i], circuits[j], H=H)
-                    xSS = BraKetQulacs(circuits[i], circuits[j], H=None)
+                    kwargs.pop("H")
                 else:
-                    raise ValueError("Unknown solver {}".format(solver))
-
-
-                EE += (1*coefficcents[i])*(1*coefficcents[j])*Objective(args=[xEE],transformation=identity)
-                SS += (1*coefficcents[i])*(1*coefficcents[j])*Objective(args=[xSS],transformation=identity)
-
-        self.SS:Objective = SS
-        self.EE:Objective = EE
-
-        variables = {}
-        for U in circuits:
-            variables = {**variables, **{x: 0.0 for x in U.extract_variables()}}
-
-        for c in coefficcents:
-            variables = {**variables, **{x: 0.0 for x in c.extract_variables()}}
-        self.variables = list(variables.keys())
-
-
-    def __call__(self, variables, *args, **kwargs):
-
-        assert len(variables) <= len(self.variables)
-        if self.solver == "Qulacs":
-            values = {self.variables[i]: variables[i] for i in range(len(self.variables))}
-        else:
-            values = {i: variables[i] for i in self.variables}
-
-        A = simulate(self.EE,values)
-        B = simulate(self.SS,values)
-
-        f=A.real
-        s=B.real
-        if np.isclose(s,0):
-            r = 1e5
-        else:
-            r = f/s
-
-        return r
-
-    def extract_variables(self):
-        return self.variables
-
-    def grad(self, variable: Variable = None, *args, **kwargs):
-
-        if variable is None:
-            # None means that all components are created
-            variables = deepcopy(self.extract_variables())
-            result = {}
-
-            if len(variables) == 0:
-                raise TequilaException("Error in gradient: Objective has no variables")
-
-            for k in variables:
-                assert k is not None
-                result[k] = self.grad(k)
-            return result
-        else:
-            variable = assign_variable(variable)
-        if variable not in self.extract_variables():
-            return 0.
-
-        top = grad(self.EE,variable)*self.SS - self.EE*grad(self.SS,variable)
-        bottom = self.SS ** 2
-
-        gradient = top/bottom
-
-        return gradient
+                    H = mol.make_hamiltonian()
+                EE += (1*coefficcents[i])*(1*coefficcents[j])*tqBraket(ket=circuits[i], bra=circuits[j], operator=H)
+                SS += (1*coefficcents[i])*(1*coefficcents[j])*tqOverlap(ket=circuits[i], bra=circuits[j])
+    f = lambda x:sign(x)*max(abs(x),1.e-6)
+    SS = SS.apply(f)
+    return EE/SS

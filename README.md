@@ -65,7 +65,7 @@ The package's specified installation command is erroneous and deploys the prior 
 ```bash
 pip install git+https://github.com/davibinco/TenCirChem-NG.git
 ```
-Note that the link above is not the original repo but our own fork, fixing [this bug](https://github.com/tensorcircuit/TenCirChem-NG/pull/4) until implemented on the code.
+Note that the link above is not the original repo but our own fork, fixing [this issue](https://github.com/tensorcircuit/TenCirChem-NG/pull/4) for parameter consistency with other backends. Furthermore, it has been extended to support excitations of more of 2 electrons. Furthermore, it has been customized to allow the phase gates action required to [sunrise/tequila gradient computation](https://arxiv.org/abs/2011.05938).
 
 ## Fermionic Circuit
 The FCircuit has been developed in order to preserve abstract fermionic layers. This circuit consists of two main parts, the `initial_state` and the circuit itself. The `initial_state` relies on a tequila `QubitWaveFunction`, whose states are checked to be particle conserving. It can be set through any way of creating a `tq.QubitWaveFunction`, either with a `FCircuit` or `QCircuit` with already mapped variables, or the options available in `QubitWaveFunction.convert_from()`. **It is important to take into account that both FQE and TCC work with `initial_states` in upthendown format, i.e., Reordered Jordan-Wigner, therefore we are keeping it here as mandatory**. In order to create the circuit itself, some gates have been already defined at sunrise.gates.
@@ -90,9 +90,9 @@ Finally, they can be employed in a similar way to tequila `QCircuit` or converte
 ```python
 U = ...
 # The expectation value object is explained below
-E = sun.Braket(U=U, backend='tcc', mol=mol)
-res = sun.minimize(E, silent=True)
-print(sun.simulate(U, variables=res.variables))
+E = sun.Braket(U=U, mol=mol)
+res = sun.minimize(E, silent=True, backend='tcc')
+print(sun.simulate(U, variables=res.variables, backend='spex'))
 print('Energy ', res.energy)
 print('Variables ', res.variables)
 opt = sun.optimize_orbitals(molecule=mol, circuit=U, backend='fqe', silent=True)
@@ -110,8 +110,8 @@ Fermionic Expectation Value, interface with FQE, TCC and TQ. Created in a simila
 
 ```python
 # If not specified, the default operator is the molecular Hamiltonian
-E = sun.Braket(molecule=mol, U=U, backend='tcc')
-ov = sun.Braket(bra=U1, ket=U2, operator='I', backend='fqe')
+E = sun.Braket(molecule=mol, U=U)
+ov = sun.Braket(bra=U1, ket=U2, operator='I')
 # It can also employ custom operators
 from openfermion import FermionOperator
 op = FermionOperator('0^ 1^ 1 0', 0.5)
@@ -161,9 +161,9 @@ U += molecule.make_excitation_gate(indices=[(0,4),(1,8)], angle=tq.Variable('a')
 # The molecular Hamiltonian for a given encoding is automatically built
 # For custom Hamiltonians please check tutorial above for the Fermionic Expectation Value
 H = molecule.make_hamiltonian()
-exp = tq.ExpectationValue(H=H, U=U) # Create the Expectation Value Object
+exp = sn.ExpectationValue(H=H, U=U) # Create the Expectation Value Object
 # Minimize the energy. You can provide initial variables
-mini = tq.minimize(objective=exp, silent=False, initial_values={}) 
+mini = sn.minimize(objective=exp, silent=False, initial_values={}, backend="spex") 
 print('Minimized Angles:\n', mini.angles)
 print('Minimized Energy: ', mini.energy)
 ```

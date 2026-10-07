@@ -594,7 +594,6 @@ class FCircuit:
         '''
         U = deepcopy(self)
         if molecule is not None:
-            assert molecule.transformation is not None
             res = QCircuit()
             U = U.to_udud(molecule.n_orbitals)
             molecule.transformation.upthendown = True
