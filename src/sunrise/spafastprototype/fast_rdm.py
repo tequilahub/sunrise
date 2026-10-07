@@ -7,7 +7,7 @@ from ._compute_rdms import compute_rdms, _assemble_rdm2, _assemble_rdm1
 
 
 def fast_rdm(U, mol, clusters, variables, test=False,backend='qulacs'):
-    """
+    r"""
     This function builds the 1-RDM and 2-RDM by exploiting the separability of 
     the circuit to speed up the procedure. 
 

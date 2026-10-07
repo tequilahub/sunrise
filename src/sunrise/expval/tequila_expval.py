@@ -2,10 +2,10 @@ from tequila import BraKet, ExpectationValue, Objective
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from openfermion import FermionOperator
 from .fermionic_braket import FermBraketImpl
-from sunrise.molecules.fermionic_base import FermionicBase
 from tequila.hamiltonian.paulis import from_string, I
 
 def TequilaBraket(braket:"FermBraketImpl", *args, **kwargs) -> Objective:
+    from sunrise.molecules.fermionic_base import FermionicBase
     mol = braket.molecule
     if isinstance(mol,FermionicBase):
         mol = QuantumChemistryBase(parameters=mol.parameters, transformation='REORDEREDJORDANWIGNER', integral_manager=mol.integral_manager)
