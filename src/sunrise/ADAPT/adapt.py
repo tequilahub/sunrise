@@ -48,12 +48,10 @@ class ObjectiveFactoryBase:
             elif isinstance(H, FermionOperator):
                 H = molecule.transformation(H)
         self.ferm = isinstance(molecule, FermionicBase) or isinstance(Upre, FCircuit) or isinstance(Upost, FCircuit)
-        if self.ferm:
-            Upre = FCircuit()
-            Upost = FCircuit()
-        else:
-            Upre = QCircuit()
-            Upost = QCircuit()
+        if Upre is None:
+            Upre = FCircuit() if self.ferm else QCircuit()
+        if Upost is None:
+            Upost = FCircuit() if self.ferm else QCircuit()
         self.H = H
         if Upre is not None:
             self.Upre = Upre
@@ -66,7 +64,7 @@ class ObjectiveFactoryBase:
     def __call__(self, U, screening=False, *args, **kwargs):
         if self.ferm:
             assert isinstance(U, FCircuit), f'FCircuit expected due to the solver initialization but {type(U)} received.'
-            return Braket(ket=U, operator=self.H, mol=self.molecule)
+            return Braket(ket=self.Upre + U + self.Upost, operator=self.H, mol=self.molecule)
         else:
             return ExpectationValue(H=self.H, U=self.Upre + U + self.Upost, *args, **kwargs)
 
@@ -111,6 +109,12 @@ class Adapt:
         ):
             self.parameters.optimizer_args["silent"] = True
 
+    def _has_upre(self):
+        Upre = getattr(self.objective_factory, "Upre", None)
+        if Upre is None:
+            return False
+        return len(Upre.gates) > 0 or getattr(Upre, "initial_state", None) is not None
+
     def __call__(self, static_variables=None, mp_pool=None, label=None, variables=None, *args, **kwargs):
         if not self.parameters.silent:
             print("Starting Adaptive Solver")
@@ -137,6 +141,9 @@ class Adapt:
         elif 'initial_state' in kwargs:
             U.initial_state = kwargs['initial_state']
             kwargs.pop('initial_state')
+        elif self._has_upre():
+            # Upre already prepares the reference, starting from it again would apply it twice
+            U = type(self.objective_factory.Upre)()
         elif hasattr(self.operator_pool, "initialize_circuit"):
             U = self.operator_pool.initialize_circuit()
         initial_objective = self.make_objective(U, variables=variables)
@@ -483,6 +490,8 @@ class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
         Qp = paulis.Qp(U.qubits)
         # get all overlaps  
         for i, Ux in enumerate(self.circuits):
+            # previous states share Upre/Upost, the stored circuits only hold the adaptive part
+            Ux = self.Upre + Ux + self.Upost
             if ferm:
                 S2 =  Fidelity(ket=circuit, bra=Ux, mol=self.molecule)
             else:
