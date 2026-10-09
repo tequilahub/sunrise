@@ -8,14 +8,13 @@ from tequila.objective.objective import Variable, Variables, ExpectationValue
 
 from tequila.simulators.simulator_api import simulate
 from tequila.utils import to_float
-from tequila.quantumchemistry.chemistry_tools import prepare_product_state, \
+from sunrise.molecules.qubit_base.chemistry_tools import prepare_product_state, \
     ParametersQC, NBodyTensor
-from tequila.quantumchemistry import optimize_orbitals
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase as qc_base
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as qc_base
 import typing, numpy
 from itertools import product
 from sunrise.molecules.hybrid_base.encodings import known_encodings
-from tequila.quantumchemistry.encodings import EncodingBase
+from sunrise.molecules.qubit_base.encodings import EncodingBase
 from sunrise.molecules.hybrid_base.FermionicGateImpl import FermionicGateImpl
 from openfermion import FermionOperator
 import copy
@@ -242,7 +241,7 @@ class HybridBase(qc_base):
         )
     
     def use_native_orbitals(self, inplace=False, core: list = None, *args, **kwargs):
-        """
+        r"""
         Parameters
         ----------
         inplace: update current molecule or return a new instance
@@ -278,20 +277,20 @@ class HybridBase(qc_base):
                 else:
                     if isinstance(core, int):
                         core = [core]
-                    active = get_active(c, d, s, [i.idx_total for i in self.integral_manager.active_orbitals])
+                    active = get_active(c, d, s, [i for i in range(len(self.integral_manager.orbitals)) if i not in core])
         assert len(active) + len(core) == len(self.integral_manager.orbitals)
         if "reference_orbitals" in kwargs:
             reference_orbitals = kwargs["reference_orbitals"]
-            kwargs.pop()
-            assert len(reference_orbitals) == len(self.parameters.total_n_electrons)//2,f'Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons//2}, received {len(reference_orbitals)}'
+            kwargs.pop("reference_orbitals")
+            assert len(reference_orbitals) == self.parameters.total_n_electrons//2,f'Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons//2}, received {len(reference_orbitals)}'
         else:
             reference_orbitals = [i.idx_total for i in self.integral_manager.reference_orbitals]
         to_active = [i for i in range(len(self.integral_manager.orbitals)) if i not in core]
         to_active = {active[i]: to_active[i] for i in range(len(active))}
         if len(core):
-            c_combined = numpy.zeros(shape=c.shape)
-            for i,idx in enumerate(core):
-                c_combined[:, i] = c[:, idx]
+            # keep the core orbitals at their own indices (`core` is passed as
+            # frozen_idx below) and only replace the active columns
+            c_combined = c.copy()
             for act_idx in active:
                 c_combined[:, to_active[act_idx]] = d[:, act_idx]
             coeff = orthogonalize_active_space(c_combined, s, core, [*to_active.values()])
@@ -300,8 +299,9 @@ class HybridBase(qc_base):
             if len(active) == len(self.select):
                 new_select = {i: self.select[i] for i in range(len(active))}
             else:
-                s = {i: self.select[i] for i in self.select.keys() if i not in core}
-                new_select = {i: s[[*s.keys()][i]] for i in range(len(s))}
+                # do not shadow `s` (the overlap integrals) - still needed below
+                remaining = {i: self.select[i] for i in self.select.keys() if i not in core}
+                new_select = {i: remaining[[*remaining.keys()][i]] for i in range(len(remaining))}
             if inplace:
                 self.integral_manager = self.initialize_integral_manager(
                     one_body_integrals=self.integral_manager.one_body_integrals,
@@ -882,70 +882,6 @@ class HybridBase(qc_base):
         else:
             warnings.warn("compute_rdms called with instruction to not compute?", TequilaWarning)
     
-    def optimize_orbitals(self,molecule, circuit:QCircuit=None, vqe_solver=None, pyscf_arguments=None, silent=False, vqe_solver_arguments=None, initial_guess=None, return_mcscf=False, use_hcb = False, molecule_factory=None,molecule_arguments=None ,restrict_to_active_space = True,*args, **kwargs):
-        """
-        Interface with tq.quantumchemistry.optimize_orbitals
-        Parameters
-        ----------
-        molecule: The tequila molecule whose orbitals are to be optimized
-        circuit: The circuit that defines the ansatz to the wavefunction in the VQE
-                 can be None, if a customized vqe_solver is passed that can construct a circuit
-        vqe_solver: The VQE solver (the default - vqe_solver=None - will take the given circuit and construct an expectationvalue out of molecule.make_hamiltonian and the given circuit)
-                    A customized object can be passed that needs to be callable with the following signature: vqe_solver(H=H, circuit=self.circuit, molecule=molecule, **self.vqe_solver_arguments)
-        pyscf_arguments: Arguments for the MCSCF structure of PySCF, if None, the defaults are {"max_cycle_macro":10, "max_cycle_micro":3} (see here https://pyscf.org/pyscf_api_docs/pyscf.mcscf.html)
-        silent: silence printout
-        vqe_solver_arguments: Optional arguments for a customized vqe_solver or the default solver
-                              for the default solver: vqe_solver_arguments={"optimizer_arguments":A, "restrict_to_hcb":False} where A holds the kwargs for tq.minimize
-                              restrict_to_hcb keyword controls if the standard (in whatever encoding the molecule structure has) Hamiltonian is constructed or the hardcore_boson hamiltonian
-        initial_guess: Initial guess for the MCSCF module of PySCF (Matrix of orbital rotation coefficients)
-                       The default (None) is a unit matrix
-                       predefined commands are
-                            initial_guess="random"
-                            initial_guess="random_loc=X_scale=Y" with X and Y being floats
-                            This initialized a random guess using numpy.random.normal(loc=X, scale=Y) with X=0.0 and Y=0.1 as defaults
-        return_mcscf: return the PySCF MCSCF structure after optimization
-        molecule_arguments: arguments to pass to molecule_factory or default molecule constructor | only change if you know what you are doing
-        molecule_factory: callable function creates the molecule class
-        args: just here for convenience
-        kwargs: just here for conveniece
-
-        Returns
-        -------
-            Optimized Tequila Hybrid Molecule
-        """
-        hybrid = hasattr(molecule,'select')
-        if molecule_arguments is None:
-            if hybrid:
-                molecule_arguments = {"select": molecule.select, "condense": molecule.condense,
-                                  "two_qubit": molecule.two_qubit,
-                                  "integral_tresh": molecule.integral_tresh,"parameters": molecule.parameters,
-                                  "transformation": molecule.transformation,"backend":'pyscf'}
-            else: molecule_arguments = {"parameters": molecule.parameters,"transformation": molecule.transformation,"backend":'pyscf'}
-        else:
-            if hybrid:
-                mol_args = {"select": molecule.select, "condense": molecule.condense,
-                                  "two_qubit": molecule.two_qubit,
-                                  "integral_tresh": molecule.integral_tresh,"parameters": molecule.parameters,
-                                  "transformation": molecule.transformation,"backend":'pyscf'}
-                mol_args.update(molecule_arguments)
-                molecule_arguments = mol_args
-        if molecule_factory is None:
-            result = optimize_orbitals(molecule=molecule, circuit=circuit, vqe_solver=vqe_solver,
-                                       pyscf_arguments=pyscf_arguments, silent=silent,
-                                       vqe_solver_arguments=vqe_solver_arguments,
-                                       initial_guess=initial_guess, return_mcscf=return_mcscf,
-                                       use_hcb=use_hcb, molecule_factory=HybridBase,
-                                       molecule_arguments=molecule_arguments, *args, **kwargs)
-        else:
-            result = optimize_orbitals(molecule=molecule, circuit=circuit, vqe_solver=vqe_solver,
-                                                           pyscf_arguments=pyscf_arguments, silent=silent,
-                                                           vqe_solver_arguments=vqe_solver_arguments,
-                                                           initial_guess=initial_guess, return_mcscf=return_mcscf,
-                                                           use_hcb=use_hcb, molecule_factory=molecule_factory,
-                                                           molecule_arguments=molecule_arguments, *args, **kwargs)
-        result.molecule = HybridBase(**molecule_arguments, integral_manager=result.molecule.integral_manager)
-        return result
-    
     def transform_orbitals(self, orbital_coefficients, ignore_active_space=False, name=None, *args, **kwargs):
         """
         Parameters
@@ -1139,7 +1075,7 @@ class HybridBase(qc_base):
                                   assume_real=assume_real, opt=opt, control=control, **kwargs))
 
     def make_excitation_generator(self, indices: typing.Iterable[typing.Tuple[int, int]], form: str = None, remove_constant_term: bool = True) -> QubitHamiltonian:
-        """
+        r"""
         Notes
         ----------
         Creates the transformed hermitian generator of UCC type unitaries:
@@ -1277,7 +1213,7 @@ class HybridBase(qc_base):
     
     def make_ansatz(self, name: str, *args, **kwargs) -> QCircuit:
         """
-        Automatically calls the right subroutines to construct ansatze implemented in tequila.chemistry
+        Automatically calls the right subroutines to construct ansatze implemented in sunrise.chemistry
         name: namne of the ansatz, examples are: UpCCGSD, UpCCD, SPA, UCCSD, SPA+UpCCD, SPA+GS
         """
         name = name.lower()
@@ -1696,7 +1632,7 @@ class HybridBase(qc_base):
             Returns
             -------
         """
-        from tequila import Molecule as mol
+        from sunrise.molecules.qubit_base import Molecule as mol
         c, h, g = self.get_integrals()
         BOS_L = self.BOS_MO
         NBOS_L = self.FER_MO

@@ -1,11 +1,12 @@
 # From https://iopscience.iop.org/article/10.1088/2058-9565/aca4ee/meta
 import tequila as tq
+import sunrise as sun
 import numpy as np
 from sunrise.orbital_correlation.density_matrix_utils import *
 from sunrise.orbital_correlation.quantum_info_utils import *
 
 ### Prove Eq.36 and Table 2
-mol = tq.Molecule("H 0 0 0\nH 0 0 0.7","sto-3g").use_native_orbitals()
+mol = sun.chemistry.Molecule("H 0 0 0\nH 0 0 0.7","sto-3g").use_native_orbitals()
 # Hartree-Fock state in atomic orbitals (Eq.35)
 HF = mol.prepare_reference() + mol.make_excitation_gate((0,2), -np.pi/2) + mol.make_excitation_gate((1,3), -np.pi/2)
 # Mutual information with subsystems (I)

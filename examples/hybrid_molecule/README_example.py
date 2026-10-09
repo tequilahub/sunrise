@@ -26,7 +26,7 @@ print('Minimized Energy: ', mini.energy)
 
 
 ### ORBITAL OPTIMIZATION
-result = molecule.optimize_orbitals(molecule=molecule,circuit=Uspa,initial_guess='random',silent=True) #Since random guess, may take some time
+result = sun.optimize_orbitals(molecule=molecule,circuit=Uspa,initial_guess='random',silent=True) #Since random guess, may take some time
 omol = result.molecule
 print("Opt SPA Energy = ",result.energy)
 print("Select: ",omol.select)

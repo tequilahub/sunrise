@@ -3,7 +3,7 @@ import warnings
 
 from tequila import TequilaWarning
 from .HybridBase import HybridBase
-from tequila.quantumchemistry.chemistry_tools import ParametersQC
+from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC
 
 SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf"] # , "psi4", "madness"
 INSTALLED_QCHEMISTRY_BACKENDS = {"base": HybridBase} #"madness": QuantumChemistryMadness

@@ -1,13 +1,12 @@
-from tequila.quantumchemistry import QuantumChemistryBase
+from sunrise.molecules.qubit_base import QuantumChemistryBase
 from sunrise.expval import Braket, Overlap
-from  tequila.objective.objective import Objective
-from tequila.objective.objective import Overlap as tqOverlap
-from tequila.objective.objective import BraKet as tqBraket
+from tequila import BraKet as tqBraket
+from tequila import Overlap as tqOverlap
 from tequila import TequilaException
 from typing import Union
 from tequila import QCircuit
 from sunrise import FCircuit
-from tequila import TequilaException
+from tequila import TequilaException, Objective
 from numpy import sign
 
 def BigExpVal(circuits:list[Union[QCircuit,FCircuit]], coefficcents:list[float], mol:QuantumChemistryBase, **kwargs) -> Objective:

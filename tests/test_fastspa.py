@@ -4,10 +4,10 @@ import sunrise as sn
 from numpy import isclose
 
 @pytest.mark.parametrize("geom",["H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2","O 0.00000 0.00000 0.11779\nH 0.00000 0.75545 -0.47116\nH 0.00000 -0.75545 -0.47116"])
-@pytest.mark.parametrize('nature',['tequila','hybrid'])
+@pytest.mark.parametrize('nature',['qubit','hybrid'])
 def test_fast_spa_opt(geom, nature):
-    tqmol = tq.Molecule(geometry=geom, basis_set='sto-3g', units='a')
-    snmol = tq.Molecule(geometry=geom, basis_set='sto-3g', units='a', nature=nature)
+    tqmol = sn.Molecule(geometry=geom, basis_set='sto-3g', units='a')
+    snmol = sn.Molecule(geometry=geom, basis_set='sto-3g', units='a', nature=nature)
 
     tqmol,tqedges = sn.CLPO.generate_CLPO_molecule_edges(mol=tqmol)
     snmol,snedges = sn.CLPO.generate_CLPO_molecule_edges(mol=snmol)
@@ -21,15 +21,15 @@ def test_fast_spa_opt(geom, nature):
     assert isclose(tqres.energy, snres.energy)
 
 @pytest.mark.parametrize("geom",["H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2","O 0.00000 0.00000 0.11779\nH 0.00000 0.75545 -0.47116\nH 0.00000 -0.75545 -0.47116"])
-@pytest.mark.parametrize('nature',['tequila','hybrid'])
-def test_fast_spa_orb_opt(geom, nature):
-    tqmol = tq.Molecule(geometry=geom, basis_set='sto-3g', units='a')
-    snmol = tq.Molecule(geometry=geom, basis_set='sto-3g', units='a', nature=nature)
+@pytest.mark.parametrize('nature',['qubit','hybrid'])
+def test_fast_spa_opt(geom, nature):
+    tqmol = sn.Molecule(geometry=geom, basis_set='sto-3g', units='a')
+    snmol = sn.Molecule(geometry=geom, basis_set='sto-3g', units='a', nature=nature)
 
     tqmol,tqedges = sn.CLPO.generate_CLPO_molecule_edges(mol=tqmol)
     snmol,snedges = sn.CLPO.generate_CLPO_molecule_edges(mol=snmol)
 
-    tqopt = tq.chemistry.optimize_orbitals(molecule=tqmol, circuit=tqmol.make_ansatz("HCB-SPA",edges=tqedges), silent=True, use_hcb=True)
+    tqopt = sn.optimize_orbitals(molecule=tqmol, circuit=tqmol.make_ansatz("HCB-SPA",edges=tqedges), silent=True, use_hcb=True)
     snopt = sn.SPAFP.run_spa(mol=snmol, edges=snedges, silent=True, initial_guess=False, grouping=4)
 
     assert isclose(tqopt.energy, snopt.energy)

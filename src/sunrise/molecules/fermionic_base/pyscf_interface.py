@@ -1,9 +1,9 @@
 from tequila import TequilaException, QubitWaveFunction
-from tequila.quantumchemistry import ParametersQC, NBodyTensor
+from sunrise.molecules.qubit_base import ParametersQC, NBodyTensor
 import pyscf
 from pyscf import fci
 from .fer_base import FermionicBase
-from tequila.quantumchemistry.chemistry_tools import OrbitalData
+from sunrise.molecules.qubit_base.chemistry_tools import OrbitalData
 
 import numpy
 import typing

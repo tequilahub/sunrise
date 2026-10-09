@@ -1,8 +1,8 @@
-from tequila import BraKet, Objective, ExpectationValue
-from tequila.hamiltonian.paulis import I, from_string
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from tequila import BraKet, ExpectationValue, Objective
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from openfermion import FermionOperator
 from .fermionic_braket import FermBraketImpl
+from tequila.hamiltonian.paulis import from_string, I
 
 def TequilaBraket(braket:"FermBraketImpl", *args, **kwargs) -> Objective:
     from sunrise.molecules.fermionic_base import FermionicBase

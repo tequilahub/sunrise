@@ -5,16 +5,16 @@ import numpy as np
 import openfermion as of
 import scipy
 
-HAS_PYSCF = "pyscf" in tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
-HAS_PSI4 = "psi4" in tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
+HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
+HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found")
-@pytest.mark.parametrize("backend",tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS)
+@pytest.mark.parametrize("backend",sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS)
 def test_hcb_measurement_linearH4_scenario2(backend):
     if backend in ('base', 'madness'):
         pytest.skip(f"{backend} not available")
     # Create the molecule
-    mol = tq.Molecule(geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5", basis_set="sto-3g", backend=backend).use_native_orbitals()
+    mol = sun.Molecule(geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5", basis_set="sto-3g", backend=backend).use_native_orbitals()
     H = mol.make_hamiltonian()
 
     # Create circuit
@@ -68,12 +68,12 @@ def test_hcb_measurement_linearH4_scenario2(backend):
     assert np.isclose(test_energy, energy, 10**-3)
 
 @pytest.mark.skipif(condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf/madness not found")
-@pytest.mark.parametrize("backend",tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS)
+@pytest.mark.parametrize("backend",sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS)
 def test_hcb_measurement_linearH4_scenario1(backend):
     if backend in ('base', 'madness'):
         pytest.skip(f"{backend} not available")
     # Create the molecule
-    mol = tq.Molecule(geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5", basis_set="sto-3g", backend=backend).use_native_orbitals()
+    mol = sun.Molecule(geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5", basis_set="sto-3g", backend=backend).use_native_orbitals()
     fci = mol.compute_energy("fci")
     H = mol.make_hamiltonian()
 

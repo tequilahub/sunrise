@@ -9,6 +9,10 @@ It holds no qubits, but only physical information, making it efficient for stora
 
 [Tequila](https://github.com/tequilahub) chemistry extension package.
 
+Sunrise also hosts the qubit-based quantum chemistry module (`sunrise.chemistry`, formerly
+`tequila.quantumchemistry`), which provides `Molecule`, `MoleculeFromOpenFermion` and
+`MoleculeFromTequila` together with the `base`, `psi4`, `pyscf` and `madness` backends.
+
 
 # Installation
 Sunrise is compatible with macOS and Linux operating systems. PySCF is not supported on Windows.
@@ -96,7 +100,7 @@ opt = sun.optimize_orbitals(molecule=mol, circuit=U, backend='fqe', silent=True)
 
 or compiled to qubit and being employed as in regular tequila:
 ```python
-mol = sun.Molecule(geometry=geom, basis_set='sto-3g', nature='tequila')
+mol = sun.Molecule(geometry=geom, basis_set='sto-3g', nature='qubit')
 U = U.to_qcircuit(mol)
 ```
 
@@ -212,7 +216,7 @@ geometry = """O 0.000000 0.000000 0.000000\n H 0.757000 0.586000 0.000000\nH -0.
 mol = sun.Molecule(geometry=geometry, basis_set='sto-3g',nature='h')
 sun.plot_MO(molecule=mol,filename="water")
 ```
-The cubefile generation may take some time. Here we provided a tq.Molecule but it also accepts any molecule class with mol.parameters and mol.integral_manager
+The cubefile generation may take some time. Here we provided a sun.Molecule but it also accepts any molecule class with mol.parameters and mol.integral_manager
 
 ##  Circuit Visualizer
 Improved circuit visualizer which creates the circuit qpic file with improved circuit structures in common chemistry building blocks as the electronic excitation gates. It creates gates in molecular orbitals picture, halving the number of qubits displayed.

@@ -4,7 +4,7 @@ from itertools import product
 import gc
 from typing import Any
 import tequila
-from tequila import Molecule
+from sunrise.molecules.qubit_base import Molecule
 import numpy
 from pandas import DataFrame
 from sunrise.symmetry_adaptation.irrep_provider import IrrepProviderBase

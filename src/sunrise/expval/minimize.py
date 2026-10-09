@@ -1,6 +1,6 @@
 from tequila.optimizers import minimize as tminimize
 import typing
-from tequila.objective.objective import Objective, Variable
+from tequila.objective.objective import Objective, Variable, assign_variable
 from tequila.circuit.noise import NoiseModel
 from tequila import TequilaException,QCircuit,QubitWaveFunction
 from tequila.objective import QTensor,format_variable_dictionary
@@ -21,7 +21,12 @@ def minimize(objective, method:str="bfgs", variables:list=None, initial_values:U
     elif "backend" in kwargs and kwargs["backend"] in INSTALLED_FERMIONIC_BACKENDS:
         fbackend = kwargs["backend"]
         kwargs.pop("backend")
-    else: fbackend = None
+    if "fermionic_backend" in kwargs:
+        fbackend = kwargs["fermionic_backend"]
+    elif "fermionic_backend" in kwargs and kwargs["fermionic_backend"] in INSTALLED_FERMIONIC_BACKENDS:
+        fbackend = kwargs["fermionic_backend"]
+        kwargs.pop("fermionic_backend")
+    else: fbackend = 'spex'
     if "backend" not in kwargs:
         kwargs["backend"] = None
     if hasattr(objective,'args') and any([type(arg).__name__ ==  "FermBraketImpl" for arg in objective.args]):
@@ -45,6 +50,10 @@ def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_com
         is contained within an ExpectationValue
     :return: an Objective, whose calculation yields the gradient of g w.r.t variable
     """
+    if isinstance(variable, (list, tuple)):
+        if len(variable) == 0:
+            raise TequilaException("Error in gradient: Objective has no variables")
+        return {assign_variable(k): grad(objective, k, no_compile, *args, **kwargs) for k in variable}
 
     if hasattr(objective,'args') and any([type(arg).__name__ == "FermBraketImpl" for arg in objective.args]):
         return tqgrad(objective=objective, variable=variable, no_compile=True, *args, **kwargs)

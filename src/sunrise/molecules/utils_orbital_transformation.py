@@ -1,7 +1,7 @@
 import numpy
 from typing import Tuple
 from copy import deepcopy
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.molecules.hybrid_base import HybridBase
 from sunrise.molecules.fermionic_base import FermionicBase
 

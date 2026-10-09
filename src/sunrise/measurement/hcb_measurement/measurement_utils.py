@@ -1,4 +1,5 @@
 import tequila as tq
+from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 import numpy as np
 
 class input_state:
@@ -110,7 +111,7 @@ def fold_rotators(mol, UR, *args, **kwargs):
     tg = np.einsum("ixkl, jx -> ijkl", tg, UR_matrix, optimize='greedy')
     tg = np.einsum("xjkl, ix -> ijkl", tg, UR_matrix, optimize='greedy')
 
-    tmol = tq.Molecule(parameters=mol.parameters, transformation=mol.transformation, n_electrons=mol.n_electrons,
+    tmol = QubitMolecule(parameters=mol.parameters, transformation=mol.transformation, n_electrons=mol.n_electrons,
                        nuclear_repulsion=c, one_body_integrals=th, two_body_integrals=tg, ordering='openfermion')
 
     return tmol
@@ -144,9 +145,9 @@ def get_hcb_part(mol):
                         res_g[i][j][k][l] = g.elems[i][j][k][l]
 
     # Create the HCB and residual molecule
-    hcb_mol = tq.Molecule(parameters=mol.parameters, transformation=mol.transformation, n_electrons=mol.n_electrons,
+    hcb_mol = QubitMolecule(parameters=mol.parameters, transformation=mol.transformation, n_electrons=mol.n_electrons,
                           nuclear_repulsion=c, one_body_integrals=hcb_h, two_body_integrals=hcb_g, ordering='openfermion')
-    res_mol = tq.Molecule(parameters=mol.parameters, transformation=mol.transformation, n_electrons=mol.n_electrons,
+    res_mol = QubitMolecule(parameters=mol.parameters, transformation=mol.transformation, n_electrons=mol.n_electrons,
                           nuclear_repulsion=0, one_body_integrals=res_h, two_body_integrals=res_g, ordering='openfermion')
 
     return hcb_mol, res_mol

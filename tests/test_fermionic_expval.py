@@ -12,7 +12,7 @@ HAS_TCC = 'tcc' in INSTALLED_FERMIONIC_BACKENDS
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_spa(geom,backend):
-    mol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner', units='a').use_native_orbitals()
+    mol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     edges = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='hybrid').get_spa_edges()
     U = mol.make_ansatz("SPA",edges=edges,optimize=False)
     circuit = sn.FCircuit.from_edges(edges=edges,n_orb=mol.n_orbitals)
@@ -30,7 +30,7 @@ def test_spa(geom,backend):
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_upccsd(geom,backend):
-    mol = tq.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner', units='a')
+    mol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner')
     U = mol.make_ansatz("UpCCSD")
     fmol = sn.Molecule(geometry=geom, basis_set='sto-3g', nature='fermionic')
     circuit = fmol.make_ansatz("UpCCSD")
@@ -43,7 +43,7 @@ def test_upccsd(geom,backend):
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_transition(backend):
     geom = 'H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.'
-    mol = tq.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner', units='a').use_native_orbitals()
+    mol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
     H = mol.make_hamiltonian()
     U1 = mol.make_ansatz("SPA", edges=[(0,1),(2,3)])
     U2 = mol.make_ansatz("SPA", edges=[(0,2),(1,3)])
@@ -61,9 +61,9 @@ def test_transition(backend):
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_mapped_variables(geom,backend):
     random.seed(datetime.now().timestamp())
-    mol = tq.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner', units='a').use_native_orbitals()
-    edges = sn.Molecule(geometry=geom, basis_set='sto-3g', nature='hybrid').get_spa_edges()
-    U = mol.make_ansatz("SPA", edges=edges, optimize=False)
+    mol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner').use_native_orbitals()
+    edges = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='hybrid').get_spa_edges()
+    U = mol.make_ansatz("SPA",edges=edges,optimize=False)
     mapa = {d:random.random()*np.pi for d in U.extract_variables()}
     U = U.map_variables(mapa)
     circuit = sn.FCircuit.from_edges(edges=edges, n_orb=mol.n_orbitals)
@@ -76,31 +76,26 @@ def test_mapped_variables(geom,backend):
 
 
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
-@pytest.mark.parametrize("use_hcb",[True,False])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
-def test_optimize_orbitals(geom,backend,use_hcb):
-    if backend == "tequila":
-        pytest.skip("Tequila backend requires a Qubit-based molecule")
+def test_optimize_orbitals(geom,backend):
     if backend == "fqe":
         pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f')
     snmol, edges = snmol.use_CLPO_orbitals_and_edges()
-    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner')
-    # same CLPO starting orbitals on the tequila side, so both optimizations start from the same point
+    tqmol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner')
     tqmol = sn.CLPO.generate_CLPO_molecule(tqmol)
     snU = snmol.make_ansatz('SPA',edges=edges)
     tqU = tqmol.make_ansatz('HCB-SPA',edges=edges)
-    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True,use_hcb=use_hcb)
-    tqopt = tq.chemistry.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True)
+    snopt = sn.optimize_orbitals(molecule=snmol,circuit=snU,backend=backend,silent=True)
+    tqopt = sn.optimize_orbitals(molecule=tqmol,circuit=tqU,use_hcb=True,silent=True)
     assert isclose(snopt.energy,tqopt.energy)
 
-#TODO: recursion limit problem on tequila, return when fixed
 @pytest.mark.parametrize("geom", ["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_overlap_minimization(geom,backend):
     if backend == "tequila":
         pytest.skip("Skipping tequila")
-    mol = tq.Molecule(geometry=geom, basis_set='sto-3g',transformation='reordered-jordan-wigner', units='a').use_native_orbitals()
+    mol = sn.Molecule(geometry=geom, basis_set='sto-3g',transformation='reordered-jordan-wigner', units='a').use_native_orbitals()
     H = mol.make_hamiltonian()
     U1 = mol.make_ansatz("SPA", edges=[(0, 1), (2, 3)])
     U2 = mol.make_ansatz("SPA", edges=[(0, 2), (1, 3)])
@@ -113,7 +108,7 @@ def test_overlap_minimization(geom,backend):
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_gradient(geom,backend):
-    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a').use_native_orbitals()
+    tqmol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a').use_native_orbitals()
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f').use_native_orbitals()
     random.seed(datetime.now().timestamp())
     tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=False)
@@ -130,7 +125,7 @@ def test_gradient(geom,backend):
 @pytest.mark.parametrize("geom",["H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8","H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"])
 @pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
 def test_circuit_simulate(geom,backend):
-    tqmol = tq.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a')
+    tqmol = sn.Molecule(geometry=geom,basis_set='sto-3g',transformation='reordered-jordan-wigner',units='a')
     snmol = sn.Molecule(geometry=geom,basis_set='sto-3g',nature='f')
     random.seed(datetime.now().timestamp())
     tqU = tqmol.make_ansatz('UpCCSD',hcb_optimization=False)
@@ -149,7 +144,7 @@ def test_tcc_backends_grandients(geom,backend):
     import tencirchem
     if not hasattr(tencirchem.utils.misc, "get_null_projector_active_mask"):
         pytest.skip("Main tcc installation detected, this test is only for our custom one.")
-    mol = tq.Molecule(geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner").use_native_orbitals()
+    mol = sn.Molecule(geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner").use_native_orbitals()
     snmol = sn.Molecule(geometry=geom, basis_set="sto-3g",nature='f').use_native_orbitals()
     H = mol.make_hamiltonian()
     tqO = tq.ExpectationValue(H=H,U=mol.make_ansatz('UpCCSD',hcb_optimization=False))

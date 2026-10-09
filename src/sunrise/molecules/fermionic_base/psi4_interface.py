@@ -2,10 +2,10 @@ from tequila import TequilaException, TequilaWarning
 
 from tequila.circuit import QCircuit
 from tequila.objective.objective import Variables
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
-from tequila.quantumchemistry.chemistry_tools import ClosedShellAmplitudes, Amplitudes
-from tequila.quantumchemistry import ParametersQC, NBodyTensor
-from tequila.quantumchemistry.chemistry_tools import ActiveSpaceData, OrbitalData
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+from sunrise.molecules.qubit_base.chemistry_tools import ClosedShellAmplitudes, Amplitudes
+from sunrise.molecules.qubit_base import ParametersQC, NBodyTensor
+from sunrise.molecules.qubit_base.chemistry_tools import ActiveSpaceData, OrbitalData
 
 import copy
 import numpy
@@ -729,7 +729,7 @@ class QuantumChemistryPsi4(FermionicBase):
         -------
             the f12 correction for the energy
         """
-        from tequila.quantumchemistry.f12_corrections._f12_correction_psi4 import ExplicitCorrelationCorrectionPsi4
+        from sunrise.molecules.qubit_base.f12_corrections._f12_correction_psi4 import ExplicitCorrelationCorrectionPsi4
 
         correction = ExplicitCorrelationCorrectionPsi4(
             mol=self,

@@ -5,7 +5,7 @@ import openfermion as of
 import scipy
 
 # Create the molecule
-mol = tq.Molecule(geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5", basis_set="sto-3g").use_native_orbitals()
+mol = sun.chemistry.Molecule(geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5", basis_set="sto-3g").use_native_orbitals()
 fci = mol.compute_energy("fci")
 H = mol.make_hamiltonian()
 

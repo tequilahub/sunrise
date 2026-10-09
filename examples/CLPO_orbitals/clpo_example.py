@@ -36,7 +36,7 @@ H -0.35993 -0.00000 -2.12298
 H 3.33365 -0.01193 -1.02751
 H 1.85521 0.00845 -2.12564'''
 
-mol = sn.Molecule(geometry=geometry, basis_set='sto-3g', backend='pyscf', nature='t')
+mol = sn.Molecule(geometry=geometry, basis_set='sto-3g', backend='pyscf', nature='q')
 
 # Replaced sn.CLPO.generate_HAO_molecule
 mol3 = generate_HAO_molecule(mol, silent=True)

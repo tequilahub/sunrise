@@ -7,7 +7,7 @@ from copy import deepcopy
 #Step 1: Molecule intialization
 n_atoms = 8
 geo = "".join([f'H 0. 0. {i}\n'.format(i) for i in range(n_atoms)])
-mol = tq.Molecule(geometry=geo,basis_set='sto-3g',backend='pyscf',units='a').use_native_orbitals()
+mol = sn.chemistry.Molecule(geometry=geo,basis_set='sto-3g',backend='pyscf',units='a').use_native_orbitals()
 
 # The first graph correspond to: H-H H-H H-H ...
 edges = [(2*i,2*i+1) for i in range(mol.n_orbitals//2)]

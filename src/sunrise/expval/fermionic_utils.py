@@ -1,7 +1,8 @@
 import openfermion
 from sympy.codegen.rewriting import powm1_opt
-from tequila import TequilaException,QCircuit,Objective,Molecule
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from tequila import TequilaException, QCircuit, Objective
+from sunrise.molecules.qubit_base import Molecule
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 import typing
 import numpy as np
 from sunrise.fermionic_operations.gates import *

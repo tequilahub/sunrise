@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from re import sub
 import tequila
-from tequila import Molecule
+from sunrise.molecules.qubit_base import Molecule
 import pandas as pd
 from itertools import groupby, combinations, product as iproduct
 import numpy

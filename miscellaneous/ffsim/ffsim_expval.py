@@ -1,9 +1,10 @@
 from ..fermionic_operations.circuit import FCircuit
-from tequila import TequilaException,Molecule,QubitWaveFunction,simulate,Variable,Objective,assign_variable,QubitHamiltonian
+from tequila import TequilaException,QubitWaveFunction,simulate,Variable,Objective,assign_variable,QubitHamiltonian
+from sunrise.molecules.qubit_base import Molecule
 from tequila import grad as tq_grad
 from tequila.objective.objective import Variables,FixedVariable
-from tequila.quantumchemistry.chemistry_tools import NBodyTensor
-from tequila.quantumchemistry import qc_base
+from sunrise.molecules.qubit_base.chemistry_tools import NBodyTensor
+from sunrise.molecules.qubit_base import qc_base
 from tequila.utils.bitstrings import BitString, BitNumbering
 from numbers import Number
 from numpy import ceil,argwhere,pi,prod,eye,zeros,isclose,allclose,ndarray,array,complex128,real,vdot
