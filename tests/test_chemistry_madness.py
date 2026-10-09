@@ -205,11 +205,10 @@ def test_madness_upccgsd(trafo):
 )
 def test_madness_pyscf_bridge():
     mol = sun.chemistry.Molecule(
-        name="balanced_be",
         geometry="Be 0.0 0.0 0.0",
         units="angstrom",
         n_pno=2,
-        pno={"diagonal": True, "maxrank": 1},
+        pno={"diagonal": True, "maxrank": 2},
     )
     H = mol.make_hamiltonian()
     e1 = numpy.linalg.eigvalsh(H.to_matrix())[0]
