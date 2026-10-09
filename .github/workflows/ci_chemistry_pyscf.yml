@@ -31,6 +31,5 @@ jobs:
         python -m pip install -e .
         cd tests
         ls
-        pytest test_adapt.py  -m "not dependencies"
-        pytest test_chemistry.py
+        pytest test_chemistry.py test_adapt.py  -m "not dependencies"
         cd ../
