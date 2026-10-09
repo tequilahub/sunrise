@@ -408,13 +408,12 @@ class TCCBraket:
         '''
         def from_string(operator:str):
             if operator.upper()=="I":
+                # identity as N/n_elec: exact on the fixed particle-number CI space
                 nmo = len(self.BK.aslst)
+                n_elec = int(np.sum(self.BK.n_elec))
                 self.BK.hamiltonian = None
-                self.BK.int1e = zeros((nmo,nmo))
-                int2e = zeros((nmo,nmo,nmo,nmo))
-                for i in range(nmo):
-                    int2e[i,i,i,i] = 1#0.5
-                self.BK.int2e = int2e
+                self.BK.int1e = eye(nmo) / n_elec
+                self.BK.int2e = zeros((nmo,nmo,nmo,nmo))
                 self.BK.e_core = 0.
                 self.BK.hamiltonian_lib = {}
             elif operator.upper() == "H":
@@ -425,6 +424,8 @@ class TCCBraket:
         if operator is None:
             return None
         if isinstance(operator,str):
+            if operator.upper()=="I":
+                return lambda ket: ket
             from_string(operator)
             return None
         elif isinstance(operator,FermionOperator):

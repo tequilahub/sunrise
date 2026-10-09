@@ -6,6 +6,7 @@ from tequila import (
     TequilaException,
     QCircuit,
     ExpectationValue,
+    paulis,
 )
 from tequila.apps.adapt import AdaptPoolBase
 import numpy
@@ -13,7 +14,7 @@ import dataclasses
 import warnings
 from itertools import combinations
 from tequila.apps.adapt.adapt import AdaptParameters
-from sunrise.expval import Braket
+from sunrise.expval import Braket, Fidelity
 from openfermion.ops.operators.fermion_operator import FermionOperator
 from sunrise import (
     grad,
@@ -46,8 +47,7 @@ class ObjectiveFactoryBase:
                 H = molecule.make_hardcore_boson_hamiltonian()
             elif isinstance(H, FermionOperator):
                 H = molecule.transformation(H)
-
-        self.ferm = isinstance(molecule, FermionicBase) 
+        self.ferm = isinstance(molecule, FermionicBase) or isinstance(Upre, FCircuit) or isinstance(Upost, FCircuit)
         if self.ferm:
             Upre = FCircuit()
             Upost = FCircuit()
@@ -66,7 +66,7 @@ class ObjectiveFactoryBase:
     def __call__(self, U, screening=False, *args, **kwargs):
         if self.ferm:
             assert isinstance(U, FCircuit), f'FCircuit expected due to the solver initialization but {type(U)} received.'
-            return Braket(ket=U, operator=self.H)
+            return Braket(ket=U, operator=self.H, mol=self.molecule)
         else:
             return ExpectationValue(H=self.H, U=self.Upre + U + self.Upost, *args, **kwargs)
 
@@ -83,17 +83,23 @@ class Adapt:
     parameters: AdaptParameters = AdaptParameters()
 
     def make_objective(self, U, variables=None, *args, **kwargs):
-        return self.objective_factory(U=U, variables=variables, *args, **{**self.parameters.compile_args, **kwargs})
+        return self.objective_factory(U=U, variables=variables, molecule=self.molecule, *args, **{**self.parameters.compile_args, **kwargs})
 
-    def __init__(self, operator_pool, H=None, objective_factory=None,backend=None, *args, **kwargs):
+    def __init__(self, operator_pool, H=None, objective_factory=None, backend=None, molecule=None, *args, **kwargs):
         """
         For the Default Adaptive Solver kwargs can contain Upre and Upost as described in:
         See out online tutorial for more information: https://github.com/tequilahub/tequila-tutorials
         """
         self.operator_pool = operator_pool
         self.backend = backend
+        self.molecule = molecule
+        if molecule is None:
+            if objective_factory is not None and hasattr(objective_factory,'molecule'):
+                self.molecule  = getattr(objective_factory,'molecule', None)
+            elif operator_pool is not None and hasattr(operator_pool,'molecule'):
+                self.molecule = getattr(operator_pool,'molecule', None)
         if objective_factory is None:
-            self.objective_factory = ObjectiveFactoryBase(H, *args, **kwargs)
+            self.objective_factory = ObjectiveFactoryBase(H, molecule=self.molecule, *args, **kwargs)
         else:
             self.objective_factory = objective_factory
         filtered = {k: v for k, v in kwargs.items() if k in self.parameters.__dict__}
@@ -281,7 +287,7 @@ class Adapt:
             dEs = [self.do_screening(arg) for arg in args]
         else:
             if not self.parameters.silent:
-                print("screen with {} workers".format(mp_pool._processes))
+                print(f"screen with {mp_pool._processes} workers")
             dEs = mp_pool.map(self.do_screening, args)
         dEs = dict(sorted(dEs, reverse=True, key=lambda x: numpy.fabs(x[1])))
         return dEs
@@ -328,15 +334,13 @@ class MolecularPool(AdaptPoolBase):
         if isinstance(indices, str):
             if "CC" not in indices.upper():
                 raise TequilaException(
-                    "Pool of type {} not yet supported.\nCreate your own by passing the initialized indices".format(
-                        indices
-                    )
+                    f"Pool of type {indices} not yet supported.\nCreate your own by passing the initialized indices"
                 )
 
-            generalized = True if "G" in indices.upper() else False
-            paired = True if "P" in indices.upper() else False
-            singles = True if "S" in indices.upper() else False
-            doubles = True if "D" in indices.upper() else False
+            generalized = "G" in indices.upper()
+            paired = "P" in indices.upper()
+            singles = "S" in indices.upper()
+            doubles = "D" in indices.upper()
 
             indices = []
             if doubles:
@@ -473,14 +477,14 @@ class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
         circuit = self.Upre + U + self.Upost
         ferm = isinstance(circuit, FCircuit) 
         if ferm:
-            objective = Braket(ket=circuit, operator=self.H)
+            objective = Braket(ket=circuit, operator=self.H, mol=self.molecule)
         else:
             objective = ExpectationValue(H=self.H, U=circuit)
-        Qp = FermionOperator(' '.join('{p} {p}^'.format(p=p) for p in U.qubits))
+        Qp = paulis.Qp(U.qubits)
         # get all overlaps  
         for i, Ux in enumerate(self.circuits):
             if ferm:
-                S2 =  Braket(ket=circuit + Ux.dagger(), operator=Qp)
+                S2 =  Fidelity(ket=circuit, bra=Ux, mol=self.molecule)
             else:
                 S2 = ExpectationValue(H=Qp, U=circuit + Ux.dagger())
             objective += numpy.abs(self.factors[i]) * S2

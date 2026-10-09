@@ -36,8 +36,11 @@ def test_molecular_example(nature):
     Upost = mol.make_excitation_gate(angle="a", indices=[(0, 2)])
     Upost += mol.make_excitation_gate(angle="a", indices=[(1, 3)])
     operator_pool = sun.ADAPT.MolecularPool(molecule=mol, indices="UpCCSD")
+    H = mol.make_hamiltonian()
+    if nature == "fermionic":
+        H = "H"
     solver = sun.ADAPT.Adapt(
-        H=mol.make_hamiltonian(), Upre=mol.prepare_reference(), Upost=Upost, operator_pool=operator_pool
+        H=H, Upre=mol.prepare_reference(), Upost=Upost, operator_pool=operator_pool,
     )
     result = solver(operator_pool=operator_pool, label=0)
     energy = mol.compute_energy('fci')
@@ -50,11 +53,13 @@ def test_molecular_excited_example(nature):
         mol.update_select("FF")
     H = mol.make_hamiltonian()
     if nature == "fermionic":
-        sparse_mat = openfermion.get_sparse_operator(H, n_qubits=2*mol.n_orbitals)
+        sparse_mat = openfermion.get_sparse_operator(H, n_qubits=2*mol.n_orbitals).toarray()
         eigenvalues, eigenvectors = numpy.linalg.eigh(sparse_mat)
+        n_qubits = 2*mol.n_orbitals
+        H = "H"
     else:
         eigenvalues, eigenvectors = numpy.linalg.eigh(H.to_matrix())
-    n_qubits = H.n_qubits
+        n_qubits = H.n_qubits
     reference_basis_state = 2 ** (n_qubits - 1) + 2 ** (n_qubits - 2)
     energies = []
     for i in range(len(eigenvalues)):
@@ -68,13 +73,12 @@ def test_molecular_excited_example(nature):
     for state in range(3):
         Upre = mol.prepare_reference()
         objective_factory = sun.ADAPT.ObjectiveFactorySequentialExcitedState(
-            Upre=mol.prepare_reference(), H=mol.make_hamiltonian(), circuits=circuits, factors=[100.0] * len(circuits)
+            Upre=Upre, H=H, circuits=circuits, factors=[100.0] * len(circuits), molecule=mol,
         )
         solver = sun.ADAPT.Adapt(
-            objective_factory=objective_factory, Upre=mol.prepare_reference(), operator_pool=operator_pool
+            objective_factory=objective_factory, Upre=Upre, operator_pool=operator_pool,
         )
         result = solver(operator_pool=operator_pool, label=state, static_variables=variables)
-        U = Upre + result.U
-        circuits.append(U)
+        circuits.append(result.U)
         variables = {**variables, **result.variables}
         assert numpy.isclose(result.energy, energies[state], atol=1.0e-4)

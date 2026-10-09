@@ -147,7 +147,7 @@ def test_orbital_types():
 )
 def test_transformations(trafo_args):
     geomstring = "H 0.0 0.0 0.0\nH 0.0 0.0 0.7"
-    molecule = sun.chemtry.Molecule(geometry=geomstring, units="angstrom", basis_set="sto-3g", **trafo_args)
+    molecule = sun.Molecule(geometry=geomstring, units="angstrom", basis_set="sto-3g", **trafo_args)
     gs = numpy.linalg.eigvalsh(molecule.make_hamiltonian().to_matrix())[0]
     assert numpy.isclose(gs, -1.1361894540879054)
 

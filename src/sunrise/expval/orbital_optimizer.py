@@ -92,13 +92,12 @@ def optimize_orbitals(
     """
 
     class solver:
-        def __init__(self, backend:str='spex', circuit:FCircuit=None):
+        def __init__(self, fernionic_backend:str='spex', backend:str=None, circuit:FCircuit=None):
+            self.fernionic_backend = fernionic_backend
             self.backend = backend
             self.U = circuit
         def __call__(self, H, circuit, molecule, **vqe_solver_arguments):
-            return minimize(Braket(molecule=molecule, circuit=circuit, operator="H"), backend=self.backend, **vqe_solver_arguments)
-
-    
+            return minimize(Braket(molecule=molecule, ket=circuit, operator="H"), fernionic_backend=self.fernionic_backend, backend=self.backend, **vqe_solver_arguments)
     if isinstance(molecule,HybridBase):
         use_hcb = False
         if molecule_arguments is None:
@@ -123,24 +122,33 @@ def optimize_orbitals(
             warnings.warn("Qcircuit detected but Fermionic Molecule provided. Converting the molecule to qubit_base with transformation = reordered-jordan-wigner")
         else:
             if "fermionic_backend" in kwargs:
-                backend = kwargs["fermionic_backend"]
+                fbackend = kwargs["fermionic_backend"]
+                kwargs.pop("fermionic_backend")
+            elif "fbackend" in kwargs:
+                fbackend = kwargs["fbackend"]
+                kwargs.pop("fbackend")
             else:
-                backend = INSTALLED_FERMIONIC_BACKENDS.keys()[0]
+                fbackend = "spex"
+            if "backend" in kwargs:
+                backend = kwargs["backend"]
+                kwargs.pop("backend")
+            else:
+                backend = None 
             if molecule_factory is None:
                 molecule_factory = FermionicBase
             molecule.fermionic_backend = backend
             if molecule_arguments is None:
-                molecule_arguments = {'fermionic_backend':backend,'parameters':molecule.parameters}
+                molecule_arguments = {"fermionic_backend" : fbackend, "parameters" : molecule.parameters}
             else: 
-                molecule_arguments['fermionic_backend']=backend
-                if 'parameters' not in molecule_arguments:
-                    molecule_arguments['parameters'] = molecule.parameters
+                molecule_arguments["fermionic_backend"] = fbackend
+                if "parameters" not in molecule_arguments:
+                    molecule_arguments["parameters"] = molecule.parameters
             if use_hcb:
                 if vqe_solver_arguments is None:
                     vqe_solver_arguments = {}
                 vqe_solver_arguments['restrict_to_hcb'] = True
             if vqe_solver is None:
-                vqe_solver = solver(backend=backend,circuit=circuit)
+                vqe_solver = solver(backend=backend,circuit=circuit, fernionic_backend=fbackend)
     else: #Plain Qubit molecule
         if isinstance(circuit,FCircuit):
             circuit = circuit.to_qcircuit(molecule=molecule)
