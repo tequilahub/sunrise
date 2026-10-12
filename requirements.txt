@@ -1,4 +1,4 @@
-tequila-basic
+tequila-basic @ git+https://github.com/davibinco/tequila.git@4daa4277403c12967192d96a31b47d71611d2cb9 # temporary: tequila PR #479
 numpy
 autograd
 openfermion ~= 1.0 # can not be smaller than 1.0
