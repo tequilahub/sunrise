@@ -18,14 +18,11 @@ from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS, SUPPORTED_FERMIONIC_BAC
 def minimize(objective, method:str="bfgs", variables:list=None, initial_values:Union[dict, Number, Callable]=0.0, maxiter:int=None, silent:bool=True, *args, **kwargs):
     if "fbackend" in kwargs:
         fbackend = kwargs["fbackend"]
+    elif "fermionic_backend" in kwargs:
+        fbackend = kwargs["fermionic_backend"]
     elif "backend" in kwargs and kwargs["backend"] in INSTALLED_FERMIONIC_BACKENDS:
         fbackend = kwargs["backend"]
         kwargs.pop("backend")
-    if "fermionic_backend" in kwargs:
-        fbackend = kwargs["fermionic_backend"]
-    elif "fermionic_backend" in kwargs and kwargs["fermionic_backend"] in INSTALLED_FERMIONIC_BACKENDS:
-        fbackend = kwargs["fermionic_backend"]
-        kwargs.pop("fermionic_backend")
     else: fbackend = 'spex'
     if "backend" not in kwargs:
         kwargs["backend"] = None

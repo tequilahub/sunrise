@@ -6,6 +6,8 @@ from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS,Braket
 from numpy import isclose
 import random
 from datetime import datetime
+from unittest import mock
+import sunrise.expval.minimize as sn_minimize
 
 HAS_TCC = 'tcc' in INSTALLED_FERMIONIC_BACKENDS
 
@@ -154,3 +156,25 @@ def test_tcc_backends_grandients(geom,backend):
     tqgrad = [np.real(tq.simulate(tq.grad(tqO, v), variables=point)) for v in variables]
     sngrad = [np.real(sn.simulate(sn.grad(snO, v), variables=point, backend='tcc', backend_kwargs={"engine":backend})) for v in variables]
     assert np.allclose(tqgrad, sngrad, atol=1.e-6)
+
+@pytest.mark.skipif(not HAS_TCC, reason="tcc not installed")
+@pytest.mark.parametrize("kwargs", [{"fbackend": "tcc"}, {"fermionic_backend": "tcc"}, {"backend": "tcc"}])
+def test_minimize_respects_fermionic_backend(kwargs):
+    # all fermionic backends give the same energy, so check the backend handed to compile
+    mol = sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8", basis_set='sto-3g', nature='f', backend='pyscf')
+    mol, edges = mol.use_CLPO_orbitals_and_edges()
+    U = mol.make_ansatz('SPA', edges=edges)
+    with mock.patch.object(sn_minimize, "compile", wraps=sn_minimize.compile) as compile_spy:
+        sn.minimize(Braket(molecule=mol, ket=U, operator="H"), maxiter=2, silent=True, **kwargs)
+    assert {c.kwargs.get("fbackend") or c.kwargs.get("backend") for c in compile_spy.call_args_list} == {"tcc"}
+
+@pytest.mark.skipif(not HAS_TCC, reason="tcc not installed")
+@pytest.mark.parametrize("kwargs", [{"fermionic_backend": "tcc"}, {"backend": "tcc"}])
+def test_optimize_orbitals_respects_fermionic_backend(kwargs):
+    mol = sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8", basis_set='sto-3g', nature='f', backend='pyscf')
+    mol, edges = mol.use_CLPO_orbitals_and_edges()
+    U = mol.make_ansatz('SPA', edges=edges)
+    with mock.patch.object(sn_minimize, "compile", wraps=sn_minimize.compile) as compile_spy:
+        sn.optimize_orbitals(molecule=mol, circuit=U, silent=True, pyscf_arguments={"max_cycle_macro": 1}, **kwargs)
+    # compile also takes the fermionic backend through `backend` (used for the RDMs)
+    assert {c.kwargs.get("fbackend") or c.kwargs.get("backend") for c in compile_spy.call_args_list} == {"tcc"}

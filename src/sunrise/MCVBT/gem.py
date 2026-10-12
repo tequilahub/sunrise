@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
 from sunrise.expval import Braket, Overlap
-from tequila.quantumchemistry import QuantumChemistryBase
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from tequila import BraKet as tqBraket
 from tequila import Overlap as tqOverlap
 from tequila.utils import to_float

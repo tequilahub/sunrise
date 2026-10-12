@@ -2,7 +2,7 @@ from typing import Union,List,Optional
 from openfermion.ops.operators.fermion_operator import FermionOperator
 from tequila import TequilaException, Objective
 from tequila.objective.objective import identity
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase #TODO modify when migrated
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.fermionic_operations.circuit import FCircuit
 from .fermionic_braket import FermBraketImpl
 from tequila import QTensor

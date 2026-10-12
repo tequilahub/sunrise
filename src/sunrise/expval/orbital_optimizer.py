@@ -92,12 +92,12 @@ def optimize_orbitals(
     """
 
     class solver:
-        def __init__(self, fernionic_backend:str='spex', backend:str=None, circuit:FCircuit=None):
-            self.fernionic_backend = fernionic_backend
+        def __init__(self, fermionic_backend:str='spex', backend:str=None, circuit:FCircuit=None):
+            self.fermionic_backend = fermionic_backend
             self.backend = backend
             self.U = circuit
         def __call__(self, H, circuit, molecule, **vqe_solver_arguments):
-            return minimize(Braket(molecule=molecule, ket=circuit, operator="H"), fernionic_backend=self.fernionic_backend, backend=self.backend, **vqe_solver_arguments)
+            return minimize(Braket(molecule=molecule, ket=circuit, operator="H"), fermionic_backend=self.fermionic_backend, backend=self.backend, **vqe_solver_arguments)
     if isinstance(molecule,HybridBase):
         use_hcb = False
         if molecule_arguments is None:
@@ -127,16 +127,20 @@ def optimize_orbitals(
             elif "fbackend" in kwargs:
                 fbackend = kwargs["fbackend"]
                 kwargs.pop("fbackend")
+            elif "backend" in kwargs and kwargs["backend"] in INSTALLED_FERMIONIC_BACKENDS:
+                # backward compatible: `backend` used to select the fermionic backend
+                fbackend = kwargs["backend"]
+                kwargs.pop("backend")
             else:
                 fbackend = "spex"
             if "backend" in kwargs:
                 backend = kwargs["backend"]
                 kwargs.pop("backend")
             else:
-                backend = None 
+                backend = None
             if molecule_factory is None:
                 molecule_factory = FermionicBase
-            molecule.fermionic_backend = backend
+            molecule.fermionic_backend = fbackend
             if molecule_arguments is None:
                 molecule_arguments = {"fermionic_backend" : fbackend, "parameters" : molecule.parameters}
             else: 
@@ -148,7 +152,7 @@ def optimize_orbitals(
                     vqe_solver_arguments = {}
                 vqe_solver_arguments['restrict_to_hcb'] = True
             if vqe_solver is None:
-                vqe_solver = solver(backend=backend,circuit=circuit, fernionic_backend=fbackend)
+                vqe_solver = solver(backend=backend,circuit=circuit, fermionic_backend=fbackend)
     else: #Plain Qubit molecule
         if isinstance(circuit,FCircuit):
             circuit = circuit.to_qcircuit(molecule=molecule)

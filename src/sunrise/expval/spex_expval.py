@@ -10,7 +10,7 @@ from openfermion import FermionOperator
 from numbers import Number
 from typing import Union, List, Callable
 from .fermionic_braket import FermBraketImpl
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase # TODO change when migrated
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 _ZERO_TOL = 1e-12
 
 
