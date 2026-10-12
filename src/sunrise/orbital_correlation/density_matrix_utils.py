@@ -1,7 +1,7 @@
 import tequila as tq
 from tequila import QCircuit,QubitWaveFunction,QubitHamiltonian
 from tequila.objective.objective import Variables
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase as tqMolecule
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as tqMolecule
 import numpy as np
 from scipy.linalg import logm, eigh
 import itertools

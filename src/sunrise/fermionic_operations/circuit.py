@@ -2,8 +2,8 @@ from __future__ import annotations
 from tequila.circuit._gates_impl import assign_variable
 from tequila.circuit.gates import QubitExcitationImpl,X,Phase
 from tequila import Variable,BitString,BitNumbering
-from tequila.quantumchemistry.chemistry_tools import FermionicGateImpl
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from sunrise.molecules.qubit_base.chemistry_tools import FermionicGateImpl
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from tequila.utils.exceptions import TequilaException, TequilaWarning
 from tequila import assign_variable,QCircuit,QubitWaveFunction
 from typing import List,Union,Iterable,Optional,Callable

@@ -3,7 +3,7 @@ from tequila.hamiltonian import QubitHamiltonian
 from tequila.hamiltonian.paulis import Sp, Sm, Zero
 from tequila.objective.objective import ExpectationValue
 from tequila.simulators.simulator_api import simulate
-from tequila.quantumchemistry import NBodyTensor
+from sunrise.molecules.qubit_base import NBodyTensor
 import warnings
 import numpy
 from itertools import product
@@ -470,7 +470,7 @@ def compute_rdms_tequila(self, U = None, variables = None, spin_free: bool = Tru
         raise TequilaException('Need to specify a Quantum Circuit.')
 
     def _get_hcb_op(op_tuple):
-        '''Build the hardcore boson operators: b^\dagger_ib_j + h.c. in qubit encoding '''
+        r'''Build the hardcore boson operators: b^\dagger_ib_j + h.c. in qubit encoding '''
         if (len(op_tuple) == 2):
             return 2 * Sm(op_tuple[0][0]) * Sp(op_tuple[1][0])
         elif (len(op_tuple) == 4):

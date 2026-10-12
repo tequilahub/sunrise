@@ -40,7 +40,7 @@ mixed_circuit.export_to("advanced_mixed_spin.pdf", show_spatial_orbitals=False)
 mixed_circuit.export_to("advanced_mixed_spatial.pdf", show_spatial_orbitals=True)
 
 # --- 4. Complex Raw Gates & Consecutive Merging ---
-mol_H2 = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1. ", basis_set="sto-3g")
+mol_H2 = sun.chemistry.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1. ", basis_set="sto-3g")
 raw_circuit = sun.FCircuit()
 
 # Consecutive raw gates merge into single generic boxes

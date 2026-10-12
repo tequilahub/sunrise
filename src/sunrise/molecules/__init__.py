@@ -1,10 +1,11 @@
 from tequila import TequilaException
+from sunrise.molecules import qubit_base
+from sunrise.molecules.qubit_base import Molecule as QubitMolecule, MoleculeFromOpenFermion, MoleculeFromTequila
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from .fermionic_base import FerMolecule
 from .hybrid_base import HyMolecule
-from tequila import Molecule as tqMolecule
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
 
-def Molecule(geometry: str = None,basis_set: str = None,nature: str = 'tequila',orbital_type: str = None,backend: str = None,guess_wfn=None,name: str = None,*args,**kwargs)->QuantumChemistryBase:
+def Molecule(geometry: str = None,basis_set: str = None,nature: str = 'qubit',orbital_type: str = None,backend: str = None,guess_wfn=None,name: str = None,*args,**kwargs)->QuantumChemistryBase:
     """
 
     Parameters
@@ -14,7 +15,7 @@ def Molecule(geometry: str = None,basis_set: str = None,nature: str = 'tequila',
     basis_set
         quantum chemistry basis set (sto-3g, cc-pvdz, etc)
     nature
-        Molecule type (tequila, hybrid, fermionic)
+        Molecule type (qubit, hybrid, fermionic); 'tequila' is kept as an alias for 'qubit'
     backend
         quantum chemistry backend (psi4, pyscf)
     guess_wfn
@@ -32,8 +33,8 @@ def Molecule(geometry: str = None,basis_set: str = None,nature: str = 'tequila',
     """
     if 'units' not in kwargs:
         kwargs['units'] = 'angstrom'
-    if nature.lower()=='tequila' or nature.lower()=='t':
-        return tqMolecule(geometry=geometry,basis_set=basis_set,orbital_type=orbital_type,backend=backend,guess_wfn=guess_wfn,name=name,*args,**kwargs)
+    if nature.lower() in ('qubit','q','tequila','t'):
+        return QubitMolecule(geometry=geometry,basis_set=basis_set,orbital_type=orbital_type,backend=backend,guess_wfn=guess_wfn,name=name,*args,**kwargs)
     elif nature.lower()=='hybrid' or nature.lower()=='h':
         if 'select' in kwargs:
             select = kwargs['select']
@@ -43,5 +44,5 @@ def Molecule(geometry: str = None,basis_set: str = None,nature: str = 'tequila',
     elif nature.lower()=='fermionic' or nature.lower()=='f':
         return FerMolecule(geometry=geometry,basis_set=basis_set,orbital_type=orbital_type,backend=backend,guess_wfn=guess_wfn,name=name,*args,**kwargs)
     else:
-        raise TequilaException(f"Molecule Nature not identified: {nature}. Only tequila, hybrid and fermionic allowed.")
+        raise TequilaException(f"Molecule Nature not identified: {nature}. Only qubit, hybrid and fermionic allowed.")
 

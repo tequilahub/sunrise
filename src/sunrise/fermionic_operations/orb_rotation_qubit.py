@@ -1,4 +1,5 @@
 import tequila as tq
+from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 from tequila import QCircuit,QTensor
 from numpy import zeros,eye,allclose,ndarray,array
 from typing import Union,List
@@ -24,7 +25,7 @@ class OrbitalRotation(QGateImpl):
             geom = ""
             for k in range(2 * (len(self.coeff) // 2 + 1)):
                 geom += f"h 0.0 0.0 {1.5 * k}\n"
-            dummy = tq.Molecule(geometry=geom, basis_set='sto-3g')
+            dummy = QubitMolecule(geometry=geom, basis_set='sto-3g')
             self.molecule = dummy
         else: self.molecule = molecule
         assert len(self.orbital) == len(self.coeff)

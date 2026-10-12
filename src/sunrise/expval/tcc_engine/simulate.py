@@ -1,7 +1,7 @@
 from tequila import Variable,Objective,simulate,QubitWaveFunction,TequilaWarning,BitNumbering
 from tequila.objective.objective import Variables
 from sunrise.fermionic_operations import FCircuit
-from tequila import Molecule
+from sunrise.molecules.qubit_base import Molecule
 import numpy as np
 from warnings import warn
 

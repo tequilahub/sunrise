@@ -7,5 +7,6 @@ pytest
 setuptools
 qpic
 pyscf
+# h5py <= 3.1
 janpa @ git+https://github.com/davibinco/janpa-py.git@main
 spex-tequila @ git+https://github.com/tequilahub/spex.git@main

@@ -1,6 +1,6 @@
 from tequila import TequilaException, QubitWaveFunction
 from .HybridBase import HybridBase
-from tequila.quantumchemistry import ParametersQC, NBodyTensor
+from sunrise.molecules.qubit_base import ParametersQC, NBodyTensor
 import pyscf
 from pyscf import fci
 

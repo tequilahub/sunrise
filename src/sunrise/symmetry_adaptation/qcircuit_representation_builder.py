@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from numpy.typing import NDArray
-from tequila import Molecule
+from sunrise.molecules.qubit_base import Molecule
 import tequila
 import numpy
 from .point_group import PointGroup, PointGroupRepresentation

@@ -11,8 +11,8 @@ from numbers import Number
 from pyscf import scf, mp
 from pyscf.tools import molden as pyscf_molden
 
-from tequila.quantumchemistry.pyscf_interface import QuantumChemistryPySCF
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase
+from sunrise.molecules.qubit_base.pyscf_interface import QuantumChemistryPySCF
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from tequila import TequilaException
 
 from sunrise import from_tequila

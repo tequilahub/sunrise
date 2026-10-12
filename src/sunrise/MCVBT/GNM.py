@@ -3,18 +3,16 @@ from copy import deepcopy
 import tequila as tq
 import numpy as np
 from sunrise.MCVBT.gem import gem_fast
-from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS
+from sunrise.molecules.qubit_base import QuantumChemistryBase
 from sunrise.molecules.fermionic_base import FermionicBase
-from tequila.quantumchemistry import QuantumChemistryBase
-from tequila import TequilaWarning, QCircuit, TequilaException
-from tequila import SUPPORTED_BACKENDS
 import sunrise as sn
 from sunrise.MCVBT.Big_Exp import BigExpVal
 from sunrise.expval import Braket
 from typing import Dict
 import csv
 import os
-
+from tequila import SUPPORTED_BACKENDS, TequilaException, TequilaWarning, QCircuit
+from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS
 
 class mcvbt:
 

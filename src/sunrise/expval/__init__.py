@@ -2,7 +2,7 @@ from typing import Union,List,Optional
 from openfermion.ops.operators.fermion_operator import FermionOperator
 from tequila import TequilaException, Objective
 from tequila.objective.objective import identity
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase #TODO modify when migrated
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.fermionic_operations.circuit import FCircuit
 from .fermionic_braket import FermBraketImpl
 from tequila import QTensor
@@ -62,7 +62,7 @@ def Fidelity(ket: FCircuit, bra: FCircuit, mol : Optional[QuantumChemistryBase] 
     A tq.Objective that evaluated to the fidelity between the two states
 
     """
-    return Objective(args=[Braket(ket=ket, bra=bra, molecule=mol, operator=None, *args, **kwargs).args[0]], transformation=lambda x: abs(x)**2)
+    return Objective(args=[Braket(ket=ket, bra=bra, molecule=mol, operator='I', *args, **kwargs).args[0]], transformation=lambda x: abs(x)**2)
 
 def Overlap(ket : FCircuit, bra : FCircuit, mol : Optional[QuantumChemistryBase] = None, *args, **kwargs) -> Objective:
     """

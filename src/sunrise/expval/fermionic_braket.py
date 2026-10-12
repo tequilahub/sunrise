@@ -4,7 +4,7 @@ from openfermion.ops.operators.fermion_operator import FermionOperator
 from tequila import TequilaException, Objective, assign_variable
 from tequila import grad as tqgrad
 from tequila.objective.objective import Variable, identity, FixedVariable
-from tequila.quantumchemistry.qc_base import QuantumChemistryBase #TODO modify when migrated
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.fermionic_operations.fgateimpl import FGateImpl
 from sunrise.fermionic_operations.gates import FermionicExcitation

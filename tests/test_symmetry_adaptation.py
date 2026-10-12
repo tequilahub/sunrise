@@ -6,7 +6,7 @@ import pytest
 from sunrise.symmetry_adaptation import PointGroup, QCircuitRepresentationBuilder, FockSpaceState, IrrepProvider, SymmetryAdaptedLinearCombintationSymmetrization, SpinSymmetrizationProcedure, SpinCGSymmetrizationProcedure
 
 
-HAS_PYSCF = "pyscf" in tq.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
+HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 
 molecule_pointgroup_list: list[tuple[str, str]] = [
 	("D2h", "H 0. 0. 0. \n H 0. 0. 0.74804"),
@@ -33,7 +33,7 @@ def test_point_group_correctness() -> None:
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
 def test_representation_builder(molecule_pointgroup) -> None:
-	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
+	mol = sun.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
 	pg = PointGroup.from_pyscf(molecule_pointgroup[0])
 	provider_canonical = IrrepProvider(mol, pg, "canon")
 	states = FockSpaceState.non_ionic_states(mol, provider_canonical)
@@ -63,7 +63,7 @@ def test_representation_builder(molecule_pointgroup) -> None:
 # as imported from pyscf in its AO permutation representation
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_representation_builder_correctness() -> None:
-	mol = tq.Molecule(geometry="H 1. -1. 0. \n H 1. 1. 0. \n H -1. 1. 0. \n H -1. -1. 0.",basis_set='sto-3g', backend="pyscf")
+	mol = sun.Molecule(geometry="H 1. -1. 0. \n H 1. 1. 0. \n H -1. 1. 0. \n H -1. -1. 0.",basis_set='sto-3g', backend="pyscf")
 	pg = PointGroup.from_pyscf("D2h")
 	rep_ao = QCircuitRepresentationBuilder(mol, pg).build_ao_permutation_representation()
 
@@ -78,7 +78,7 @@ def test_representation_builder_correctness() -> None:
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
 def test_spin_symmetrization(molecule_pointgroup) -> None:
-	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
+	mol = sun.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf(molecule_pointgroup[0])
 
 	provider_canonical = IrrepProvider(mol, pg, "canon")
@@ -93,7 +93,7 @@ def test_spin_symmetrization(molecule_pointgroup) -> None:
 # Statically tests the values for H2 with canonical MOs
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_spin_symmetrization_correctness() -> None:
-	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
+	mol = sun.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("D2h")
 	provider_canonical = IrrepProvider(mol, pg, "canon")
 	states_list = FockSpaceState.non_ionic_states(mol, provider_canonical)
@@ -119,7 +119,7 @@ def test_spin_symmetrization_correctness() -> None:
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
 def test_SALC_symmetrization(molecule_pointgroup) -> None:
-	mol = tq.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
+	mol = sun.Molecule(geometry=molecule_pointgroup[1],basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf(molecule_pointgroup[0])
 
 	provider_localized = IrrepProvider(mol, pg, "loc")
@@ -133,7 +133,7 @@ def test_SALC_symmetrization(molecule_pointgroup) -> None:
 # Statically tests the values for H2 with localized MOs
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_SALC_symmetrization_correctness() -> None:
-	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf").use_native_orbitals()
+	mol = sun.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf").use_native_orbitals()
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("D2h")
 
 	provider_localized = IrrepProvider(mol, pg, "loc")
@@ -159,7 +159,7 @@ def test_SALC_symmetrization_correctness() -> None:
 # Tests fragment state generation (subset of orbitals treated as an open-shell fragment)
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_fragment_states() -> None:
-	mol = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.", basis_set='sto-3g', backend="pyscf")
+	mol = sun.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.", basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf("D2h")
 	provider = IrrepProvider(mol, pg, "loc")
 
@@ -185,7 +185,7 @@ def test_fragment_states() -> None:
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
 def test_spin_CG_symmetrization(molecule_pointgroup) -> None:
-	mol = tq.Molecule(geometry=molecule_pointgroup[1], basis_set='sto-3g', backend="pyscf")
+	mol = sun.Molecule(geometry=molecule_pointgroup[1], basis_set='sto-3g', backend="pyscf")
 	pg = sun.symmetry_adaptation.PointGroup.from_pyscf(molecule_pointgroup[0])
 	provider_canonical = IrrepProvider(mol, pg, "canon")
 
@@ -206,13 +206,13 @@ def test_spin_CG_symmetrization(molecule_pointgroup) -> None:
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_spin_CG_build_physical_state_correctness() -> None:
 	# H2: O_{2,1}^{0,0} singlet (Eq A1)
-	mol2 = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1.", basis_set='sto-3g', backend="pyscf")
+	mol2 = sun.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1.", basis_set='sto-3g', backend="pyscf")
 	cg2 = SpinCGSymmetrizationProcedure(mol2)
 	s = cg2.build_physical_state(open_shell_orbitals=[0, 1], S=0, m_s=0, coupling="singlet")
 	assert abs(s.S2) < 1e-6 and s.spin_multiplicity == "singlet"
 
 	# H4: O_{4,2}^{0,0} two singlet pairs (Eq A4)
-	mol4 = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.",
+	mol4 = sun.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.",
 					   basis_set='sto-3g', backend="pyscf")
 	cg4 = SpinCGSymmetrizationProcedure(mol4)
 	pairs = cg4.build_physical_state(open_shell_orbitals=[0, 1, 2, 3], S=0, m_s=0, coupling="singlet_pairs")
@@ -220,7 +220,7 @@ def test_spin_CG_build_physical_state_correctness() -> None:
 	assert all(abs(o - 1.0) < 1e-6 for o in pairs.mo_occ)
 
 	# H6: O_{6,1}^{0,0} two quartets -> singlet via Hund's rule (Eq A6)
-	mol6 = tq.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3. \n H 0. 0. 4. \n H 0. 0. 5.",
+	mol6 = sun.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3. \n H 0. 0. 4. \n H 0. 0. 5.",
 					   basis_set='sto-3g', backend="pyscf")
 	cg6 = SpinCGSymmetrizationProcedure(mol6)
 	n2 = cg6.build_physical_state(

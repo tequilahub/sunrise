@@ -1,6 +1,7 @@
 import numpy
 import time
 import tequila as tq
+from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 from .decompose import decompose
 
 def tqcomp(*args, **kwargs):
@@ -83,7 +84,7 @@ def fast_qtensor(qtensor, variables, do_decompose=False, evaluate=True,grouping:
 
 if __name__ == "__main__":
 
-    mol = tq.Molecule(geometry="Be 0.0 0.0 0.0", basis_set="sto-3g")
+    mol = QubitMolecule(geometry="Be 0.0 0.0 0.0", basis_set="sto-3g")
     U = mol.make_ansatz(name="UpCCGSD")
     H = mol.make_hamiltonian()
     E = tq.ExpectationValue(H=H, U=U)

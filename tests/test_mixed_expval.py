@@ -15,10 +15,10 @@ def test_mixed_objective(backend, braket, same_variables):
     geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
     snmol = sn.Molecule(geometry=geom, basis_set='sto-3g', nature='f').use_native_orbitals()
     # qubit version of snmol, for the tequila reference of the sunrise term
-    refmol = tq.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
+    refmol = sn.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
     # different geometry for the tequila term, so that mixing up the two Hamiltonians would be noticed
     tqgeom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
-    tqmol = tq.Molecule(geometry=tqgeom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
+    tqmol = sn.Molecule(geometry=tqgeom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
 
     edges = {"bra": [(0, 1), (2, 3)], "ket": [(0, 2), (1, 3)]}
     snU = {k: sn.FCircuit.from_edges(edges=e, n_orb=snmol.n_orbitals) for k, e in edges.items()}
@@ -55,9 +55,9 @@ def test_mixed_objective_minimize(backend, same_variables):
     # more than 10 minutes per case on tequila PR #472 (gradients through the ancilla decomposition)
     geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
     snmol = sn.Molecule(geometry=geom, basis_set='sto-3g', nature='f').use_native_orbitals()
-    refmol = tq.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
+    refmol = sn.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
     tqgeom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
-    tqmol = tq.Molecule(geometry=tqgeom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
+    tqmol = sn.Molecule(geometry=tqgeom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
 
     edges = [(0, 2), (1, 3)]
     snU = sn.FCircuit.from_edges(edges=edges, n_orb=snmol.n_orbitals)
@@ -84,7 +84,7 @@ def test_mixed_objective_complex(backend):
     # an Rz on the ket gives the tequila braket an imaginary part, so the mixed objective is complex
     geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
     snmol = sn.Molecule(geometry=geom, basis_set='sto-3g', nature='f').use_native_orbitals()
-    tqmol = tq.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
+    tqmol = sn.Molecule(geometry=geom, basis_set='sto-3g', transformation='reordered-jordan-wigner').use_native_orbitals()
     H = tqmol.make_hamiltonian()
 
     edges = {"bra": [(0, 1), (2, 3)], "ket": [(0, 2), (1, 3)]}

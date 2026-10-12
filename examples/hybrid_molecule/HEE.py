@@ -1,5 +1,5 @@
 import sunrise as sn
-from tequila.quantumchemistry.chemistry_tools import NBodyTensor
+from sunrise.molecules.qubit_base.chemistry_tools import NBodyTensor
 import numpy as np
 import subprocess
 try:
