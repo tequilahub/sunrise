@@ -185,7 +185,7 @@ Please, note that the present example can be found in the test file.
 ## Orbital Hybridization
 Automated framework for the generation of ansatz-specific optimized molecular orbitals. Given the Molecule Geometry 
 it identifies atomic hybridization states in order to construct an orbital coefficient matrix and generate a edge 
-list of electron pairings and bond assignments. Currently only implemented with Sunrise Molcules (nature = 'hybrid' and 'fermionic')
+list of electron pairings and bond assignments. Available for all Sunrise Molecules (nature = 'qubit', 'hybrid' and 'fermionic')
 ```python
 import sunrise as sun
 import tequila as tq
