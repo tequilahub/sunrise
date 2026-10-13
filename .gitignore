@@ -235,3 +235,5 @@ erik/*
 # scratch files written by the chemistry tests (psi4/pyscf/madness)
 *.hdf5
 *.out
+*.clean
+timer.dat

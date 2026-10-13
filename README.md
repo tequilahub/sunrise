@@ -10,8 +10,9 @@ It holds no qubits, but only physical information, making it efficient for stora
 [Tequila](https://github.com/tequilahub) chemistry extension package.
 
 Sunrise also hosts the qubit-based quantum chemistry module (`sunrise.chemistry`, formerly
-`tequila.quantumchemistry`), which provides `Molecule`, `MoleculeFromOpenFermion` and
-`MoleculeFromTequila` together with the `base`, `psi4`, `pyscf` and `madness` backends.
+`tequila.quantumchemistry`), which provides `Molecule` together with the `base`, `psi4`, `pyscf`
+and `madness` backends. `MoleculeFromSunrise`, `MoleculeFromOpenFermion`, `MoleculeFromPyscf` and
+`MoleculeToPyscf` are in `sunrise.molecules`.
 
 
 # Installation

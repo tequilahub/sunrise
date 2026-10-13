@@ -10,7 +10,7 @@ from numbers import Number
 from numpy import ceil,argwhere,pi,prod,eye,zeros,isclose,allclose,ndarray,array,complex128,real,vdot
 from pyscf.gto import Mole
 from pyscf.scf import RHF
-from sunrise.expval.pyscf_molecule import from_tequila
+from sunrise.molecules import MoleculeToPyscf
 from copy import deepcopy
 from typing import Union,List,Tuple,Callable
 from collections import defaultdict

@@ -222,9 +222,13 @@ class QuantumChemistryBase:
         -------
             The Tequila molecule
         """
+        geometry = molecule.geometry
+        if not isinstance(geometry, str):
+            # openfermion usually stores the geometry as a list of (atom, (x, y, z)), ParametersQC expects a string
+            geometry = "\n".join("{} {} {} {}".format(atom, *coordinates) for atom, coordinates in geometry)
         parameters = ParametersQC(
             basis_set=molecule.basis,
-            geometry=molecule.geometry,
+            geometry=geometry,
             units="angstrom",
             description=molecule.description,
             multiplicity=molecule.multiplicity,

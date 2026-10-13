@@ -15,7 +15,7 @@ from sunrise.molecules.qubit_base.pyscf_interface import QuantumChemistryPySCF
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from tequila import TequilaException
 
-from sunrise import from_tequila
+from sunrise import MoleculeToPyscf
 from sunrise.molecules.utils_orbital_transformation import transform, orthogonalize
 
 from janpa.io.molden import MoldenFile
@@ -121,7 +121,7 @@ def generate_CLPO_molecule_edges(mol: QuantumChemistryBase, edges: list = None, 
     if output_dir is None:
         output_dir = os.getcwd()
         
-    pfmol = from_tequila(mol)
+    pfmol = MoleculeToPyscf(mol)
     mf_full = scf.RHF(pfmol).run()
     
     custom_edges = None
@@ -166,7 +166,7 @@ def generate_HAO_molecule(mol: QuantumChemistryBase, output_dir: str = None, thr
     if output_dir is None:
         output_dir = os.getcwd()
         
-    pfmol = from_tequila(mol)
+    pfmol = MoleculeToPyscf(mol)
     mf_full = scf.RHF(pfmol).run()
     
     ret2act = kwargs.get('to_active', False)

@@ -11,7 +11,7 @@ from sunrise.expval import Braket, INSTALLED_FERMIONIC_BACKENDS
 from sunrise.expval.minimize import minimize
 from sunrise.molecules.fermionic_base.fer_base import FermionicBase
 from sunrise.molecules.hybrid_base.HybridBase import HybridBase
-from sunrise.molecules.qubit_base import MoleculeFromTequila
+from sunrise.molecules import MoleculeFromSunrise
 from typing import Union
 
 """
@@ -118,7 +118,7 @@ def optimize_orbitals(
             molecule_factory = HybridBase
     elif isinstance(molecule,FermionicBase):
         if isinstance(circuit,QCircuit):
-            molecule = MoleculeFromTequila(mol=molecule, transformation='reordered-jordan-wigner')
+            molecule = MoleculeFromSunrise(mol=molecule, transformation='reordered-jordan-wigner')
             warnings.warn("Qcircuit detected but Fermionic Molecule provided. Converting the molecule to qubit_base with transformation = reordered-jordan-wigner")
         else:
             if "fermionic_backend" in kwargs:

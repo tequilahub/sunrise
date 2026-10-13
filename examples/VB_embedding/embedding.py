@@ -192,13 +192,13 @@ def orbital_refinement():
     
     ## For this particular case the following block of code doesn't matter
     ## But pyscf uses spherical coordinates meanwhile madness does on cartesians, important for d shells and further
-    mol_sph = sn.from_tequila(mol,cart=False)
+    mol_sph = sn.MoleculeToPyscf(mol,cart=False)
     c2s = mol_sph.cart2sph_coeff(normalized='sp') 
     mo_coeff_cart_pyscf_order = np.dot(c2s, mol.integral_manager.orbital_coefficients)
 
     ## A further issue is the shell ordering, pyscf orders by angular momentum (l) (first all s orbs, then all p...) 
     ## meanwhile madness does following natural filling: (...  3s 3p 3d (if populated) 4s 4p)
-    mol_cart = sn.from_tequila(mol,cart=True)
+    mol_cart = sn.MoleculeToPyscf(mol,cart=True)
     pyscf_labels = mol_cart.ao_labels()
     indexed_labels = list(enumerate(pyscf_labels))
     sorted_labels = sorted(indexed_labels, key=get_madness_sort_key)

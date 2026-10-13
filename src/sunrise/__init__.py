@@ -2,8 +2,7 @@ from sunrise import molecules
 from sunrise.molecules import qubit_base
 from sunrise.molecules import qubit_base as chemistry  # shortcut
 from sunrise.molecules import qubit_base as quantumchemistry  # backward compatible shortcut
-from sunrise.molecules import Molecule
-from sunrise.molecules.qubit_base import MoleculeFromOpenFermion, MoleculeFromTequila
+from sunrise.molecules import Molecule, MoleculeFromOpenFermion, MoleculeFromSunrise, MoleculeFromPyscf, MoleculeToPyscf
 from sunrise.molecules.qubit_base import QuantumChemistryBase, ParametersQC, NBodyTensor
 from sunrise.plot_MO import plot_MO
 from sunrise.graphical.qpic_visualization import qpic_to_pdf,qpic_to_png
@@ -15,7 +14,6 @@ from sunrise.utils.bar import giuseppe_bar
 from sunrise.expval import Braket,show_available_modules,show_supported_modules
 from sunrise.fermionic_operations import gates
 from sunrise.fermionic_operations.circuit import FCircuit
-from sunrise.expval.pyscf_molecule import from_tequila,MoleculeFromPyscf
 from sunrise.expval.minimize import grad,minimize,simulate
 from sunrise.expval.orbital_optimizer import optimize_orbitals
 from sunrise import graphical

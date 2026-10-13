@@ -533,7 +533,7 @@ def test_pyscf_methods(method, geometry, basis_set):
     mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, backend="psi4")
 
     e1 = mol.compute_energy(method=method)
-    mol = sun.MoleculeFromTequila(mol=mol, backend="pyscf")
+    mol = sun.MoleculeFromSunrise(mol=mol, backend="pyscf")
 
     e2 = mol.compute_energy(method)
     assert numpy.isclose(e1, e2, atol=1.0e-4)
@@ -952,7 +952,7 @@ def test_hcb_rdms(geometry, optimize):
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
 @pytest.mark.parametrize("geometry", ["Li 0.0 0.0 0.0\nH 0.0 0.0 3.0", "Be 0.0 0.0 0.0\nH 0.0 0.0 3.0\nH 0.0 0.0 -3.0"])
 def test_orbital_optimization_hcb(geometry):
-    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g")
+    mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set="sto-3g", backend="pyscf")
 
     if mol.n_electrons == 4:
         edges = [(0, 2, 5), (1, 3, 4)]

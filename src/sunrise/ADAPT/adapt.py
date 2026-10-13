@@ -23,7 +23,7 @@ from sunrise import (
     FCircuit,
 )
 from sunrise.molecules.fermionic_base import FermionicBase
-from sunrise.molecules import MoleculeFromTequila
+from sunrise.molecules import MoleculeFromSunrise
 from typing import Union
 from openfermion.ops.operators.fermion_operator import FermionOperator
 
@@ -40,7 +40,7 @@ class ObjectiveFactoryBase:
         if Upre is not None and Upost is not None:
             assert type(Upre) == type(Upost), TypeError(f"Circuits of type {type(Upre)} can't be mixed with {type(Upost)}")
         if molecule is not None and isinstance(molecule, FermionicBase) and (isinstance(Upre, QCircuit) or isinstance(Upost, QCircuit)):
-            molecule = MoleculeFromTequila(mol=molecule, transformation='reordered-jordan-wigner')
+            molecule = MoleculeFromSunrise(mol=molecule, transformation='reordered-jordan-wigner')
             if H == "H":
                 H = molecule.make_hamiltonian()
             elif H == "HCB":

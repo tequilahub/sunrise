@@ -16,7 +16,6 @@ from sunrise.molecules.qubit_base import qc_base
 from tequila.utils.bitstrings import BitString, BitNumbering
 from numbers import Number
 from numpy import ceil,pi,prod,eye,zeros,allclose
-from sunrise.expval.pyscf_molecule import from_tequila
 from copy import deepcopy
 from typing import Union,List,Tuple,Callable
 from collections import defaultdict
@@ -61,7 +60,9 @@ class TCCBraket:
             int2e = int2e.reorder('c').elems
             self.BK:EXPVAL = EXPVAL.from_integral(int1e=int1e, int2e=int2e,n_elec=molecule.n_electrons, e_core=e_core,mo_coeff=mo_coeff,init_method="zeros",engine=engine,run_hf= run_hf, run_mp2= False, run_ccsd= False, run_fci= False,**backend_kwargs)
         else:
-            molecule = from_tequila(molecule)
+            # imported here and not at the top: sunrise.molecules imports sunrise.expval while it loads
+            from sunrise.molecules import MoleculeToPyscf
+            molecule = MoleculeToPyscf(molecule)
             self.BK:EXPVAL = EXPVAL(mol=molecule,run_hf= run_hf, run_mp2= False, run_ccsd= False, run_fci= False,init_method="zeros",aslst=aslst,active_space=active_space,engine=engine,mo_coeff=mo_coeff,**backend_kwargs)
         if ket is not None:
             self.ket = ket
