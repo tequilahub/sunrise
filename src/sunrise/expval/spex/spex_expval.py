@@ -5,11 +5,11 @@ from sunrise.fermionic_operations.circuit import FCircuit
 from tequila import TequilaException, QubitWaveFunction, Variable, QubitHamiltonian
 from tequila.objective.objective import Variables, Objective
 from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
-from numpy import ndarray, array, complex128, real
+from numpy import ndarray, array, complex128, real, ceil
 from openfermion import FermionOperator
 from numbers import Number
 from typing import Union, List, Callable
-from .fermionic_braket import FermBraketImpl
+from ..fermionic_braket import FermBraketImpl
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 _ZERO_TOL = 1e-12
 
@@ -365,7 +365,9 @@ def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
     return result
 
 
-def spex_circuit_simulator(U, variables, n_orb, **backend_kwargs) -> QubitWaveFunction:
+def spex_circuit_simulator(U, variables, n_orb=None, **backend_kwargs) -> QubitWaveFunction:
+    if n_orb is None:
+        n_orb = int(ceil((U.max_qubit()+1)/2))
     n_qubits = 2 * n_orb
 
     # Capture the initial state before to_upthendown, which mutates its n_qubits.

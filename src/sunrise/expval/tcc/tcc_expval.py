@@ -4,9 +4,9 @@ import tensorcircuit as tc
 import tencirchem as tcc
 from tencirchem.static.ci_utils import get_ci_strings
 from tencirchem.static.hamiltonian import get_h_fcifunc_from_integral
-from sunrise.expval.tcc_engine.braket import EXPVAL
-from sunrise.expval.tcc_engine.operator_builder import extract_restricted_integrals, build_sparse_ci_operator
-from ..fermionic_operations.circuit import FCircuit
+from sunrise.expval.tcc.braket import EXPVAL
+from sunrise.expval.tcc.operator_builder import extract_restricted_integrals, build_sparse_ci_operator
+from ...fermionic_operations.circuit import FCircuit
 from tequila import TequilaException, QubitWaveFunction, simulate, Variable, Objective, assign_variable, QubitHamiltonian
 from sunrise.molecules.qubit_base import Molecule
 from tequila import grad as tq_grad
@@ -22,7 +22,7 @@ from collections import defaultdict
 from openfermion import FermionOperator
 from openfermion.transforms.opconversions.term_reordering import reorder
 from openfermion.utils.indexing import up_then_down
-from .fermionic_braket import FermBraketImpl
+from ..fermionic_braket import FermBraketImpl
 class TCCBraket:
     def __init__(self,braket:"FermBraketImpl",*args,**kwargs):
         self.operator = None

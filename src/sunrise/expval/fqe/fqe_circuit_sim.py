@@ -10,8 +10,8 @@ try:
 except ImportError:
     pass
 def fqe_circuit_simulatorU(U:FCircuit, variables:Variables, n_orb:int=None, **backend_kwargs) -> QubitWaveFunction:
-    from . import Braket
-    from .minimize import compile
+    from .. import Braket
+    from ..minimize import compile
     if n_orb is None:
         n_orb = int(np.ceil((U.max_qubit()+1)/2))
     res = QubitWaveFunction(n_qubits=2*n_orb,numbering=BitNumbering.MSB,dense=False)

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from tequila import QCircuit, ExpectationValue, TequilaWarning, TequilaException
 from ..molecules.qubit_base.qc_base import QuantumChemistryBase, ParametersQC, NBodyTensor
 from sunrise.fermionic_operations.circuit import FCircuit
-from sunrise.expval import Braket, INSTALLED_FERMIONIC_BACKENDS
+from sunrise.expval import Braket, INSTALLED_FERMIONIC_BACKENDS, pick_backend
 from sunrise.expval.minimize import minimize
 from sunrise.molecules.fermionic_base.fer_base import FermionicBase
 from sunrise.molecules.hybrid_base.HybridBase import HybridBase
@@ -92,7 +92,7 @@ def optimize_orbitals(
     """
 
     class solver:
-        def __init__(self, fermionic_backend:str='spex', backend:str=None, circuit:FCircuit=None):
+        def __init__(self, fermionic_backend:str=None, backend:str=None, circuit:FCircuit=None):
             self.fermionic_backend = fermionic_backend
             self.backend = backend
             self.U = circuit
@@ -132,7 +132,7 @@ def optimize_orbitals(
                 fbackend = kwargs["backend"]
                 kwargs.pop("backend")
             else:
-                fbackend = "spex"
+                fbackend = pick_backend()
             if "backend" in kwargs:
                 backend = kwargs["backend"]
                 kwargs.pop("backend")

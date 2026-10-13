@@ -2,12 +2,13 @@ import numpy as np
 import tequila as tq
 import pytest
 import sunrise as sn
-from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS,Braket
+from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS,SUPPORTED_FERMIONIC_BACKENDS,Braket
 from numpy import isclose
 import random
 from datetime import datetime
 from unittest import mock
 import sunrise.expval.minimize as sn_minimize
+import sunrise.expval.simulate_circuit as sn_simulate_circuit
 
 HAS_TCC = 'tcc' in INSTALLED_FERMIONIC_BACKENDS
 
@@ -178,3 +179,57 @@ def test_optimize_orbitals_respects_fermionic_backend(kwargs):
         sn.optimize_orbitals(molecule=mol, circuit=U, silent=True, pyscf_arguments={"max_cycle_macro": 1}, **kwargs)
     # compile also takes the fermionic backend through `backend` (used for the RDMs)
     assert {c.kwargs.get("fbackend") or c.kwargs.get("backend") for c in compile_spy.call_args_list} == {"tcc"}
+
+def test_pick_backend_default():
+    # without a backend the first installed one in SUPPORTED_FERMIONIC_BACKENDS is chosen, spex first
+    expected = [b for b in SUPPORTED_FERMIONIC_BACKENDS if b in INSTALLED_FERMIONIC_BACKENDS][0]
+    assert sn.pick_backend() == expected
+    assert SUPPORTED_FERMIONIC_BACKENDS[0] == "spex"
+
+@pytest.mark.parametrize('backend',INSTALLED_FERMIONIC_BACKENDS)
+def test_pick_backend_verifies(backend):
+    assert sn.pick_backend(backend) == backend
+    assert sn.pick_backend(backend.upper()) == backend
+    if backend != "tequila":
+        # only the tequila backend can sample or simulate noise
+        with pytest.raises(tq.TequilaException):
+            sn.pick_backend(backend, samples=100)
+
+def test_pick_backend_samples_noise_random():
+    assert sn.pick_backend(samples=100) == "tequila"
+    assert sn.pick_backend(noise="device") == "tequila"
+    assert sn.pick_backend("tequila", samples=100) == "tequila"
+    assert sn.pick_backend("random") in INSTALLED_FERMIONIC_BACKENDS
+    assert sn.pick_backend("random", samples=100) == "tequila"
+    with pytest.raises(tq.TequilaException):
+        sn.pick_backend("qulacs")
+
+def test_compile_uses_picked_backend():
+    mol = sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set='sto-3g', nature='f', backend='pyscf')
+    compiled = sn_minimize.compile(Braket(molecule=mol, ket=mol.make_ansatz("UpCCSD"), operator="H"))
+    assert isinstance(compiled.args[0], INSTALLED_FERMIONIC_BACKENDS[sn.pick_backend()])
+
+def test_simulate_fcircuit_uses_picked_backend():
+    picked = sn.pick_backend()
+    if picked not in sn_simulate_circuit.INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR:
+        pytest.skip(f"{picked} has no fermionic circuit simulator")
+    mol = sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set='sto-3g', nature='f', backend='pyscf')
+    U = mol.make_ansatz("UpCCSD")
+    variables = {v: 0.1 for v in U.extract_variables()}
+    simulator = mock.Mock(wraps=sn_simulate_circuit.INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR[picked])
+    with mock.patch.dict(sn_simulate_circuit.INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR, {picked: simulator}):
+        sn.simulate(U, variables)
+    simulator.assert_called_once()
+
+@pytest.mark.parametrize("kwargs, fermionic, qubit", [({"backend": "spex"}, "spex", "spex"), ({"fbackend": "tequila", "backend": "spex"}, "tequila", "spex"), ({"fbackend": "tcc", "backend": "spex"}, "tcc", "spex"), ({"backend": "tcc"}, "tcc", None)])
+def test_compile_keeps_spex_for_tequila(kwargs, fermionic, qubit):
+    # spex is also a tequila backend: backend='spex' uses it for both, and an explicit fbackend is not overridden
+    if fermionic not in INSTALLED_FERMIONIC_BACKENDS:
+        pytest.skip(f"{fermionic} not installed")
+    mol = sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set='sto-3g', nature='f', backend='pyscf')
+    E = Braket(molecule=mol, ket=mol.make_ansatz("UpCCSD"), operator="H")
+    with mock.patch.object(sn_minimize, "compile_fexpval", wraps=sn_minimize.compile_fexpval) as fspy, mock.patch.object(sn_minimize, "tq_compile", wraps=sn_minimize.tq_compile) as qspy:
+        sn_minimize.compile(E, **kwargs)
+    assert {c.kwargs["backend"] for c in fspy.call_args_list} == {fermionic}
+    assert {c.kwargs["backend"] for c in qspy.call_args_list} == {qubit}
+

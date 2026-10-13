@@ -13,7 +13,8 @@ from ..fermionic_operations import FCircuit
 from .simulate_circuit import simulate_fcircuit
 from tequila.simulators.simulator_base import BackendCircuit
 from tequila import grad as tqgrad
-from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS, SUPPORTED_FERMIONIC_BACKENDS
+from tequila import SUPPORTED_BACKENDS
+from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS, SUPPORTED_FERMIONIC_BACKENDS, pick_backend
 
 def minimize(objective, method:str="bfgs", variables:list=None, initial_values:Union[dict, Number, Callable]=0.0, maxiter:int=None, silent:bool=True, *args, **kwargs):
     if "fbackend" in kwargs:
@@ -22,8 +23,9 @@ def minimize(objective, method:str="bfgs", variables:list=None, initial_values:U
         fbackend = kwargs["fermionic_backend"]
     elif "backend" in kwargs and kwargs["backend"] in INSTALLED_FERMIONIC_BACKENDS:
         fbackend = kwargs["backend"]
-        kwargs.pop("backend")
-    else: fbackend = 'spex'
+        if kwargs["backend"] not in SUPPORTED_BACKENDS:
+            kwargs.pop("backend")
+    else: fbackend = pick_backend()
     if "backend" not in kwargs:
         kwargs["backend"] = None
     if hasattr(objective,'args') and any([type(arg).__name__ ==  "FermBraketImpl" for arg in objective.args]):
@@ -168,10 +170,11 @@ def compile(
     if isinstance(backend,str):
         backend = backend.lower()
     if backend in SUPPORTED_FERMIONIC_BACKENDS:
-        fbackend = backend
-        backend = None
-    if fbackend is None:
-        fbackend = [*INSTALLED_FERMIONIC_BACKENDS.keys()][0]
+        if fbackend is None:
+            fbackend = backend
+        if backend not in SUPPORTED_BACKENDS:
+            backend = None
+    fbackend = pick_backend(backend=fbackend, samples=samples, noise=noise, device=device)
     if isinstance(objective,FCircuit):
         return objective # Currently there is not FCircuit compilation since the fermionic backends work with lists of operations instead of actual qcircuit compilation
 

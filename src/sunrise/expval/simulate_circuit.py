@@ -7,33 +7,34 @@ from tequila import simulate as tq_simulate
 from typing import Union
 from numpy import zeros, ceil
 from tequila import SUPPORTED_BACKENDS, QCircuit
+from sunrise.expval import pick_backend
 
 SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR = ["fqe", "tcc", "spex"]
 INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR = {}
 
 try:
-    from .tcc_engine.simulate import tcc_circuit_simulator
+    from .tcc.simulate import tcc_circuit_simulator
     INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR["tcc"] = tcc_circuit_simulator
 except ImportError:
     pass
 
 try:
-    from sunrise.expval.fqe_circuit_sim import fqe_circuit_simulatorU
+    from sunrise.expval.fqe.fqe_circuit_sim import fqe_circuit_simulatorU
     INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR["fqe"] = fqe_circuit_simulatorU
 except ImportError:
     pass
 try:
-    from .spex_expval import spex_circuit_simulator
+    from .spex.spex_expval import spex_circuit_simulator
     INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR["spex"] = spex_circuit_simulator
 except (ImportError, AttributeError):
     pass
 
-def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='tcc',**kwargs) -> QubitWaveFunction:
+def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str=None,**kwargs) -> QubitWaveFunction:
     '''
     Interface with Fermionic Backends to sumulate FCircuits
     :param U: Fcircuit to simulate
     :param variables: dictionary of {variable:value} to simulate
-    :paran backend: name of the desired backend 
+    :param backend: name of the desired backend, if None chosen by pick_backend
     
     If qubit based backend (see tequila.SUPPORTED_BACKENDS) the n_orb/molecule/FCircuit->QCircuit callable is required.
     '''
@@ -46,8 +47,17 @@ def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='
                 U.extract_variables()
             )
         )
+    if backend is None:
+        backend = pick_backend(samples=kwargs.get("samples"), noise=kwargs.get("noise"))
     backend = backend.strip().lower()
-    if 'tequila' in backend.lower() or backend in SUPPORTED_BACKENDS:
+    # the fermionic simulators first: tequila also has a (qubit) backend named spex, reachable as tequila-spex
+    if backend in SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR:
+        if backend in INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR:
+            simulator = INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR[backend]
+            return simulator(U=U,variables=variables,**kwargs)
+        else:
+            raise TequilaException(f'Backend {backend} not installed.')
+    elif 'tequila' in backend or backend == 't' or backend.startswith('t-') or backend in SUPPORTED_BACKENDS: # to use the qubit spex call backend='tequila-spex' or 't-spex'
         if backend.lower()=='tequila' or backend.lower()=='t':
             backend = None
         elif 'tequila-' in  backend:
@@ -77,12 +87,6 @@ def simulate_fcircuit(U:FCircuit, variables:Union[Variables,dict], backend:str='
             n_orb = int(ceil(U.max_qubit()+1/2))
             U = U.to_qcircuit(molecule=__generate_dummy_mol(n_orb=n_orb))
         return tq_simulate(U,backend=backend,variables=variables,**kwargs)
-    elif backend in SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR:
-        if backend in INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR:
-            simulator = INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR[backend]
-            return simulator(U=U,variables=variables,**kwargs)
-        else:
-            raise TequilaException(f'Backend {backend} not installed.')
     else:
         raise TequilaException(f'Not recognised backed: {backend}.')
 

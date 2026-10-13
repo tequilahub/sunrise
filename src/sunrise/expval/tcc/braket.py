@@ -21,7 +21,7 @@ from tencirchem.static.engine_ucc import (
 )
 from tencirchem.static.ci_utils import get_ci_strings, get_ex_bitstring, get_init_civector
 from tencirchem.static.evolve_tensornetwork import get_circuit
-from sunrise.expval.tcc_engine.engine_braket import get_energy, get_expval,get_expval_and_grad,get_energy_and_grad,get_statevector
+from sunrise.expval.tcc.engine_braket import get_energy, get_expval,get_expval_and_grad,get_energy_and_grad,get_statevector
 from tequila import Objective,Variable,simulate,assign_variable
 from tequila.objective.objective import Variables,FixedVariable
 

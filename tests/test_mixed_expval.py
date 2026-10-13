@@ -11,6 +11,8 @@ from numpy import isclose
 @pytest.mark.parametrize("braket", [False, True], ids=["expval", "braket"])
 @pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
 def test_mixed_objective(backend, braket, same_variables):
+    if backend == "spex" and braket: #TODO: remove this skip once tequila's spex backend supports tq.BraKet
+        pytest.skip("tequila's spex backend does not support tq.BraKet yet")
     # <snU|snH|snU> + <tqU|tqH|tqU> simulated with sunrise, compared with the same objective built only with tequila
     geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
     snmol = sn.Molecule(geometry=geom, basis_set='sto-3g', nature='f').use_native_orbitals()
@@ -81,6 +83,8 @@ def test_mixed_objective_minimize(backend, same_variables):
 
 @pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
 def test_mixed_objective_complex(backend):
+    if backend == "spex": #TODO: remove this skip once tequila's spex backend supports tq.BraKet
+        pytest.skip("tequila's spex backend does not support tq.BraKet yet")
     # an Rz on the ket gives the tequila braket an imaginary part, so the mixed objective is complex
     geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
     snmol = sn.Molecule(geometry=geom, basis_set='sto-3g', nature='f').use_native_orbitals()

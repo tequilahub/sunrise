@@ -7,22 +7,23 @@ from sunrise.fermionic_operations.circuit import FCircuit
 from .fermionic_braket import FermBraketImpl
 from tequila import QTensor
 
-SUPPORTED_FERMIONIC_BACKENDS = ["tequila", "fqe", "tcc", "spex"]
+# in order of preference when no backend is chosen: spex is sunrise's own simulator
+SUPPORTED_FERMIONIC_BACKENDS = ["spex", "tcc", "fqe", "tequila"]
 INSTALLED_FERMIONIC_BACKENDS = {}
 
 try:
-    from .tcc_expval import TCCBraket
+    from .tcc.tcc_expval import TCCBraket
     INSTALLED_FERMIONIC_BACKENDS["tcc"] = TCCBraket
 except ImportError:
     pass
 
 try:
-    from .fqe_expval import FQEBraKet
+    from .fqe.fqe_expval import FQEBraKet
     INSTALLED_FERMIONIC_BACKENDS["fqe"] = FQEBraKet
 except ImportError:
     pass
 try:
-    from .spex_expval import SpexExpval
+    from .spex.spex_expval import SpexExpval
     INSTALLED_FERMIONIC_BACKENDS["spex"] = SpexExpval
 except (ImportError, AttributeError):
     pass
@@ -38,6 +39,61 @@ def show_available_modules():
 
 def show_supported_modules():
     print(SUPPORTED_FERMIONIC_BACKENDS)
+
+
+def pick_backend(backend: str = None, samples: int = None, noise=None, device=None) -> str:
+    """
+    choose, or verify, a fermionic backend for the user.
+    Parameters
+    ----------
+    backend: str, optional:
+        what backend to choose or verify. if None: choose for the user, following the order of SUPPORTED_FERMIONIC_BACKENDS.
+        'random' chooses one of the installed backends at random.
+    samples: int, optional:
+        if int and not None, choose (verify) a backend which supports sampling.
+    noise: str or NoiseModel, optional:
+        if not None, choose (verify) a backend which supports the specified noise.
+    device: optional:
+        if not None, choose (verify) a backend which supports the specified device.
+
+    Only the tequila backend, which simulates through the tequila qubit simulators, supports samples, noise and devices.
+
+    Returns
+    -------
+    str:
+        the name of the chosen (or verified) backend.
+    """
+
+    if len(INSTALLED_FERMIONIC_BACKENDS) == 0:
+        raise TequilaException("No fermionic backends installed on your system")
+
+    # the fermionic simulators only compute wavefunctions
+    needs_tequila = samples is not None or noise is not None or device is not None
+
+    if backend is None:
+        if needs_tequila:
+            return "tequila"
+        for f in SUPPORTED_FERMIONIC_BACKENDS:
+            if f in INSTALLED_FERMIONIC_BACKENDS:
+                return f
+
+    if hasattr(backend, "lower"):
+        backend = backend.lower()
+
+    if backend == "random":
+        if needs_tequila:
+            return "tequila"
+        import random
+        return random.choice(list(INSTALLED_FERMIONIC_BACKENDS.keys()))
+
+    if backend not in SUPPORTED_FERMIONIC_BACKENDS:
+        raise TequilaException(f"Fermionic backend {backend} not supported")
+    elif backend not in INSTALLED_FERMIONIC_BACKENDS:
+        raise TequilaException(f"Fermionic backend {backend} not installed")
+    elif needs_tequila and backend != "tequila":
+        raise TequilaException(f"Fermionic backend {backend} does not support samples, noise or devices, use the tequila backend")
+
+    return backend
 
 def Fidelity(ket: FCircuit, bra: FCircuit, mol : Optional[QuantumChemistryBase] = None, *args, **kwargs) -> Objective:
     """
