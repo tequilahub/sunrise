@@ -54,6 +54,9 @@ def gates_to_orb_rot(rotation_circuit:tq.QCircuit, dim:int, isReordered:bool=Fal
         params.append(gate.parameter)
         g = []
         for idx in gate.indices:
+            # the gate keeps its indices sorted, the sign gives back the direction they had
+            if getattr(gate, "sign", 1) == -1:
+                idx = idx[::-1]
             g.append(tuple([i+core+core*(not isReordered) for i in idx]))
         indices.append(g)
 
@@ -77,9 +80,10 @@ def gates_to_orb_rot(rotation_circuit:tq.QCircuit, dim:int, isReordered:bool=Fal
         tmp = np.eye(dim) # dim is the dimension of orbital coefficients
         if isinstance(params[k], tq.Objective):
             params[k] = params[k]()
+        # UR(i, j) moves an electron from i to j for a positive angle
         tmp[index[0]][index[0]] = np.cos(params[k]/2)
-        tmp[index[0]][index[1]] = np.sin(params[k]/2)
-        tmp[index[1]][index[0]] = -np.sin(params[k]/2)
+        tmp[index[0]][index[1]] = -np.sin(params[k]/2)
+        tmp[index[1]][index[0]] = np.sin(params[k]/2)
         tmp[index[1]][index[1]] = np.cos(params[k]/2)
         rot_matrices.append(tmp)
 

@@ -456,7 +456,11 @@ class FCircuit:
                     reference += gate
                 elif isinstance(gate,FermionicGateImpl):
                     begining = False 
-                    operations += sunrise.gates.FermionicExcitation(indices=gate.indices,variables=gate.parameter,reordered=reordered)
+                    if gate.sign is None:
+                        raise TequilaException(f'Excitation with pairs in both directions can not be converted: {gate.indices}')
+                    # the gate keeps its indices sorted, the sign gives back the direction they had
+                    variables = gate.parameter if gate.sign == 1 else -gate.parameter
+                    operations += sunrise.gates.FermionicExcitation(indices=gate.indices,variables=variables,reordered=reordered)
                 else:
                     temp = []
                     for i in range(len(gate._target)//2):

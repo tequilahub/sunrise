@@ -201,8 +201,8 @@ class FermionicBase(QuantumChemistryBase):
         Parameters
         ----------
         indices : typing.Iterable[typing.Tuple[int, int]] :
-            List of tuples [(a_0, i_0), (a_1, i_1), ... ] - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
-            can also be given as one big list: [a_0, i_0, a_1, i_1 ...]
+            List of tuples [(i_0, a_0), (i_1, a_1), ... ], each pair destroys i and creates a - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
+            can also be given as one big list: [i_0, a_0, i_1, a_1 ...]
         form : str : (Default value None):
             Manipulate the generator to involution or projector
             set form='involution' or 'projector'
@@ -228,8 +228,8 @@ class FermionicBase(QuantumChemistryBase):
             if len(indices) % 2 != 0:
                 raise TequilaException(
                     "make_excitation_generator: unexpected input format of indices\n"
-                    "use list of tuples as [(a_0, i_0),(a_1, i_1) ...]\n"
-                    "or list as [a_0, i_0, a_1, i_1, ... ]\n"
+                    "use list of tuples as [(i_0, a_0),(i_1, a_1) ...]\n"
+                    "or list as [i_0, a_0, i_1, a_1, ... ]\n"
                     "you gave: {}".format(indices)
                 )
             converted = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
@@ -239,6 +239,8 @@ class FermionicBase(QuantumChemistryBase):
         # convert everything to native python int
         # otherwise openfermion will complain
         converted = [(int(pair[0]), int(pair[1])) for pair in converted]
+        # (p, q) destroys p and creates q: the operator below is a^dagger_q a_p
+        converted = [(q, p) for p, q in converted]
 
         # convert to openfermion input format
         ofi = []
@@ -303,7 +305,7 @@ class FermionicBase(QuantumChemistryBase):
         Parameters:
         ----------
             indices:
-                tuple of two spatial(!) orbital indices
+                two spatial(!) orbital indices i and j, a positive angle moves electrons from i to j
             angle:
                 Numeric or hashable type or tequila objective. Default is None and results
                 in automatic naming as ("R",i,j)
@@ -313,7 +315,6 @@ class FermionicBase(QuantumChemistryBase):
             control:
                 List of possible control qubits 
         """
-        i, j = self.format_excitation_indices([(i, j)])[0]
         if angle is None:
             if label is None:
                 angle = Variable(name=("R", i, j)) * numpy.pi
@@ -331,7 +332,7 @@ class FermionicBase(QuantumChemistryBase):
         Parameters:
         ----------
             indices:
-                tuple of two spatial(!) orbital indices
+                two spatial(!) orbital indices i and j, a positive angle moves electrons from i to j
             angle:
                 Numeric or hashable type or tequila objective. Default is None and results
                 in automatic naming as ("R",i,j)
@@ -344,7 +345,6 @@ class FermionicBase(QuantumChemistryBase):
                 Assume that the wavefunction will always stay real.
                 Will reduce potential gradient costs by a factor of 2
         """
-        i, j = self.format_excitation_indices([(i, j)])[0]
         if angle is None:
             if label is None:
                 angle = Variable(name=("C", i, j)) * numpy.pi
@@ -362,12 +362,12 @@ class FermionicBase(QuantumChemistryBase):
             e^{-i\\frac{a}{2} G}
         with generator defines by the indices [(p0,q0),(p1,q1),...]
         .. math::
-            G = i(\\prod_{k} a_{p_k}^\\dagger a_{q_k} - h.c.)
+            G = i(\\prod_{k} a_{q_k}^\\dagger a_{p_k} - h.c.)
 
         Parameters
         ----------
             indices:
-                List of tuples that define the generator
+                List of tuples that define the generator, (p, q) destroys p and creates q
             angle:
                 Numeric or hashable type or tequila objective
             control:
@@ -1020,7 +1020,8 @@ class FermionicBase(QuantumChemistryBase):
         factor = 1.0 / trotter_steps
         for step in range(trotter_steps):
             for idx, angle in indices.items():
-                converted = [(idx[2 * i], idx[2 * i + 1]) for i in range(len(idx) // 2)]
+                # the amplitudes list the virtual orbital first, (a, i): the excitation destroys i and creates a
+                converted = [(idx[2 * i + 1], idx[2 * i]) for i in range(len(idx) // 2)]
                 U += self.make_excitation_gate(indices=converted, angle=factor * angle)
         if (
             hasattr(initial_amplitudes, "lower")

@@ -97,8 +97,14 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
                     target.append(y)
             U = gates.QubitExcitation(target=target, angle=self.parameter, control=self.control)
         else:
-            if self.transformation.lower().strip("_") == "jordanwigner":
-                U =  self.fermionic_excitation(angle=self.sign*self.parameter, indices=self.indices, control=self.control)
+            if self.transformation.lower().strip("_") == "jordanwigner" and self.sign is not None:
+                # the compiled circuit has the opposite sign for every pair nested inside another one
+                sign = self.sign
+                for k, (p0, q0) in enumerate(self.indices):
+                    for p1, q1 in self.indices[k + 1:]:
+                        if (p0 < p1 and q1 < q0) or (p1 < p0 and q0 < q1):
+                            sign *= -1
+                U =  self.fermionic_excitation(angle=sign*self.parameter, indices=self.indices, control=self.control)
             else:
                 U = gates.Trotterized(generator=self.generator, control=self.control, angle=self.parameter, steps=1)
         return U
@@ -121,17 +127,15 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         Consistent formatting of excitation variable
         idx = [(p0,q0),(p1,q1),...,(pn,qn)]
         sorted as: pi<qi and p0 < p1 < p2
-        :param idx: list of index tuples describing a single(!) fermionic excitation
-        :return: sign of the variable with re-ordered indices
+        :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
+        :return: sign of the variable with re-ordered indices, None if the pairs go in both directions (then they can not be sorted)
         """
-        sig = 1
-        for pair in idx:
-            if pair[1] > pair[0]:
-                sig *= -1
-        for pair in range(len(idx) - 1):
-            if idx[pair + 1][0] > idx[pair][0]:
-                sig *= -1
-        return sig
+        # the pairs commute, so their order does not matter, and reversing all of them gives the hermitian conjugate
+        if all(pair[0] < pair[1] for pair in idx):
+            return 1
+        if all(pair[0] > pair[1] for pair in idx):
+            return -1
+        return None
 
     def cCRy(self, target: int, dcontrol: typing.Union[list, int], control: typing.Union[list, int],
              angle: typing.Union[Real, Variable, typing.Hashable], case: int = 1) -> QCircuit:
