@@ -2,12 +2,9 @@ import openfermion
 from sympy.codegen.rewriting import powm1_opt
 from tequila import TequilaException, QCircuit, Objective
 from sunrise.molecules.qubit_base import Molecule
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 import typing
 import numpy as np
 from sunrise.fermionic_operations.gates import *
-from sunrise.fermionic_operations.circuit import FCircuit
-from typing import Union
 
 def make_fermionic_hamiltonian(one_body_integrals, two_body_integrals, constant, *args, **kwargs):
 
@@ -118,47 +115,3 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
         op = openfermion.FermionOperator(tuple(ofi), 1)
     return op
 
-
-def rotate_molecule(U:FCircuit,mol:QuantumChemistryBase,angles:Union[dict,None]=None)->QuantumChemistryBase:
-    """
-    U: a FCircuit with ONLY UR gates
-    mol: Tequila Molecule you want to rotate
-    angles: dictionary to map the circuit variables in case they are not mapped yet
-    Output: rotated molecule
-    """
-    #TODO: at some point this function should go inside the qcbase, but better when implemented on tequila
-    U = U.to_udud(norb=mol.n_orbitals)
-    if angles is not None:
-        U = U.map_variables(angles)
-    core = 0
-    while mol.integral_manager.orbitals[core].idx is None:
-        core += 1
-    n_mo = len(mol.integral_manager.orbital_coefficients)
-    params = []
-    indices = []
-    for gate in reversed(U.gates):
-        assert gate._name == 'UR'
-        # Extract parameters and indices from gates
-        params.append(gate.variables)
-        g = []
-        for idx in gate.indices[0]: #we only need the first index of each UR
-            g.extend((i+2*core)//2 for i in idx)
-        indices.append(g)
-    # Create a matrix for each UR gate
-    rot_matrices = []
-    for k,index in enumerate(indices):
-        tmp = np.eye(n_mo)
-        if isinstance(params[k], Objective):
-            params[k] = params[k]()
-        tmp[index[0]][index[0]] = np.cos(params[k]/2)
-        tmp[index[0]][index[1]] = np.sin(params[k]/2)
-        tmp[index[1]][index[0]] = -np.sin(params[k]/2)
-        tmp[index[1]][index[1]] = np.cos(params[k]/2)
-        rot_matrices.append(tmp)
-
-    # Multiply all matrices
-    tmatrix = rot_matrices[0]
-    for matrix in rot_matrices[1:]:
-        tmatrix = np.dot(tmatrix,matrix)
-    mol.integral_manager.transform_orbitals(tmatrix.T)
-    return mol
