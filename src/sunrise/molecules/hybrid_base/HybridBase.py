@@ -964,7 +964,7 @@ class HybridBase(qc_base):
         Parameters:
         ----------
             indices:
-                tuple of two spatial(!) orbital indices
+                two spatial(!) orbital indices i and j, a positive angle moves electrons from i to j
             angle:
                 Numeric or hashable type or tequila objective. Default is None and results
                 in automatic naming as ("R",i,j)
@@ -977,7 +977,6 @@ class HybridBase(qc_base):
                 Assume that the wavefunction will always stay real.
                 Will reduce potential gradient costs by a factor of 2
         """
-        i, j = self.format_excitation_indices([(i, j)])[0]
         if not (self.select[i] == "F" and self.select[j] == "F"):
             raise TequilaException(f"Rotation{(i,j)} not allowed, try Correlator")
         if angle is None:
@@ -1000,7 +999,7 @@ class HybridBase(qc_base):
         Parameters:
         ----------
             indices:
-                tuple of two spatial(!) orbital indices
+                two spatial(!) orbital indices i and j, a positive angle moves electrons from i to j
             angle:
                 Numeric or hashable type or tequila objective. Default is None and results
                 in automatic naming as ("R",i,j)
@@ -1013,7 +1012,6 @@ class HybridBase(qc_base):
                 Assume that the wavefunction will always stay real.
                 Will reduce potential gradient costs by a factor of 2
         """
-        i, j = self.format_excitation_indices([(i, j)])[0]
         if angle is None:
             if label is None:
                 angle = Variable(name=("C", i, j)) * numpy.pi
@@ -1037,12 +1035,12 @@ class HybridBase(qc_base):
             e^{-i\\frac{a}{2} G}
         with generator defines by the indices [(p0,q0),(p1,q1),...] or [p0,q0,p1,q1 ...]
         .. math::
-            G = i(\\prod_{k} a_{p_k}^\\dagger a_{q_k} - h.c.)
+            G = i(\\prod_{k} a_{q_k}^\\dagger a_{p_k} - h.c.)
 
         Parameters
         ----------
             indices:
-                List of tuples that define the generator
+                List of tuples that define the generator, (p, q) destroys p and creates q
             angle:
                 Numeric or hashable type or tequila objective
             control:
@@ -1086,8 +1084,8 @@ class HybridBase(qc_base):
         Parameters
         ----------
         indices : typing.Iterable[typing.Tuple[int, int]] :
-            List of tuples [(a_0, i_0), (a_1, i_1), ... ] - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
-            can also be given as one big list: [a_0, i_0, a_1, i_1 ...]
+            List of tuples [(i_0, a_0), (i_1, a_1), ... ], each pair destroys i and creates a - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
+            can also be given as one big list: [i_0, a_0, i_1, a_1 ...]
         form : str : (Default value None):
             Manipulate the generator to involution or projector
             set form='involution' or 'projector'
@@ -1109,8 +1107,8 @@ class HybridBase(qc_base):
         elif not isinstance(indices[0], typing.Iterable):
             if len(indices) % 2 != 0:
                 raise TequilaException("make_excitation_generator: unexpected input format of indices\n"
-                                       "use list of tuples as [(a_0, i_0),(a_1, i_1) ...]\n"
-                                       "or list as [a_0, i_0, a_1, i_1, ... ]\n"
+                                       "use list of tuples as [(i_0, a_0),(i_1, a_1) ...]\n"
+                                       "or list as [i_0, a_0, i_1, a_1, ... ]\n"
                                        "you gave: {}".format(indices))
             converted = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
         else:
@@ -1118,17 +1116,24 @@ class HybridBase(qc_base):
         # convert everything to native python int
         # otherwise openfermion will complain
         converted = [(int(pair[0]), int(pair[1])) for pair in converted]
+        # (p, q) destroys p and creates q: the operator below is a^dagger_q a_p
+        converted = [(q, p) for p, q in converted]
         # convert to openfermion input format
+        # the encoding drops the second spin-orbital of a HCB orbital, which is only correct if the two operators of
+        # a HCB orbital are next to each other: write prod_k a^dagger_{c_k} a_{d_k} (the pairs commute, so sorted)
+        # as a^dagger_{c_0} ... a^dagger_{c_n} a_{d_n} ... a_{d_0}, which is the same operator
+        converted = sorted(converted)
         ofi = []
         dag = []
         for pair in converted:
             assert (len(pair) == 2)
-            ofi += [(int(pair[0]), 1),
-                    (int(pair[1]), 0)]  # openfermion does not take other types of integers like numpy.int64
-            dag += [(int(pair[0]), 0),
-                    (int(pair[1]), 1)]  # to distinguis from HCB to JW, JW 0,1 HCB 2,3 for creation anihilation
+            ofi += [(int(pair[0]), 1)]
+            dag += [(int(pair[1]), 1)]
+        for pair in reversed(converted):
+            ofi += [(int(pair[1]), 0)]
+            dag += [(int(pair[0]), 0)]
         op = FermionOperator(tuple(ofi), 1.j)  # 1j makes it hermitian
-        op += FermionOperator(tuple(reversed(dag)), -1.j)
+        op += FermionOperator(tuple(dag), -1.j)
 
         if isinstance(form, str) and form.lower() != 'fermionic':
             # indices for all the Na operators
@@ -1357,7 +1362,7 @@ class HybridBase(qc_base):
                         if use_units_of_pi:
                             angle = angle * numpy.pi
                         if hcb:
-                            U += self.make_hardcore_boson_excitation_gate(indices=[(q1, c)], angle=angle)
+                            U += self.make_hardcore_boson_excitation_gate(indices=[(c, q1)], angle=angle)
                         else:
                             U += self.make_excitation_gate(
                                 indices=[(2 * c, 2 * q1), (2 * c + 1, 2 * q1 + 1)], angle=angle

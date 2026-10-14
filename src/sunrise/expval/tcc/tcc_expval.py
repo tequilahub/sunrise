@@ -495,7 +495,7 @@ def init_state_from_array(wvf:QubitWaveFunction,tol=1e-6):
 def indices_tq_to_tcc(indices:List[List[Tuple[int]]]=None):
     '''
     Expected indices like [[(0,1),(n_mo+0,n_mo+1),...],[(a,b),(c,d),...],...] (in upthendown)
-    Returned [(...,n_mo+1,1,0,n_mo+0,...),(...,d,b,a,c,...)]
+    Returned [(...,n_mo+0,0,1,n_mo+1,...),(...,c,a,b,d,...)]
     '''
     if indices is None:
         return None,None,None
@@ -512,14 +512,16 @@ def indices_tq_to_tcc(indices:List[List[Tuple[int]]]=None):
         params.append(str(exct))
         param_ids.append(len(param_ids))
         for idx in exct:
-            exc.append(idx[0])
-            exc.insert(0,idx[1])
+            # (p, q) destroys p and creates q: tcc creates the first half of an ex_op, but applies it with the
+            # opposite sign of the angle (angles = -0.5*variables), so p goes in the first half
+            exc.append(idx[1])
+            exc.insert(0,idx[0])
         ex_ops.append(tuple(exc))
     return ex_ops,params,param_ids
 
 def indices_tcc_to_tq(indices:List[List[Tuple[int]]]=None)->List[List[Tuple[int]]]:
     '''
-    Expected indices like [(...,n_mo+1,1,0,n_mo+0,...),(...,d,b,a,c,...)]
+    Expected indices like [(...,n_mo+0,0,1,n_mo+1,...),(...,c,a,b,d,...)]
     Returned [[(0,1),(n_mo+0,n_mo+1),...],[(a,b),(c,d),...],...] (in upthendown)
     '''
     if indices is None:
@@ -533,7 +535,7 @@ def indices_tcc_to_tq(indices:List[List[Tuple[int]]]=None)->List[List[Tuple[int]
     for exct in indices:
         exc = []
         for i in range(len(exct)//2):
-            exc.append((exct[-i-1],exct[i]))
+            exc.append((exct[i],exct[-i-1]))
         ex_ops.append(exc[::-1])
     return ex_ops
 

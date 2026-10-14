@@ -79,12 +79,11 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         """
         Consistent formatting of excitation indices
         idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: p0<p1<pn and pi<qi
-        :param idx: list of index tuples describing a single(!) fermionic excitation
+        sorted as: p0<p1<pn, each pair keeps its direction
+        :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
         :return: list of index tuples
         """
 
-        idx = [tuple(sorted(x)) for x in idx]
         idx = sorted(idx, key=lambda x: x[0])
         return list(idx)
 
@@ -92,17 +91,17 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         """
         Consistent formatting of excitation variable
         idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: pi<qi and p0 < p1 < p2
-        :param idx: list of index tuples describing a single(!) fermionic excitation
-        :return: sign of the variable with re-ordered indices
+        sorted as: p0 < p1 < p2, each pair keeps its direction
+        :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
+        :return: sign of the variable for the compiled circuit with re-ordered indices
         """
+        # prod_k a^dagger_{q_k} a_{p_k} = a^dagger_{q_0} ... a^dagger_{q_n} a_{p_n} ... a_{p_0}, the compiled circuit
+        # has the creators sorted: the sign changes for every two pairs whose p and q are in opposite order
         sig = 1
-        for pair in idx:
-            if pair[1] > pair[0]:
-                sig *= -1
-        for pair in range(len(idx) - 1):
-            if idx[pair + 1][0] > idx[pair][0]:
-                sig *= -1
+        for k in range(len(idx)):
+            for l in range(k + 1, len(idx)):
+                if (idx[k][0] > idx[l][0]) != (idx[k][1] > idx[l][1]):
+                    sig *= -1
         return sig
 
     def cCRy(

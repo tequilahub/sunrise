@@ -77,9 +77,10 @@ def gates_to_orb_rot(rotation_circuit:tq.QCircuit, dim:int, isReordered:bool=Fal
         tmp = np.eye(dim) # dim is the dimension of orbital coefficients
         if isinstance(params[k], tq.Objective):
             params[k] = params[k]()
+        # UR(i, j) moves an electron from i to j for a positive angle
         tmp[index[0]][index[0]] = np.cos(params[k]/2)
-        tmp[index[0]][index[1]] = np.sin(params[k]/2)
-        tmp[index[1]][index[0]] = -np.sin(params[k]/2)
+        tmp[index[0]][index[1]] = -np.sin(params[k]/2)
+        tmp[index[1]][index[0]] = np.sin(params[k]/2)
         tmp[index[1]][index[1]] = np.cos(params[k]/2)
         rot_matrices.append(tmp)
 
