@@ -7,10 +7,8 @@ import pandas as pd
 from itertools import groupby, combinations, product as iproduct
 import numpy
 from .irrep_provider import IrrepProviderBase
-from .point_group import PointGroup
-from .point_group import PointGroup, PointGroupRepresentation
+from .point_group import PointGroupRepresentation
 from .fock_space_state import FockSpaceState
-from .qcircuit_representation_builder import QCircuitRepresentationBuilder
 import math
 
 @dataclass
@@ -126,17 +124,16 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 	"""A symmetrization procedure that symmetrizes states by constructing symmetry-adapted linear combinations."""
 	
-	pg: PointGroup
 	pgr: PointGroupRepresentation | None = None
 
 	def __post_init__(self):
 		if self.pgr is None:
-			self.pgr = QCircuitRepresentationBuilder(self.mol, self.pg).build_qcircuit_representation()
+			self.pgr = self.mol.qcircuit_representation
 		
-		# Fetch the MO-specific permutations and phases
-		builder = QCircuitRepresentationBuilder(self.mol, self.pg)
-		self._spatial_perms, self._spatial_phases = builder._get_mo_perms_and_phases()
-		# for label in self.pg.character_table.operation_symbols:
+		# Fetch the MO-specific permutations and phases, keyed by the operations of the symmetry group
+		self._pg = self.mol.symmetry_group
+		self._spatial_perms, self._spatial_phases = self.mol.mo_perms_and_phases
+		# for label in self._pg.character_table.operation_symbols:
 		# 	print(f"{label}: perm={self._spatial_perms[label]}, phases={self._spatial_phases[label]}")
 
 	@staticmethod
@@ -205,7 +202,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 			state_list = list(states)
 
 		# assume the IrrepProviderBase is the same for all states; the SALC construction below
-		# uses self.pg's character table, not irrep_provider, which is only propagated to
+		# uses the character table of the symmetry group of self.mol, not irrep_provider, which is only propagated to
 		# the output states.
 		irrep_provider = state_list[0].irrep_provider
 		fragment_orbitals = getattr(state_list[0], 'fragment_orbitals', None)
@@ -213,6 +210,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 		# assumes the representation as quantum circuit
 		n_orbitals = self.mol.n_orbitals
 		n_qubits = 2 * n_orbitals
+		pg = self._pg
 
 		# select which operations to apply
 		# For an fragment-space fragment, only operations that map the fragment orbital
@@ -222,11 +220,11 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 			fragment_set = set(fragment_orbitals)
 			selected_ops = [
 				(k, op_label)
-				for k, op_label in enumerate(self.pg.character_table.operation_symbols)
+				for k, op_label in enumerate(pg.character_table.operation_symbols)
 				if all(self._spatial_perms[op_label][i] in fragment_set for i in fragment_orbitals)
 			]
 		else:
-			selected_ops = list(enumerate(self.pg.character_table.operation_symbols))
+			selected_ops = list(enumerate(pg.character_table.operation_symbols))
 
 		# Group projected SALCs by (irrep, S2, m_s) to preserve spin purity!
 		SALC_by_sector: dict[tuple, list[tequila.QubitWaveFunction]] = {}
@@ -245,10 +243,10 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 				resulting_state_list.append(self._apply_spatial_permutation_bitstring(state.wavefunction, perm, n_orbitals, phases))
 				op_indices.append(k)
 
-			for j, irrep in enumerate(self.pg.character_table.dict.keys()):
+			for j, irrep in enumerate(pg.character_table.dict.keys()):
 				state_SALC = tequila.QubitWaveFunction(n_qubits=n_qubits)
 				for idx, k in enumerate(op_indices):
-					character = self.pg.character_table.dict[irrep][k]
+					character = pg.character_table.dict[irrep][k]
 					if character != 0:
 						state_SALC += character * resulting_state_list[idx]
 
