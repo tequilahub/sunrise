@@ -901,7 +901,8 @@ class QuantumChemistryBase:
         It can be set with a PointGroup or its Schoenflies label, e.g. to work in a subgroup.
         """
         if self._point_group is None:
-            pyscf_mol = pyscf.gto.M(atom=str(self.parameters.geometry), basis=self.parameters.basis_set, charge=self.parameters.charge, unit=self.parameters.units, symmetry=True, verbose=0)
+            # the point group only depends on the nuclei, so the basis is not needed (it can be custom)
+            pyscf_mol = pyscf.gto.M(atom=str(self.parameters.geometry), charge=self.parameters.charge, unit=self.parameters.units, symmetry=True, verbose=0)
             self.point_group = pyscf_mol.topgroup if hasattr(PointGroup, pyscf_mol.topgroup) else pyscf_mol.groupname
         return self._point_group
 
@@ -923,7 +924,7 @@ class QuantumChemistryBase:
         """
         if self.point_group.schoenflies_label in pyscf.symm.param.CHARACTER_TABLE:
             return self.point_group
-        pyscf_mol = pyscf.gto.M(atom=str(self.parameters.geometry), basis=self.parameters.basis_set, charge=self.parameters.charge, unit=self.parameters.units, symmetry=True, verbose=0)
+        pyscf_mol = pyscf.gto.M(atom=str(self.parameters.geometry), charge=self.parameters.charge, unit=self.parameters.units, symmetry=True, verbose=0)
         return PointGroup.from_pyscf(pyscf_mol.groupname)
 
     def atomic_permutation_representation(self):
