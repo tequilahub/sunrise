@@ -338,7 +338,7 @@ def _civect_to_qwvf(state_dict: dict, n_qubits: int) -> QubitWaveFunction:
 
 def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
     from sunrise  import simulate
-    # each gate maps to FermionTerm(creation_idx=[from...], annihilation_idx=[to...], 1j)
+    # each gate maps to FermionTerm(creation_idx=[to...], annihilation_idx=[from...], 1j): (p, q) destroys p and creates q
     state = {} if state is None else state
     result = {int(k): complex(v) for k, v in state.items() if abs(v) > _ZERO_TOL}
     if circuit is None:
@@ -356,8 +356,8 @@ def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
         else:
             theta = parameter
         for term_pairs in indices:
-            creation = [p[0] for p in term_pairs]
-            annihilation = [p[1] for p in term_pairs]
+            creation = [p[1] for p in term_pairs]
+            annihilation = [p[0] for p in term_pairs]
             n_pairs = len(term_pairs)
             weight = 1.0j * ((-1) ** (n_pairs * (n_pairs - 1) // 2))
             term = spex.FermionTerm(creation, annihilation, weight)

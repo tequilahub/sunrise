@@ -29,8 +29,8 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
     Parameters
     ----------
     indices : typing.Iterable[typing.Tuple[int, int]] :
-        List of tuples [(a_0, i_0), (a_1, i_1), ... ] - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
-        can also be given as one big list: [a_0, i_0, a_1, i_1 ...]
+        List of tuples [(i_0, a_0), (i_1, a_1), ... ], each pair destroys i and creates a - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
+        can also be given as one big list: [i_0, a_0, i_1, a_1 ...]
     form : str : (Default value None):
         Manipulate the generator to involution or projector
         set form='involution' or 'projector'
@@ -48,8 +48,8 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
     elif not isinstance(indices[0], typing.Iterable):
         if len(indices) % 2 != 0:
             raise TequilaException("make_excitation_generator: unexpected input format of indices\n"
-                                   "use list of tuples as [(a_0, i_0),(a_1, i_1) ...]\n"
-                                   "or list as [a_0, i_0, a_1, i_1, ... ]\n"
+                                   "use list of tuples as [(i_0, a_0),(i_1, a_1) ...]\n"
+                                   "or list as [i_0, a_0, i_1, a_1, ... ]\n"
                                    "you gave: {}".format(indices))
         converted = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
     else:
@@ -58,6 +58,8 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
     # convert everything to native python int
     # otherwise openfermion will complain
     converted = [(int(pair[0]), int(pair[1])) for pair in converted]
+    # (p, q) destroys p and creates q: the operator below is a^dagger_q a_p
+    converted = [(q, p) for p, q in converted]
 
     # convert to openfermion input format
     ofi = []
