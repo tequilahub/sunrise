@@ -54,9 +54,6 @@ def gates_to_orb_rot(rotation_circuit:tq.QCircuit, dim:int, isReordered:bool=Fal
         params.append(gate.parameter)
         g = []
         for idx in gate.indices:
-            # the gate keeps its indices sorted, the sign gives back the direction they had
-            if getattr(gate, "sign", 1) == -1:
-                idx = idx[::-1]
             g.append(tuple([i+core+core*(not isReordered) for i in idx]))
         indices.append(g)
 

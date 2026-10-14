@@ -97,14 +97,8 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
                     target.append(y)
             U = gates.QubitExcitation(target=target, angle=self.parameter, control=self.control)
         else:
-            if self.transformation.lower().strip("_") == "jordanwigner" and self.sign is not None:
-                # the compiled circuit has the opposite sign for every pair nested inside another one
-                sign = self.sign
-                for k, (p0, q0) in enumerate(self.indices):
-                    for p1, q1 in self.indices[k + 1:]:
-                        if (p0 < p1 and q1 < q0) or (p1 < p0 and q0 < q1):
-                            sign *= -1
-                U =  self.fermionic_excitation(angle=sign*self.parameter, indices=self.indices, control=self.control)
+            if self.transformation.lower().strip("_") == "jordanwigner":
+                U =  self.fermionic_excitation(angle=self.sign*self.parameter, indices=self.indices, control=self.control)
             else:
                 U = gates.Trotterized(generator=self.generator, control=self.control, angle=self.parameter, steps=1)
         return U
@@ -113,12 +107,11 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         """
         Consistent formatting of excitation indices
         idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: p0<p1<pn and pi<qi
-        :param idx: list of index tuples describing a single(!) fermionic excitation
+        sorted as: p0<p1<pn, each pair keeps its direction
+        :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
         :return: list of index tuples
         """
 
-        idx = [tuple(sorted(x)) for x in idx]
         idx = sorted(idx, key=lambda x: x[0])
         return list(idx)
 
@@ -126,16 +119,18 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         """
         Consistent formatting of excitation variable
         idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: pi<qi and p0 < p1 < p2
+        sorted as: p0 < p1 < p2, each pair keeps its direction
         :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
-        :return: sign of the variable with re-ordered indices, None if the pairs go in both directions (then they can not be sorted)
+        :return: sign of the variable for the compiled circuit with re-ordered indices
         """
-        # the pairs commute, so their order does not matter, and reversing all of them gives the hermitian conjugate
-        if all(pair[0] < pair[1] for pair in idx):
-            return 1
-        if all(pair[0] > pair[1] for pair in idx):
-            return -1
-        return None
+        # prod_k a^dagger_{q_k} a_{p_k} = a^dagger_{q_0} ... a^dagger_{q_n} a_{p_n} ... a_{p_0}, the compiled circuit
+        # has the creators sorted: the sign changes for every two pairs whose p and q are in opposite order
+        sig = 1
+        for k in range(len(idx)):
+            for l in range(k + 1, len(idx)):
+                if (idx[k][0] > idx[l][0]) != (idx[k][1] > idx[l][1]):
+                    sig *= -1
+        return sig
 
     def cCRy(self, target: int, dcontrol: typing.Union[list, int], control: typing.Union[list, int],
              angle: typing.Union[Real, Variable, typing.Hashable], case: int = 1) -> QCircuit:
