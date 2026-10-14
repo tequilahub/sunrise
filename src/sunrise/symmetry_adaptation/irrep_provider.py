@@ -1,14 +1,16 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import tequila
-from sunrise.molecules.qubit_base import Molecule
 import numpy
-from .point_group import PointGroupRepresentation
+if TYPE_CHECKING:
+	# only for type hints, importing it at runtime would be circular
+	from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 @dataclass
 class IrrepProviderBase(ABC):
-	mol: Molecule
+	mol: QuantumChemistryBase
 	
 	@abstractmethod
 	def get_irrep(self, state) -> str:
@@ -22,17 +24,12 @@ class LocalizedIrrepProvider(IrrepProviderBase):
 	This assumes a representation that is based on localized occupancies.
 	"""
 	
-	def __init__(self, mol: Molecule):
+	def __init__(self, mol: QuantumChemistryBase):
 		super().__init__(mol)
-		self._representation: PointGroupRepresentation[tequila.QCircuit, tequila.QubitWaveFunction] = mol.qcircuit_representation
 
-		# Fetch the MO-specific permutations and phases, keyed by the operations of the symmetry group
-		self._pg = mol.symmetry_group
-		self._spatial_perms, self._spatial_phases = mol.mo_perms_and_phases
-
-	@property
-	def representation(self) -> PointGroupRepresentation[tequila.QCircuit, tequila.QubitWaveFunction]:
-		return self._representation
+		# Fetch the MO-specific permutations and phases, keyed by the operations of the point group
+		self._pg = mol.point_group
+		self._spatial_perms, self._spatial_phases = mol.compute_mo_perms_and_phases()
 
 	def get_irrep(self, state) -> str | None:
 		from .symmetrization_procedure import SymmetryAdaptedLinearCombintationSymmetrization
@@ -74,14 +71,14 @@ class LocalizedIrrepProvider(IrrepProviderBase):
 class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 	"""
 	An irrep provider that uses PySCF to determine the irreducible representation of a state in the canonical molecular orbital basis.
-	PySCF only labels orbitals in Abelian groups, so the states are labelled in mol.abelian_symmetry_group,
+	PySCF only labels orbitals in Abelian groups, so the states are labelled in mol.abelian_point_group,
 	e.g. in D2h for a molecule with D4h symmetry.
 	"""
 
-	def __init__(self, mol: Molecule):
+	def __init__(self, mol: QuantumChemistryBase):
 		super().__init__(mol)
-		self._pg = mol.abelian_symmetry_group
-		self._mol_irreps = mol.orbital_irreps
+		self._pg = mol.abelian_point_group
+		self._mol_irreps = mol.compute_orbital_irreps()
 
 	
 	@property
@@ -120,13 +117,12 @@ class MEAOIrrepProvider(LocalizedIrrepProvider):
 	An irrep provider for MEAOs.
 	Inherits from LocalizedIrrepProvider but uses MO-basis permutations and phases.
 	"""
-	def __init__(self, mol: Molecule):
+	def __init__(self, mol: QuantumChemistryBase):
 		# Skip parent __init__'s AO permutation logic
 		IrrepProviderBase.__init__(self, mol)
-		self._representation = mol.qcircuit_representation
 
-		self._pg = mol.symmetry_group
-		self._spatial_perms, self._spatial_phases = mol.mo_perms_and_phases
+		self._pg = mol.point_group
+		self._spatial_perms, self._spatial_phases = mol.compute_mo_perms_and_phases()
 
 
 SUPPORTED_IRREP_PROVIDERS = ["loc", "canon", "meao"]
@@ -141,7 +137,7 @@ def show_supported_modules():
     print(SUPPORTED_IRREP_PROVIDERS)
 
 # TODO: change "provider" with a better keyword
-def IrrepProvider(mol: Molecule, provider:str="canon", *args, **kwargs) -> IrrepProviderBase:
+def IrrepProvider(mol: QuantumChemistryBase, provider:str="canon", *args, **kwargs) -> IrrepProviderBase:
     r'''
     ADD SOMETHING
     '''

@@ -1,8 +1,12 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from dataclasses import dataclass
 from numpy.typing import NDArray
-from sunrise.molecules.qubit_base import Molecule
 import tequila
 import numpy
+if TYPE_CHECKING:
+	# only for type hints, importing it at runtime would be circular
+	from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 class GeometricTransformationHelper:
@@ -289,7 +293,7 @@ class GeometricTransformationHelper:
 # This is really inefficient but will work for now
 @dataclass
 class FermionicSWAP:
-	mol: Molecule
+	mol: QuantumChemistryBase
 
 	def f(self, i: int, j: int) -> tequila.QCircuit:
 		"""

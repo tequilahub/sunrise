@@ -122,7 +122,8 @@ class FermionicBase(QuantumChemistryBase):
 
         self._rdm1 = None
         self._rdm2 = None
-        self._symmetry_group = None
+        # given with the point_group keyword, otherwise detected when it is first needed
+        self.point_group = kwargs.get("point_group")
 
     @classmethod
     def from_tequila(cls, molecule,*args, **kwargs):

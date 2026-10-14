@@ -1,20 +1,23 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from re import sub
 import tequila
-from sunrise.molecules.qubit_base import Molecule
 import pandas as pd
 from itertools import groupby, combinations, product as iproduct
 import numpy
 from .irrep_provider import IrrepProviderBase
-from .point_group import PointGroupRepresentation
 from .fock_space_state import FockSpaceState
 import math
+if TYPE_CHECKING:
+	# only for type hints, importing it at runtime would be circular
+	from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 @dataclass
 class SymmetrizationProcedure(ABC):
 
-	mol: Molecule
+	mol: QuantumChemistryBase
 
 	@abstractmethod
 	def symmetrize(self, states: pd.DataFrame) -> pd.DataFrame:
@@ -124,15 +127,10 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 	"""A symmetrization procedure that symmetrizes states by constructing symmetry-adapted linear combinations."""
 	
-	pgr: PointGroupRepresentation | None = None
-
 	def __post_init__(self):
-		if self.pgr is None:
-			self.pgr = self.mol.qcircuit_representation
-		
-		# Fetch the MO-specific permutations and phases, keyed by the operations of the symmetry group
-		self._pg = self.mol.symmetry_group
-		self._spatial_perms, self._spatial_phases = self.mol.mo_perms_and_phases
+		# Fetch the MO-specific permutations and phases, keyed by the operations of the point group
+		self._pg = self.mol.point_group
+		self._spatial_perms, self._spatial_phases = self.mol.compute_mo_perms_and_phases()
 		# for label in self._pg.character_table.operation_symbols:
 		# 	print(f"{label}: perm={self._spatial_perms[label]}, phases={self._spatial_phases[label]}")
 
@@ -202,7 +200,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 			state_list = list(states)
 
 		# assume the IrrepProviderBase is the same for all states; the SALC construction below
-		# uses the character table of the symmetry group of self.mol, not irrep_provider, which is only propagated to
+		# uses the character table of the point group of self.mol, not irrep_provider, which is only propagated to
 		# the output states.
 		irrep_provider = state_list[0].irrep_provider
 		fragment_orbitals = getattr(state_list[0], 'fragment_orbitals', None)

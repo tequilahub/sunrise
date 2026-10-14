@@ -5,7 +5,7 @@ import sunrise as sun
 
 from sunrise.symmetry_adaptation import FockSpaceState, IrrepProvider, SpinSymmetrizationProcedure
 
-# Create the molecule, its symmetry group (D2h) is detected from the geometry
+# Create the molecule, its point group (D2h) is detected from the geometry
 mol = sun.chemistry.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
 
 # Create an irrep provider to indicate that the FockSpaceStates
