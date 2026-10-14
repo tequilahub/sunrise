@@ -40,6 +40,7 @@ class HybridBase(qc_base):
         self._select = {}
         self._rdm1 = None
         self._rdm2 = None
+        self._symmetry_group = None
         if ("condense" in kwargs):
             self.condense = kwargs["condense"]
             kwargs.pop("condense")

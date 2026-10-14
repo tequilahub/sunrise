@@ -122,6 +122,7 @@ class FermionicBase(QuantumChemistryBase):
 
         self._rdm1 = None
         self._rdm2 = None
+        self._symmetry_group = None
 
     @classmethod
     def from_tequila(cls, molecule,*args, **kwargs):
