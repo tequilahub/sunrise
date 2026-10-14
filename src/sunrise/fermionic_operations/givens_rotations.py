@@ -66,13 +66,14 @@ def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[lis
     for theta in reversed(theta_list):
         if  isinstance(theta[0],numbers.Number) and abs(theta[0])%numpy.pi<tol:
                 continue
+        # (UR(i, j) moves an electron from i to j for a positive angle)
         if fix:
-            circuit += fe.UR(i=theta[1], j=theta[2], angle=theta[0] * -2)
+            circuit += fe.UR(i=theta[1], j=theta[2], variables=theta[0] * 2)
         else:
             circuit += fe.UR(
                 i=theta[1],
                 j=theta[2],
-                angle=(theta[0] * -2)
+                variables=(theta[0] * 2)
                 + Variable(
                     f"UR({theta[1]},{theta[2]}"
                     + ("," + str(label)) * (label is not None)
@@ -80,7 +81,7 @@ def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[lis
                 ),
             )
 
-        return circuit
+    return circuit
 
 def givens_matrix(n, p, q, theta)->QTensor:
     """
@@ -257,7 +258,7 @@ def reconstruct_matrix_from_circuit(U:fe.FCircuit,norb:int=None, to_real_if_poss
     first = True
     for i,gate in enumerate(U.gates):
         if gate.name =='UR':
-            theta_list.append((0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
+            theta_list.append((-0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
         elif gate.name == "Ph":
             if not first:
                 first = True
@@ -278,9 +279,9 @@ def reconstruct_matrix_from_circuit(U:fe.FCircuit,norb:int=None, to_real_if_poss
                 continue
             if i+1!=len(U.gates) and U.gates[i+1].name == "FermionicExcitation" and len(U.gates[i+1].indices[0])==len(gate.indices[0])==1 and gate.indices[0][0][0]//2 == U.gates[i+1].indices[0][0][0]//2 and gate.indices[0][0][1]//2 == U.gates[i+1].indices[0][0][1]//2:
                 if isinstance(gate.variables, (Variable, Objective)) and isinstance(U.gates[i+1].variables, (Variable, Objective)): # Not sure if I can check the to Objectives to be the same, so I just go on
-                    theta_list.append((0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
+                    theta_list.append((-0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
                 elif isinstance(gate.variables, numbers.Number) and isinstance(U.gates[i+1].variables, numbers.Number) and numpy.isclose(gate.variables, U.gates[i+1].variables, atol=tol):
-                    theta_list.append((0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
+                    theta_list.append((-0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
                 else:
                     raise TequilaException("FermionicExcitation gates must come in pairs to be converted to UR gates.")
                 first = False
