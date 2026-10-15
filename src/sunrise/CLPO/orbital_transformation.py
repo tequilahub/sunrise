@@ -30,7 +30,7 @@ def __get_MP2_occ(mol: QuantumChemistryBase) -> Tuple[list, list]:
     rdm1 = mp.MP2(hf).run().make_rdm1()
     return fr + np.diag(rdm1).tolist(), hf.mo_energy
 
-def extract_clpo_graph(npa_res, clpo_res) -> List[Tuple[int, ...]]:
+def extract_clpo_graph(npa_res, clpo_res, avisar:bool=True) -> tuple[List[Tuple[int, ...]], str]:
     """Extracts the CLPO graph (edges) directly from janpa-py results."""
     Q = clpo_res.clpo.nao_to_hybrids @ clpo_res.clpo.lo_to_hybrids.T
     sds_clpo = Q.T @ npa_res.sds_nao @ Q
@@ -40,13 +40,16 @@ def extract_clpo_graph(npa_res, clpo_res) -> List[Tuple[int, ...]]:
     nodes = []
     n_lo = len(occupancies)
     i = 0
+    aviso = []
     while i < n_lo:
         lo_type = lo_types[i]
         occ = round(occupancies[i], 5)
         
         if lo_type == LO_TYPE_LP:
             if 0.5 < occ < 1.5:
-                warn(f'Lone Pair {i} found with occupation close to 1 => {occ:.5f}, take care.')
+                aviso.append((lo_type,i,occ))
+                if avisar:
+                    warn(f'Lone Pair {i} found with occupation close to 1 => {occ:.5f}, take care.')
             if occ < 1.0:
                 i += 1
                 continue
@@ -62,16 +65,18 @@ def extract_clpo_graph(npa_res, clpo_res) -> List[Tuple[int, ...]]:
             bd_occ = occ
             nb_occ = round(occupancies[i+1], 5)
             if bd_occ + nb_occ < 1.7:
-                warn(f'Bond pair orbitals [{i},{i+1}] population expected under expected 2e-, predicted: {bd_occ + nb_occ:.5f}, take care with predicted edges.')
+                aviso.append((lo_type,i,bd_occ + nb_occ))
+                if avisar:
+                    warn(f'Bond pair orbitals [{i},{i+1}] population expected under expected 2e-, predicted: {bd_occ + nb_occ:.5f}, take care with predicted edges.')
             nodes.append((i, i + 1))
             i += 2
             
         else:
             i += 1
             
-    return nodes
+    return nodes, aviso
 
-def _run_janpa_pipeline(pfmol, mo_coeff, mo_occ, mo_energy, thres=1e-9, silent=True, custom_edges=None):
+def _run_janpa_pipeline(pfmol, mo_coeff, mo_occ, mo_energy, thres=1e-9, silent=True, custom_edges=None, avisar:bool=True):
     """Internal helper to run the JANPA pipeline entirely in memory/tempfiles."""
     with tempfile.TemporaryDirectory() as tmpdir:
         molden_in = os.path.join(tmpdir, "temp.molden")
@@ -92,7 +97,7 @@ def _run_janpa_pipeline(pfmol, mo_coeff, mo_occ, mo_energy, thres=1e-9, silent=T
                     clpo_opts.edges = str(custom_edges) 
                 
                 clpo_res = create_clpos(npa_res.sds_nao, npa_res.nao, molden_file.centers, clpo_opts)
-                graph = extract_clpo_graph(npa_res, clpo_res)
+                graph, aviso = extract_clpo_graph(npa_res, clpo_res, avisar)
                 
                 # CRITICAL: These matrices have shape (n_orb, n_ao) where ROWS are orbitals.
                 # Tequila expects (n_ao, n_orb) where COLUMNS are orbitals.
@@ -108,40 +113,41 @@ def _run_janpa_pipeline(pfmol, mo_coeff, mo_occ, mo_energy, thres=1e-9, silent=T
             if silent:
                 devnull.close()
                 
-    return aho_to_ao, clpo_to_ao, graph
+    return aho_to_ao, clpo_to_ao, graph, aviso
 
 def generate_molden(mol: QuantumChemistryBase, filename: str = None, output_dir: str = None, 
                     mo_occ: list = None, mo_energy: list = None, use_mp2: bool = False, 
                     option1: bool = True, use_active: bool = True):
     pass
 
-def generate_CLPO_molecule_edges(mol: QuantumChemistryBase, edges: list = None, output_dir: str = None, 
-                                 thres: Number = 1.e-12, silent: bool = True, use_active: bool = True, 
-                                 rm_files: bool = True, **kwargs) -> Tuple[QuantumChemistryBase, list]:
+def generate_CLPO_molecule_edges(
+        mol: QuantumChemistryBase,
+        edges: list = None,
+        output_dir: str = None,
+        thres: Number = 1.e-12,
+        silent: bool = True,
+        use_active: bool = True,
+        **kwargs
+    ) -> Tuple[QuantumChemistryBase, list]:
     if output_dir is None:
         output_dir = os.getcwd()
         
     pfmol = MoleculeToPyscf(mol)
     mf_full = scf.RHF(pfmol).run()
     
+    # edges are bonds imposed on the CLPOs between 0-based atoms, e.g. [(1, 2), (1, 2)] for a double bond between atoms 1
+    # and 2; the bonds between the other atom pairs are found automatically. Atoms do not depend on the active space,
+    # so they are passed as given. Cast to native int to avoid np.int64 string representation issues
     custom_edges = None
     if edges is not None:
-        if use_active:
-            _, to_active = generate_HAO_molecule(deepcopy(mol), output_dir=output_dir, thres=thres, silent=True, use_active=True, rm_files=False, to_active=True)
-            d = {i.idx: i.idx_total for i in mol.integral_manager.active_orbitals}
-            to_active_inv = {v: k for k, v in to_active.items()}
-            # Cast to native int to avoid np.int64 string representation issues
-            custom_edges = [tuple([int(to_active_inv[d[e]]) for e in edge]) for edge in edges]
-        else:
-            # Cast to native int to avoid np.int64 string representation issues
-            custom_edges = [tuple([int(e) for e in edge]) for edge in edges]
+        custom_edges = [tuple([int(e) for e in edge]) for edge in edges]
 
     # clpo_to_ao is now (n_ao, n_clpo) after the transpose fix in _run_janpa_pipeline
-    _, clpo_to_ao_full, graph_full = _run_janpa_pipeline(
+    _, clpo_to_ao_full, graph_full, aviso = _run_janpa_pipeline(
         pfmol, mf_full.mo_coeff, mf_full.mo_occ, mf_full.mo_energy,
-        thres=thres, silent=silent, custom_edges=custom_edges
+        thres=thres, silent=silent, custom_edges=custom_edges, avisar=not use_active
     )
-    
+
     if use_active:
         nmol_full = deepcopy(mol)
         nmol_full.integral_manager.orbital_coefficients = clpo_to_ao_full
@@ -152,6 +158,7 @@ def generate_CLPO_molecule_edges(mol: QuantumChemistryBase, edges: list = None, 
         ncore = len(mol_out.integral_manager.orbital_coefficients) - mol_out.n_orbitals
         graph = [tuple([to_active[i] - ncore for i in edge if i in to_active.keys()]) for edge in graph_full]
         graph = [g for g in graph if len(g)]
+        __raise_aviso(aviso, to_active, ncore)
     else:
         mo_matrix = orthogonalize(clpo_to_ao_full, mol.integral_manager.overlap_integrals)
         mol_out = deepcopy(mol)
@@ -172,9 +179,9 @@ def generate_HAO_molecule(mol: QuantumChemistryBase, output_dir: str = None, thr
     ret2act = kwargs.get('to_active', False)
     
     # aho_to_ao_full is now (n_ao, n_hyb) after the transpose fix in _run_janpa_pipeline
-    aho_to_ao_full, _, _ = _run_janpa_pipeline(
+    aho_to_ao_full, _, _, aviso = _run_janpa_pipeline(
         pfmol, mf_full.mo_coeff, mf_full.mo_occ, mf_full.mo_energy,
-        thres=thres, silent=silent
+        thres=thres, silent=silent, avisar=use_active,
     )
     
     if use_active:
@@ -183,6 +190,7 @@ def generate_HAO_molecule(mol: QuantumChemistryBase, output_dir: str = None, thr
         nmol_full.integral_manager._orbital_type = "HAO"
         
         mol_out, to_active = transform(original=mol, modified=nmol_full, orbital_type='HAO')
+        __raise_aviso(aviso, to_active, len(mol_out.integral_manager.orbital_coefficients) - mol_out.n_orbitals)
         if ret2act:
             return mol_out, to_active
         return mol_out
@@ -198,3 +206,10 @@ def generate_CLPO_molecule(mol: QuantumChemistryBase, edges: list = None, output
                            rm_files: bool = True, **kwargs) -> QuantumChemistryBase:
     mol_out, _ = generate_CLPO_molecule_edges(mol, edges, output_dir, thres, silent, use_active, rm_files, **kwargs)
     return mol_out
+
+def __raise_aviso(aviso:tuple[int,int,float], to_active:dict[int,int], ncore:int=0):
+    warnings = {LO_TYPE_LP:"Lone Pair {i} found with occupation close to 1 => {occ:.5f}, take care.",
+                LO_TYPE_BD:"Bond pair orbitals [{i},{j}] population expected under expected 2e-, predicted: {occ:.5f}, take care with predicted edges."}
+    for w in aviso:
+        lo_type, idx, occ = w
+        warn(warnings[lo_type].format(i=to_active[idx] - ncore,j=to_active[idx+1]-ncore, occ=occ))
