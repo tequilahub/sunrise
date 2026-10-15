@@ -114,21 +114,33 @@ def get_core(c_orig:numpy.ndarray, d_orig:numpy.ndarray, s:numpy.ndarray, active
 
     return sorted(chosen_fr_idx)
 
-def transform(modified:QuantumChemistryBase, original:QuantumChemistryBase, orbital_type:str = None) -> Tuple[QuantumChemistryBase, dict]:
+def transform(modified:QuantumChemistryBase, original:QuantumChemistryBase, orbital_type:str = None, *args, **kwargs) -> Tuple[QuantumChemistryBase, dict]:
     '''
     Procedure similar to what is done in use_native_orbitals but for arbitrary basis keeped insied modified. Keeps frozen orbitals canHF
     orthogonalized with the active modified ones
-    Returns modified molecule with the core orbitals of the original one
+    modified: sunrise molecule with modified orb. coeff. to be orthogonalized
+    original: sunrise HF molecule. Not runing here a new HF to be backend independent.
+    orbital type: the text that will show whem printing the molecule
+    kwargs: Molecular arguments. It can also be defined the core and active orbitals, see get_core and get_active above.
+    Returns modified sunrise molecule with the core orbitals of the original one
     And a dictionary with the form {active_orbital_index_before:active_orbital_index_after}
     The frozen orbitals will always be the N first on the orbital matrix
     '''
-    core = [i.idx_total for i in original.integral_manager.orbitals if i.idx is None]
+    if "core" in kwargs:
+        core = kwargs["core"]
+        kwargs.pop("core")
+    else:
+        core = [i.idx_total for i in original.integral_manager.orbitals if i.idx is None]
     assert len(original.integral_manager.orbitals) == len(modified.integral_manager.orbitals)
     c_orig = original.integral_manager.orbital_coefficients.copy()
     d_orig = modified.integral_manager.orbital_coefficients.copy()
     s = original.integral_manager.overlap_integrals.copy()
     n_basis = c_orig.shape[0]
-    active = get_active(c_orig, d_orig, s, [i.idx_total for i in original.integral_manager.orbitals if i.idx is not None])
+    if "active" in kwargs:
+        active = kwargs["active"]
+        kwargs.pop("active")
+    else:
+        active = get_active(c_orig, d_orig, s, [i.idx_total for i in original.integral_manager.orbitals if i.idx is not None])
     to_active =  [i for i in range(n_basis) if  i not in core]
     to_active = {active[i] : to_active[i] for i in range(len(active))}
     reference_orbitals = core.copy()
