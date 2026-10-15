@@ -237,3 +237,5 @@ erik/*
 *.out
 *.clean
 timer.dat
+# copy of tests/data that the psi4 CI workflow makes at the repository root
+/data/

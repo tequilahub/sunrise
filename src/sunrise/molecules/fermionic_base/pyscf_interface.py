@@ -60,7 +60,9 @@ class QuantumChemistryPySCF(FermionicBase):
             if point_group is not None:
                 if point_group.lower() != "c1":
                     mol.symmetry = True
-                    mol.symmetry_subgroup = point_group
+                    # PySCF only computes in Abelian groups, for the others (e.g. D4h) it takes the largest Abelian subgroup
+                    if pyscf.symm.std_symb(point_group) in pyscf.symm.param.CHARACTER_TABLE:
+                        mol.symmetry_subgroup = point_group
                 else:
                     mol.symmetry = False
             else:
@@ -97,7 +99,6 @@ class QuantumChemistryPySCF(FermionicBase):
             g_ao = NBodyTensor(elems=g_ao, ordering="mulliken")
 
             self.pyscf_molecule = mol
-            self.point_group = mol.symmetry_subgroup
 
             kwargs["overlap_integrals"] = S
             kwargs["two_body_integrals"] = g_ao
