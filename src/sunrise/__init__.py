@@ -2,7 +2,7 @@ from sunrise import molecules
 from sunrise.molecules import qubit_base
 from sunrise.molecules import qubit_base as chemistry  # shortcut
 from sunrise.molecules import qubit_base as quantumchemistry  # backward compatible shortcut
-from sunrise.molecules import Molecule, MoleculeFromOpenFermion, MoleculeFromSunrise, MoleculeFromPyscf, MoleculeToPyscf
+from sunrise.molecules import Molecule, MoleculeFromOpenFermion, MoleculeFromSunrise, MoleculeFromPyscf, MoleculeToPyscf, load_molecule
 from sunrise.molecules.qubit_base import QuantumChemistryBase, ParametersQC, NBodyTensor
 from sunrise.plot_MO import plot_MO
 from sunrise.graphical.qpic_visualization import qpic_to_pdf,qpic_to_png

@@ -1130,3 +1130,64 @@ def test_ghost_atom():
     fci1 = mol.compute_energy("fci")
     mol.make_molecule().get_molecular_hamiltonian()  # ensure that openfermion doesn't break with the ghost atom
     assert fci0 > fci1
+
+
+def save_and_load(mol, tmp_path, monkeypatch):
+    mol.save(str(tmp_path / "molecule.h5"))
+    # load it from another directory, the file must not depend on where it was written
+    (tmp_path / "other").mkdir()
+    monkeypatch.chdir(tmp_path / "other")
+    return sun.load_molecule(str(tmp_path / "molecule.h5"))
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+@pytest.mark.parametrize(
+    "nature, kwargs",
+    [
+        ("qubit", {"transformation": "ReorderedJordanWigner"}),
+        ("hybrid", {"select": "FBBF", "two_qubit": True}),
+        ("fermionic", {}),
+    ],
+)
+def test_save_load(tmp_path, monkeypatch, nature, kwargs):
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
+    mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf", nature=nature, **kwargs)
+    loaded = save_and_load(mol, tmp_path, monkeypatch)
+
+    assert type(loaded) is type(mol)
+    assert loaded.parameters == mol.parameters
+    assert loaded.make_hamiltonian() == mol.make_hamiltonian()
+    if nature == "hybrid":
+        assert loaded.select == mol.select
+        assert loaded.two_qubit == mol.two_qubit
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_save_load_transformed_orbitals(tmp_path, monkeypatch):
+    # the orbitals, active space and point group of the molecule are kept, not the ones the backend computes
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
+    mol = sun.Molecule(geometry=geometry, basis_set="6-31g", backend="pyscf", active_orbitals=[0, 1, 2, 3, 5])
+    U = numpy.linalg.qr(numpy.random.default_rng(1).normal(size=(mol.n_orbitals, mol.n_orbitals)))[0]
+    mol = mol.transform_orbitals(U, name="random")
+    mol.point_group = "c2v"
+    loaded = save_and_load(mol, tmp_path, monkeypatch)
+
+    assert numpy.allclose(loaded.integral_manager.orbital_coefficients, mol.integral_manager.orbital_coefficients)
+    assert [o.idx_total for o in loaded.integral_manager.active_orbitals] == [0, 1, 2, 3, 5]
+    assert loaded.integral_manager._orbital_type == "random"
+    assert loaded.point_group.schoenflies_label == "C2v"
+    assert loaded.make_hamiltonian() == mol.make_hamiltonian()
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_save_load_xyz_geometry(tmp_path, monkeypatch):
+    # the coordinates are stored, not the name of the xyz file
+    monkeypatch.chdir(tmp_path)
+    with open("h4.xyz", "w") as f:
+        f.write("4\nhydrogen chain\nH 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5\n")
+    mol = sun.Molecule(geometry="h4.xyz", basis_set="sto-3g", backend="pyscf")
+    H = mol.make_hamiltonian()
+    loaded = save_and_load(mol, tmp_path, monkeypatch)
+
+    assert loaded.parameters.name == "h4"
+    assert loaded.make_hamiltonian() == H
