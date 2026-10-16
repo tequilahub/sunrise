@@ -51,7 +51,7 @@ class SPASolver:
         return self.vqe(*args, **kwargs)
     
     def vqe(self, H, circuit, molecule, *args, **kwargs) -> OptimizerResults:
-        if self.edges is not None and isinstance(self.edges,list) and isinstance(self.edges[0],(tuple,list)) and isinstance(self.edges[0][0],int):
+        if self.edges is not None and isinstance(self.edges,list) and isinstance(self.edges[0],(tuple,list)) and isinstance(self.edges[0][0],int) and all([len(edge) < 3 for edge in self.edges]):
             variables, energy = spa_solve_graph(mol=molecule,graph=self.edges)
             return OptimizerResults(energy=energy, history=None, variables=variables)
         
@@ -81,7 +81,7 @@ class SPASolver:
     def compute_rdms(self, U, variables, molecule, use_hcb=False ):
         start = time.time()
         if self.fast_rdm:
-            if self.edges is not None and isinstance(self.edges,list) and isinstance(self.edges[0],(tuple,list)) and isinstance(self.edges[0][0],int):
+            if self.edges is not None and isinstance(self.edges,list) and isinstance(self.edges[0],(tuple,list)) and isinstance(self.edges[0][0],int) and all([len(edge) < 3 for edge in self.edges]):
                 return spa_rdms(edges=self.edges, variables=variables, n_orbitals=molecule.n_orbitals)
             # needs hacked tq version where molecule.compute_rdms gives back the raw list of qops
             rdm1, rdm2 = fast_rdm(U=U, mol=molecule, clusters=self.grouping, variables=variables,backend=self.backend)
