@@ -10,21 +10,23 @@ from tequila.hamiltonian.paulis import Sp,Sm,Z
 from tequila import QubitHamiltonian
 import openfermion
 from sunrise.molecules.qubit_base.encodings import EncodingBase as EB
+from sunrise.molecules.qubit_base import encodings as qubit_encodings
 from copy import deepcopy
 def known_encodings():
     # convenience for testing and I/O
     encodings = {
         "JordanWigner": JordanWigner,
-        # "BravyiKitaev": BravyiKitaev,
+        "BravyiKitaev": BravyiKitaev,
         # "BravyiKitaevFast": BravyiKitaevFast,
-        # "BravyiKitaevTree": BravyiKitaevTree,
+        "BravyiKitaevTree": BravyiKitaevTree,
+        "TaperedBinary": TaperedBinary,
         # "TaperedBravyiKitaev": TaperedBravyKitaev
     }
     # aliases
     encodings = {**encodings,
                  "ReorderedJordanWigner": lambda **kwargs: JordanWigner(up_then_down=True, **kwargs),
-                 # "ReorderedBravyiKitaev": lambda **kwargs: BravyiKitaev(up_then_down=True, **kwargs),
-                 # "ReorderedBravyiKitaevTree": lambda **kwargs: BravyiKitaevTree(up_then_down=True, **kwargs),
+                 "ReorderedBravyiKitaev": lambda **kwargs: BravyiKitaev(up_then_down=True, **kwargs),
+                 "ReorderedBravyiKitaevTree": lambda **kwargs: BravyiKitaevTree(up_then_down=True, **kwargs),
                  }
     return {k.replace("_", "").replace("-", "").upper(): v for k, v in encodings.items()}
 
@@ -98,14 +100,21 @@ class JordanWigner(EB):
         for pair in lista:
             index = pair[0]
             temp = pair[1]
+            fer = []
             for term in index:
                 if (not self.two_qubit) and (self.select[term[0]//2]=="B" and (term[0]%2)):
                     pass
+                elif type(self) is not JordanWigner and (self.two_qubit or self.select[term[0]//2]=="F"):
+                    # encoded below with the qubit_base encoding of the same name, the modes are the positions in FER_SO
+                    fer.append((self.FER_SO.index(self.pos[term[0]]), term[1]))
                 else:
                     if (term[1]):
                         temp *= cre(term[0])
                     else:
                         temp *= anni(term[0])
+            if len(fer):
+                # the bosonic operators have no strings, they commute with the fermionic ones
+                temp *= getattr(qubit_encodings, type(self).__name__)(n_electrons=self.n_electrons, n_orbitals=len(self.FER_SO) // 2)(openfermion.FermionOperator(tuple(fer))).map_qubits(dict(enumerate(self.FER_SO)))
             qop += temp
         return qop
 
@@ -140,18 +149,24 @@ class JordanWigner(EB):
                 U += X(target=pos[2 * i + 1], control=pos[2 * i])
             if not bos and (alle or self.two_qubit or self.select[i]=='F'):
                 U += X(target=pos[2*i+1], control=pos[2*i])
+        if not bos:
+            U += self.jw_to_me()
         return U
 
     def me_to_jw(self) -> QCircuit:
-        return QCircuit()
+        return self.jw_to_me().dagger()
 
     def jw_to_me(self) -> QCircuit:
-        return QCircuit()
+        if type(self) is JordanWigner or not len(self.FER_SO):
+            return QCircuit()
+        return getattr(qubit_encodings, type(self).__name__)(n_electrons=self.n_electrons, n_orbitals=len(self.FER_SO) // 2).jw_to_me().map_qubits(dict(enumerate(self.FER_SO)))
 
     def map_state(self, state: list, *args, **kwargs):
         state = state + [0] * (2 * self.n_orbitals - len(state))
         if not all([state[2*i] == state[2*i+1] for i in range(self.n_orbitals) if self.select[i]=='B']):
             raise TequilaException("Incompatible state and encoding selection")
+        if type(self) is not JordanWigner:
+            return EB.map_state(self, state)
         for i in range(len(state)//2):
             if self.select[i] == 'B':
                 if self.two_qubit: pass
@@ -287,3 +302,17 @@ class JordanWigner(EB):
                     f"Warning, encoding format not recognised: {type(select)}.\n Please choose either a Str, Dict, List or Tuple.")
         self.FER_SO, self.pos = select_to_list(select)
         self.select = select
+        if type(self) is TaperedBinary and len(self.FER_SO) and not self.two_qubit and "B" in select.values():
+            raise TequilaException("TaperedBinary needs a fixed number of electrons in the F orbitals: use only F orbitals or two_qubit=True")
+
+
+class BravyiKitaev(JordanWigner):
+    """OpenFermion::bravyi_kitaev on the fermionic orbitals"""
+
+
+class BravyiKitaevTree(JordanWigner):
+    """OpenFermion::bravyi_kitaev_tree on the fermionic orbitals"""
+
+
+class TaperedBinary(JordanWigner):
+    """OpenFermion::binary_code_transform with the checksum code on the fermionic orbitals, the 2 tapered qubits stay in |0>"""
