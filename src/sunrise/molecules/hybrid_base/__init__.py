@@ -33,7 +33,8 @@ def HyMolecule(geometry: str = None,basis_set: str = None,transformation: typing
     basis_set
         quantum chemistry basis set (sto-3g, cc-pvdz, etc)
     transformation
-        The Fermion to Qubit Transformation (jordan-wigner, bravyi-kitaev, bravyi-kitaev-tree and whatever OpenFermion supports)
+        The Fermion to Qubit Transformation (jordan-wigner, bravyi-kitaev, bravyi-kitaev-tree,
+        tapered-binary and the reordered ones, see hybrid_base/encodings.py), the bosonic orbitals are hard-core bosons
     backend
         quantum chemistry backend (psi4, pyscf)
     guess_wfn
