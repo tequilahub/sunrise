@@ -221,6 +221,17 @@ def test_ucc_singles_psi4():
     )
 
 
+@pytest.mark.skipif(condition=not HAS_PSI4, reason="you don't have psi4")
+def test_spa_psi4():
+    # psi4 molecules hold psi4 objects that can not be deepcopied
+    mol = sun.Molecule(geometry="data/h2.xyz", units="angstrom", basis_set="sto-3g", backend="psi4")
+    edges = mol.get_spa_edges()
+    assert edges == [(0, 1)]
+    U = sun.FCircuit.from_edges(edges=edges, n_orb=mol.n_orbitals)
+    result = sun.minimize(sun.Braket(molecule=mol, ket=U), silent=True)
+    assert numpy.isclose(result.energy, -1.1368354639104123, atol=1.0e-4)
+
+
 def do_test_ucc(qc_interface, parameters, result, trafo, backend="qulacs"):
     # check examples for comments
     psi4_interface = qc_interface(parameters=parameters, transformation=trafo)

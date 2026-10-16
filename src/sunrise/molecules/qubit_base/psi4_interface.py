@@ -271,6 +271,19 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
 
         self.kwargs = kwargs
 
+    def __deepcopy__(self, memo):
+        # psi4 objects can not be deepcopied (they can not be pickled), the copy shares them
+        psi4_objects = [self.psi4_mol, getattr(self, "ref_wfn", None)]
+        for log in self.logs.values():
+            psi4_objects += [log.wfn, log.mol]
+        for x in psi4_objects:
+            memo[id(x)] = x
+        result = self.__class__.__new__(self.__class__)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            setattr(result, k, copy.deepcopy(v, memo))
+        return result
+
     @property
     def nirrep(self):
         return self.ref_wfn.nirrep()
