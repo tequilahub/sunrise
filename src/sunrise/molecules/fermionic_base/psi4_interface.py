@@ -183,9 +183,10 @@ class QuantumChemistryPsi4(FermionicBase):
 
         self.psi4_mol = psi4.geometry(parameters.get_geometry_string())
         psi4.activate(self.psi4_mol)
-        self._point_group = self.psi4_mol.point_group().symbol()
-        if "point_group" in kwargs:
-            self._point_group = kwargs["point_group"]
+        # the point group psi4 computes in, psi4 only supports Abelian groups (for e.g. D4h it keeps its own choice)
+        self._psi4_point_group = self.psi4_mol.point_group().symbol()
+        if kwargs.get("point_group") is not None and kwargs["point_group"].lower() in ("c1", "ci", "c2", "cs", "d2", "c2v", "c2h", "d2h"):
+            self._psi4_point_group = kwargs["point_group"]
 
         self.energies = {}  # history to avoid recomputation
         self.logs = {}  # store full psi4 output
@@ -258,14 +259,13 @@ class QuantumChemistryPsi4(FermionicBase):
         )
         # need to recompute
         # (psi4 won't take over active space information otherwise)
+        if kwargs.get("point_group") is not None:
+            # the molecule took the point group, psi4 computes in its Abelian one
+            kwargs["point_group"] = self._psi4_point_group
         self.compute_energy(method="hf", recompute=True, *args, **kwargs)
         self.ref_wfn = self.logs["hf"].wfn
 
         self.kwargs = kwargs
-
-    @property
-    def point_group(self):
-        return self._point_group
 
     @property
     def nirrep(self):
@@ -302,7 +302,7 @@ class QuantumChemistryPsi4(FermionicBase):
         else:
             tmp = psi4.driver.p4util.numpy_helper._to_array(wfn.epsilon_a(), dense=False)
 
-        if irrep is None or self.point_group.lower() == "c1":
+        if irrep is None or self._psi4_point_group.lower() == "c1":
             result = []
             for x in tmp:
                 result += [x]
@@ -320,7 +320,7 @@ class QuantumChemistryPsi4(FermionicBase):
                 method="hf",
                 ignore_active_space=True,
                 options={"RHF__FAIL_ON_MAXITER": False},
-                point_group=self.point_group,
+                point_group=self._psi4_point_group,
             )
             ref_wfn = self.logs["hf"].wfn
 
@@ -597,7 +597,7 @@ class QuantumChemistryPsi4(FermionicBase):
         result += "{key:15} : {value:15} \n".format(
             key="Point Group (full)", value=self.psi4_mol.get_full_point_group().lower()
         )
-        result += "{key:15} : {value:15} \n".format(key="Point Group (used)", value=self.point_group)
+        result += "{key:15} : {value:15} \n".format(key="Point Group (used)", value=self._psi4_point_group)
         result += "{key:15} : {value} \n".format(key="nirrep", value=self.nirrep)
         result += "{key:15} : {value} \n".format(key="irreps", value=self.irreps)
         result += "{key:15} : {value:15} \n".format(

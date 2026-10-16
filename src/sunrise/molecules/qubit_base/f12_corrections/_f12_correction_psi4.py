@@ -61,7 +61,7 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
 
         # If cabs_type == "cabs+", need C1-symmetry
         if self.cabs_type == "cabs+":
-            if not self.mol._point_group.lower() == "c1":
+            if not self.mol._psi4_point_group.lower() == "c1":
                 raise TequilaException("CABS+ approach currently requires C1 symmetry!")
 
         if (self.rdm1 is None) or (self.rdm2 is None):

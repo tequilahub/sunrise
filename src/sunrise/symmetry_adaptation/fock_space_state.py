@@ -1,15 +1,18 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from collections.abc import Generator
 from itertools import product
 import gc
-from typing import Any
+from typing import Any, TYPE_CHECKING
 import tequila
-from sunrise.molecules.qubit_base import Molecule
 import numpy
 from pandas import DataFrame
 from sunrise.symmetry_adaptation.irrep_provider import IrrepProviderBase
 from functools import cached_property
 from itertools import combinations
+if TYPE_CHECKING:
+	# only for type hints, importing it at runtime would be circular
+	from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 def _fixed_popcount_bitstrings(n_qubits: int, n_ones: int) -> Generator[str, None, None]:
     """Yields exactly the bitstrings of length n_qubits with n_ones bits set —
@@ -20,7 +23,7 @@ def _fixed_popcount_bitstrings(n_qubits: int, n_ones: int) -> Generator[str, Non
             val |= (1 << p)
         yield format(val, f'0{n_qubits}b')
 
-def _fragment_bitstrings(mol: Molecule, fragment_orbitals: list[int], fragment_electrons: int | str | None = None) -> Generator[str, None, None]:
+def _fragment_bitstrings(mol: QuantumChemistryBase, fragment_orbitals: list[int], fragment_electrons: int | str | None = None) -> Generator[str, None, None]:
     """Yields full-space bitstrings for a fragment, padding other orbitals with '00' (vacuum)."""
     n_spatial = mol.n_orbitals
     n_fragment_qubits = 2 * len(fragment_orbitals)
@@ -52,14 +55,14 @@ def _fragment_bitstrings(mol: Molecule, fragment_orbitals: list[int], fragment_e
 class FockSpaceState:
 	"""A class representing a state in Fock space, i.e. a state of occupation numbers for each orbital."""
 
-	mol: Molecule
+	mol: QuantumChemistryBase
 	wavefunction: tequila.QubitWaveFunction
 	irrep_provider: IrrepProviderBase
 	_S2: float | None = None
 	_irrep: str | None = None
 
 
-	def __init__(self, mol: Molecule, wavefunction: str | tequila.QubitWaveFunction, provider: IrrepProviderBase, S2=None, irrep=None, fragment_orbitals: list[int] | None = None, m_s=None):
+	def __init__(self, mol: QuantumChemistryBase, wavefunction: str | tequila.QubitWaveFunction, provider: IrrepProviderBase, S2=None, irrep=None, fragment_orbitals: list[int] | None = None, m_s=None):
 		self.mol = mol
 		if isinstance(wavefunction, str):
 			self.wavefunction = tequila.QubitWaveFunction.from_string(f"|{wavefunction}>")
@@ -262,12 +265,12 @@ class FockSpaceState:
 		)
 	
 	@classmethod
-	def all_states(cls, mol: Molecule, provider: IrrepProviderBase) -> list['FockSpaceState']:
+	def all_states(cls, mol: QuantumChemistryBase, provider: IrrepProviderBase) -> list['FockSpaceState']:
 		"""Generates all possible Fock space states for a given molecule."""
 		return cls.by_filter(mol, provider)
 	
 	@classmethod
-	def non_ionic_states(cls, mol: Molecule, provider: IrrepProviderBase, fragment_orbitals: list[int] | None = None, fragment_electrons: int | None = None) -> list['FockSpaceState']:
+	def non_ionic_states(cls, mol: QuantumChemistryBase, provider: IrrepProviderBase, fragment_orbitals: list[int] | None = None, fragment_electrons: int | None = None) -> list['FockSpaceState']:
 		"""Generates all non-ionic Fock space states for a given molecule."""
 		if fragment_orbitals is None:
 			n_qubits = 2 * mol.n_orbitals
@@ -276,7 +279,7 @@ class FockSpaceState:
 		return cls.by_filter(mol, provider, fragment_orbitals=fragment_orbitals, fragment_electrons=fragment_electrons)
 	
 	@classmethod
-	def by_filter(cls, mol: Molecule, provider: IrrepProviderBase, mo_occ: list[int] | None = None, m_s: int | None = None, S2: int | None = None, spin_multiplicity: str | None = None, irrep: str | None = None, non_ionic: bool = False, max_count: int | None = None, bitstring_generator: Generator[str, None, None] | None = None, fragment_orbitals: list[int] | None = None, fragment_electrons: int | None = None) -> list['FockSpaceState']:
+	def by_filter(cls, mol: QuantumChemistryBase, provider: IrrepProviderBase, mo_occ: list[int] | None = None, m_s: int | None = None, S2: int | None = None, spin_multiplicity: str | None = None, irrep: str | None = None, non_ionic: bool = False, max_count: int | None = None, bitstring_generator: Generator[str, None, None] | None = None, fragment_orbitals: list[int] | None = None, fragment_electrons: int | None = None) -> list['FockSpaceState']:
 		"""Efficiently generates Fock space states for a given molecule taking various filters into account."""
 		# import pyscf
 
