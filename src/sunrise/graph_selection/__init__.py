@@ -22,5 +22,4 @@ from .adapted_heuristics import (
     random_blossom,
     random_blossom_scaled,
 )
-from .spa_solve import hcb_model, spa_angles_for_graph
-from .spa import OptimizationResult, generate_initial_guess_from_edges, run_spa_optimization
+from .spa import run_spa_optimization

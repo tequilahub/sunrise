@@ -2,14 +2,12 @@ import inspect
 from typing import Any, Sequence, TypedDict
 
 import numpy as np
-import tequila as tq
 from numpy import eye
 from numpy.typing import NDArray
 
-from ..expval.orbital_optimizer import optimize_orbitals
 from ..molecules.qubit_base import QuantumChemistryBase
 from .shared import generate_min_global_distance_edges
-from .spa_solve import spa_angles_for_graph
+from ..spafastprototype import spa_solve_graph, run_spa
 
 
 class CustomData(TypedDict):
@@ -68,39 +66,28 @@ def run_spa_optimization(
         edges=edges, vertices=coordinates
     ).T
 
-    U = molecule.make_ansatz(name="HCB-SPA", edges=edges)  # Hardcore Boson Circuit
-
-    opt = optimize_orbitals(
-        molecule.use_native_orbitals(),
-        U,
+    opt = run_spa(
+        mol=molecule.use_native_orbitals(),
+        edges=edges,
         initial_guess=initial_guess,
         silent=True,
         use_hcb=True,
     )
 
     mol = opt.molecule
-    H = mol.make_hardcore_boson_hamiltonian()
-
-    E = tq.ExpectationValue(H=H, U=U)
 
     graph = [tuple(edge) for edge in edges]
-    angles = spa_angles_for_graph(mol, graph)
+    variables, energy = spa_solve_graph(mol, graph)
     var_dict = {}
 
-    for k, param_key in enumerate(U.make_parameter_map()):
-        var_dict[param_key] = angles[k]
+    U_x = mol.make_ansatz(name="SPA", edges=edges)
 
-    result = tq.simulate(E, variables=var_dict)
-
-    # result2 = tq.minimize(E, silent=True)
-
-    U_x = mol.hcb_to_me(U)
 
     return OptimizationResult(
-        energy=result,
+        energy=energy,
         orbital_coefficients=opt.molecule.integral_manager.orbital_coefficients,
         orbital_transformation=opt.mo_coeff,
-        # variables=result.variables,
+        variables=variables,
         variables=var_dict,
         circuit=U_x,
         molecule=mol,

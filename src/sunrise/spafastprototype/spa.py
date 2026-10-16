@@ -7,8 +7,10 @@ from .fast_rdm import fast_rdm
 from .fast_qtensor import fast_qtensor
 from .decompose import decompose, make_decomposed_clusters
 from ..expval.orbital_optimizer import OptimizeOrbitalsResult
+from tequila.optimizers.optimizer_base import OptimizerResults
 from tequila import TequilaWarning
 from typing import Union
+from .spa_classical_solver import spa_solve_graph, spa_rdms
 
 def run_spa(mol, edges, initial_guess=None, decompose=True, silent=True,grouping:Union[int,list[int],None]=None,backend:str='qulacs', fast_rdm=True, **kwargs)->OptimizeOrbitalsResult:
 
@@ -28,13 +30,13 @@ def run_spa(mol, edges, initial_guess=None, decompose=True, silent=True,grouping
         else: initial_guess = None
     grouping = make_decomposed_clusters(U, grouping)
 
-    vqe_solver = SPASolver(decompose=decompose,grouping=grouping,backend=backend, fast_rdm=fast_rdm)
+    vqe_solver = SPASolver(decompose=decompose,grouping=grouping,backend=backend, fast_rdm=fast_rdm, edges=edges)
     opt = optimize_orbitals(circuit=U, molecule=mol, initial_guess=initial_guess, vqe_solver=vqe_solver, silent=silent, use_hcb=True,vqe_solver_arguments={"optimizer_arguments":{"backend":backend}}, **kwargs)
     return opt
 
 class SPASolver:
 
-    def __init__(self, decompose=False,grouping:Union[int,list[int],None]=None,backend:str='qulacs', fast_rdm=True, restrict_to_hcb=True):
+    def __init__(self, decompose=False,grouping:Union[int,list[int],None]=None,backend:str='qulacs', fast_rdm=True, restrict_to_hcb=True, edges:list[tuple[int]]=None):
         self.decompose=decompose
         self.rdm_qtensors = None
         self.variables = None
@@ -43,11 +45,16 @@ class SPASolver:
         self.restart_from_previous_runs=True
         self.restrict_to_hcb = restrict_to_hcb # need to change to "use_hcb" for consistency, but also needs to be changted in tequila
         self.fast_rdm=fast_rdm
+        self.edges = edges
+        
     def __call__(self, *args, **kwargs):
         return self.vqe(*args, **kwargs)
     
-    def vqe(self, H, circuit, molecule, *args, **kwargs):
-
+    def vqe(self, H, circuit, molecule, *args, **kwargs) -> OptimizerResults:
+        if self.edges is not None and isinstance(self.edges,list) and isinstance(self.edges[0],(tuple,list)) and isinstance(self.edges[0][0],int):
+            variables, energy = spa_solve_graph(mol=molecule,graph=self.edges)
+            return OptimizerResults(energy=energy, history=None, variables=variables)
+        
         if "restrict_to_hcb" in kwargs:
             self.restrict_to_hcb = kwargs
         # failsave:
@@ -74,6 +81,8 @@ class SPASolver:
     def compute_rdms(self, U, variables, molecule, use_hcb=False ):
         start = time.time()
         if self.fast_rdm:
+            if self.edges is not None and isinstance(self.edges,list) and isinstance(self.edges[0],(tuple,list)) and isinstance(self.edges[0][0],int):
+                return spa_rdms(edges=self.edges, variables=variables, n_orbitals=molecule.n_orbitals)
             # needs hacked tq version where molecule.compute_rdms gives back the raw list of qops
             rdm1, rdm2 = fast_rdm(U=U, mol=molecule, clusters=self.grouping, variables=variables,backend=self.backend)
         else:
