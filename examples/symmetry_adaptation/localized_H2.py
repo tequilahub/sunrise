@@ -4,10 +4,17 @@ from pandas import DataFrame
 import tequila as tq
 import sunrise as sun
 
-from sunrise.symmetry_adaptation import FockSpaceState, IrrepProvider, SymmetryAdaptedLinearCombintationSymmetrization, SpinSymmetrizationProcedure
+from sunrise.symmetry_adaptation import (
+    FockSpaceState,
+    IrrepProvider,
+    SymmetryAdaptedLinearCombintationSymmetrization,
+    SpinSymmetrizationProcedure,
+)
 
 # Create the molecule, its point group (D2h) is detected from the geometry
-mol = sun.chemistry.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
+mol = sun.chemistry.Molecule(
+    geometry="H 0. 0. 0. \n H 0. 0. 0.74804", basis_set="sto-3g", backend="pyscf"
+)
 
 # Create an irrep provider to indicate that the FockSpaceStates
 # are in the localized/naturalized orbital basis corresponding to
@@ -18,12 +25,16 @@ provider_local = IrrepProvider(mol, "loc")
 states_list: list[FockSpaceState] = FockSpaceState.non_ionic_states(mol, provider_local)
 
 # Symmetrize the states with respect to SALCs
-SALC_symm_list: list[FockSpaceState] = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(states_list)
+SALC_symm_list: list[FockSpaceState] = SymmetryAdaptedLinearCombintationSymmetrization(
+    mol
+).symmetrize(states_list)
 
 # Symmetrize the states with respect to spin
 # Note that the spin symmetrization is intended to
 # be applied after the SALC symmetrization
-spin_symm_list: list[FockSpaceState] = SpinSymmetrizationProcedure(mol).symmetrize(SALC_symm_list)
+spin_symm_list: list[FockSpaceState] = SpinSymmetrizationProcedure(mol).symmetrize(
+    SALC_symm_list
+)
 
 # Display the states as a DataFrame
 FockSpaceState.dataframe(spin_symm_list)
