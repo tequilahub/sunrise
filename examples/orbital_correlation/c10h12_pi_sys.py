@@ -34,9 +34,14 @@ H 5.646212 1.298382 0.000000
 H 6.495727 -0.342292 0.000000
 """
 
-mol = sun.Molecule(geometry=geometry, basis_set='sto-3g', nature='f', active_orbitals=[30,32,33,34,35,36,37,38,39,40]).use_native_orbitals()
+mol = sun.Molecule(
+    geometry=geometry,
+    basis_set="sto-3g",
+    nature="f",
+    active_orbitals=[30, 32, 33, 34, 35, 36, 37, 38, 39, 40],
+).use_native_orbitals()
 # mol = sun.chemistry.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[30,32,33,34,35,36,37,38,39,40]).use_native_orbitals() # for fast-spa
-edges = [(0,1),(2,3),(4,5),(6,7),(8,9)]
+edges = [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]
 # initial_guess = np.array([
 #     [1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
 #     [1,-1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -54,24 +59,38 @@ edges = [(0,1),(2,3),(4,5),(6,7),(8,9)]
 # mo_coeff = opt.mo_coeff
 # with open('c10h12_spa_orb.npy', 'wb') as f:
 #     np.save(f, opt.mo_coeff)
-with open('c10h12_spa_orb.npy', 'rb') as f: # stored mo coeff matrix
+with open("c10h12_spa_orb.npy", "rb") as f:  # stored mo coeff matrix
     mo_coeff = np.load(f)
 
 U = sun.FCircuit.from_edges(n_orb=mol.n_orbitals, edges=edges)
 UR = get_givens_circuit(mo_coeff)
-UR_dag = get_givens_circuit(mo_coeff.T) # Transpose because .dagger() doesn't work
+UR_dag = get_givens_circuit(mo_coeff.T)  # Transpose because .dagger() doesn't work
 U = U + UR_dag
 # print(U.extract_indices())
 # E = sun.Braket(backend='fqe', molecule=mol, U=U)
 # result = sun.minimize(E, silent=False)
 # U = U.map_variables(result.variables)
-variables = {((0, 1), 'D', None): -0.49211983715024776, ((2, 3), 'D', None): -0.484945590285971, ((4, 5), 'D', None): -0.4822927757317614, ((6, 7), 'D', None): -0.4845345232116803, ((8, 9), 'D', None): -0.4971122459912079}
+variables = {
+    ((0, 1), "D", None): -0.49211983715024776,
+    ((2, 3), "D", None): -0.484945590285971,
+    ((4, 5), "D", None): -0.4822927757317614,
+    ((6, 7), "D", None): -0.4845345232116803,
+    ((8, 9), "D", None): -0.4971122459912079,
+}
 U = U.map_variables(variables)
 # print(U)
 # print(sun.simulate(U))
 
-mol = sun.Molecule(geometry=geometry, basis_set='sto-3g', active_orbitals=[30,32,33,34,35,36,37,38,39,40], nature='q', transformation="reordered-jordan-wigner").use_native_orbitals()
+mol = sun.Molecule(
+    geometry=geometry,
+    basis_set="sto-3g",
+    active_orbitals=[30, 32, 33, 34, 35, 36, 37, 38, 39, 40],
+    nature="q",
+    transformation="reordered-jordan-wigner",
+).use_native_orbitals()
 U = U.to_qcircuit(mol)
 pairs = [(i, j) for i in range(mol.n_orbitals) for j in range(i + 1, mol.n_orbitals)]
 for pair in pairs:
-    print(f"I({pair[0],pair[1]}) = {mutual_info_simple(mol, U, orb_a=pair[0], orb_b=pair[1])}")
+    print(
+        f"I({pair[0], pair[1]}) = {mutual_info_simple(mol, U, orb_a=pair[0], orb_b=pair[1])}"
+    )

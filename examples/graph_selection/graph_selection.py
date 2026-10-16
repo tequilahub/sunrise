@@ -35,7 +35,9 @@ mol = sn.Molecule(geometry=geometry, basis_set="sto-3g")
 num_atoms = len(coordinates)
 
 graphs = {
-    "generate_min_global_distance_edges": generate_min_global_distance_edges(coordinates),
+    "generate_min_global_distance_edges": generate_min_global_distance_edges(
+        coordinates
+    ),
     "nearest_insertion": nearest_insertion(coordinates),
 }
 for heuristic in [
@@ -50,8 +52,12 @@ for heuristic in [
     graphs[heuristic.__name__] = heuristic(num_atoms, coordinates)
 
 for name, edges in graphs.items():
-    print(f"{name:36s} {edges}  total distance = {total_distance(edges, coordinates):.4f}")
+    print(
+        f"{name:36s} {edges}  total distance = {total_distance(edges, coordinates):.4f}"
+    )
 
-result = run_spa_optimization(mol, coordinates=coordinates, key_heuristic=minimum_weight_perfect_performance)
+result = run_spa_optimization(
+    mol, coordinates=coordinates, key_heuristic=minimum_weight_perfect_performance
+)
 print("SPA energy ", result["energy"])
 print("FCI energy ", mol.compute_energy("fci"))
