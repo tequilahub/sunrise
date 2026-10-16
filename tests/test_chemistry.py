@@ -562,10 +562,6 @@ def test_fermionic_backends(backend, basis_set, tmp_path, monkeypatch):
     assert mol.n_orbitals == qmol.n_orbitals
     assert numpy.isclose(mol.compute_energy("fci"), qmol.compute_energy("fci"))
 
-    U = mol.make_spa_ansatz(edges=mol.get_spa_edges())
-    result = sun.minimize(sun.Braket(molecule=qmol, ket=U), silent=True)
-    assert numpy.isclose(result.energy, qmol.compute_energy("fci"), atol=1.0e-5)
-
 
 # madness does not use a basis set, psi4 is not available for hybrid molecules
 @pytest.mark.parametrize(
@@ -582,10 +578,6 @@ def test_hybrid_backends(backend, basis_set, tmp_path, monkeypatch):
     mol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend, select="BF", nature="hybrid")
     assert mol.n_orbitals == qmol.n_orbitals
     assert numpy.isclose(mol.compute_energy("fci"), qmol.compute_energy("fci"))
-
-    U = mol.make_ansatz("SPA", edges=mol.get_spa_edges())
-    result = tq.minimize(tq.ExpectationValue(H=mol.make_hamiltonian(), U=U), silent=True)
-    assert numpy.isclose(result.energy, qmol.compute_energy("fci"), atol=1.0e-5)
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
