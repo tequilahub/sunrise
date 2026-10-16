@@ -78,8 +78,6 @@ def run_spa_optimization(
 
     graph = [tuple(edge) for edge in edges]
     variables, energy = spa_solve_graph(mol, graph)
-    var_dict = {}
-
     U_x = mol.make_ansatz(name="SPA", edges=edges)
 
 
@@ -88,7 +86,6 @@ def run_spa_optimization(
         orbital_coefficients=opt.molecule.integral_manager.orbital_coefficients,
         orbital_transformation=opt.mo_coeff,
         variables=variables,
-        variables=var_dict,
         circuit=U_x,
         molecule=mol,
         custom_data=None,
