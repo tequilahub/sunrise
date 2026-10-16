@@ -1,10 +1,13 @@
 import typing
+import json
+import warnings
+import h5py
 import pyscf
 from pyscf.gto import Mole
 from numpy import ndarray
 from typing import Callable
 from typing import Union
-from tequila import TequilaException
+from tequila import TequilaException, TequilaWarning
 from sunrise.molecules import qubit_base, hybrid_base, fermionic_base
 from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
@@ -104,6 +107,59 @@ def MoleculeFromSunrise(mol, transformation=None, backend=None, *args, nature: s
         *args,
         **kwargs,
     )
+
+
+def load_molecule(filename: str) -> QuantumChemistryBase:
+    """
+    Load a sunrise molecule saved with mol.save(filename), in the nature it was saved with
+    It is rebuilt from the stored integrals and orbitals, nothing is recomputed
+    Parameters
+    ----------
+    filename
+        The HDF5 file written by mol.save
+    Returns
+    -------
+        The sunrise molecule
+    """
+    with h5py.File(filename, "r") as f:
+        data = json.loads(f["molecule"][()])
+        integrals = {k: f[k][()] for k in ("one_body_integrals", "two_body_integrals", "overlap_integrals", "orbital_coefficients")}
+    integrals["two_body_integrals"] = NBodyTensor(elems=integrals["two_body_integrals"], ordering="chem")
+
+    backends = NATURE_BACKENDS[data["nature"]]
+    backend = data["backend"]
+    if backend not in ("base", "pyscf") or backend not in backends:
+        # psi4 and madness would compute the integrals again
+        fallback = "pyscf" if "pyscf" in backends else "base"
+        warnings.warn("molecule was saved with the {} backend, it is loaded with the {} backend".format(backend, fallback), TequilaWarning)
+        backend = fallback
+
+    kwargs = {**integrals, **data["settings"]}
+    if data["transformation"] is not None:
+        kwargs["transformation"] = data["transformation"]["name"]
+        kwargs.update({"transformation__" + k: v for k, v in data["transformation"]["arguments"].items()})
+    mol = backends[backend](
+        parameters=ParametersQC(**data["parameters"]),
+        nuclear_repulsion=data["constant_term"],
+        active_orbitals=data["active_orbitals"],
+        reference_orbitals=data["reference_orbitals"],
+        frozen_orbitals=[],  # the active space is given, no core is frozen on top of it
+        point_group=data["point_group"],
+        **kwargs,
+    )
+
+    # the orbital data is set afterwards, on init the orbital type "native" would transform the orbitals again
+    mol.integral_manager._basis_name = data["basis_name"]
+    mol.integral_manager._orbital_type = data["orbital_type"]
+    for o, stored in zip(mol.integral_manager.orbitals, data["orbitals"]):
+        # idx is the index in the active space, already set by it
+        o.irrep, o.idx_irrep, o.idx_total, o.energy, o.occ = (stored[k] for k in ("irrep", "idx_irrep", "idx_total", "energy", "occ"))
+        o.pair = None if stored["pair"] is None else tuple(stored["pair"])
+    if data["irreps"] is not None:
+        mol.irreps = data["irreps"]
+    if data["pyscf_molecule"] is not None:
+        mol.pyscf_molecule = pyscf.gto.loads(data["pyscf_molecule"])
+    return mol
 
 
 def MoleculeFromOpenFermion(
