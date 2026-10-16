@@ -4,9 +4,10 @@ import warnings
 from tequila import TequilaWarning
 from .fer_base import FermionicBase 
 from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC
+from .madness_interface import QuantumChemistryMadness
 
-SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf", "psi4"]  #, "madness"
-INSTALLED_QCHEMISTRY_BACKENDS = {"base": FermionicBase} #"madness": QuantumChemistryMadness
+SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf", "psi4", "madness"]
+INSTALLED_QCHEMISTRY_BACKENDS = {"base": FermionicBase, "madness": QuantumChemistryMadness}
 
 try:
     from .psi4_interface import QuantumChemistryPsi4
@@ -32,7 +33,7 @@ def FerMolecule(geometry: str = None,basis_set: str = None,orbital_type: str = N
     basis_set
         quantum chemistry basis set (sto-3g, cc-pvdz, etc)
     backend
-        quantum chemistry backend (psi4, pyscf)
+        quantum chemistry backend (psi4, pyscf, madness)
     guess_wfn
         pass down a psi4 guess wavefunction to start the scf cycle from
         can also be a filename leading to a stored wavefunction
