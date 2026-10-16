@@ -692,6 +692,48 @@ class QuantumChemistryBase:
         )
         return result
 
+    def rotate_molecule(self, U, angles: typing.Union[dict, None] = None):
+        """
+        U: a FCircuit with ONLY UR gates
+        angles: dictionary to map the circuit variables in case they are not mapped yet
+        Output: rotated molecule
+        """
+        U = U.to_udud(norb=self.n_orbitals)
+        if angles is not None:
+            U = U.map_variables(angles)
+        core = 0
+        while self.integral_manager.orbitals[core].idx is None:
+            core += 1
+        n_mo = len(self.integral_manager.orbital_coefficients)
+        params = []
+        indices = []
+        for gate in reversed(U.gates):
+            assert gate._name == 'UR'
+            # Extract parameters and indices from gates
+            params.append(gate.variables)
+            g = []
+            for idx in gate.indices[0]: #we only need the first index of each UR
+                g.extend((i+2*core)//2 for i in idx)
+            indices.append(g)
+        # Create a matrix for each UR gate
+        rot_matrices = []
+        for k,index in enumerate(indices):
+            tmp = numpy.eye(n_mo)
+            if isinstance(params[k], Objective):
+                params[k] = params[k]()
+            tmp[index[0]][index[0]] = numpy.cos(params[k]/2)
+            tmp[index[0]][index[1]] = numpy.sin(params[k]/2)
+            tmp[index[1]][index[0]] = -numpy.sin(params[k]/2)
+            tmp[index[1]][index[1]] = numpy.cos(params[k]/2)
+            rot_matrices.append(tmp)
+
+        # Multiply all matrices
+        tmatrix = rot_matrices[0]
+        for matrix in rot_matrices[1:]:
+            tmatrix = numpy.dot(tmatrix,matrix)
+        self.integral_manager.transform_orbitals(tmatrix.T)
+        return self
+
     def orthonormalize_basis_orbitals(self):
         # backward compatibility
         return self.use_native_orbitals()
