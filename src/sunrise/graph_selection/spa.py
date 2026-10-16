@@ -71,7 +71,6 @@ def run_spa_optimization(
         edges=edges,
         initial_guess=initial_guess,
         silent=True,
-        use_hcb=True,
     )
 
     mol = opt.molecule
