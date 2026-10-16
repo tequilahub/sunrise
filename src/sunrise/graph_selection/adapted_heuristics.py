@@ -1,14 +1,9 @@
 import random
 import numpy as np
 import math
-import tequila as tq
-import tqdm
-import pandas as pd
-import matplotlib.pyplot as plt
 import networkx as nx
 
-from quanti_gin.data_generator import DataGenerator
-from quanti_gin.shared import matrix_scaling
+from .shared import matrix_scaling
 from scipy.spatial.distance import pdist, squareform
 
 
@@ -371,47 +366,3 @@ heuristics = {
     "blossom": random_blossom,
     "scaled blossom": random_blossom_scaled,
 }
-
-if __name__ == "__main__":
-    # run_benchmark(num_atoms=6, num_jobs=5)
-    results = []
-
-    jobs = DataGenerator.generate_jobs(number_of_jobs=5, number_of_atoms=12)
-
-    for job in jobs:
-        print("new molecule")
-
-        coordinates = job.coordinates
-        geometry = job.geometry
-
-        mol = tq.Molecule(geometry=geometry, basis_set="sto-3g")
-
-        for name, function in heuristics.items():
-            print(f"Running {name}...")
-            edges = function(num_atoms=12, coordinates=coordinates)
-            # print(edges)
-            for rank, edge in enumerate(edges, start=1):
-                print("new edge", edge)
-                result = DataGenerator.run_spa_optimization(
-                    molecule=mol, coordinates=coordinates, edges=edge
-                )
-
-                ground_state_energy = mol.compute_energy("fci")
-                energy = result["energy"]
-                energy_gab = energy - ground_state_energy
-                # print(energy)
-
-                results.append(
-                    {
-                        "molecule_id": job.id,
-                        "method": name,
-                        "rank": rank,
-                        "energy": energy,
-                        "edges": edge,
-                        "ground state energy": ground_state_energy,
-                        "energy gab": energy_gab,
-                    }
-                )
-
-    data = pd.DataFrame(results)
-    data.to_csv(f"benchmark_results_{12}_spa_angles.csv", index=False)

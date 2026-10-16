@@ -1,106 +1,8 @@
-from dataclasses import dataclass
-from os import PathLike
 import numpy as np
-import pandas as pd
 import random
 import math
 import networkx as nx
-from numpy.typing import NDArray
-from tequila.quantumchemistry import QuantumChemistryBase
 from scipy.spatial.distance import pdist, squareform
-
-
-@dataclass
-class Result:
-    job_id: int
-    method: str
-    optimized_energy: float
-    optimized_variables: list[float]
-    edges: list[tuple[int, int]]
-
-
-@dataclass
-class DataFile:
-    file_path: PathLike
-    df: pd.DataFrame
-    coordinates: NDArray[np.float64]
-    method_results: dict[str, Result]
-
-
-def read_result(job) -> Result:
-    job_id = job["job_id"]
-    method = job["method"]
-    optimized_energy = job["optimized_energy"]
-    if "optimized_variables" in job:
-        optimized_variables = job["optimized_variables"]
-        optimized_variable_counts = job["optimized_variable_count"]
-        optimized_variable_cols = [
-            [f"optimized_variable_{i}" for i in range(optimized_variable_count)]
-            for optimized_variable_count in optimized_variable_counts
-        ]
-
-        for i, cols in enumerate(optimized_variable_cols):
-            sample_variables = [job[col][i] for col in cols]
-            optimized_variables.append(sample_variables)
-    else:
-        optimized_variables = []
-    if "edges" in job:
-        edges = job["edges"]
-    else:
-        edges = []
-    return Result(
-        job_id=job_id,
-        method=method,
-        optimized_energy=optimized_energy,
-        optimized_variables=optimized_variables,
-        edges=edges,
-    )
-
-
-def read_data_file(file_path: PathLike):
-    # load the csv file into a pandas dataframe
-    df = pd.read_csv(file_path)
-
-    method_results = {}
-    job_groups = df.groupby("method")
-    for group_key, group in job_groups:
-        method_results[group_key] = read_result(group)
-
-    atom_counts = df["atom_count"]
-    coordinate_cols = [
-        [(f"x_{i}", f"y_{i}", f"z_{i}") for i in range(atom_count)]
-        for atom_count in atom_counts
-    ]
-
-    coordinates = []
-    for i, cols in enumerate(coordinate_cols):
-        sample_coordinates = [
-            (df[col[0]][i], df[col[1]][i], df[col[2]][i]) for col in cols
-        ]
-        coordinates.append(sample_coordinates)
-    coordinates = np.array(coordinates)
-
-    if "edge_0_start" in df:
-        edges = []
-        edge_counts = df["edge_count"]
-
-        edge_cols = [
-            [(f"edge_{i}_start", f"edge_{i}_end") for i in range(edge_count)]
-            for edge_count in edge_counts
-        ]
-
-        for i, cols in enumerate(edge_cols):
-            sample_edges = [(df[col[0]][i], df[col[1]][i]) for col in cols]
-            edges.append(sample_edges)
-    else:
-        edges = []
-
-    return DataFile(
-        file_path=file_path,
-        df=df,
-        coordinates=coordinates,
-        method_results=method_results,
-    )
 
 
 def generate_min_local_distance_edges(vertices: np.ndarray):
@@ -172,6 +74,8 @@ def generate_local_optimal_edges_from_vertices(vertices: np.ndarray, start=0):
     first_vertice = vertices[start]
     our_vertices = np.delete(vertices, start, axis=0)
     our_vertices = np.insert(our_vertices, 0, first_vertice, axis=0)
+    # our_vertices[k] is vertices[order[k]]
+    order = [start] + [i for i in range(len(vertices)) if i != start]
     done = set()
     edges = []
     edge_length_sum = 0
@@ -192,7 +96,7 @@ def generate_local_optimal_edges_from_vertices(vertices: np.ndarray, start=0):
                 nearest_vertex_index = b
                 nearest_vertex = vertex_b
 
-        edges.append(tuple(sorted([a, nearest_vertex_index])))
+        edges.append(tuple(sorted([order[a], order[nearest_vertex_index]])))
         edge_length_sum += np.linalg.norm(vertex_a - nearest_vertex)
         done.update([tuple(vertex_a.tolist()), tuple(nearest_vertex.tolist())])
     return (edges, edge_length_sum)

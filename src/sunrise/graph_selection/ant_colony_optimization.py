@@ -1,13 +1,6 @@
 import numpy as np
-import tequila as tq
-import math
-import pandas as pd
-import itertools
-import random
-import matplotlib.pyplot as plt
 
 from scipy.spatial.distance import squareform, pdist
-from quanti_gin.data_generator import DataGenerator
 
 
 def ant_colony_opt(
