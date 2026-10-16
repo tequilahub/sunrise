@@ -34,6 +34,10 @@ jobs:
           # treat remaining issues as warnings, keep line length 127 and complexity limit
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Test basic installation
+        env:
+          # qiskit (pulled in by TenCirChem-NG) uses most of the static TLS reserved for dlopen since 2.6,
+          # so the libgomp of pyscf no longer fits: "cannot allocate memory in static TLS block"
+          GLIBC_TUNABLES: glibc.rtld.optional_static_tls=4096
         run: |
           pip install -e .
           pip install pytest
