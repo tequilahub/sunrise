@@ -19,6 +19,7 @@ import select_backends
 
 HAS_PYSCF = "pyscf" in qc.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in qc.INSTALLED_QCHEMISTRY_BACKENDS
+HAS_MADNESS = "madness" in qc.INSTALLED_QCHEMISTRY_BACKENDS and qc.QuantumChemistryMadness.find_executable() is not None
 
 backends = select_backends.get()
 standard_trafos = ["JordanWigner", "ReorderedJordanWigner", "BravyiKitaev"]
@@ -541,6 +542,50 @@ def test_pyscf_methods(method, geometry, basis_set):
     mol = sun.Molecule(geometry=geometry, units="angstrom", basis_set=basis_set, backend="pyscf")
     e3 = mol.compute_energy(method)
     assert numpy.isclose(e1, e3, atol=1.0e-4)
+
+
+# madness does not use a basis set
+@pytest.mark.parametrize(
+    "backend, basis_set",
+    [
+        pytest.param("pyscf", "sto-3g", marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")),
+        pytest.param("psi4", "sto-3g", marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found")),
+        pytest.param("madness", None, marks=pytest.mark.skipif(condition=not HAS_MADNESS, reason="madness not found")),
+    ],
+)
+def test_fermionic_backends(backend, basis_set, tmp_path, monkeypatch):
+    # madness writes its files into the working directory
+    monkeypatch.chdir(tmp_path)
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 0.75"
+    qmol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend, transformation="ReorderedJordanWigner")
+    mol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend, nature="fermionic")
+    assert mol.n_orbitals == qmol.n_orbitals
+    assert numpy.isclose(mol.compute_energy("fci"), qmol.compute_energy("fci"))
+
+    U = mol.make_spa_ansatz(edges=mol.get_spa_edges())
+    result = sun.minimize(sun.Braket(molecule=qmol, ket=U), silent=True)
+    assert numpy.isclose(result.energy, qmol.compute_energy("fci"), atol=1.0e-5)
+
+
+# madness does not use a basis set, psi4 is not available for hybrid molecules
+@pytest.mark.parametrize(
+    "backend, basis_set",
+    [
+        pytest.param("pyscf", "sto-3g", marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")),
+        pytest.param("madness", None, marks=pytest.mark.skipif(condition=not HAS_MADNESS, reason="madness not found")),
+    ],
+)
+def test_hybrid_backends(backend, basis_set, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 0.75"
+    qmol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend)
+    mol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend, select="BF", nature="hybrid")
+    assert mol.n_orbitals == qmol.n_orbitals
+    assert numpy.isclose(mol.compute_energy("fci"), qmol.compute_energy("fci"))
+
+    U = mol.make_ansatz("SPA", edges=mol.get_spa_edges())
+    result = tq.minimize(tq.ExpectationValue(H=mol.make_hamiltonian(), U=U), silent=True)
+    assert numpy.isclose(result.energy, qmol.compute_energy("fci"), atol=1.0e-5)
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
