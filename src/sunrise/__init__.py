@@ -24,3 +24,4 @@ from sunrise.MCVBT.GNM import mcvbt
 from sunrise import spafastprototype as SPAFP
 from sunrise import ADAPT
 from sunrise import ADAPT as adapt
+from sunrise import graph_selection
