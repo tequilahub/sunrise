@@ -14,7 +14,7 @@ from pyscf.tools import molden as pyscf_molden
 
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise import MoleculeToPyscf
-from sunrise.molecules.utils_orbital_transformation import transform, orthogonalize
+from sunrise.utils.orbital_transformation import transform, orthogonalize
 
 from janpa.io.molden import MoldenFile
 from janpa.npa.npa import run_npa

@@ -9,8 +9,7 @@ from sunrise.graphical.qpic_visualization import qpic_to_pdf,qpic_to_png
 from sunrise.graphical import draw
 from sunrise import measurement
 from sunrise.fermionic_operations.orb_rotation_qubit import OrbitalRotation
-from sunrise.utils.giuseppe import giuseppe
-from sunrise.utils.bar import giuseppe_bar
+from sunrise.utils.giuseppe import giuseppe, giuseppe_bar
 from sunrise.expval import Braket,show_available_modules,show_supported_modules,pick_backend
 from sunrise.fermionic_operations import gates
 from sunrise.fermionic_operations.circuit import FCircuit

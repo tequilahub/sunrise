@@ -33,7 +33,7 @@ import tequila
 import pyscf
 from scipy.optimize import linear_sum_assignment
 from sunrise.symmetry_adaptation.point_group import PointGroup, PointGroupRepresentation
-from sunrise.symmetry_adaptation.transformation_helpers import GeometricTransformationHelper, FermionicSWAP
+from sunrise.utils.transformation_helpers import GeometricTransformationHelper, FermionicSWAP
 
 
 try:
@@ -763,7 +763,7 @@ class QuantumChemistryBase:
         New molecule in the native (orthonormalized) basis given
         e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
         """
-        from sunrise.molecules.utils_orbital_transformation import get_active, get_core, orthogonalize_active_space
+        from sunrise.utils.orbital_transformation import get_active, get_core, orthogonalize_active_space
 
         c = self.integral_manager.orbital_coefficients.copy()
         s = self.integral_manager.overlap_integrals.copy()

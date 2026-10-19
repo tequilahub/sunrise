@@ -5,7 +5,6 @@ from numpy.ma.core import shape
 from tequila import QubitWaveFunction, TequilaException
 from tequila.objective.objective import Objective, Variables, Variable
 import fqe
-from sunrise.expval.fqe.fqe_utils import *
 from sunrise.expval.fqe.fermionic_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
 from ..fermionic_braket import FermBraketImpl
