@@ -5,9 +5,10 @@ The purely qubit-based ADAPT tests stay in tequila.
 """
 
 import numpy
-import sunrise as sun
-import pytest
 import openfermion
+import pytest
+
+import sunrise as sun
 
 
 def make_test_molecule(nature):

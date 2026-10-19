@@ -1,9 +1,10 @@
-import pytest
-import numpy
 import os
-import tequila as tq
-import sunrise as sun
 
+import numpy
+import pytest
+import tequila as tq
+
+import sunrise as sun
 from sunrise.molecules.qubit_base import INSTALLED_QCHEMISTRY_BACKENDS
 
 has_pyscf = "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS
@@ -20,10 +21,8 @@ print("executable = ", executable)
 
 def test_executable():
     if root is not None and executable is None:
-        raise Exception(
-            "Found no pno_integrals executable but found MAD_ROOT_DIR={}\nSeems like you wanted that tested".format(
-                root
-            )
+        raise tq.TequilaException(
+            "Found no pno_integrals executable but found MAD_ROOT_DIR={root}\nSeems like you wanted that tested"
         )
 
 
@@ -73,18 +72,18 @@ def test_madness_full_he():
 
 @pytest.mark.skipif(executable is None, reason="madness was not found")
 def test_madness_data_io():
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom")
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", n_pno="read", units="angstrom")
+    sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom")
+    sun.Molecule(geometry="he 0.0 0.0 0.0", n_pno="read", units="angstrom")
 
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", units="angstrom")
-    mol = sun.Molecule(
+    sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", units="angstrom")
+    sun.Molecule(
         geometry="he 0.0 0.0 0.0", datadir="1/2/3", n_pno="read", units="angstrom"
     )
 
-    mol = sun.Molecule(
+    sun.Molecule(
         geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", units="angstrom"
     )
-    mol = sun.Molecule(
+    sun.Molecule(
         geometry="he 0.0 0.0 0.0",
         datadir="1/2/3",
         name="asd",
@@ -177,7 +176,7 @@ def test_madness_upccgsd(trafo):
     assert numpy.isclose(result.energy, oigawert, atol=1.0e-3)
 
     H = mol.make_hamiltonian()
-    oigawert2 = numpy.linalg.eigvalsh(H.to_matrix())[0]
+    numpy.linalg.eigvalsh(H.to_matrix())[0]
     U = mol.make_upccgsd_ansatz(name="SPA-D")
     E = tq.ExpectationValue(H=H, U=U)
     assert len(E.extract_variables()) == 2

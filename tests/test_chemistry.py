@@ -70,7 +70,6 @@ def test_base(trafo):
         ]
     )
     np = 0.0
-    n = 2
     molecule = sun.Molecule(
         backend="base",
         geometry="he 0.0 0.0 0.0",
@@ -176,7 +175,7 @@ def test_transformations(trafo_args):
 @pytest.mark.dependencies
 def test_dependencies():
     for key in qc.SUPPORTED_QCHEMISTRY_BACKENDS:
-        assert key in qc.INSTALLED_QCHEMISTRY_BACKENDS.keys()
+        assert key in qc.INSTALLED_QCHEMISTRY_BACKENDS
 
 
 @pytest.mark.skipif(
@@ -279,7 +278,7 @@ def test_mp2_psi4():
 def do_test_mp2(qc_interface, parameters, result):
     # check examples for comments
     psi4_interface = qc_interface(parameters=parameters)
-    hqc = psi4_interface.make_hamiltonian()
+    psi4_interface.make_hamiltonian()
 
     amplitudes = psi4_interface.compute_mp2_amplitudes()
     variables = amplitudes.make_parameter_dictionary()
@@ -319,7 +318,7 @@ def test_amplitudes_psi4(method):
 def do_test_amplitudes(method, qc_interface, parameters, result):
     # check examples for comments
     psi4_interface = qc_interface(parameters=parameters)
-    hqc = psi4_interface.make_hamiltonian()
+    psi4_interface.make_hamiltonian()
     if result is None:
         result = psi4_interface.compute_energy(method=method)
     amplitudes = psi4_interface.compute_amplitudes(method=method)
@@ -769,7 +768,7 @@ def test_fci_hcb():
     spa_wfn = tq.simulate(U, spa.variables)
 
     # FCI projected onto HCB space
-    e_hcb, wfn_hcb = mol.compute_energy("fci", get_wfn=True, use_hcb=True)
+    _e_hcb, wfn_hcb = mol.compute_energy("fci", get_wfn=True, use_hcb=True)
     fidelity_hcb = abs(spa_wfn.inner(wfn_hcb)) ** 2
 
     # Fermionic SPA
@@ -784,7 +783,7 @@ def test_fci_hcb():
     spa_wfn = tq.simulate(U, spa.variables)
 
     # FCI in full fermionic space
-    e_full, wfn_full = mol.compute_energy("fci", get_wfn=True)
+    _e_full, wfn_full = mol.compute_energy("fci", get_wfn=True)
     fidelity = abs(spa_wfn.inner(wfn_full)) ** 2
     print(fidelity)
 
@@ -872,11 +871,11 @@ def test_native_active_space(system, core):
         frozen_core=False,
         frozen_orbitals=core,
     )
-    eival, eivect = numpy.linalg.eigh(mol.make_hamiltonian().to_matrix())
+    eival, _eivect = numpy.linalg.eigh(mol.make_hamiltonian().to_matrix())
     mol = sun.Molecule(
         geometry=system, units="angstrom", basis_set="sto-3g", frozen_core=False
     ).use_native_orbitals(core=core)
-    eival1, eivect1 = numpy.linalg.eigh(mol.make_hamiltonian().to_matrix())
+    eival1, _eivect1 = numpy.linalg.eigh(mol.make_hamiltonian().to_matrix())
     assert numpy.allclose(eival, eival1)
 
 
@@ -928,8 +927,8 @@ def test_crosscheck_cis_mp2_large():
     r_2 = mol2.compute_cis_amplitudes()
     for i in range(len(r_1.omegas)):
         assert numpy.isclose(r_1.omegas[i], r_2.omegas[i], atol=1.0e-4)
-    x, e_1 = mol1.compute_mp2_amplitudes(return_energy=True)
-    x, e_2 = mol2.compute_mp2_amplitudes(return_energy=True)
+    _x, e_1 = mol1.compute_mp2_amplitudes(return_energy=True)
+    _x, e_2 = mol2.compute_mp2_amplitudes(return_energy=True)
     assert e_1 is not None
     assert e_2 is not None
     assert numpy.isclose(e_1, e_2, atol=1.0e-4)
@@ -1005,7 +1004,7 @@ def test_spa_consistency(geometry, name, optimize, transformation):
     # if not, HCB is not used in  circuit optimization anyways
     try:
         mol.transformation.hcb_to_me()
-    except Exception:
+    except tq.TequilaException:
         return
 
     # doesn't need to make physical sense for the test
@@ -1107,10 +1106,8 @@ def test_hcb_rdms(geometry, optimize):
     elif mol1.n_electrons == 2:
         edges = [(0, 1)]
     else:
-        raise Exception(
-            "test only created for n_electrons = 2,4 you gave {}".format(
-                mol1.n_electrons
-            )
+        raise tq.TequilaException(
+            f"test only created for n_electrons = 2,4 you gave {mol1.n_electrons}"
         )
 
     U1_1 = mol1.make_ansatz("SPA", edges=edges, optimize=optimize)
@@ -1159,10 +1156,8 @@ def test_orbital_optimization_hcb(geometry):
     elif mol.n_electrons == 2:
         edges = [(0, 1)]
     else:
-        raise Exception(
-            "test only created for n_electrons = 2,4 you gave {}".format(
-                mol.n_electrons
-            )
+        raise tq.TequilaException(
+            f"test only created for n_electrons = 2,4 you gave {mol.n_electrons}"
         )
 
     U1 = mol.make_ansatz(name="HCB-SPA", edges=edges)
@@ -1233,66 +1228,6 @@ def test_givens_on_molecule(size, transformation):
 
     result1 = tq.simulate(E1)
     result2 = tq.simulate(E2)
-
-    assert numpy.isclose(result1, result2)
-
-
-def test_givens_on_molecule():
-    size = 3  # Since above test pased reduced the cases to make it afforable
-    transformation = "JordanWigner"
-    # dummy one-electron integrals
-    h = numpy.ones(shape=[size, size])
-    # dummy two-electron integrals
-    g = numpy.ones(shape=[size, size, size, size])
-
-    U = rg.generate_random_unitary(size)
-
-    # transformed integrals
-    th = (U.T.dot(h)).dot(U)
-    tg = numpy.einsum("ijkx, xl -> ijkl", g, U, optimize="greedy")
-    tg = numpy.einsum("ijxl, xk -> ijkl", tg, U, optimize="greedy")
-    tg = numpy.einsum("ixkl, xj -> ijkl", tg, U, optimize="greedy")
-    tg = numpy.einsum("xjkl, xi -> ijkl", tg, U, optimize="greedy")
-
-    # original molecule/H
-    mol = sun.Molecule(
-        geometry="He 0.0 0.0 0.0",
-        units="angstrom",
-        nuclear_repulsion=0.0,
-        one_body_integrals=h,
-        two_body_integrals=g,
-        basis_set="dummy",
-        transformation=transformation,
-    )
-    H = mol.make_hamiltonian()
-    # transformed molecule/H
-    tmol = sun.Molecule(
-        geometry="He 0.0 0.0 0.0",
-        units="angstrom",
-        nuclear_repulsion=0.0,
-        one_body_integrals=th,
-        two_body_integrals=tg,
-        basis_set="dummy",
-        transformation=transformation,
-    )
-    tH = tmol.make_hamiltonian()
-    QU = tq.QTensor(shape=(size, size))
-    variables = {}
-    for i in range(size):
-        for j in range(size):
-            QU[i, j] = tq.Variable(str(U[i, j]))
-            variables.update({str(U[i, j]): U[i, j]})
-    # transformation in qubit space (this corresponds to the U above)
-    UR = mol.get_givens_circuit(QU)  # Works!
-    # test circuit
-    circuit = rg.make_random_circuit(size)
-
-    # create expectation values and see if they are the same
-    E1 = tq.ExpectationValue(U=circuit, H=tH)
-    E2 = tq.ExpectationValue(U=circuit + UR, H=H)
-
-    result1 = tq.simulate(E1)
-    result2 = tq.simulate(E2, variables=variables)
 
     assert numpy.isclose(result1, result2)
 

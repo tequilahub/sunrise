@@ -1,17 +1,16 @@
-import tequila as tq
-import sunrise as sun
 import numpy as np
 import pytest
+import tequila as tq
 
+import sunrise as sun
 from sunrise.symmetry_adaptation import (
-    PointGroup,
     FockSpaceState,
     IrrepProvider,
-    SymmetryAdaptedLinearCombintationSymmetrization,
-    SpinSymmetrizationProcedure,
+    PointGroup,
     SpinCGSymmetrizationProcedure,
+    SpinSymmetrizationProcedure,
+    SymmetryAdaptedLinearCombintationSymmetrization,
 )
-
 
 HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 
@@ -250,10 +249,8 @@ def test_spin_symmetrization_correctness() -> None:
     assert len(symm_list) == len(expected_wavefunctions)
     for state in symm_list:
         assert any(
-            [
-                bool(rep_qcircuit.is_close_function(state.wavefunction, expected))
-                for expected in expected_wavefunctions
-            ]
+            bool(rep_qcircuit.is_close_function(state.wavefunction, expected))
+            for expected in expected_wavefunctions
         )
 
 
@@ -310,10 +307,8 @@ def test_SALC_symmetrization_correctness() -> None:
     assert len(symm_list) == len(expected_wavefunctions)
     for state in symm_list:
         assert any(
-            [
-                bool(rep_qcircuit.is_close_function(state.wavefunction, expected))
-                for expected in expected_wavefunctions
-            ]
+            bool(rep_qcircuit.is_close_function(state.wavefunction, expected))
+            for expected in expected_wavefunctions
         )
 
 

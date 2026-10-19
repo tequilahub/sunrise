@@ -1,6 +1,7 @@
-import tequila as tq
-import pytest
 import numpy
+import pytest
+import tequila as tq
+
 import sunrise as sn
 
 

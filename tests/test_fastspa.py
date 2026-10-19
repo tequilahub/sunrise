@@ -1,7 +1,8 @@
-import tequila as tq
 import pytest
-import sunrise as sn
+import tequila as tq
 from numpy import isclose
+
+import sunrise as sn
 
 
 @pytest.mark.parametrize(
@@ -43,7 +44,7 @@ def test_fast_spa_opt(geom, nature):
     ],
 )
 @pytest.mark.parametrize("nature", ["qubit", "hybrid"])
-def test_fast_spa_opt(geom, nature):
+def test_fast_spa_opt_orb(geom, nature):
     tqmol = sn.Molecule(geometry=geom, basis_set="sto-3g", units="a")
     snmol = sn.Molecule(geometry=geom, basis_set="sto-3g", units="a", nature=nature)
 

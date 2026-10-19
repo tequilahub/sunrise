@@ -1,28 +1,29 @@
 import random
 
-import pytest
 import numpy as np
-import sunrise as sn
+import pytest
 import tequila as tq
+
+import sunrise as sn
 from sunrise.graph_selection import (
-    generate_min_global_distance_edges,
-    random_matching,
-    generate_all_possible_edges,
-    total_distance,
-    brute_force,
-    nearest_insertion,
-    two_opt,
-    simulated_annealing,
-    genetic_algorithm,
-    minimum_weight_perfect_performance,
-    blossom_scaled,
     ant_colony_opt,
+    blossom_scaled,
+    brute_force,
+    generate_all_possible_edges,
+    generate_min_global_distance_edges,
+    genetic_algorithm,
     genetic_algorithm_best_n_solutions,
-    simulated_annealing_best_n_solutions,
-    two_opt_best_n_solutions,
+    minimum_weight_perfect_performance,
+    nearest_insertion,
     random_blossom,
     random_blossom_scaled,
+    random_matching,
     run_spa_optimization,
+    simulated_annealing,
+    simulated_annealing_best_n_solutions,
+    total_distance,
+    two_opt,
+    two_opt_best_n_solutions,
 )
 
 

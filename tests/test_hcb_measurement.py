@@ -1,9 +1,10 @@
-import tequila as tq
-import sunrise as sun
-import pytest
 import numpy as np
 import openfermion as of
+import pytest
 import scipy
+import tequila as tq
+
+import sunrise as sun
 
 HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
@@ -32,7 +33,6 @@ def test_hcb_measurement_linearH4_scenario2(backend):
         + mol.UR(0, 3, angle=0.2334)
         + mol.UR(1, 2, angle=0.2334)
     )
-    energy1 = -1.979853695572642
     variables1 = {
         ((0, 1), "D", None): -0.6621692220931846,
         ((2, 3), "D", None): -0.6621692220931825,
@@ -81,7 +81,7 @@ def test_hcb_measurement_linearH4_scenario2(backend):
     # Test measurement of H rotated in SPA with SPA circuit
     E_test = tq.ExpectationValue(U=U0 + rotators[0].dagger(), H=mol.make_hamiltonian())
     tmol = sun.measurement.fold_rotators(mol, rotators[0])
-    hcb_mol, res_mol = sun.measurement.get_hcb_part(tmol)
+    hcb_mol, _res_mol = sun.measurement.get_hcb_part(tmol)
     EX = tq.ExpectationValue(
         U=U0 + rotators[0].dagger() + rotators[0], H=hcb_mol.make_hamiltonian()
     )
@@ -123,7 +123,7 @@ def test_hcb_measurement_linearH4_scenario1(backend):
     # Create true wave function
     Hof = H.to_openfermion()
     Hsparse = of.linalg.get_sparse_operator(Hof)
-    v, vv = scipy.sparse.linalg.eigsh(Hsparse, sigma=fci)
+    _v, vv = scipy.sparse.linalg.eigsh(Hsparse, sigma=fci)
     wfn = tq.QubitWaveFunction.from_array(vv[:, 0])
     energy = wfn.inner(H * wfn).real
 

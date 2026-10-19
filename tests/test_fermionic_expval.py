@@ -1,18 +1,20 @@
+import random
+from datetime import datetime
+from unittest import mock
+
 import numpy as np
-import tequila as tq
 import pytest
+import tequila as tq
+from numpy import isclose
+
 import sunrise as sn
+import sunrise.expval.minimize as sn_minimize
+import sunrise.expval.simulate_circuit as sn_simulate_circuit
 from sunrise.expval import (
     INSTALLED_FERMIONIC_BACKENDS,
     SUPPORTED_FERMIONIC_BACKENDS,
     Braket,
 )
-from numpy import isclose
-import random
-from datetime import datetime
-from unittest import mock
-import sunrise.expval.minimize as sn_minimize
-import sunrise.expval.simulate_circuit as sn_simulate_circuit
 
 HAS_TCC = "tcc" in INSTALLED_FERMIONIC_BACKENDS
 
@@ -191,7 +193,7 @@ def test_gradient(geom, backend):
     snU = snmol.make_ansatz("UpCCSD")
     tqval = tq.ExpectationValue(H=tqmol.make_hamiltonian(), U=tqU)
     snval = sn.Braket(molecule=snmol, ket=snU)
-    n = random.sample(range(0, len(tqval.extract_variables())), 5)
+    n = random.sample(range(len(tqval.extract_variables())), 5)
     variables = [tqval.extract_variables()[i] for i in n]
     values = {d: random.random() * np.pi for d in tqval.extract_variables()}
     tqg = [tq.simulate(tq.grad(tqval, v), variables=values) for v in variables]
@@ -331,9 +333,9 @@ def test_optimize_orbitals_respects_fermionic_backend(kwargs):
 
 def test_pick_backend_default():
     # without a backend the first installed one in SUPPORTED_FERMIONIC_BACKENDS is chosen, spex first
-    expected = [
+    expected = next(
         b for b in SUPPORTED_FERMIONIC_BACKENDS if b in INSTALLED_FERMIONIC_BACKENDS
-    ][0]
+    )
     assert sn.pick_backend() == expected
     assert SUPPORTED_FERMIONIC_BACKENDS[0] == "spex"
 

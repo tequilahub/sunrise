@@ -1,9 +1,9 @@
-import pytest
-import tequila as tq
-import sunrise as sun
-import numpy
 import os
-import glob
+
+import numpy
+import pytest
+
+import sunrise as sun
 
 HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 
@@ -28,9 +28,9 @@ cabs_ready_psi4 = False
 if HAS_PSI4:
     import psi4
 
-    #!! The function "cheap_ri_space"  was added on top of psi4, but is unused at the moment.
-    #!! This means it might be removed again when a PR into psi4 is issued,
-    #!! but if successful the test does not need to be skipped anymore :)
+    # The function "cheap_ri_space"  was added on top of psi4, but is unused at the moment.
+    # This means it might be removed again when a PR into psi4 is issued,
+    # but if successful the test does not need to be skipped anymore :)
     if hasattr(psi4.core.OrbitalSpace, "cheap_ri_space"):
         cabs_ready_psi4 = True
 
