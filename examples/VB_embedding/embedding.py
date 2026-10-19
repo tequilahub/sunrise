@@ -1,11 +1,14 @@
-import tequila as tq
-import sunrise as sn
-import sys
 import pickle
-import numpy as np
-from sunrise.spafastprototype import decompose
-from copy import deepcopy
 import re
+import sys
+from copy import deepcopy
+
+import numpy as np
+import tequila as tq
+
+import sunrise as sn
+from sunrise.spafastprototype import decompose
+
 ## Example of protocol presented on http://arxiv.org/abs/2606.26882, using many tools already presented on this package examples.
 
 sys.setrecursionlimit(100000)
@@ -25,7 +28,7 @@ file_name = "butadiene_spa.data"
 
 
 def get_madness_sort_key(item):
-    original_idx, label_str = item
+    _original_idx, label_str = item
     parts = label_str.split()
     atom_idx = int(parts[0])
     orbital_part = parts[2]
@@ -330,7 +333,7 @@ def orbital_refinement():
         rdm1, rdm2 = sn.SPAFP.fast_rdm(
             U=U, mol=mol, variables=result.variables, clusters=clusters
         )
-        print("iteration {} energy {}".format(iteration, result.energy))
+        print(f"iteration {iteration} energy {result.energy}")
 
         opti = fe.OrbitalRefinement(world, Vnuc, nuc_repulsion)
         core, active = opti.get_orbitals(

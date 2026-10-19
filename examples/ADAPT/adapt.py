@@ -1,5 +1,5 @@
 import sunrise as sun
-from sunrise.ADAPT.adapt import MolecularPool, Adapt
+from sunrise.ADAPT.adapt import Adapt, MolecularPool
 
 geo = "H 0. 0. 0. \n Li 0. 0. 1."
 mol = sun.Molecule(
@@ -13,7 +13,8 @@ solver = Adapt(
     optimizer_args={"method": "adam", "silent": True},
 )
 result = solver()
-final_circuit = mol.prepare_reference() + result.U
+final_circuit = result.U
 print(f"{final_circuit.depth = }")
 print(f"{result.energy = }")
 print("Steps", len(result.histories))
+print("Final circuit:\n ",final_circuit)
