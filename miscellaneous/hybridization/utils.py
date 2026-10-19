@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.linalg import orthogonal_procrustes
 
+
 class VectorUtils:
     # Unused for now
     @staticmethod
@@ -41,7 +42,9 @@ class VectorUtils:
             # Specifically, take the norm of the new cross-product and ensure it's near-zero
             if np.linalg.norm(new_normal) == 0:
                 continue  # perfectly coplanar with this vector
-            angle_difference = np.dot(normal, new_normal) / (np.linalg.norm(normal) * np.linalg.norm(new_normal))
+            angle_difference = np.dot(normal, new_normal) / (
+                np.linalg.norm(normal) * np.linalg.norm(new_normal)
+            )
 
             # If the angle difference is significant (outside threshold), their normals are not aligned -> non-coplanar
             # Clamp the value within the valid range of arccos (-1 to 1) to avoid numerical issues
@@ -55,6 +58,8 @@ class VectorUtils:
                 return False
 
         return True
+
+
 class MatrixUtils:
     @staticmethod
     def is_unitary(m):
@@ -150,7 +155,9 @@ class MatrixUtils:
         :param Q: Target vectors (Nx3 array)
         :return: Rotation matrix R (3x3)
         """
-        assert len(P) == len(Q), "Both vector sets must have the same number of elements"
+        assert len(P) == len(Q), (
+            "Both vector sets must have the same number of elements"
+        )
 
         # Find the quaternion that best aligns P to Q
         rotation, rmsd = R.align_vectors(Q, P)
@@ -201,6 +208,8 @@ class MatrixUtils:
         """
         Q, R = np.linalg.qr(C)
         return Q
+
+
 class HybridizationUtils:
     @staticmethod
     def procrustes_alignment(align_source, align_target, gram_correction=True):
@@ -211,18 +220,15 @@ class HybridizationUtils:
         :param gram_correction: Apply Gram-Schmidt orthogonalization after alignment.
         :return: Rotated source vector set.
         """
-        R, _ = orthogonal_procrustes(
-            align_source,
-            align_target
-        )
+        R, _ = orthogonal_procrustes(align_source, align_target)
 
         # Rotate the px, py, pz components of the hybrid orbitals
-        rotated = np.dot(
-            align_source,
-            R.T
-        )
+        rotated = np.dot(align_source, R.T)
 
-        if gram_correction: rotated = MatrixUtils.gram_schmidt(rotated)  # Re-orthogonalize/normalize directions
+        if gram_correction:
+            rotated = MatrixUtils.gram_schmidt(
+                rotated
+            )  # Re-orthogonalize/normalize directions
         return rotated
 
     @staticmethod
@@ -234,23 +240,31 @@ class HybridizationUtils:
         :param gram_correction: Apply Gram-Schmidt orthogonalization after alignment.
         :return: Rotated source vector set.
         """
-        R = MatrixUtils.kabsch_algorithm_with_sign_correction(align_source, align_target)  # Get pure rotation matrix
+        R = MatrixUtils.kabsch_algorithm_with_sign_correction(
+            align_source, align_target
+        )  # Get pure rotation matrix
         rotated = np.dot(align_source, R.T)  # Apply transformation
 
         if gram_correction:
-            rotated = MatrixUtils.gram_schmidt(rotated)  # Re-orthogonalize/normalize directions
+            rotated = MatrixUtils.gram_schmidt(
+                rotated
+            )  # Re-orthogonalize/normalize directions
 
         return rotated
-    
+
     @staticmethod
-    def get_kabsch_alignment_matrix(align_source, align_target, gram_correction=False)->np.ndarray:
+    def get_kabsch_alignment_matrix(
+        align_source, align_target, gram_correction=False
+    ) -> np.ndarray:
         """
         Aligns vectors using the Kabsch algorithm (pure rotation).
         :param align_source: Source vector set (Nx3).
         :param align_target: Target vector set (Nx3).
         :return: Rotation Matrix to apply as np.dot(align_source, Rotation_matrix.T).
         """
-        return  MatrixUtils.kabsch_algorithm_with_sign_correction(align_source, align_target) 
+        return MatrixUtils.kabsch_algorithm_with_sign_correction(
+            align_source, align_target
+        )
 
     @staticmethod
     def quaternion_alignment(align_source, align_target, gram_correction=True):
@@ -261,17 +275,23 @@ class HybridizationUtils:
         :param gram_correction: Apply Gram-Schmidt orthogonalization after alignment.
         :return: Rotated source vector set.
         """
-        assert len(align_source) == len(align_target), "Source and target must have the same number of points."
+        assert len(align_source) == len(align_target), (
+            "Source and target must have the same number of points."
+        )
 
         # Find the rotation matrix using scipy's quaternion-based vector alignment
-        rotation, rmsd = R.align_vectors(align_target, align_source)  # align_vectors aligns src -> tgt
+        rotation, rmsd = R.align_vectors(
+            align_target, align_source
+        )  # align_vectors aligns src -> tgt
         R_matrix = rotation.as_matrix()
 
         # Rotate the source vectors
         rotated = np.dot(align_source, R_matrix.T)
 
         if gram_correction:
-            rotated = MatrixUtils.gram_schmidt(rotated)  # Re-orthogonalize/normalize directions
+            rotated = MatrixUtils.gram_schmidt(
+                rotated
+            )  # Re-orthogonalize/normalize directions
 
         return rotated
 
@@ -281,17 +301,21 @@ class HybridizationUtils:
             if np.dot(rotated[i], target[i]) < 0:  # Check if signs are flipped
                 rotated[i] *= -1  # Flip the sign of the rotated vector
         return rotated
+
+
 class AtomUtils:
     max_electrons_by_shell = [2, 8, 18, 32, 32, 18, 8]
+
+
 class XYZUtils:
     def cleanup(xyz_string):
         lines = [line.strip() for line in xyz_string.strip().splitlines()]
         for i, line in enumerate(lines):
             if len(line) != 0:  # Found the first line with content
-                if ' ' in line:
+                if " " in line:
                     # Join the remaining lines
-                    return '\n'.join(lines[i:])
+                    return "\n".join(lines[i:])
                 else:  # Starts with number and comment lines
                     # Remove the first 2 lines with content, and join the remaining lines
-                    return '\n'.join(lines[i + 2:])
-        return ''  # If no lines with spaces exist, return an empty string
+                    return "\n".join(lines[i + 2 :])
+        return ""  # If no lines with spaces exist, return an empty string

@@ -86,7 +86,7 @@ the self-test at the bottom checks.
 """
 
 
-def hcb_model(mol:QuantumChemistryBase):
+def hcb_model(mol: QuantumChemistryBase):
     """Single pass over the Pauli terms -> (eps, U, hop).  O(T + n^2).
 
     Returns the n-vector eps, the n x n density-density matrix U, and the
@@ -95,17 +95,19 @@ def hcb_model(mol:QuantumChemistryBase):
     """
     c, h, g = mol.get_integrals(ordering="openfermion")
     g = g.elems
-    eps = np.einsum('iiii->i', g) + 2.0 * np.diag(h)
-    U = 2.0 * (2.0 * np.einsum('ijji->ij', g) - np.einsum('ijij->ij', g))
-    hop = np.einsum('iijj->ij', g)
+    eps = np.einsum("iiii->i", g) + 2.0 * np.diag(h)
+    U = 2.0 * (2.0 * np.einsum("ijji->ij", g) - np.einsum("ijij->ij", g))
+    hop = np.einsum("iijj->ij", g)
     np.fill_diagonal(U, 0.0)
     np.fill_diagonal(hop, 0.0)
 
     return eps, U, hop, c
 
+
 # --------------------------------------------------------------------------
 #  graph
 # --------------------------------------------------------------------------
+
 
 def split_graph(graph):
     """graph -> (edges, lone).
@@ -117,13 +119,16 @@ def split_graph(graph):
     edges = [tuple(e) for e in graph if len(e) == 2]
     lone = [e[0] for e in graph if len(e) == 1]
     if len(edges) + len(lone) != len(graph):
-        raise ValueError("graph entries must have length 1 (lone pair) or 2 (edge): {}".format(graph))
+        raise ValueError(
+            "graph entries must have length 1 (lone pair) or 2 (edge): {}".format(graph)
+        )
     return edges, lone
 
 
 # --------------------------------------------------------------------------
 #  occupations and energy
 # --------------------------------------------------------------------------
+
 
 def spa_occupations(edges, theta, n, lone=()):
     """Orbital occupations <n_p> of the SPA state.  O(N)."""
@@ -148,13 +153,13 @@ def spa_energy(eps, U, hop, shift, edges, theta, lone=()):
     o = spa_occupations(edges, theta, n, lone)
     theta = np.asarray(theta, dtype=float)
 
-    e_one = float(eps @ o)                                   # O(N)
-    e_uu = 0.5 * float(o @ (U @ o))                          # O(N^2)
+    e_one = float(eps @ o)  # O(N)
+    e_uu = 0.5 * float(o @ (U @ o))  # O(N^2)
 
     I = np.array([e[0] for e in edges], dtype=int)
     J = np.array([e[1] for e in edges], dtype=int)
-    e_uu -= float(np.sum(U[I, J] * o[I] * o[J]))             # same edge: 0
-    e_hop = float(np.sum(hop[I, J] * np.sin(theta)))         # intra-edge only
+    e_uu -= float(np.sum(U[I, J] * o[I] * o[J]))  # same edge: 0
+    e_hop = float(np.sum(hop[I, J] * np.sin(theta)))  # intra-edge only
 
     return shift + e_one + e_uu + e_hop
 
@@ -162,6 +167,7 @@ def spa_energy(eps, U, hop, shift, edges, theta, lone=()):
 # --------------------------------------------------------------------------
 #  angles
 # --------------------------------------------------------------------------
+
 
 def _readout(eps, U, hop, edges, lone, sweeps, callback=None):
     """Vacuum read-out followed by `sweeps` dressed (Gauss-Seidel) sweeps.
@@ -216,7 +222,14 @@ def spa_angles_for_graph(mol, graph, sweeps=2, label=None) -> Variables:
 #  angles + energy in one pass
 # --------------------------------------------------------------------------
 
-def spa_solve_graph(mol:QuantumChemistryBase, graph:list[tuple[int]], sweeps=2, label=None, trace=False) -> tuple[Variables, float]:
+
+def spa_solve_graph(
+    mol: QuantumChemistryBase,
+    graph: list[tuple[int]],
+    sweeps=2,
+    label=None,
+    trace=False,
+) -> tuple[Variables, float]:
     """Read out the angles of one graph and evaluate its SPA energy.
 
     Returns (theta, energy).  With trace=True, returns (theta, energy, hist)
@@ -230,21 +243,35 @@ def spa_solve_graph(mol:QuantumChemistryBase, graph:list[tuple[int]], sweeps=2, 
     eps, U, hop, shift = hcb_model(mol)
 
     hist = []
-    theta = _readout(eps, U, hop, edges, lone, sweeps,
-                     callback=lambda th: hist.append(spa_energy(eps, U, hop, shift, edges, th, lone)))
+    theta = _readout(
+        eps,
+        U,
+        hop,
+        edges,
+        lone,
+        sweeps,
+        callback=lambda th: hist.append(
+            spa_energy(eps, U, hop, shift, edges, th, lone)
+        ),
+    )
 
     if trace:
         return list(theta), hist[-1], hist
     return _to_variables(edges, theta, label), hist[-1]
 
 
-def spa_energy_for_graph(mol:QuantumChemistryBase, graph:list[tuple[int]], theta) -> float:
+def spa_energy_for_graph(
+    mol: QuantumChemistryBase, graph: list[tuple[int]], theta
+) -> float:
     """SPA energy of one graph at given angles (one per length-2 edge).  O(N^2)."""
     edges, lone = split_graph(graph)
     eps, U, hop, shift = hcb_model(mol)
     return spa_energy(eps, U, hop, shift, edges, theta, lone)
 
-def spa_rdms(edges:list[tuple[int]], variables:Variables, n_orbitals:int=None, label=None):
+
+def spa_rdms(
+    edges: list[tuple[int]], variables: Variables, n_orbitals: int = None, label=None
+):
     """
     Classical evaluation of the spin-free 1- and 2-RDM (dirac ordering) of the HCB-SPA wavefunction.
 
@@ -261,14 +288,14 @@ def spa_rdms(edges:list[tuple[int]], variables:Variables, n_orbitals:int=None, l
     """
     if n_orbitals is None:
         n_orbitals = max(max(edge) for edge in edges) + 1
-    values = {getattr(k, 'name', k): float(v) for k, v in variables.items()}
+    values = {getattr(k, "name", k): float(v) for k, v in variables.items()}
 
     c = np.zeros(n_orbitals)
     edge_id = np.full(n_orbitals, -1)
     for e, edge in enumerate(edges):
         amp = 1.0
         for i in range(1, len(edge)):
-            angle = values[((edge[i - 1], edge[i]), 'D', label)]
+            angle = values[((edge[i - 1], edge[i]), "D", label)]
             c[edge[i - 1]] = amp * np.cos(0.5 * angle)
             amp *= np.sin(0.5 * angle)
         c[edge[-1]] = amp

@@ -151,7 +151,6 @@ def generate_all_possible_edges(atoms: list[int]):
         next_partial_edge = []
 
         for current_edge_pair, remaining in partial_edges:
-
             if len(remaining) == 0:
                 edges.append(current_edge_pair)
                 continue
@@ -383,7 +382,6 @@ def simulated_annealing(
     i = 0
     no_improv = 0
     while start > end and i < max_iter:
-
         i += 1
         new_edges = random_neighbour(current_edges)
         new_distance = total_distance(new_edges, coordinates=coordinates)

@@ -5,7 +5,8 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.molecules.hybrid_base import HybridBase
 from sunrise.molecules.fermionic_base import FermionicBase
 
-def orthogonalize(c:numpy.ndarray, s:numpy.ndarray) -> numpy.ndarray:
+
+def orthogonalize(c: numpy.ndarray, s: numpy.ndarray) -> numpy.ndarray:
     """
     Symmetrically orthogonalize orbital coefficients.
     c: (basis_functions, orbitals)
@@ -30,7 +31,10 @@ def orthogonalize(c:numpy.ndarray, s:numpy.ndarray) -> numpy.ndarray:
 
     return jcoef
 
-def orthogonalize_active_space(c:numpy.ndarray, s:numpy.ndarray, frozen_idx:list[int], active_idx:list[int]) -> numpy.ndarray:
+
+def orthogonalize_active_space(
+    c: numpy.ndarray, s: numpy.ndarray, frozen_idx: list[int], active_idx: list[int]
+) -> numpy.ndarray:
     """
     Symmetrically orthogonalize orbital coefficients defined by colums with indices 'active_idx' while keeping untouched those defined by 'frozen_idx'.
     c: (basis_functions, orbitals)
@@ -56,7 +60,13 @@ def orthogonalize_active_space(c:numpy.ndarray, s:numpy.ndarray, frozen_idx:list
     c_new[:, active_idx] = c_a_proj @ X
     return c_new
 
-def get_active(c_orig:numpy.ndarray, d_orig:numpy.ndarray, s:numpy.ndarray, active_idx_c:list[int]) -> list[int]:
+
+def get_active(
+    c_orig: numpy.ndarray,
+    d_orig: numpy.ndarray,
+    s: numpy.ndarray,
+    active_idx_c: list[int],
+) -> list[int]:
     """
     Safely identifies active orbitals in d_orig by projecting them into the entire active subspace of c_orig.
     c_orig: original orbital matrix which will be frozen (typicall HF)
@@ -79,14 +89,20 @@ def get_active(c_orig:numpy.ndarray, d_orig:numpy.ndarray, s:numpy.ndarray, acti
     sorted_d_indices = numpy.argsort(active_weights)[::-1]
 
     # 5. Select the top N orbitals that match the active space best
-    chosen_active_idx = sorted_d_indices[:len(active_idx_c)]
+    chosen_active_idx = sorted_d_indices[: len(active_idx_c)]
 
     return sorted(chosen_active_idx)
 
-def get_core(c_orig:numpy.ndarray, d_orig:numpy.ndarray, s:numpy.ndarray, active_idx_d:list[int]):
+
+def get_core(
+    c_orig: numpy.ndarray,
+    d_orig: numpy.ndarray,
+    s: numpy.ndarray,
+    active_idx_d: list[int],
+):
     """
     Given the active space indices of d_orig, finds which occupied orbitals in c_orig should be frozen (core orbitals).
-    
+
     Parameters:
     -----------
     c_orig: original orbital matrix which will be frozen (typicall HF)
@@ -114,8 +130,15 @@ def get_core(c_orig:numpy.ndarray, d_orig:numpy.ndarray, s:numpy.ndarray, active
 
     return sorted(chosen_fr_idx)
 
-def transform(modified:QuantumChemistryBase, original:QuantumChemistryBase, orbital_type:str = None, *args, **kwargs) -> Tuple[QuantumChemistryBase, dict]:
-    '''
+
+def transform(
+    modified: QuantumChemistryBase,
+    original: QuantumChemistryBase,
+    orbital_type: str = None,
+    *args,
+    **kwargs,
+) -> Tuple[QuantumChemistryBase, dict]:
+    """
     Procedure similar to what is done in use_native_orbitals but for arbitrary basis keeped insied modified. Keeps frozen orbitals canHF
     orthogonalized with the active modified ones
     modified: sunrise molecule with modified orb. coeff. to be orthogonalized
@@ -125,13 +148,17 @@ def transform(modified:QuantumChemistryBase, original:QuantumChemistryBase, orbi
     Returns modified sunrise molecule with the core orbitals of the original one
     And a dictionary with the form {active_orbital_index_before:active_orbital_index_after}
     The frozen orbitals will always be the N first on the orbital matrix
-    '''
+    """
     if "core" in kwargs:
         core = kwargs["core"]
         kwargs.pop("core")
     else:
-        core = [i.idx_total for i in original.integral_manager.orbitals if i.idx is None]
-    assert len(original.integral_manager.orbitals) == len(modified.integral_manager.orbitals)
+        core = [
+            i.idx_total for i in original.integral_manager.orbitals if i.idx is None
+        ]
+    assert len(original.integral_manager.orbitals) == len(
+        modified.integral_manager.orbitals
+    )
     c_orig = original.integral_manager.orbital_coefficients.copy()
     d_orig = modified.integral_manager.orbital_coefficients.copy()
     s = original.integral_manager.overlap_integrals.copy()
@@ -140,32 +167,71 @@ def transform(modified:QuantumChemistryBase, original:QuantumChemistryBase, orbi
         active = kwargs["active"]
         kwargs.pop("active")
     else:
-        active = get_active(c_orig, d_orig, s, [i.idx_total for i in original.integral_manager.orbitals if i.idx is not None])
-    to_active =  [i for i in range(n_basis) if  i not in core]
-    to_active = {active[i] : to_active[i] for i in range(len(active))}
+        active = get_active(
+            c_orig,
+            d_orig,
+            s,
+            [
+                i.idx_total
+                for i in original.integral_manager.orbitals
+                if i.idx is not None
+            ],
+        )
+    to_active = [i for i in range(n_basis) if i not in core]
+    to_active = {active[i]: to_active[i] for i in range(len(active))}
     reference_orbitals = core.copy()
-    i =0
-    while len(reference_orbitals) < original.parameters.total_n_electrons//2:
+    i = 0
+    while len(reference_orbitals) < original.parameters.total_n_electrons // 2:
         if i not in reference_orbitals:
             reference_orbitals.append(i)
         i += 1
     n_core = len(core)
     n_active = len(active)
     c_combined = numpy.zeros((n_basis, n_core + n_active))
-    for i,idx in enumerate(core):
+    for i, idx in enumerate(core):
         c_combined[:, i] = c_orig[:, idx]
     for act_idx in active:
         c_combined[:, to_active[act_idx]] = d_orig[:, act_idx]
-    jcoef = orthogonalize_active_space(c_combined, s,core, [*to_active.values()])
-    ref = [i.idx_total for i in original.integral_manager.reference_orbitals if i not in original.integral_manager.active_reference_orbitals]
-    ref.extend([i for i in range(n_basis) if  i not in core][:len(original.integral_manager.active_reference_orbitals)])
-    integral_manager = modified.initialize_integral_manager(one_body_integrals=original.integral_manager.one_body_integrals,
-                    two_body_integrals=original.integral_manager.two_body_integrals, constant_term=original.integral_manager.constant_term,
-                    active_orbitals= [i for i in range(n_basis) if  i not in core], frozen_orbitals=core, orbital_coefficients=jcoef,
-                    overlap_integrals=original.integral_manager.overlap_integrals, reference_orbitals=ref, orbital_type=orbital_type)
+    jcoef = orthogonalize_active_space(c_combined, s, core, [*to_active.values()])
+    ref = [
+        i.idx_total
+        for i in original.integral_manager.reference_orbitals
+        if i not in original.integral_manager.active_reference_orbitals
+    ]
+    ref.extend(
+        [i for i in range(n_basis) if i not in core][
+            : len(original.integral_manager.active_reference_orbitals)
+        ]
+    )
+    integral_manager = modified.initialize_integral_manager(
+        one_body_integrals=original.integral_manager.one_body_integrals,
+        two_body_integrals=original.integral_manager.two_body_integrals,
+        constant_term=original.integral_manager.constant_term,
+        active_orbitals=[i for i in range(n_basis) if i not in core],
+        frozen_orbitals=core,
+        orbital_coefficients=jcoef,
+        overlap_integrals=original.integral_manager.overlap_integrals,
+        reference_orbitals=ref,
+        orbital_type=orbital_type,
+    )
     parameters = deepcopy(original.parameters)
     if isinstance(modified, FermionicBase):
-        return FermionicBase(parameters=parameters, integral_manager=integral_manager, fermionic_backend=modified.fermionic_backend), to_active
+        return FermionicBase(
+            parameters=parameters,
+            integral_manager=integral_manager,
+            fermionic_backend=modified.fermionic_backend,
+        ), to_active
     elif isinstance(modified, HybridBase):
-        return HybridBase(parameters=parameters, integral_manager=integral_manager, transformation=modified.transformation, select=modified.select, two_qubit=modified.two_qubit, condense=modified.condense), to_active
-    return QuantumChemistryBase(parameters=parameters, integral_manager=integral_manager, transformation=modified.transformation), to_active
+        return HybridBase(
+            parameters=parameters,
+            integral_manager=integral_manager,
+            transformation=modified.transformation,
+            select=modified.select,
+            two_qubit=modified.two_qubit,
+            condense=modified.condense,
+        ), to_active
+    return QuantumChemistryBase(
+        parameters=parameters,
+        integral_manager=integral_manager,
+        transformation=modified.transformation,
+    ), to_active

@@ -14,10 +14,19 @@ import os
 from tequila import SUPPORTED_BACKENDS, TequilaException, TequilaWarning, QCircuit
 from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS
 
-class mcvbt:
 
-    def __init__(self, mol: QuantumChemistryBase, graphs: list, circuits=None, strategy=None, solver:str="FQE",
-                 filename="mcvbt_results.csv", overwrite_file=True, silent=False):
+class mcvbt:
+    def __init__(
+        self,
+        mol: QuantumChemistryBase,
+        graphs: list,
+        circuits=None,
+        strategy=None,
+        solver: str = "FQE",
+        filename="mcvbt_results.csv",
+        overwrite_file=True,
+        silent=False,
+    ):
 
         self.mol = mol
         self.graphs = graphs
@@ -32,7 +41,7 @@ class mcvbt:
         self.silent = silent
 
         if overwrite_file and os.path.isfile(self.csvfile_name):
-           os.remove(self.csvfile_name)
+            os.remove(self.csvfile_name)
 
         if self.circuits is not None:
             if len(self.circuits) != len(self.graphs):
@@ -44,22 +53,24 @@ class mcvbt:
             self.__create_circuits()
 
         if init_strategy == "pre-optimize":
-            if not self.silent: print("Start pre-optimization of individual circuits")
+            if not self.silent:
+                print("Start pre-optimization of individual circuits")
             variables_preopt, energies = self.__preoptimize_variables()
             self.results[(1, 0)] = min(energies)
-            if not self.silent: print("End of pre-optimization")
+            if not self.silent:
+                print("End of pre-optimization")
         elif init_strategy == "zeros":
             variables_preopt = {}
             for circ in self.circuits:
                 for v in circ.variables:
                     variables_preopt[v] = 0.01
-            self.results[(1, 0)] = 0.
+            self.results[(1, 0)] = 0.0
         elif init_strategy == "random":
             variables_preopt = {}
             for circ in self.circuits:
                 for v in circ.extract_variables():
-                    variables_preopt[v] = np.random.uniform(0, 2*np.pi)
-            self.results[(1, 0)] = 0.
+                    variables_preopt[v] = np.random.uniform(0, 2 * np.pi)
+            self.results[(1, 0)] = 0.0
         else:
             raise ValueError("Unknown init_strategy {}".format(init_strategy))
 
@@ -72,32 +83,50 @@ class mcvbt:
                 writer = csv.writer(file)
                 writer.writerow([self.mol.compute_energy("fci")])
 
-        if not self.silent: print("Start G(N,M)  optimization")
+        if not self.silent:
+            print("Start G(N,M)  optimization")
         N = len(self.circuits)
-        for n in range(2, N+1):
-            if not self.silent: 
+        for n in range(2, N + 1):
+            if not self.silent:
                 print("Start G({},0) optimization".format(n))
                 print("variables preopt", variables_preopt)
-            v, _ = gem_fast(circuits=self.circuits[:n], solver=self.solver, variables=variables_preopt, mol=self.mol, silent=self.silent)
-            if not self.silent: print("End G({},0)   optimization".format(n))
+            v, _ = gem_fast(
+                circuits=self.circuits[:n],
+                solver=self.solver,
+                variables=variables_preopt,
+                mol=self.mol,
+                silent=self.silent,
+            )
+            if not self.silent:
+                print("End G({},0)   optimization".format(n))
             self.results[(n, 0)] = v[0]
         self.final_variables = self.variables_preopt
-        self.final_variables[('c', 0)] = 1.0
+        self.final_variables[("c", 0)] = 1.0
 
         variables = {**variables_preopt}
         start = 2
-        for m in range(1,N+1):
+        for m in range(1, N + 1):
             if m > start:
                 start = m
-            for n in range(start, N+1):
+            for n in range(start, N + 1):
                 if not self.silent:
                     with open(self.csvfile_name, mode="a", newline="") as file:
                         writer = csv.writer(file)
-                        writer.writerow(["G({},{})".format(n,m)])
-                if not self.silent: print("Start G({},{}) optimization".format(n,m))
-                v, _, variables = GNM(circuits=self.circuits[:n], variables=variables, solver=self.solver,
-                                      mol=self.mol,filename=self.csvfile_name, M=m, max_iter=10, silent=self.silent)
-                if not self.silent: print("End G({},{})   optimization".format(n,m))
+                        writer.writerow(["G({},{})".format(n, m)])
+                if not self.silent:
+                    print("Start G({},{}) optimization".format(n, m))
+                v, _, variables = GNM(
+                    circuits=self.circuits[:n],
+                    variables=variables,
+                    solver=self.solver,
+                    mol=self.mol,
+                    filename=self.csvfile_name,
+                    M=m,
+                    max_iter=10,
+                    silent=self.silent,
+                )
+                if not self.silent:
+                    print("End G({},{})   optimization".format(n, m))
                 self.results[(n, m)] = v[0]
                 self.final_variables = variables
 
@@ -117,19 +146,28 @@ class mcvbt:
         energies = []
         for preopt_circuit in self.circuits:
             if self.solver.lower() in SUPPORTED_FERMIONIC_BACKENDS:
-                E_preopt = Braket(ket=preopt_circuit, mol=self.mol, operator='H')
+                E_preopt = Braket(ket=preopt_circuit, mol=self.mol, operator="H")
                 variables = preopt_circuit.variables
                 init_vars = {vs: 0 for vs in variables}
 
                 for gate in preopt_circuit.gates:
                     if gate.name == "UR":
-                        init_vars[gate.variables] = np.pi/2
-                r = sn.minimize(E_preopt, silent=self.silent, initial_values=init_vars, fbackend=self.solver, *args, **kwargs)
+                        init_vars[gate.variables] = np.pi / 2
+                r = sn.minimize(
+                    E_preopt,
+                    silent=self.silent,
+                    initial_values=init_vars,
+                    fbackend=self.solver,
+                    *args,
+                    **kwargs,
+                )
                 energies.append(r.energy)
 
                 self.variables_preopt = {**self.variables_preopt, **r.angles}
             elif self.solver.lower() in SUPPORTED_BACKENDS:
-                E_preopt = tq.ExpectationValue(U=preopt_circuit, H=self.mol.make_hamiltonian())
+                E_preopt = tq.ExpectationValue(
+                    U=preopt_circuit, H=self.mol.make_hamiltonian()
+                )
 
                 variables = E_preopt.extract_variables()
                 init_vars = {vs: 0 for vs in variables}
@@ -137,7 +175,14 @@ class mcvbt:
                 for vs in init_vars:
                     if "R" in str(vs):
                         init_vars[vs] = 0.01
-                result = sn.minimize(E_preopt, silent=self.silent, initial_values=init_vars, backend=self.solver, *args, **kwargs)
+                result = sn.minimize(
+                    E_preopt,
+                    silent=self.silent,
+                    initial_values=init_vars,
+                    backend=self.solver,
+                    *args,
+                    **kwargs,
+                )
 
                 energies.append(result.energy)
 
@@ -151,18 +196,30 @@ class mcvbt:
         if self.solver.lower() in SUPPORTED_FERMIONIC_BACKENDS:
             self.circuits = []
             for i, edges in enumerate(self.graphs):
-                U = sn.FCircuit.from_edges(edges=edges, label="G{}".format(i), n_orb=self.mol.n_orbitals)
+                U = sn.FCircuit.from_edges(
+                    edges=edges, label="G{}".format(i), n_orb=self.mol.n_orbitals
+                )
                 for j, e in enumerate(edges):
-                    U += sn.gates.FermionicExcitation(indices=[(2 * e[0], 2 * e[1])],
-                                                      variables="(R{}_{})".format(i, j))
-                    U += sn.gates.FermionicExcitation(indices=[(2 * e[0] + 1, 2 * e[1] + 1)],
-                                                      variables="(R{}_{})".format(i, j))
+                    U += sn.gates.FermionicExcitation(
+                        indices=[(2 * e[0], 2 * e[1])],
+                        variables="(R{}_{})".format(i, j),
+                    )
+                    U += sn.gates.FermionicExcitation(
+                        indices=[(2 * e[0] + 1, 2 * e[1] + 1)],
+                        variables="(R{}_{})".format(i, j),
+                    )
                 self.circuits.append(U)
         elif self.solver.lower() in SUPPORTED_BACKENDS:
             mol = self.mol
             if isinstance(mol, FermionicBase):
-                TequilaWarning(f'Fermionic Base provided while qubit base solver ({self.solver})\n Converting molecule to qubit with reordered-JW')
-                mol = QuantumChemistryBase(parameters=mol.parameters,integral_manager=mol.integral_manager, transformation='reordered-jordan-wigner')
+                TequilaWarning(
+                    f"Fermionic Base provided while qubit base solver ({self.solver})\n Converting molecule to qubit with reordered-JW"
+                )
+                mol = QuantumChemistryBase(
+                    parameters=mol.parameters,
+                    integral_manager=mol.integral_manager,
+                    transformation="reordered-jordan-wigner",
+                )
             self.circuits = []
             for i, edges in enumerate(self.graphs):
                 U = mol.make_ansatz(name="SPA", edges=edges, label="G{}".format(i))
@@ -170,8 +227,8 @@ class mcvbt:
                     U += mol.UR(i=e[0], j=e[1], label="R{}_{}".format(i, j))
                 self.circuits.append(U)
 
-    def __add_delocalization(self, variables_preopt:Dict[tq.Variable, float]):
-        aux_circuits=[]
+    def __add_delocalization(self, variables_preopt: Dict[tq.Variable, float]):
+        aux_circuits = []
         for i, circ in enumerate(self.circuits):
             if isinstance(circ, QCircuit):
                 raise TequilaException("Strategies not implemented for QCircuit yet.")
@@ -183,15 +240,21 @@ class mcvbt:
 
                 # regroup into tuples of original size
                 tuple_size = len(self.graphs[i][0])
-                shifted_graph = [tuple(shifted[i:i + tuple_size]) for i in range(0, len(shifted), tuple_size)]
+                shifted_graph = [
+                    tuple(shifted[i : i + tuple_size])
+                    for i in range(0, len(shifted), tuple_size)
+                ]
 
                 for edge in shifted_graph:
-                    circ += sn.gates.FermionicExcitation(indices=[(2 * edge[0], 2 * edge[1])],
-                                                          variables="shift{}_{}".format(i, edge))
+                    circ += sn.gates.FermionicExcitation(
+                        indices=[(2 * edge[0], 2 * edge[1])],
+                        variables="shift{}_{}".format(i, edge),
+                    )
 
-                    circ += sn.gates.FermionicExcitation(indices=[(2 * edge[0] + 1, 2 * edge[1] + 1)],
-                                                          variables="shift{}_{}".format(i, edge))
-
+                    circ += sn.gates.FermionicExcitation(
+                        indices=[(2 * edge[0] + 1, 2 * edge[1] + 1)],
+                        variables="shift{}_{}".format(i, edge),
+                    )
 
             elif self.strategy == "triangle":
                 raise NotImplementedError
@@ -199,7 +262,9 @@ class mcvbt:
                 raise NotImplementedError
 
             aux_circuits.append(circ)
-            filtered_variables= [x for x in circ.variables if x not in variables_preopt]
+            filtered_variables = [
+                x for x in circ.variables if x not in variables_preopt
+            ]
             for v in filtered_variables:
                 variables_preopt[v] = 0.0
 
@@ -217,7 +282,9 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
     if M is None:
         M = len(circuits)
 
-    for i in range(M, N): #map pre opt variables to current circuit set and overrite old circuits
+    for i in range(
+        M, N
+    ):  # map pre opt variables to current circuit set and overrite old circuits
         U = deepcopy(circuits[i])
         U = U.map_variables(variables)
         circuits[i] = U
@@ -231,7 +298,6 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
     v, vv = gem_fast(circuits=circuits, variables=variables, mol=mol, solver=solver)
     x0 = {k: variables[k] for k in vkeys}
 
-
     coeffs = []
     for i in range(len(circuits)):
         c = tq.Variable(("c", i))
@@ -242,9 +308,10 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
     energy = 1.0
 
     callback_energies = []
+
     def callback(x):
 
-        energy = sn.simulate(mcvbt_exp,variables=x,backend=solver)
+        energy = sn.simulate(mcvbt_exp, variables=x, backend=solver)
         if not silent:
             print("current energy: {:+2.4f}".format(energy))
         callback_energies.append(energy)
@@ -254,27 +321,51 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
                 writer = csv.writer(file)
                 writer.writerow([callback_energies[-1]])
 
-
-    mcvbt_exp = BigExpVal(circuits=circuits, coefficcents=coeffs, mol=mol, H=mol.make_hamiltonian())
+    mcvbt_exp = BigExpVal(
+        circuits=circuits, coefficcents=coeffs, mol=mol, H=mol.make_hamiltonian()
+    )
     for i in range(max_iter):
-        if not silent: print("iteration {}".format(i))
+        if not silent:
+            print("iteration {}".format(i))
         if solver.lower() in SUPPORTED_BACKENDS:
-            result = tq.minimize(mcvbt_exp, initial_values=x0, method="bfgs", silent=silent, gradient="2-point",method_options={"disp": not silent, "maxiter": 100},  callback=callback, backend=solver)
+            result = tq.minimize(
+                mcvbt_exp,
+                initial_values=x0,
+                method="bfgs",
+                silent=silent,
+                gradient="2-point",
+                method_options={"disp": not silent, "maxiter": 100},
+                callback=callback,
+                backend=solver,
+            )
 
         else:
-            result = sn.minimize(mcvbt_exp, initial_values=x0, method="bfgs", silent=silent, callback=callback, backend=solver)
-        v, vv = gem_fast(circuits=circuits, variables=result.variables, mol=mol, solver=solver)
+            result = sn.minimize(
+                mcvbt_exp,
+                initial_values=x0,
+                method="bfgs",
+                silent=silent,
+                callback=callback,
+                backend=solver,
+            )
+        v, vv = gem_fast(
+            circuits=circuits, variables=result.variables, mol=mol, solver=solver
+        )
 
         for i in range(len(coeffs)):
             x0[coeffs[i]] = vv[i, 0]
 
-        if not np.isclose(energy, v[0], atol=1.e-4):
-            if not silent: print("not converged")
-            if not silent: print(energy)
-            if not silent: print(v[0])
+        if not np.isclose(energy, v[0], atol=1.0e-4):
+            if not silent:
+                print("not converged")
+            if not silent:
+                print(energy)
+            if not silent:
+                print(v[0])
             energy = v[0]
         else:
-            if not silent: print("converged after {} iterations with energy {}".format(i,energy))
+            if not silent:
+                print("converged after {} iterations with energy {}".format(i, energy))
             energy = v[0]
             break
 

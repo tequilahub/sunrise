@@ -7,13 +7,24 @@ from numbers import Real
 import numpy
 from scipy.constants import physical_constants
 
-from tequila import BitString, QCircuit, TequilaException, TequilaWarning, Variable, compile_circuit
+from tequila import (
+    BitString,
+    QCircuit,
+    TequilaException,
+    TequilaWarning,
+    Variable,
+    compile_circuit,
+)
 from tequila.circuit import gates
 
 try:
-    from openfermion.ops.representations import get_active_space_integrals  # needs openfermion 1.3
+    from openfermion.ops.representations import (
+        get_active_space_integrals,
+    )  # needs openfermion 1.3
 except ImportError as E:
-    raise TequilaException("{}\nplease update openfermion to version 1.3 or higher".format(str(E)))
+    raise TequilaException(
+        "{}\nplease update openfermion to version 1.3 or higher".format(str(E))
+    )
 
 
 @dataclass
@@ -28,8 +39,12 @@ class ActiveSpaceData:
 
     def __str__(self):
         result = "Active Space Data:\n"
-        result += "{key:15} : {value:15} \n".format(key="active_orbitals", value=str(self.active_orbitals))
-        result += "{key:15} : {value:15} \n".format(key="reference_orbitals", value=str(self.reference_orbitals))
+        result += "{key:15} : {value:15} \n".format(
+            key="active_orbitals", value=str(self.active_orbitals)
+        )
+        result += "{key:15} : {value:15} \n".format(
+            key="reference_orbitals", value=str(self.reference_orbitals)
+        )
         result += "{key:15} : {value:15} \n".format(
             key="active_reference_orbitals", value=str(self.active_reference_orbitals)
         )
@@ -51,12 +66,16 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
     """
 
     def __init__(self, generator, p0, transformation, indices=None, *args, **kwargs):
-        super().__init__(generator=generator, target=generator.qubits, p0=p0, *args, **kwargs)
+        super().__init__(
+            generator=generator, target=generator.qubits, p0=p0, *args, **kwargs
+        )
         self._name = "FermionicExcitation"
         self.transformation = transformation
         self.indices = indices
         if not hasattr(indices[0], "__len__"):
-            self.indices = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
+            self.indices = [
+                (indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)
+            ]
         self.sign = self.format_excitation_variables(self.indices)
         self.indices = self.format_excitation_indices(self.indices)
 
@@ -66,14 +85,24 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             for x in self.indices:
                 for y in x:
                     target.append(y)
-            return gates.QubitExcitation(target=target, angle=self.parameter, control=self.control)
+            return gates.QubitExcitation(
+                target=target, angle=self.parameter, control=self.control
+            )
         else:
             if self.transformation.lower().strip("_") == "jordanwigner":
                 return self.fermionic_excitation(
-                    angle=self.sign * self.parameter, indices=self.indices, control=self.control, opt=False
+                    angle=self.sign * self.parameter,
+                    indices=self.indices,
+                    control=self.control,
+                    opt=False,
                 )
             else:
-                return gates.Trotterized(generator=self.generator, control=self.control, angle=self.parameter, steps=1)
+                return gates.Trotterized(
+                    generator=self.generator,
+                    control=self.control,
+                    angle=self.parameter,
+                    steps=1,
+                )
 
     def format_excitation_indices(self, idx):
         """
@@ -124,7 +153,9 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         if isinstance(dcontrol, int):
             dcontrol = [dcontrol]
         if not len(dcontrol):
-            return compile_circuit(gates.Ry(angle=angle, target=target, control=control))
+            return compile_circuit(
+                gates.Ry(angle=angle, target=target, control=control)
+            )
         else:
             if isinstance(angle, str):
                 angle = Variable(angle)
@@ -134,12 +165,24 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             ctr.pop(0)
             if case:
                 U += (
-                    self.cCRy(target=target, dcontrol=ctr, angle=angle / 2, case=1, control=control)
+                    self.cCRy(
+                        target=target,
+                        dcontrol=ctr,
+                        angle=angle / 2,
+                        case=1,
+                        control=control,
+                    )
                     + gates.H(aux)
                     + gates.CNOT(target, aux)
                 )
                 U += (
-                    self.cCRy(target=target, dcontrol=ctr, angle=-angle / 2, case=0, control=control)
+                    self.cCRy(
+                        target=target,
+                        dcontrol=ctr,
+                        angle=-angle / 2,
+                        case=0,
+                        control=control,
+                    )
                     + gates.CNOT(target, aux)
                     + gates.H(aux)
                 )
@@ -147,12 +190,24 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
                 U += (
                     gates.H(aux)
                     + gates.CNOT(target, aux)
-                    + self.cCRy(target=target, dcontrol=ctr, angle=-angle / 2, case=0, control=control)
+                    + self.cCRy(
+                        target=target,
+                        dcontrol=ctr,
+                        angle=-angle / 2,
+                        case=0,
+                        control=control,
+                    )
                 )
                 U += (
                     gates.CNOT(target, aux)
                     + gates.H(aux)
-                    + self.cCRy(target=target, dcontrol=ctr, angle=angle / 2, case=1, control=control)
+                    + self.cCRy(
+                        target=target,
+                        dcontrol=ctr,
+                        angle=angle / 2,
+                        case=1,
+                        control=control,
+                    )
                 )
             return U
 
@@ -170,7 +225,9 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         lto = []
         lfrom = []
         if isinstance(indices, tuple) and not hasattr(indices[0], "__len__"):
-            indices = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
+            indices = [
+                (indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)
+            ]
         for pair in indices:
             lfrom.append(pair[0])
             lto.append(pair[1])
@@ -206,8 +263,14 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             Ur.gates.pop(-1)
             Ur.gates.pop(-1)
             Upair2.gates.pop(0)
-            Ur += gates.Rz(numpy.pi / 2, target=lto[-1]) + gates.Rz(-numpy.pi / 2, target=lfrom[-1])
-            Ur += gates.CNOT(lto[-1], lfrom[-1]) + gates.Rz(numpy.pi / 2, target=lfrom[-1]) + gates.H(lfrom[-1])
+            Ur += gates.Rz(numpy.pi / 2, target=lto[-1]) + gates.Rz(
+                -numpy.pi / 2, target=lfrom[-1]
+            )
+            Ur += (
+                gates.CNOT(lto[-1], lfrom[-1])
+                + gates.Rz(numpy.pi / 2, target=lfrom[-1])
+                + gates.H(lfrom[-1])
+            )
         return Upair + Uladder + Ur + Uladder.dagger() + Upair2
 
     def __str(self):
@@ -246,7 +309,9 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         if hasattr(self, "generator") and self.generator:
             mapped.generator = self.generator.map_qubits(qubit_map=qubit_map)
         if hasattr(self, "generators"):
-            mapped.generators = [i.map_qubits(qubit_map=qubit_map) for i in self.generators]
+            mapped.generators = [
+                i.map_qubits(qubit_map=qubit_map) for i in self.generators
+            ]
         mapped.finalize()
         if hasattr(self, "generator"):
             mapped.generator = self.generator.map_qubits(qubit_map=qubit_map)
@@ -285,7 +350,9 @@ class ParametersQC:
     basis_set: str = None  # Quantum chemistry basis set
     geometry: str = None  # geometry of the underlying molecule,
     # this can be a filename leading to an .xyz file or the geometry given as a string
-    units: str = None  # units of the geometry, if nothing is passed it will be set to Angstrom!
+    units: str = (
+        None  # units of the geometry, if nothing is passed it will be set to Angstrom!
+    )
     description: str = ""
     multiplicity: int = 1
     charge: int = 0
@@ -315,7 +382,9 @@ class ParametersQC:
         return self.get_nuc_charge() - self.charge
 
     def get_nuc_charge(self):
-        return sum(self.get_atom_number(name=atom) for atom in self.get_atoms(ghost="pyscf"))
+        return sum(
+            self.get_atom_number(name=atom) for atom in self.get_atoms(ghost="pyscf")
+        )
 
     def get_atom_number(self, name):
         atom_numbers = {
@@ -338,7 +407,20 @@ class ParametersQC:
             "cl": 17,
             "ar": 18,
         }
-        if any(g in name.lower() for g in ["ghost:", "ghost-", "ghost_", "ghost", "x:", "x-", "x_", "gh(", "@"]):
+        if any(
+            g in name.lower()
+            for g in [
+                "ghost:",
+                "ghost-",
+                "ghost_",
+                "ghost",
+                "x:",
+                "x-",
+                "x_",
+                "gh(",
+                "@",
+            ]
+        ):
             return 0
         if name.lower() in atom_numbers:
             return atom_numbers[name.lower()]
@@ -352,7 +434,9 @@ class ParametersQC:
             return element.number
         except Exception:
             raise TequilaException(
-                "can not assign atomic number to element {}\npip install periodictable will fix it".format(atom)
+                "can not assign atomic number to element {}\npip install periodictable will fix it".format(
+                    atom
+                )
             )
 
     def get_atoms(self, ghost="of"):
@@ -365,7 +449,10 @@ class ParametersQC:
             )
         # determine units, default Angstrom
         if self.units is None:
-            warnings.warn("Warning: No units passed with geometry, assuming units are angstrom.", TequilaWarning)
+            warnings.warn(
+                "Warning: No units passed with geometry, assuming units are angstrom.",
+                TequilaWarning,
+            )
             self.units = "angstrom"
         else:
             self.units = self.units.lower()
@@ -388,17 +475,28 @@ class ParametersQC:
                     self.description = description
             else:
                 atoms = self.get_atoms()
-                atom_names = sorted(list(set(atoms)), key=lambda x: self.get_atom_number(x), reverse=True)
+                atom_names = sorted(
+                    list(set(atoms)),
+                    key=lambda x: self.get_atom_number(x),
+                    reverse=True,
+                )
                 if self.name is None:
                     drop_ones = lambda x: "" if x == 1 else x
-                    self.name = "".join(["{}{}".format(x, drop_ones(atoms.count(x))) for x in atom_names])
+                    self.name = "".join(
+                        [
+                            "{}{}".format(x, drop_ones(atoms.count(x)))
+                            for x in atom_names
+                        ]
+                    )
             self.name = self.name.lower()
 
         if self.geometry is None:
             self.geometry = self.name + ".xyz"
 
         if ".xyz" in self.geometry and not os.path.isfile(self.geometry):
-            raise TequilaException("could not find file for molecular coordinates {}".format(self.geometry))
+            raise TequilaException(
+                "could not find file for molecular coordinates {}".format(self.geometry)
+            )
 
     @property
     def filename(self):
@@ -436,7 +534,17 @@ class ParametersQC:
         """
 
         def format_ghost(string: str, ghost: str = "of") -> str:
-            prefixes = ["ghost:", "ghost-", "ghost_", "ghost", "x:", "x-", "x_", "gh(", "@"]
+            prefixes = [
+                "ghost:",
+                "ghost-",
+                "ghost_",
+                "ghost",
+                "x:",
+                "x-",
+                "x_",
+                "gh(",
+                "@",
+            ]
 
             detected_prefix = None
             atom_name = string
@@ -457,7 +565,17 @@ class ParametersQC:
                     atom_name = atom_name[: atom_name.find(")")]
                 return atom_name
             elif ghost_backend == "pyscf":
-                pyscf_valid = ["ghost:", "ghost-", "ghost_", "ghost", "x:", "x-", "x_", "gh(", "@"]
+                pyscf_valid = [
+                    "ghost:",
+                    "ghost-",
+                    "ghost_",
+                    "ghost",
+                    "x:",
+                    "x-",
+                    "x_",
+                    "gh(",
+                    "@",
+                ]
                 if detected_prefix in pyscf_valid:
                     orig_prefix = string[: len(detected_prefix)]
                     return orig_prefix + atom_name
@@ -484,7 +602,9 @@ class ParametersQC:
 
         assert len(string) > 0
         assert isinstance(string, str)
-        if any(g in string.lower() for g in ["ghost", "x:", "x-", "x_", "gh(", "@"]):  # Care with Xe
+        if any(
+            g in string.lower() for g in ["ghost", "x:", "x-", "x_", "gh(", "@"]
+        ):  # Care with Xe
             return format_ghost(string=string, ghost=ghost)
         fstring = string[0].upper() + string[1:].lower()
         return fstring
@@ -530,16 +650,28 @@ class ParametersQC:
                 elif initial_units == "angstrom":
                     tmp = (
                         ParametersQC.format_element_name(words[0], ghost),
-                        (float(words[1]) / c_bohrtoang, float(words[2]) / c_bohrtoang, float(words[3]) / c_bohrtoang),
+                        (
+                            float(words[1]) / c_bohrtoang,
+                            float(words[2]) / c_bohrtoang,
+                            float(words[3]) / c_bohrtoang,
+                        ),
                     )
                 elif initial_units == "bohr":
                     tmp = (
                         ParametersQC.format_element_name(words[0], ghost),
-                        (float(words[1]) * c_bohrtoang, float(words[2]) * c_bohrtoang, float(words[3]) * c_bohrtoang),
+                        (
+                            float(words[1]) * c_bohrtoang,
+                            float(words[2]) * c_bohrtoang,
+                            float(words[3]) * c_bohrtoang,
+                        ),
                     )
                 result.append(tmp)
             except ValueError:
-                print("get_geometry list unknown line:\n ", line, "\n proceed with caution!")
+                print(
+                    "get_geometry list unknown line:\n ",
+                    line,
+                    "\n proceed with caution!",
+                )
         return result
 
     def get_geometry_string(self, desired_units="angstrom", ghost="of") -> str:
@@ -579,10 +711,18 @@ class ParametersQC:
             geomstring, comment = self.read_xyz_from_file(self.geometry)
             if self.description == "":
                 self.description = comment
-            return self.convert_to_list(geomstring, initial_units=self.units, desired_units=desired_units, ghost=ghost)
+            return self.convert_to_list(
+                geomstring,
+                initial_units=self.units,
+                desired_units=desired_units,
+                ghost=ghost,
+            )
         elif self.geometry is not None:
             return self.convert_to_list(
-                self.geometry, initial_units=self.units, desired_units=desired_units, ghost=ghost
+                self.geometry,
+                initial_units=self.units,
+                desired_units=desired_units,
+                ghost=ghost,
             )
         else:
             raise Exception("Parameters.qc.geometry is None")
@@ -656,7 +796,9 @@ class ClosedShellAmplitudes:
             ) in numpy.ndenumerate(self.tIA):
                 if not numpy.isclose(value, 0.0, atol=threshold) or not screening:
                     variables[(A + nocc, I)] = value
-        return dict(sorted(variables.items(), key=lambda x: numpy.abs(x[1]), reverse=True))
+        return dict(
+            sorted(variables.items(), key=lambda x: numpy.abs(x[1]), reverse=True)
+        )
 
 
 @dataclass
@@ -690,7 +832,14 @@ class Amplitudes:
 
         """
         tijab = cs.tIjAb - numpy.einsum("ijab -> ijba", cs.tIjAb, optimize="greedy")
-        return cls(tIjAb=cs.tIjAb, tIA=cs.tIA, tiJaB=cs.tIjAb, tia=cs.tIA, tijab=tijab, tIJAB=tijab)
+        return cls(
+            tIjAb=cs.tIjAb,
+            tIA=cs.tIA,
+            tiJaB=cs.tIjAb,
+            tia=cs.tIA,
+            tijab=tijab,
+            tIJAB=tijab,
+        )
 
     tIjAb: numpy.ndarray = None
     tIA: numpy.ndarray = None
@@ -721,13 +870,19 @@ class Amplitudes:
 
             for (I, j, A, b), value in numpy.ndenumerate(self.tIjAb):
                 if not numpy.isclose(value, 0.0, atol=threshold):
-                    variables[(2 * (nocc + A), 2 * I, 2 * (nocc + b) + 1, j + 1)] = value
+                    variables[(2 * (nocc + A), 2 * I, 2 * (nocc + b) + 1, j + 1)] = (
+                        value
+                    )
             for (i, J, a, B), value in numpy.ndenumerate(self.tiJaB):
                 if not numpy.isclose(value, 0.0, atol=threshold):
-                    variables[(2 * (nocc + a) + 1, 2 * i + 1, 2 * (nocc + B), J)] = value
+                    variables[(2 * (nocc + a) + 1, 2 * i + 1, 2 * (nocc + B), J)] = (
+                        value
+                    )
             for (i, j, a, b), value in numpy.ndenumerate(self.tijab):
                 if not numpy.isclose(value, 0.0, atol=threshold):
-                    variables[(2 * (nocc + a) + 1, 2 * i + 1, 2 * (nocc + b) + 1, j + 1)] = value
+                    variables[
+                        (2 * (nocc + a) + 1, 2 * i + 1, 2 * (nocc + b) + 1, j + 1)
+                    ] = value
             for (I, J, A, B), value in numpy.ndenumerate(self.tijab):
                 if not numpy.isclose(value, 0.0, atol=threshold):
                     variables[(2 * (nocc + A), 2 * I, 2 * (nocc + B), J)] = value
@@ -783,7 +938,9 @@ class NBodyTensor:
                 return "of"
             else:
                 raise TequilaException(
-                    "Unknown two-body tensor scheme {}. Supported are dirac, mulliken, and openfermion".format(scheme)
+                    "Unknown two-body tensor scheme {}. Supported are dirac, mulliken, and openfermion".format(
+                        scheme
+                    )
                 )
 
         def is_phys(self):
@@ -833,13 +990,19 @@ class NBodyTensor:
         for _ in range(trials):
             idx = numpy.random.randint(0, n, 4)
             test1 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[2], idx[1], idx[0], idx[3]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[2], idx[1], idx[0], idx[3]],
+                atol=1.0e-4,
             )
             test2 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[0], idx[3], idx[2], idx[1]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[0], idx[3], idx[2], idx[1]],
+                atol=1.0e-4,
             )
             test3 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[2], idx[3], idx[0], idx[1]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[2], idx[3], idx[0], idx[1]],
+                atol=1.0e-4,
             )
             if not (test1 and test2 and test3):
                 return False
@@ -855,13 +1018,19 @@ class NBodyTensor:
         for _ in range(trials):
             idx = numpy.random.randint(0, n, 4)
             test1 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[1], idx[0], idx[2], idx[3]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[1], idx[0], idx[2], idx[3]],
+                atol=1.0e-4,
             )
             test2 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[0], idx[1], idx[3], idx[2]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[0], idx[1], idx[3], idx[2]],
+                atol=1.0e-4,
             )
             test3 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[1], idx[0], idx[3], idx[2]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[1], idx[0], idx[3], idx[2]],
+                atol=1.0e-4,
             )
             if not (test1 and test2 and test3):
                 return False
@@ -877,13 +1046,19 @@ class NBodyTensor:
         for _ in range(trials):
             idx = numpy.random.randint(0, n, 4)
             test1 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[3], idx[1], idx[2], idx[0]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[3], idx[1], idx[2], idx[0]],
+                atol=1.0e-4,
             )
             test2 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[0], idx[2], idx[1], idx[3]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[0], idx[2], idx[1], idx[3]],
+                atol=1.0e-4,
             )
             test3 = numpy.isclose(
-                elems[idx[0], idx[1], idx[2], idx[3]], elems[idx[3], idx[2], idx[1], idx[0]], atol=1.0e-4
+                elems[idx[0], idx[1], idx[2], idx[3]],
+                elems[idx[3], idx[2], idx[1], idx[0]],
+                atol=1.0e-4,
             )
             if not (test1 and test2 and test3):
                 return False
@@ -953,7 +1128,9 @@ class NBodyTensor:
             self.ordering = self.Ordering(ordering)
         else:
             if ordering is not None:
-                raise Exception("Ordering only implemented for tensors of order 4 / 2-body tensors.")
+                raise Exception(
+                    "Ordering only implemented for tensors of order 4 / 2-body tensors."
+                )
             self.ordering = None
 
     @property
@@ -988,7 +1165,9 @@ class NBodyTensor:
         # Perform slicing via numpy.take
         out = self.elems
         for ax in range(self.order):
-            if idx_lists[ax] is not None:  # None means, we want the full space in this direction
+            if (
+                idx_lists[ax] is not None
+            ):  # None means, we want the full space in this direction
                 out = numpy.take(out, idx_lists[ax], axis=ax)
 
         return out
@@ -999,7 +1178,9 @@ class NBodyTensor:
         if self._size_full is None:
             tmp_size = self.elems.shape[0]
 
-        self._passive_indices = [i for i in range(tmp_size) if i not in self.active_indices]
+        self._passive_indices = [
+            i for i in range(tmp_size) if i not in self.active_indices
+        ]
         self._full_indices = [i for i in range(tmp_size)]
 
     def sub_str(self, name: str) -> numpy.ndarray:
@@ -1033,7 +1214,9 @@ class NBodyTensor:
         if len(name) != self.order:
             raise Exception("Name does not match order of the tensor.")
         if self.active_indices is None:
-            raise Exception("Need to set an active space in order to call this function.")
+            raise Exception(
+                "Need to set an active space in order to call this function."
+            )
 
         idx_lists = []
         # Parse name as string of space indices
@@ -1127,7 +1310,15 @@ class OrbitalData:
     def __str__(self):
         return (
             "{"
-            + "{}".format("".join(["{}:{}, ".format(k, v) for k, v in self.__dict__.items() if v is not None]))
+            + "{}".format(
+                "".join(
+                    [
+                        "{}:{}, ".format(k, v)
+                        for k, v in self.__dict__.items()
+                        if v is not None
+                    ]
+                )
+            )
             .rstrip()
             .rstrip(",")
             + "}"
@@ -1178,12 +1369,17 @@ class IntegralManager:
         except Exception as E:
             raise TequilaException(
                 "{}\ntwo_body_integrals given in wrong format. Needs to be a sun.chemistry.NBodyTensor in chem ordering.\n{} with ordering={}".format(
-                    str(E), str(type(two_body_integrals)), str(two_body_integrals.ordering)
+                    str(E),
+                    str(type(two_body_integrals)),
+                    str(two_body_integrals.ordering),
                 )
             )
 
         for i in range(4):
-            assert self._one_body_integrals.shape[0] == self._two_body_integrals.elems.shape[i]
+            assert (
+                self._one_body_integrals.shape[0]
+                == self._two_body_integrals.elems.shape[i]
+            )
         assert self._one_body_integrals.shape[0] == self._one_body_integrals.shape[1]
 
         if overlap_integrals is None:
@@ -1197,7 +1393,10 @@ class IntegralManager:
         self._orbital_coefficients = orbital_coefficients
 
         if orbitals is None:
-            orbitals = [OrbitalData(idx_total=i, idx=i) for i in range(one_body_integrals.shape[0])]
+            orbitals = [
+                OrbitalData(idx_total=i, idx=i)
+                for i in range(one_body_integrals.shape[0])
+            ]
 
         self._orbitals = orbitals
         self.active_space = active_space
@@ -1246,7 +1445,9 @@ class IntegralManager:
     @property
     def active_reference_orbitals(self):
         return [
-            self._orbitals[i] for i in self.active_space.active_orbitals if i in self.active_space.reference_orbitals
+            self._orbitals[i]
+            for i in self.active_space.active_orbitals
+            if i in self.active_space.reference_orbitals
         ]
 
     @property
@@ -1334,14 +1535,21 @@ class IntegralManager:
         updates the structure with new orbitals: c = cU
         """
         assert self.is_unitary(U)
-        self.orbital_coefficients = numpy.einsum("ix, xj -> ij", self.orbital_coefficients, U, optimize="greedy")
+        self.orbital_coefficients = numpy.einsum(
+            "ix, xj -> ij", self.orbital_coefficients, U, optimize="greedy"
+        )
         if name is None:
             self._orbital_type += "-transformed"
         else:
             self._orbital_type = name
 
     def get_integrals(
-        self, orbital_coefficients=None, ordering="openfermion", ignore_active_space=False, *args, **kwargs
+        self,
+        orbital_coefficients=None,
+        ordering="openfermion",
+        ignore_active_space=False,
+        *args,
+        **kwargs,
     ):
         """
         Get all molecular integrals in given orbital basis (determined by orbital_coefficients in self or the ones passed here)
@@ -1360,8 +1568,12 @@ class IntegralManager:
             orbital_coefficients = self.orbital_coefficients
 
         c = self.constant_term
-        h = self._get_transformed_one_body_integrals(orbital_coefficients=orbital_coefficients)
-        g = self._get_transformed_two_body_integrals(orbital_coefficients=orbital_coefficients, ordering=ordering)
+        h = self._get_transformed_one_body_integrals(
+            orbital_coefficients=orbital_coefficients
+        )
+        g = self._get_transformed_two_body_integrals(
+            orbital_coefficients=orbital_coefficients, ordering=ordering
+        )
         if not ignore_active_space and self._active_space is not None:
             g = g.reorder(to="openfermion").elems
 
@@ -1379,22 +1591,30 @@ class IntegralManager:
         g.reorder(to=ordering)
         return c, h, g
 
-    def _get_transformed_one_body_integrals(self, orbital_coefficients=None, verify=True):
+    def _get_transformed_one_body_integrals(
+        self, orbital_coefficients=None, verify=True
+    ):
         if orbital_coefficients is None:
             orbital_coefficients = self.orbital_coefficients
         elif verify:
-            assert self.verify_orbital_coefficients(orbital_coefficients=orbital_coefficients)
+            assert self.verify_orbital_coefficients(
+                orbital_coefficients=orbital_coefficients
+            )
         h = self.one_body_integrals
         h = numpy.einsum("ix, xj -> ij", h, orbital_coefficients, optimize="greedy")
         h = numpy.einsum("xj, xi -> ij", h, orbital_coefficients, optimize="greedy")
 
         return h
 
-    def _get_transformed_two_body_integrals(self, orbital_coefficients=None, ordering="openfermion", verify=True):
+    def _get_transformed_two_body_integrals(
+        self, orbital_coefficients=None, ordering="openfermion", verify=True
+    ):
         if orbital_coefficients is None:
             orbital_coefficients = self.orbital_coefficients
         elif verify:
-            assert self.verify_orbital_coefficients(orbital_coefficients=orbital_coefficients)
+            assert self.verify_orbital_coefficients(
+                orbital_coefficients=orbital_coefficients
+            )
 
         g = self.two_body_integrals
         g = g.reorder("chem").elems
@@ -1444,10 +1664,30 @@ class IntegralManager:
     def print_basis_info(self, print_coefficients=True, *args, **kwargs) -> None:
         print("{:15} : {}".format("basis_name", self._basis_name), *args, **kwargs)
         print("{:15} : {}".format("orbital_type", self._orbital_type), *args, **kwargs)
-        print("{:15} : {}".format("orthogonal basis", self.basis_is_orthogonal()), *args, **kwargs)
-        print("{:15} : {}".format("basis functions", self.one_body_integrals.shape[0]), *args, **kwargs)
-        print("{:15} : {}".format("active orbitals", [o.idx_total for o in self.active_orbitals]), *args, **kwargs)
-        print("{:15} : {}".format("reference", [x.idx_total for x in self.reference_orbitals]), *args, **kwargs)
+        print(
+            "{:15} : {}".format("orthogonal basis", self.basis_is_orthogonal()),
+            *args,
+            **kwargs,
+        )
+        print(
+            "{:15} : {}".format("basis functions", self.one_body_integrals.shape[0]),
+            *args,
+            **kwargs,
+        )
+        print(
+            "{:15} : {}".format(
+                "active orbitals", [o.idx_total for o in self.active_orbitals]
+            ),
+            *args,
+            **kwargs,
+        )
+        print(
+            "{:15} : {}".format(
+                "reference", [x.idx_total for x in self.reference_orbitals]
+            ),
+            *args,
+            **kwargs,
+        )
 
         if not print_coefficients:
             return

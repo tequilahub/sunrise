@@ -58,7 +58,15 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
         elif not f12_filename.endswith(".npy"):
             raise TequilaException
         external_info = {"f12_filename": f12_filename, "ordering": "chem"}
-        super().__init__(mol=mol, rdm1=rdm1, rdm2=rdm2, n_ri=n_ri, gamma=gamma, external_info=external_info, **kwargs)
+        super().__init__(
+            mol=mol,
+            rdm1=rdm1,
+            rdm2=rdm2,
+            n_ri=n_ri,
+            gamma=gamma,
+            external_info=external_info,
+            **kwargs,
+        )
 
     def setup_tensors_madness(self):
         """

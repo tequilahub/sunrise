@@ -18,6 +18,7 @@ Two strategies are provided:
   so the O(2**n_qubits) cost is paid once at construction time instead of on every
   evaluation.
 """
+
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -122,7 +123,9 @@ def extract_restricted_integrals(
     return int1e, int2e, constant
 
 
-def build_sparse_ci_operator(operator: FermionOperator, n_qubits: int, ci_strings) -> csr_matrix:
+def build_sparse_ci_operator(
+    operator: FermionOperator, n_qubits: int, ci_strings
+) -> csr_matrix:
     """
     General fallback: build the Jordan-Wigner sparse matrix once (O(2**n_qubits),
     paid only at construction time) and restrict it to the CI-string basis so that

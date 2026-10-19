@@ -1,16 +1,27 @@
-from numpy import sqrt,array
+from numpy import sqrt, array
 from .utils import XYZUtils
 from re import split
 
 
 BOND_DISTANCE_TOLERANCE = 1.3
 
+
 class AtomData:
-    def __init__(self, name, symbol, covalent_radius_pm, max_bonds, number_of_shells, number_of_electrons,
-                 electrons_by_shell):
+    def __init__(
+        self,
+        name,
+        symbol,
+        covalent_radius_pm,
+        max_bonds,
+        number_of_shells,
+        number_of_electrons,
+        electrons_by_shell,
+    ):
         self.name = name
         self.symbol = symbol
-        self.covalent_radius = None if covalent_radius_pm is None else covalent_radius_pm / 100
+        self.covalent_radius = (
+            None if covalent_radius_pm is None else covalent_radius_pm / 100
+        )
         self.max_bonds = max_bonds
         self.number_of_shells = number_of_shells
         self.number_of_electrons = number_of_electrons
@@ -19,6 +30,7 @@ class AtomData:
     @property
     def covalent_radius_pm(self):
         return self.covalent_radius * 100
+
 
 atom_data_by_number = [
     AtomData("Hydrogen", "H", 31, 1, 1, 1, [1]),
@@ -138,7 +150,7 @@ atom_data_by_number = [
     AtomData("Moscovium", "Mc", None, 15, 7, 115, [2, 8, 18, 32, 32, 18, 5]),
     AtomData("Livermorium", "Lv", None, 16, 7, 116, [2, 8, 18, 32, 32, 18, 6]),
     AtomData("Tennessine", "Ts", None, 17, 7, 117, [2, 8, 18, 32, 32, 18, 7]),
-    AtomData("Oganesson", "Og", None, 18, 7, 118, [2, 8, 18, 32, 32, 18, 8])
+    AtomData("Oganesson", "Og", None, 18, 7, 118, [2, 8, 18, 32, 32, 18, 8]),
 ]
 atom_data_by_symbol = {}
 
@@ -156,7 +168,7 @@ class Position:
         dx = self.x - other.x
         dy = self.y - other.y
         dz = self.z - other.z
-        return sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+        return sqrt(dx**2 + dy**2 + dz**2)
 
     @property
     def coords(self):
@@ -166,10 +178,19 @@ class Position:
     def from_string(string):
         parts = string.split()
         return Position(float(parts[1]), float(parts[2]), float(parts[3]))
+
+
 class Atom(AtomData):
     def __init__(self, atom_data, position):
-        super().__init__(atom_data.name, atom_data.symbol, atom_data.covalent_radius_pm, atom_data.max_bonds,
-                         atom_data.number_of_shells, atom_data.number_of_electrons, atom_data.electrons_by_shell)
+        super().__init__(
+            atom_data.name,
+            atom_data.symbol,
+            atom_data.covalent_radius_pm,
+            atom_data.max_bonds,
+            atom_data.number_of_shells,
+            atom_data.number_of_electrons,
+            atom_data.electrons_by_shell,
+        )
         self.position = position
 
     @property
@@ -185,7 +206,7 @@ class Atom(AtomData):
 
     @staticmethod
     def from_string(string):
-        parts = split(r'\s+', string.strip())
+        parts = split(r"\s+", string.strip())
         symbol = parts[0]
         atom_data = atom_data_by_symbol[symbol]
         position = Position.from_string(string)
@@ -199,5 +220,7 @@ class Atom(AtomData):
     def can_bond_with(self, other):
         if self.covalent_radius is None or other.covalent_radius is None:
             return False
-        max_bonding_distance = BOND_DISTANCE_TOLERANCE * (self.covalent_radius + other.covalent_radius)
+        max_bonding_distance = BOND_DISTANCE_TOLERANCE * (
+            self.covalent_radius + other.covalent_radius
+        )
         return self.distance_to(other) <= max_bonding_distance

@@ -79,7 +79,6 @@ def run_spa_optimization(
     variables, energy = spa_solve_graph(mol, graph)
     U_x = mol.make_ansatz(name="SPA", edges=edges)
 
-
     return OptimizationResult(
         energy=energy,
         orbital_coefficients=opt.molecule.integral_manager.orbital_coefficients,

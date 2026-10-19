@@ -1,5 +1,5 @@
 from optparse import Option
-from typing import List, Union, Optional,Dict
+from typing import List, Union, Optional, Dict
 
 from .color import ColorRange, Colors, Color
 
@@ -15,13 +15,15 @@ class CircuitStyle:
         primary, secondary -- Basic colors to be used by the gates, each contains a text and gate color.
     """
 
-    def __init__(self,
-                 group_together: bool = False,
-                 parametrized_marking: Optional[Colors] = Colors(Color("black"), Color("unia")),
-                 color_range: Optional[ColorRange] = ColorRange(Color("blue"), Color("red")),
-                 primary: Colors = Colors(Color("white"), Color("tq")),
-                 secondary: Colors = Colors(Color("white"), Color("fai")),
-                 personalized:Dict['str',Colors]={}):
+    def __init__(
+        self,
+        group_together: bool = False,
+        parametrized_marking: Optional[Colors] = Colors(Color("black"), Color("unia")),
+        color_range: Optional[ColorRange] = ColorRange(Color("blue"), Color("red")),
+        primary: Colors = Colors(Color("white"), Color("tq")),
+        secondary: Colors = Colors(Color("white"), Color("fai")),
+        personalized: Dict["str", Colors] = {},
+    ):
         self.group_together = group_together
         self.parametrized_marking = parametrized_marking
         self.color_range = color_range

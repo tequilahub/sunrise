@@ -1,10 +1,11 @@
 import os
 import hashlib
 
+
 def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
     """
     Draw a Sunrise FCircuit or Tequila Objective using the Sunrise graphical engine.
-    
+
     Parameters
     ----------
     circuit : FCircuit, QCircuit, or Objective
@@ -19,10 +20,10 @@ def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
         Additional arguments passed to FCircuit.export_to (e.g., show_spatial_orbitals, style).
     """
     from tequila.objective import Objective
-    
+
     # We always use the Sunrise engine for FCircuits, so ignore tequila's backend kwarg
     kwargs.pop("backend", None)
-    
+
     # If it's an Objective, draw all unique circuits contained within it
     if isinstance(circuit, Objective):
         drawn = {}
@@ -45,27 +46,29 @@ def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
         circuit = circuit.U
     if hasattr(circuit, "abstract_circuit"):
         circuit = circuit.abstract_circuit
-        
+
     # Generate a unique temporary filename if none is provided
     if filename is None:
         h = hashlib.md5(str(circuit).encode()).hexdigest()[:8]
         filename = f"sunrise_draw_{h}.png"
-        
+
     # Ensure we are exporting to PNG for display
     if not filename.endswith(".png"):
         filename = filename.split(".")[0] + ".png"
-        
+
     # Route to Sunrise FCircuit engine, or fallback to Tequila for standard QCircuits
     if hasattr(circuit, "export_to"):
         circuit.export_to(filename, *args, **kwargs)
     else:
         import tequila as tq
+
         tq.draw(circuit, filename=filename, *args, **kwargs)
         return
-        
+
     # Display inline if running in a Jupyter Notebook / IPython environment
     try:
         from IPython.display import Image, display
+
         display(Image(filename=filename, width=width, height=height))
     except ImportError:
         print(f"Circuit drawn and saved to: {os.path.abspath(filename)}")

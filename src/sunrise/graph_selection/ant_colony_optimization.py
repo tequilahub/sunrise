@@ -59,7 +59,6 @@ def ant_colony_opt(
             ant_matchings.append(matching)
 
         for matching in ant_matchings:
-
             cost = sum(distance_matrix[i][j] for i, j in matching)
 
             if cost < best_cost:

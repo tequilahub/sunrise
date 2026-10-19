@@ -11,7 +11,9 @@ has_pyscf = "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS
 executable = sun.chemistry.madness_interface.QuantumChemistryMadness.find_executable()
 root = os.environ.get("MAD_ROOT_DIR")
 if executable is None:
-    executable = sun.chemistry.madness_interface.QuantumChemistryMadness.find_executable(root)
+    executable = (
+        sun.chemistry.madness_interface.QuantumChemistryMadness.find_executable(root)
+    )
 print("root = ", root)
 print("executable = ", executable)
 
@@ -26,7 +28,8 @@ def test_executable():
 
 
 @pytest.mark.skipif(
-    not (os.path.isfile("he_gtensor.npy") and os.path.isfile("he_htensor.npy")), reason="data not there"
+    not (os.path.isfile("he_gtensor.npy") and os.path.isfile("he_htensor.npy")),
+    reason="data not there",
 )
 def test_madness_he_data():
     # relies that he_xtensor.npy are present (x=g,h)
@@ -45,7 +48,9 @@ def test_madness_he_data():
 
 @pytest.mark.skipif(executable is None, reason="madness was not found")
 def test_madness_frozen_core():
-    molecule = sun.chemistry.Molecule(geometry="Li 0.0 0.0 0.0\nLi 0.0 0.0 1.6", units="angstrom")
+    molecule = sun.chemistry.Molecule(
+        geometry="Li 0.0 0.0 0.0\nLi 0.0 0.0 1.6", units="angstrom"
+    )
     assert molecule.n_orbitals == 2
     assert molecule.parameters.get_number_of_core_electrons() == 4
 
@@ -72,10 +77,20 @@ def test_madness_data_io():
     mol = sun.Molecule(geometry="he 0.0 0.0 0.0", n_pno="read", units="angstrom")
 
     mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", units="angstrom")
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", n_pno="read", units="angstrom")
+    mol = sun.Molecule(
+        geometry="he 0.0 0.0 0.0", datadir="1/2/3", n_pno="read", units="angstrom"
+    )
 
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", units="angstrom")
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", n_pno="read", units="angstrom")
+    mol = sun.Molecule(
+        geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", units="angstrom"
+    )
+    mol = sun.Molecule(
+        geometry="he 0.0 0.0 0.0",
+        datadir="1/2/3",
+        name="asd",
+        n_pno="read",
+        units="angstrom",
+    )
 
 
 @pytest.mark.skipif(executable is None, reason="madness was not found")
@@ -84,7 +99,12 @@ def test_madness_full_li_plus():
     # or pno_integrals in the path
     geomstring = "Li 0.0 0.0 0.0"
     molecule = sun.Molecule(
-        name="li+", geometry=geomstring, units="angstrom", n_pno=1, charge=1, frozen_core=False
+        name="li+",
+        geometry=geomstring,
+        units="angstrom",
+        n_pno=1,
+        charge=1,
+        frozen_core=False,
     )  # need to deactivate frozen_core, otherwise there is no active orbital
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
@@ -101,7 +121,9 @@ def test_madness_full_be():
     # relies on madness being compiled and MAD_ROOT_DIR exported
     # or pno_integrals in the path
     geomstring = "Be 0.0 0.0 0.0"
-    molecule = sun.chemistry.Molecule(name="be", geometry=geomstring, units="angstrom", n_pno=3, frozen_core=True)
+    molecule = sun.chemistry.Molecule(
+        name="be", geometry=geomstring, units="angstrom", n_pno=3, frozen_core=True
+    )
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
@@ -113,10 +135,18 @@ def test_madness_full_be():
 
 
 @pytest.mark.parametrize(
-    "trafo", ["BravyiKitaev", "JordanWigner", "BravyiKitaevTree", "ReorderedJordanWigner", "ReorderedBravyiKitaev"]
+    "trafo",
+    [
+        "BravyiKitaev",
+        "JordanWigner",
+        "BravyiKitaevTree",
+        "ReorderedJordanWigner",
+        "ReorderedBravyiKitaev",
+    ],
 )
 @pytest.mark.skipif(
-    executable is None and not os.path.isfile("balanced_be_gtensor.npy"), reason="madness was not found"
+    executable is None and not os.path.isfile("balanced_be_gtensor.npy"),
+    reason="madness was not found",
 )
 def test_madness_upccgsd(trafo):
     n_pno = 2
@@ -169,7 +199,9 @@ def test_madness_upccgsd(trafo):
     result = tq.minimize(E)
     assert numpy.isclose(result.energy, -14.60266198, atol=1.0e-3)
 
-    U = mol.make_upccgsd_ansatz(name="SPA-UpCCGSD")  # in this case no difference to SPA-UpCCSD
+    U = mol.make_upccgsd_ansatz(
+        name="SPA-UpCCGSD"
+    )  # in this case no difference to SPA-UpCCSD
     E = tq.ExpectationValue(H=H, U=U)
     assert len(E.extract_variables()) == 4
     result = tq.minimize(E)

@@ -54,6 +54,7 @@ In the following we show the most relevant ones.
 To see the supported fermionic backends use:
 ```python
 import sunrise as sun  # First time might take some seconds
+
 sun.show_supported_modules()
 ```
 ### [FQE](https://github.com/quantumlib/OpenFermion-FQE)
@@ -74,34 +75,35 @@ The FCircuit has been developed in order to preserve abstract fermionic layers. 
 A representative example could be:
 ```python
 from sunrise import gates
+
 U = sun.FCircuit()
-U.initial_state = '1*|11001100>'
-U += gates.UR(0,1,"a") + gates.UR(2,3,"b") 
-U += gates.UC(1,2,'c') + gates.UC(0,3,'d')
-U += gates.FermionicExcitation([(0,4),(1,5)],'e')
+U.initial_state = "1*|11001100>"
+U += gates.UR(0, 1, "a") + gates.UR(2, 3, "b")
+U += gates.UC(1, 2, "c") + gates.UC(0, 3, "d")
+U += gates.FermionicExcitation([(0, 4), (1, 5)], "e")
 ```
 
 They can also be created with the Fermionic Molecule:
 ```python
 geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
-mol = sun.Molecule(geometry=geom, basis_set='sto-3g', nature='f')
-U = mol.make_ansatz('UpCCSD')
+mol = sun.Molecule(geometry=geom, basis_set="sto-3g", nature="f")
+U = mol.make_ansatz("UpCCSD")
 ```
 Finally, they can be employed in a similar way to tequila `QCircuit` or converted to them:
 ```python
 U = ...
 # The expectation value object is explained below
 E = sun.Braket(U=U, mol=mol)
-res = sun.minimize(E, silent=True, backend='tcc')
-print(sun.simulate(U, variables=res.variables, backend='spex'))
-print('Energy ', res.energy)
-print('Variables ', res.variables)
-opt = sun.optimize_orbitals(molecule=mol, circuit=U, backend='fqe', silent=True)
+res = sun.minimize(E, silent=True, backend="tcc")
+print(sun.simulate(U, variables=res.variables, backend="spex"))
+print("Energy ", res.energy)
+print("Variables ", res.variables)
+opt = sun.optimize_orbitals(molecule=mol, circuit=U, backend="fqe", silent=True)
 ```
 
 or compiled to qubit and being employed as in regular tequila:
 ```python
-mol = sun.Molecule(geometry=geom, basis_set='sto-3g', nature='qubit')
+mol = sun.Molecule(geometry=geom, basis_set="sto-3g", nature="qubit")
 U = U.to_qcircuit(mol)
 ```
 
@@ -128,7 +130,12 @@ Example:
 import sunrise as sun
 import tequila as tq
 
-molecule  = sun.Molecule(geometry="H 0. 0. 0. \n Li 0. 0. 1.5", basis_set="sto-3g", select="BBFBF", nature='h')
+molecule = sun.Molecule(
+    geometry="H 0. 0. 0. \n Li 0. 0. 1.5",
+    basis_set="sto-3g",
+    select="BBFBF",
+    nature="h",
+)
 print(molecule.select)
 ```
 
@@ -137,7 +144,10 @@ Which can be also initialized as:
 import sunrise as sun
 from sunrise.molecules import HyMolecule
 import tequila as tq
-molecule  = HyMolecule(geometry="H 0. 0. 0. \n Li 0. 0. 1.5", basis_set="sto-3g", select={2:"F",4:"F"})
+
+molecule = HyMolecule(
+    geometry="H 0. 0. 0. \n Li 0. 0. 1.5", basis_set="sto-3g", select={2: "F", 4: "F"}
+)
 print(molecule.select)
 ```
 
@@ -145,15 +155,21 @@ print(molecule.select)
 The SPA circuit (and all the tequila built-in circuits) are already adapted to the encoding.
 
 ```python
-Uspa = molecule.make_ansatz("SPA",edges=[(0,1)])
+Uspa = molecule.make_ansatz("SPA", edges=[(0, 1)])
 ```
 However, one can also build its own circuits:
 ```python
-U = tq.QCircuit() # see more on https://github.com/tequilahub/tequila-tutorials/
-U += molecule.prepare_reference() # Prepare the reference HF state if no other is provided
-U += molecule.UC(0, 2, angle=(0,2,"a")) # Paired 2e excitation from MO 0 to MO 2
-U += molecule.UR(2, 4, angle=(2,4,"UR")) # Two One-electron excitation: MO 2_up->4_up + 2_down->4_down TAKE CARE OF THE ENCODING
-U += molecule.make_excitation_gate(indices=[(0,4),(1,8)], angle=tq.Variable('a')) # Generic excitation
+U = tq.QCircuit()  # see more on https://github.com/tequilahub/tequila-tutorials/
+U += (
+    molecule.prepare_reference()
+)  # Prepare the reference HF state if no other is provided
+U += molecule.UC(0, 2, angle=(0, 2, "a"))  # Paired 2e excitation from MO 0 to MO 2
+U += molecule.UR(
+    2, 4, angle=(2, 4, "UR")
+)  # Two One-electron excitation: MO 2_up->4_up + 2_down->4_down TAKE CARE OF THE ENCODING
+U += molecule.make_excitation_gate(
+    indices=[(0, 4), (1, 8)], angle=tq.Variable("a")
+)  # Generic excitation
 ```
 
 ### Minimize the Energy of the Circuit Expectation Value
@@ -162,18 +178,18 @@ U += molecule.make_excitation_gate(indices=[(0,4),(1,8)], angle=tq.Variable('a')
 # The molecular Hamiltonian for a given encoding is automatically built
 # For custom Hamiltonians please check tutorial above for the Fermionic Expectation Value
 H = molecule.make_hamiltonian()
-exp = sn.ExpectationValue(H=H, U=U) # Create the Expectation Value Object
+exp = sn.ExpectationValue(H=H, U=U)  # Create the Expectation Value Object
 # Minimize the energy. You can provide initial variables
-mini = sn.minimize(objective=exp, silent=False, initial_values={}, backend="spex") 
-print('Minimized Angles:\n', mini.angles)
-print('Minimized Energy: ', mini.energy)
+mini = sn.minimize(objective=exp, silent=False, initial_values={}, backend="spex")
+print("Minimized Angles:\n", mini.angles)
+print("Minimized Energy: ", mini.energy)
 ```
 
 ### Optimize your Orbitals
 Molecular orbitals can be optimized taking advantage of this Hybrid Encoding.
 
 ```python
-result = sun.optimize_orbitals(molecule=molecule, circuit=Uspa, initial_guess='random') 
+result = sun.optimize_orbitals(molecule=molecule, circuit=Uspa, initial_guess="random")
 # Since it is a random guess, it may take some time
 omol = result.molecule
 print("Opt SPA Energy = ", result.energy)
@@ -192,7 +208,9 @@ import tequila as tq
 
 geometry = """O 0.000000 0.000000 0.000000\n H 0.757000 0.586000 0.000000\nH -0.757000 0.586000 0.000000"""
 
-mol = sun.Molecule(geometry=geometry, basis_set='sto-3g',nature='h').use_native_orbitals()
+mol = sun.Molecule(
+    geometry=geometry, basis_set="sto-3g", nature="h"
+).use_native_orbitals()
 clpo_mol, edges = mol.use_CLPO_orbitals_and_edges()
 U = clpo_mol.make_ansatz(name="HCB-SPA", edges=edges)
 opt = sun.optimize_orbitals(molecule=clpo_mol, circuit=U)
@@ -214,8 +232,8 @@ import tequila as tq
 
 geometry = """O 0.000000 0.000000 0.000000\n H 0.757000 0.586000 0.000000\nH -0.757000 0.586000 0.000000"""
 
-mol = sun.Molecule(geometry=geometry, basis_set='sto-3g',nature='h')
-sun.plot_MO(molecule=mol,filename="water")
+mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", nature="h")
+sun.plot_MO(molecule=mol, filename="water")
 ```
 The cubefile generation may take some time. Here we provided a sun.Molecule but it also accepts any molecule class with mol.parameters and mol.integral_manager
 
@@ -230,15 +248,19 @@ from math import pi
 
 # --- 1. Basic Circuit Setup & Reference State ---
 geom = "H 0 0 0\nH 0 0 1\nH 0 0 2\nH 0 0 3"
-snmol = sun.Molecule(geometry=geom, basis_set='sto-3g', nature='f', units='a')
+snmol = sun.Molecule(geometry=geom, basis_set="sto-3g", nature="f", units="a")
 circuit = sun.FCircuit()
 circuit += snmol.prepare_reference()
 
 # --- 2. Gate Types Showcase ---
 # Single, Paired Double, and Unpaired Double Excitations
-circuit += sun.gates.FermionicExcitation(indices=[(1, 7)], variables="a")          # Single
-circuit += sun.gates.FermionicExcitation(indices=[(0, 4), (1, 7)], variables=2.0)  # Paired Double
-circuit += sun.gates.FermionicExcitation(indices=[(0, 2), (3, 5)], variables="b")  # Unpaired Double
+circuit += sun.gates.FermionicExcitation(indices=[(1, 7)], variables="a")  # Single
+circuit += sun.gates.FermionicExcitation(
+    indices=[(0, 4), (1, 7)], variables=2.0
+)  # Paired Double
+circuit += sun.gates.FermionicExcitation(
+    indices=[(0, 2), (3, 5)], variables="b"
+)  # Unpaired Double
 
 # Special Fermionic Gates
 circuit += sun.gates.UR(0, 1, variables="c")  # Orbital Rotator
@@ -256,12 +278,14 @@ circuit.export_to("basic_hybrid_spatial.pdf", show_spatial_orbitals=True, select
 
 # --- 5. Variable Assignment & Color Ranges ---
 # Plot the symbolic circuit (triggers parametrized marking)
-circuit.export_to("basic_symbolic.pdf", style={'parametrized': 'blue'})
+circuit.export_to("basic_symbolic.pdf", style={"parametrized": "blue"})
 
 # Map variables to numeric values and plot with a color range
 variables = {"a": 0, "b": pi / 4, "c": pi / 2, "d": pi}
 numeric_circuit = circuit.map_variables(variables)
-numeric_circuit.export_to("basic_numeric.pdf", style={'color_range': ["#00FF6A", 'red']})
+numeric_circuit.export_to(
+    "basic_numeric.pdf", style={"color_range": ["#00FF6A", "red"]}
+)
 
 # --- 6. Spatial vs Spin Views ---
 circuit.export_to("basic_spin_view.pdf", show_spatial_orbitals=False)

@@ -4,11 +4,20 @@ import tequila as tq
 from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 from .decompose import decompose
 
+
 def tqcomp(*args, **kwargs):
     # print("\nHERE WE ARE\n")
     return tq.compile(*args, **kwargs)
 
-def fast_qtensor(qtensor, variables, do_decompose=False, evaluate=True,grouping:int=None,backend='qulacs'):
+
+def fast_qtensor(
+    qtensor,
+    variables,
+    do_decompose=False,
+    evaluate=True,
+    grouping: int = None,
+    backend="qulacs",
+):
     simple = True
     shape = qtensor.shape
     n = 1
@@ -21,48 +30,52 @@ def fast_qtensor(qtensor, variables, do_decompose=False, evaluate=True,grouping:
     for i in range(n):
         E = flat[i]
         if len(E.get_expectationvalues()) > 1:
-            simple=False
+            simple = False
             break
         E = E.get_expectationvalues()[0]
-        if len(E.H)>1:
+        if len(E.H) > 1:
             simple = False
             break
 
-        H = E.H[0].simplify(threshold=1.e-6)
+        H = E.H[0].simplify(threshold=1.0e-6)
         U = E.U
         idx = hash(str(U))
-        circuit_ids[idx]=U
+        circuit_ids[idx] = U
         if idx in ulist:
-            ulist[idx][i]=H
+            ulist[idx][i] = H
         else:
-            ulist[idx] = {i:H}
+            ulist[idx] = {i: H}
 
-    #print("first half: {}s".format(time.time()-start))
+    # print("first half: {}s".format(time.time()-start))
     start = time.time()
     if not simple:
         # print("are we here?")
         return tq.simulate(qtensor, variables)
 
-    values = [0]*n
+    values = [0] * n
 
-    #print(len(ulist))
-    for idx,Hlist in ulist.items():
+    # print(len(ulist))
+    for idx, Hlist in ulist.items():
         U = circuit_ids[idx]
         H = list(Hlist.values())
         if do_decompose:
-            tmp = decompose(H, U, nolist=False,grouping=grouping)
+            tmp = decompose(H, U, nolist=False, grouping=grouping)
         else:
-            tmp = [tq.ExpectationValue(H=h, U=U) for h in H]#, shape=[len(Hlist)])
+            tmp = [tq.ExpectationValue(H=h, U=U) for h in H]  # , shape=[len(Hlist)])
             tmp = tq.QTensor(tmp, shape=[len(tmp)])
 
         if evaluate:
             # print("we evaluate?")
-            vars = {x:variables[x] for x in variables.keys() if x in tmp.extract_variables()}
-            tmp = tq.simulate(tmp, vars,backend=backend)
+            vars = {
+                x: variables[x]
+                for x in variables.keys()
+                if x in tmp.extract_variables()
+            }
+            tmp = tq.simulate(tmp, vars, backend=backend)
         else:
-            #xstart = time.time()
-            tmp = tqcomp(tmp,backend=backend)
-            #print("compiling: {}s".format(time.time() - xstart))
+            # xstart = time.time()
+            tmp = tqcomp(tmp, backend=backend)
+            # print("compiling: {}s".format(time.time() - xstart))
 
         if len(Hlist) == 1:
             tmp = [tmp]
@@ -71,26 +84,23 @@ def fast_qtensor(qtensor, variables, do_decompose=False, evaluate=True,grouping:
         for i in range(len(H)):
             values[keys[i]] = tmp[i]
 
-    #print("second half: {}s".format(time.time()-start))
+    # print("second half: {}s".format(time.time()-start))
 
     if evaluate:
         values = numpy.asarray(values)
-        return values.reshape(shape),shape
+        return values.reshape(shape), shape
     else:
         return values, shape
 
 
-
-
 if __name__ == "__main__":
-
     mol = QubitMolecule(geometry="Be 0.0 0.0 0.0", basis_set="sto-3g")
     U = mol.make_ansatz(name="UpCCGSD")
     H = mol.make_hamiltonian()
     E = tq.ExpectationValue(H=H, U=U)
     CE = tq.compile(E)
 
-    variables = {k:1.0 for k in U.extract_variables()}
+    variables = {k: 1.0 for k in U.extract_variables()}
     rdm1, rdm2 = mol.compute_rdms(U=U, evaluate=False, spin_free=True)
     print(rdm1)
     print(rdm2)
@@ -108,10 +118,10 @@ if __name__ == "__main__":
     start = time.time()
     zrdm2 = fast_qtensor(rdm2, variables=variables)
     print(time.time() - start)
-    xrdm1, xrdm2 = mol.compute_rdms(U=U, variables=variables, evaluate=True, spin_free=True)
+    xrdm1, xrdm2 = mol.compute_rdms(
+        U=U, variables=variables, evaluate=True, spin_free=True
+    )
 
     print(sum((xrdm1 - zrdm1).flatten()))
     print(sum((xrdm1 - yrdm1).flatten()))
     print(sum((xrdm2 - yrdm2).flatten()))
-
-

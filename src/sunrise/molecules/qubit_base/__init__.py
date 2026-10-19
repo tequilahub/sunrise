@@ -8,7 +8,10 @@ from .madness_interface import QuantumChemistryMadness
 from .encodings import known_encodings
 
 SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "psi4", "madness", "pyscf"]
-INSTALLED_QCHEMISTRY_BACKENDS = {"base": QuantumChemistryBase, "madness": QuantumChemistryMadness}
+INSTALLED_QCHEMISTRY_BACKENDS = {
+    "base": QuantumChemistryBase,
+    "madness": QuantumChemistryMadness,
+}
 
 try:
     from .psi4_interface import QuantumChemistryPsi4
@@ -75,11 +78,16 @@ def Molecule(
     # failsafe for common mistake
     if "basis" in kwargs:
         warnings.warn(
-            'called molecule with keyword "basis={0}" converting it to "basis_set={0}"'.format(kwargs["basis"]),
+            'called molecule with keyword "basis={0}" converting it to "basis_set={0}"'.format(
+                kwargs["basis"]
+            ),
             TequilaWarning,
         )
         if basis_set is not None:
-            warnings.warn('did not convert as "basis_set={}" was already given'.format(basis_set), TequilaWarning)
+            warnings.warn(
+                'did not convert as "basis_set={}" was already given'.format(basis_set),
+                TequilaWarning,
+            )
         basis_set = kwargs["basis"]
 
     keyvals = {}
@@ -91,9 +99,13 @@ def Molecule(
         parameters = kwargs["parameters"]
         kwargs.pop("parameters")
     else:
-        parameters = ParametersQC(name=name, geometry=geometry, basis_set=basis_set, multiplicity=1, **keyvals)
+        parameters = ParametersQC(
+            name=name, geometry=geometry, basis_set=basis_set, multiplicity=1, **keyvals
+        )
 
-    integrals_provided = all([key in kwargs for key in ["one_body_integrals", "two_body_integrals"]])
+    integrals_provided = all(
+        [key in kwargs for key in ["one_body_integrals", "two_body_integrals"]]
+    )
     if integrals_provided and backend is None:
         backend = "base"
 
@@ -102,7 +114,10 @@ def Molecule(
             backend = "madness"
             basis_set = "mra"
             parameters.basis_set = basis_set
-            if orbital_type is not None and orbital_type.lower() not in ["pno", "mra-pno"]:
+            if orbital_type is not None and orbital_type.lower() not in [
+                "pno",
+                "mra-pno",
+            ]:
                 warnings.warn(
                     "only PNOs supported as orbital_type without basis set. Setting to pno - You gave={}".format(
                         orbital_type
@@ -111,7 +126,10 @@ def Molecule(
                 )
             orbital_type = "pno"
         else:
-            if orbital_type is not None and orbital_type.lower() not in ["hf", "native"]:
+            if orbital_type is not None and orbital_type.lower() not in [
+                "hf",
+                "native",
+            ]:
                 warnings.warn(
                     "only hf and native supported as orbital_type with basis-set. Setting to hf - You gave={}".format(
                         orbital_type
@@ -127,7 +145,9 @@ def Molecule(
             elif "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS:
                 backend = "pyscf"
             else:
-                raise Exception("No quantum chemistry backends installed on your system")
+                raise Exception(
+                    "No quantum chemistry backends installed on your system"
+                )
 
     elif backend == "base":
         if not integrals_provided:
@@ -148,8 +168,14 @@ def Molecule(
     if guess_wfn is not None and backend != "psi4":
         raise Exception("guess_wfn only works for psi4")
 
-    if basis_set is None and backend.lower() not in ["base", "madness"] and not integrals_provided:
-        raise Exception("no basis_set or integrals provided for backend={}".format(backend))
+    if (
+        basis_set is None
+        and backend.lower() not in ["base", "madness"]
+        and not integrals_provided
+    ):
+        raise Exception(
+            "no basis_set or integrals provided for backend={}".format(backend)
+        )
     elif basis_set is None:
         basis_set = "custom"
         parameters.basis_set = basis_set

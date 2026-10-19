@@ -2,11 +2,11 @@ from tequila.optimizers import minimize as tminimize
 import typing
 from tequila.objective.objective import Objective, Variable, assign_variable
 from tequila.circuit.noise import NoiseModel
-from tequila import TequilaException,QCircuit,QubitWaveFunction
-from tequila.objective import QTensor,format_variable_dictionary
+from tequila import TequilaException, QCircuit, QubitWaveFunction
+from tequila.objective import QTensor, format_variable_dictionary
 from tequila.simulators.simulator_api import compile as tq_compile
 from tequila.autograd_imports import __AUTOGRAD__BACKEND__
-from typing import Dict, Union, Hashable,Callable
+from typing import Dict, Union, Hashable, Callable
 from numbers import Number
 from numbers import Real as RealNumber
 from ..fermionic_operations import FCircuit
@@ -14,9 +14,23 @@ from .simulate_circuit import simulate_fcircuit
 from tequila.simulators.simulator_base import BackendCircuit
 from tequila import grad as tqgrad
 from tequila import SUPPORTED_BACKENDS
-from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS, SUPPORTED_FERMIONIC_BACKENDS, pick_backend
+from sunrise.expval import (
+    INSTALLED_FERMIONIC_BACKENDS,
+    SUPPORTED_FERMIONIC_BACKENDS,
+    pick_backend,
+)
 
-def minimize(objective, method:str="bfgs", variables:list=None, initial_values:Union[dict, Number, Callable]=0.0, maxiter:int=None, silent:bool=True, *args, **kwargs):
+
+def minimize(
+    objective,
+    method: str = "bfgs",
+    variables: list = None,
+    initial_values: Union[dict, Number, Callable] = 0.0,
+    maxiter: int = None,
+    silent: bool = True,
+    *args,
+    **kwargs,
+):
     if "fbackend" in kwargs:
         fbackend = kwargs["fbackend"]
     elif "fermionic_backend" in kwargs:
@@ -25,20 +39,55 @@ def minimize(objective, method:str="bfgs", variables:list=None, initial_values:U
         fbackend = kwargs["backend"]
         if kwargs["backend"] not in SUPPORTED_BACKENDS:
             kwargs.pop("backend")
-    else: fbackend = pick_backend()
+    else:
+        fbackend = pick_backend()
     if "backend" not in kwargs:
         kwargs["backend"] = None
-    if hasattr(objective,'args') and any([type(arg).__name__ ==  "FermBraketImpl" for arg in objective.args]):
+    if hasattr(objective, "args") and any(
+        [type(arg).__name__ == "FermBraketImpl" for arg in objective.args]
+    ):
         dE = grad(objective=objective, variable=variables, args=args, kwargs=kwargs)
-        dE = {g:compile(dE[g], fbackend=fbackend, backend=kwargs["backend"]) for g in dE.keys()}
-        nargs = [compile(Objective(args=[arg]), fbackend=fbackend, backend=kwargs["backend"]) for arg in objective.args]
+        dE = {
+            g: compile(dE[g], fbackend=fbackend, backend=kwargs["backend"])
+            for g in dE.keys()
+        }
+        nargs = [
+            compile(Objective(args=[arg]), fbackend=fbackend, backend=kwargs["backend"])
+            for arg in objective.args
+        ]
         objective = Objective(args=nargs, transformation=objective.transformation)
-        kwargs['backend'] = None
-        return tminimize(objective=objective, gradient=dE, method=method, variables=variables, initial_values=initial_values, maxiter=maxiter, silent=silent, *args,**kwargs)
+        kwargs["backend"] = None
+        return tminimize(
+            objective=objective,
+            gradient=dE,
+            method=method,
+            variables=variables,
+            initial_values=initial_values,
+            maxiter=maxiter,
+            silent=silent,
+            *args,
+            **kwargs,
+        )
     else:
-        return tminimize(objective=objective,method=method,variables=variables,initial_values=initial_values,maxiter=maxiter,silent=silent,*args,**kwargs)
+        return tminimize(
+            objective=objective,
+            method=method,
+            variables=variables,
+            initial_values=initial_values,
+            maxiter=maxiter,
+            silent=silent,
+            *args,
+            **kwargs,
+        )
 
-def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_compile=False, *args, **kwargs):
+
+def grad(
+    objective: Union[Objective, QTensor],
+    variable: Variable = None,
+    no_compile=False,
+    *args,
+    **kwargs,
+):
     """
     function for getting the gradients of directly differentiable gates. Expects precompiled circuits.
     :param unitary: QCircuit: the QCircuit object containing the gate to be differentiated
@@ -52,15 +101,29 @@ def grad(objective: Union[Objective, QTensor], variable: Variable = None, no_com
     if isinstance(variable, (list, tuple)):
         if len(variable) == 0:
             raise TequilaException("Error in gradient: Objective has no variables")
-        return {assign_variable(k): grad(objective, k, no_compile, *args, **kwargs) for k in variable}
+        return {
+            assign_variable(k): grad(objective, k, no_compile, *args, **kwargs)
+            for k in variable
+        }
 
-    if hasattr(objective,'args') and any([type(arg).__name__ == "FermBraketImpl" for arg in objective.args]):
-        return tqgrad(objective=objective, variable=variable, no_compile=True, *args, **kwargs)
+    if hasattr(objective, "args") and any(
+        [type(arg).__name__ == "FermBraketImpl" for arg in objective.args]
+    ):
+        return tqgrad(
+            objective=objective, variable=variable, no_compile=True, *args, **kwargs
+        )
     else:
-        return tqgrad(objective=objective, variable=variable, no_compile=no_compile, *args, **kwargs)
+        return tqgrad(
+            objective=objective,
+            variable=variable,
+            no_compile=no_compile,
+            *args,
+            **kwargs,
+        )
+
 
 def simulate(
-    objective: typing.Union[FCircuit,"Objective", "QCircuit", "QTensor"],
+    objective: typing.Union[FCircuit, "Objective", "QCircuit", "QTensor"],
     variables: Dict[Union[Variable, Hashable], RealNumber] = None,
     samples: int = None,
     backend: str = None,
@@ -108,12 +171,27 @@ def simulate(
                 objective.extract_variables()
             )
         )
-    
-    if isinstance(objective,list):
-        return [simulate(op,variables,samples,backend,noise,device,initial_state,*args,**kwargs) for op in objective] # TODO Multidimensional
-    if isinstance(objective,FCircuit):
-        return simulate_fcircuit(U=objective,variables=variables,backend=backend,*args,**kwargs)
-    
+
+    if isinstance(objective, list):
+        return [
+            simulate(
+                op,
+                variables,
+                samples,
+                backend,
+                noise,
+                device,
+                initial_state,
+                *args,
+                **kwargs,
+            )
+            for op in objective
+        ]  # TODO Multidimensional
+    if isinstance(objective, FCircuit):
+        return simulate_fcircuit(
+            U=objective, variables=variables, backend=backend, *args, **kwargs
+        )
+
     compiled_objective = compile(
         objective=objective,
         samples=samples,
@@ -124,7 +202,14 @@ def simulate(
         *args,
         **kwargs,
     )
-    return compiled_objective(variables=variables, samples=samples, initial_state=initial_state, *args, **kwargs)
+    return compiled_objective(
+        variables=variables,
+        samples=samples,
+        initial_state=initial_state,
+        *args,
+        **kwargs,
+    )
+
 
 def compile(
     objective: typing.Union["Objective", "QCircuit", "QTensor", "FCircuit"],
@@ -136,7 +221,7 @@ def compile(
     device: str = None,
     *args,
     **kwargs,
-    )-> typing.Union["BackendCircuit", "Objective"]:
+) -> typing.Union["BackendCircuit", "Objective"]:
     """Compile a tequila objective or circuit to a backend
 
     Parameters
@@ -165,20 +250,22 @@ def compile(
     if "fbackend" in kwargs:
         fbackend = kwargs["fbackend"]
         kwargs.pop("fbackend")
-    if isinstance(fbackend,str):
+    if isinstance(fbackend, str):
         fbackend = fbackend.lower()
-    if isinstance(backend,str):
+    if isinstance(backend, str):
         backend = backend.lower()
     if backend in SUPPORTED_FERMIONIC_BACKENDS:
         if fbackend is None:
             fbackend = backend
         if backend not in SUPPORTED_BACKENDS:
             backend = None
-    fbackend = pick_backend(backend=fbackend, samples=samples, noise=noise, device=device)
-    if isinstance(objective,FCircuit):
-        return objective # Currently there is not FCircuit compilation since the fermionic backends work with lists of operations instead of actual qcircuit compilation
+    fbackend = pick_backend(
+        backend=fbackend, samples=samples, noise=noise, device=device
+    )
+    if isinstance(objective, FCircuit):
+        return objective  # Currently there is not FCircuit compilation since the fermionic backends work with lists of operations instead of actual qcircuit compilation
 
-    if isinstance(objective,Objective):
+    if isinstance(objective, Objective):
         argsets = objective.argsets
         compiled_sets = []
         for argset in argsets:
@@ -188,30 +275,49 @@ def compile(
             for arg in argset:
                 if type(arg).__name__ == "FermBraketImpl":
                     if id(arg) not in expectationvalues:
-                        compiled_expval = compile_fexpval(objective=arg, backend=fbackend, *args, **kwargs)
-                        if fbackend == 'tequila':
-                            compiled_expval = tq_compile(objective=compiled_expval, variables=variables, samples=samples, 
-                                                         simulate_density=simulate_density,backend=backend, noise=noise,
-                                                           device=device, *args, **kwargs).args[0]
+                        compiled_expval = compile_fexpval(
+                            objective=arg, backend=fbackend, *args, **kwargs
+                        )
+                        if fbackend == "tequila":
+                            compiled_expval = tq_compile(
+                                objective=compiled_expval,
+                                variables=variables,
+                                samples=samples,
+                                simulate_density=simulate_density,
+                                backend=backend,
+                                noise=noise,
+                                device=device,
+                                *args,
+                                **kwargs,
+                            ).args[0]
                         expectationvalues[id(arg)] = compiled_expval
-                    else: 
+                    else:
                         compiled_expval = expectationvalues[id(arg)]
                     compiled_args.append(compiled_expval)
                 else:
                     compiled_args.append(arg)
             compiled_sets.append(compiled_args)
-        objective = type(objective)(args=compiled_sets[0], transformation=objective.transformation)
-    res = tq_compile(objective=objective, variables=variables, samples=samples, simulate_density=simulate_density,
-                      backend=backend, noise=noise, device=device, *args, **kwargs)
+        objective = type(objective)(
+            args=compiled_sets[0], transformation=objective.transformation
+        )
+    res = tq_compile(
+        objective=objective,
+        variables=variables,
+        samples=samples,
+        simulate_density=simulate_density,
+        backend=backend,
+        noise=noise,
+        device=device,
+        *args,
+        **kwargs,
+    )
     return res
 
+
 def compile_fexpval(
-    objective = None,
-    backend: str = None,
-    *args,
-    **kwargs
-    ): # For now our fermionic backends don't support noise/samples... Variables not passed since already inside FermBraketImpl
+    objective=None, backend: str = None, *args, **kwargs
+):  # For now our fermionic backends don't support noise/samples... Variables not passed since already inside FermBraketImpl
     if backend.lower() in INSTALLED_FERMIONIC_BACKENDS:
-        return INSTALLED_FERMIONIC_BACKENDS[backend.lower()](objective,*args,**kwargs)
+        return INSTALLED_FERMIONIC_BACKENDS[backend.lower()](objective, *args, **kwargs)
     else:
-        raise ImportError(f'Fermionic backend not recognised {backend}')
+        raise ImportError(f"Fermionic backend not recognised {backend}")

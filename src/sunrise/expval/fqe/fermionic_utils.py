@@ -6,19 +6,28 @@ import typing
 import numpy as np
 from sunrise.fermionic_operations.gates import *
 
-def make_fermionic_hamiltonian(one_body_integrals, two_body_integrals, constant, *args, **kwargs):
 
-    one_body_coefficients, two_body_coefficients = openfermion.chem.molecular_data.spinorb_from_spatial(
-        one_body_integrals, two_body_integrals)
+def make_fermionic_hamiltonian(
+    one_body_integrals, two_body_integrals, constant, *args, **kwargs
+):
+
+    one_body_coefficients, two_body_coefficients = (
+        openfermion.chem.molecular_data.spinorb_from_spatial(
+            one_body_integrals, two_body_integrals
+        )
+    )
 
     molecular_hamiltonian = openfermion.ops.representations.InteractionOperator(
-        constant, one_body_coefficients, 1 / 2 * two_body_coefficients)
+        constant, one_body_coefficients, 1 / 2 * two_body_coefficients
+    )
     fop = openfermion.transforms.get_fermion_operator(molecular_hamiltonian)
 
     return fop
 
 
-def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]], form: str = 'fermionic')-> openfermion.FermionOperator:
+def make_excitation_generator_op(
+    indices: typing.Iterable[typing.Tuple[int, int]], form: str = "fermionic"
+) -> openfermion.FermionOperator:
     r"""
     Notes
     ----------
@@ -41,17 +50,20 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
         1j*Transformed qubit excitation operator, depends on self.transformation
     """
 
-
     # check indices and convert to list of tuples if necessary
     if len(indices) == 0:
         raise TequilaException("make_excitation_operator: no indices given")
     elif not isinstance(indices[0], typing.Iterable):
         if len(indices) % 2 != 0:
-            raise TequilaException("make_excitation_generator: unexpected input format of indices\n"
-                                   "use list of tuples as [(i_0, a_0),(i_1, a_1) ...]\n"
-                                   "or list as [i_0, a_0, i_1, a_1, ... ]\n"
-                                   "you gave: {}".format(indices))
-        converted = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
+            raise TequilaException(
+                "make_excitation_generator: unexpected input format of indices\n"
+                "use list of tuples as [(i_0, a_0),(i_1, a_1) ...]\n"
+                "or list as [i_0, a_0, i_1, a_1, ... ]\n"
+                "you gave: {}".format(indices)
+            )
+        converted = [
+            (indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)
+        ]
     else:
         converted = indices
 
@@ -65,18 +77,20 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
     ofi = []
     dag = []
     for pair in converted:
-        assert (len(pair) == 2)
-        ofi += [(int(pair[0]), 1),
-                (int(pair[1]), 0)]  # openfermion does not take other types of integers like numpy.int64
+        assert len(pair) == 2
+        ofi += [
+            (int(pair[0]), 1),
+            (int(pair[1]), 0),
+        ]  # openfermion does not take other types of integers like numpy.int64
         dag += [(int(pair[0]), 0), (int(pair[1]), 1)]
         if pair[0] == pair[1]:
             number_op = True
-        else: 
+        else:
             number_op = False
-    op = openfermion.FermionOperator(tuple(ofi), -1.j)  # 1j makes it hermitian
-    op += openfermion.FermionOperator(tuple(reversed(dag)), 1.j)
+    op = openfermion.FermionOperator(tuple(ofi), -1.0j)  # 1j makes it hermitian
+    op += openfermion.FermionOperator(tuple(reversed(dag)), 1.0j)
 
-    if isinstance(form, str) and form.lower() != 'fermionic':
+    if isinstance(form, str) and form.lower() != "fermionic":
         # indices for all the Na operators
         Na = [x for pair in converted for x in [(pair[0], 1), (pair[0], 0)]]
         # indices for all the Ma operators (Ma = 1 - Na)
@@ -97,11 +111,15 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
             op += openfermion.FermionOperator(Ni + Ma, -0.5)
 
         elif form.lower() == "g+":
-            op += openfermion.FermionOperator([], 1.0)  # Just for clarity will be subtracted anyway
+            op += openfermion.FermionOperator(
+                [], 1.0
+            )  # Just for clarity will be subtracted anyway
             op += openfermion.FermionOperator(Na + Mi, -1.0)
             op += openfermion.FermionOperator(Ni + Ma, -1.0)
         elif form.lower() == "g-":
-            op += openfermion.FermionOperator([], -1.0)  # Just for clarity will be subtracted anyway
+            op += openfermion.FermionOperator(
+                [], -1.0
+            )  # Just for clarity will be subtracted anyway
             op += openfermion.FermionOperator(Na + Mi, 1.0)
             op += openfermion.FermionOperator(Ni + Ma, 1.0)
         elif form.lower() == "p0":
@@ -111,9 +129,11 @@ def make_excitation_generator_op(indices: typing.Iterable[typing.Tuple[int, int]
             op += openfermion.FermionOperator(Ni + Ma, -1.0)
         else:
             raise TequilaException(
-                "Unknown generator form {}, supported are G, P+, P-, G+, G- and P0".format(form))
-    
+                "Unknown generator form {}, supported are G, P+, P-, G+, G- and P0".format(
+                    form
+                )
+            )
+
     if number_op:
         op = openfermion.FermionOperator(tuple(ofi), 1)
     return op
-

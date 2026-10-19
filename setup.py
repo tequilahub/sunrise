@@ -2,11 +2,13 @@ import os
 
 from setuptools import setup, find_packages
 
+
 def read_requirements():
-    with open('requirements.txt') as file:
-        lines=file.readlines()
+    with open("requirements.txt") as file:
+        lines = file.readlines()
         requirements = [line.strip() for line in lines]
     return requirements
+
 
 # get author and version information
 VERSIONFILE = "src/sunrise/version.py"
@@ -28,7 +30,7 @@ except Exception:
     long_description = ""
 
 setup(
-    name='project-sunrise',
+    name="project-sunrise",
     version=info["__version__"],
     author=info["__author__"],
     url="https://github.com/tequilahub/sunrise",
@@ -36,10 +38,11 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=read_requirements(),
-    packages=find_packages(where='src'),
-    package_dir={'': 'src'},
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
     include_package_data=True,
     package_data={
-        '': [os.path.join('src')],"sunrise.CLPO.bin": ["*"],
+        "": [os.path.join("src")],
+        "sunrise.CLPO.bin": ["*"],
     },
 )

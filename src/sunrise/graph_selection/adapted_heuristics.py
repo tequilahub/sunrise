@@ -216,7 +216,6 @@ def simulated_annealing_best_n_solutions(
     i = 0
     no_improv = 0
     while start > end and i < max_iter:
-
         i += 1
         new_edges = random_neighbour(current_edges)
         new_distance = total_distance(new_edges, coordinates=coordinates)
@@ -309,7 +308,6 @@ def random_blossom(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10)
     distance_matrix = squareform(pdist(coordinates))
 
     for _ in range(best_n_solutions):
-
         graph = nx.Graph()
         for i in range(num_atoms):
             for j in range(i + 1, num_atoms):
@@ -338,7 +336,6 @@ def random_blossom_scaled(num_atoms: int, coordinates: np.ndarray, best_n_soluti
     distance_matrix = squareform(pdist(coordinates))
     scaled_matrix = matrix_scaling(distance_matrix)
     for _ in range(best_n_solutions):
-
         graph = nx.Graph()
         for i in range(num_atoms):
             for j in range(i + 1, num_atoms):

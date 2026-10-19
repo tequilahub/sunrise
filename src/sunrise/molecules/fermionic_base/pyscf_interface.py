@@ -45,7 +45,9 @@ class QuantumChemistryPySCF(FermionicBase):
             geometry = parameters.get_geometry()
             pyscf_geomstring = ""
             for atom in geometry:
-                pyscf_geomstring += "{} {} {} {};".format(atom[0], atom[1][0], atom[1][1], atom[1][2])
+                pyscf_geomstring += "{} {} {} {};".format(
+                    atom[0], atom[1][0], atom[1][1], atom[1][2]
+                )
 
             if "point_group" in kwargs:
                 point_group = kwargs["point_group"]
@@ -61,7 +63,10 @@ class QuantumChemistryPySCF(FermionicBase):
                 if point_group.lower() != "c1":
                     mol.symmetry = True
                     # PySCF only computes in Abelian groups, for the others (e.g. D4h) it takes the largest Abelian subgroup
-                    if pyscf.symm.std_symb(point_group) in pyscf.symm.param.CHARACTER_TABLE:
+                    if (
+                        pyscf.symm.std_symb(point_group)
+                        in pyscf.symm.param.CHARACTER_TABLE
+                    ):
                         mol.symmetry_subgroup = point_group
                 else:
                     mol.symmetry = False
@@ -78,7 +83,9 @@ class QuantumChemistryPySCF(FermionicBase):
 
             mf.kernel()
 
-            self.irreps = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff).tolist()
+            self.irreps = pyscf.symm.label_orb_symm(
+                mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff
+            ).tolist()
 
             orbital_energies = mf.mo_energy
 
@@ -139,7 +146,7 @@ class QuantumChemistryPySCF(FermionicBase):
                         alpha_str_b = bin(alpha_str)[2:].zfill(norb)
                         beta_str_b = bin(beta_str)[2:].zfill(norb)
                         merged_str_b = (alpha_str_b + beta_str_b)[::-1]
-                        merged_str = int(merged_str_b,2)
+                        merged_str = int(merged_str_b, 2)
                         wfn[merged_str] = fcivec[i, j]
                 wfns.append(QubitWaveFunction.from_array(wfn))
             if not ("nroots" in kwargs and kwargs["nroots"] > 1):
@@ -162,7 +169,9 @@ class QuantumChemistryPySCF(FermionicBase):
             return self._run_ccsd(**kwargs).e_tot
         elif method == "ccsd(t)":
             ccsd = self._run_ccsd(**kwargs)
-            return ccsd.e_tot + self._compute_perturbative_triples_correction(ccsd=ccsd, **kwargs)
+            return ccsd.e_tot + self._compute_perturbative_triples_correction(
+                ccsd=ccsd, **kwargs
+            )
         elif method == "fci":
             return self.compute_fci(**kwargs)
         else:
@@ -233,7 +242,9 @@ class QuantumChemistryPySCF(FermionicBase):
         try:
             if hasattr(self, "pyscf_molecule"):
                 base += "{:15} : {} ({})\n".format(
-                    "point_group", self.pyscf_molecule.groupname, self.pyscf_molecule.topgroup
+                    "point_group",
+                    self.pyscf_molecule.groupname,
+                    self.pyscf_molecule.topgroup,
                 )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)

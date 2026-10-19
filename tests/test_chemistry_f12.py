@@ -13,7 +13,10 @@ def test_correction_psi4_active():
     geomstring = "He 0.0 0.0 0.0"
     # This active space does not need to make sense
     mol = sun.Molecule(
-        geometry=geomstring, units="angstrom", basis_set="cc-pvqz", active_orbitals={"AG": [0, 1], "B1U": [0, 1]}
+        geometry=geomstring,
+        units="angstrom",
+        basis_set="cc-pvqz",
+        active_orbitals={"AG": [0, 1], "B1U": [0, 1]},
     )
     rdminfo = {"rdm__psi4_method": "detci"}
     dE = mol.perturbative_f12_correction(cabs_type="active", **rdminfo)
@@ -32,7 +35,10 @@ if HAS_PSI4:
         cabs_ready_psi4 = True
 
 
-@pytest.mark.skipif(condition=not cabs_ready_psi4, reason="You don't have the correct version of psi4 with CABS-hack.")
+@pytest.mark.skipif(
+    condition=not cabs_ready_psi4,
+    reason="You don't have the correct version of psi4 with CABS-hack.",
+)
 def test_correction_psi4_cabsplus():
     # Try to run CABS+, which as of now is only available via direct installation of personal fork
     # Choice of CABS also not sensible here
@@ -46,7 +52,9 @@ def test_correction_psi4_cabsplus():
     )
     rdminfo = {"rdm__psi4_method": "detci"}
     cabs_options = {"cabs_name": "cc-pvqz"}
-    dE = mol.perturbative_f12_correction(cabs_type="cabs+", cabs_options=cabs_options, **rdminfo)
+    dE = mol.perturbative_f12_correction(
+        cabs_type="cabs+", cabs_options=cabs_options, **rdminfo
+    )
 
     assert numpy.isclose(dE, -0.02285941739816253, atol=1.0e-7)
 
@@ -80,6 +88,8 @@ def test_correction_madness(trafo):
     U = mol.make_upccgsd_ansatz(name="UpCCD")
     angles = {(((0, 1),), "D", (None, 0)): -0.1278860185100716}
     rdminfo = {"U": U, "variables": angles}
-    dE = mol.perturbative_f12_correction(f12_filename=str(data_path) + "he-f12_f12tensor.npy", **rdminfo)
+    dE = mol.perturbative_f12_correction(
+        f12_filename=str(data_path) + "he-f12_f12tensor.npy", **rdminfo
+    )
 
     assert numpy.isclose(dE, -0.020945873534783065, atol=1.0e-7)
