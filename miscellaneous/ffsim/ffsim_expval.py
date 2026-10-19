@@ -1,41 +1,34 @@
-from ..fermionic_operations.circuit import FCircuit
-from tequila import (
-    TequilaException,
-    QubitWaveFunction,
-    simulate,
-    Variable,
-    Objective,
-    QubitHamiltonian,
-)
-from tequila.objective.objective import Variables
-from sunrise.molecules.qubit_base import qc_base
-from sunrise.expval import FermBraketImpl
-from tequila.utils.bitstrings import BitNumbering
-from numbers import Number
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Callable
+
+import ffsim
+from ffsim import FermionOperator
 from numpy import (
-    ceil,
-    argwhere,
-    pi,
-    prod,
-    eye,
-    zeros,
-    isclose,
-    allclose,
-    ndarray,
     array,
     complex128,
-    real,
-    vdot,
+    ndarray,
+    prod,
 )
 from pyscf.gto import Mole
 from pyscf.scf import RHF
-from sunrise.molecules import MoleculeToPyscf
-from copy import deepcopy
-from typing import Union, List, Tuple, Callable
-from collections import defaultdict
-import ffsim
-from ffsim import FermionOperator
 from scipy.sparse.linalg import LinearOperator
+from tequila import (
+    Objective,
+    QubitHamiltonian,
+    QubitWaveFunction,
+    TequilaException,
+    Variable,
+    simulate,
+)
+from tequila.objective.objective import Variables
+from tequila.utils.bitstrings import BitNumbering
+
+from sunrise.expval import FermBraketImpl
+from sunrise.molecules.qubit_base import qc_base
+
+from ..fermionic_operations.circuit import FCircuit
 
 
 class FFS_EXPVAL:
@@ -117,25 +110,23 @@ class FFS_EXPVAL:
             self.operator = self.build_operator(operator)
 
     def __call__(
-        self, variables: Union[list, dict, Variables] = {}, *args, **kwargs
+        self, variables: list | dict | Variables = None, *args, **kwargs
     ) -> float:
+        if variables is None:
+            variables = {}
         return self.simulate(variables=variables)
 
-    def simulate(self, variables: Union[list, dict] = None) -> float:
+    def simulate(self, variables: list | dict | None = None) -> float:
         check_variables = {k: k in variables for k in self.extract_variables()}
         if not all(list(check_variables.values())):
             raise TequilaException(
                 "Objective did not receive all variables:\n"
                 "You gave\n"
-                " {}\n"
+                f" {variables}\n"
                 " but the objective depends on\n"
-                " {}\n"
+                f" {self.extract_variables()}\n"
                 " missing values for\n"
-                " {}".format(
-                    variables,
-                    self.extract_variables(),
-                    [k for k, v in check_variables.items() if not v],
-                )
+                f" {[k for k, v in check_variables.items() if not v]}"
             )
         if isinstance(variables, Variables):
             variables = variables.store
@@ -147,7 +138,7 @@ class FFS_EXPVAL:
                 v.update(variables)
             tvars: list = deepcopy(self.BK.total_variables)
             variables: list = [map_variables(x, v) for x in tvars]
-        ...  # FFSim doesnt suport custom operations
+        # FFSim doesnt suport custom operations
         # if variables is None:
         #     if self.is_diagonal:
         #         return real(
@@ -219,17 +210,17 @@ class FFS_EXPVAL:
         self._ket = ket
 
     @property
-    def variables_bra(self) -> List[Variable]:
+    def variables_bra(self) -> list[Variable]:
         """Tequila Circuit Bra variables."""
         return self.bra.variables
 
     @property
-    def variables_ket(self) -> List[Variable]:
+    def variables_ket(self) -> list[Variable]:
         """Tequila circuit Ket parameters."""
         return self.ket.variables
 
     @property
-    def variables(self) -> List[Variable]:
+    def variables(self) -> list[Variable]:
         """Tequila circuit variables."""
         return self.variables_bra + self.variables_ket
 
@@ -249,7 +240,7 @@ class FFS_EXPVAL:
         return self.__civect_to_qwvf(self._init_state_ket)
 
     @property
-    def init_state(self) -> Tuple[QubitWaveFunction, QubitWaveFunction]:
+    def init_state(self) -> tuple[QubitWaveFunction, QubitWaveFunction]:
         """
         The circuit initial state before applying the excitation operators. Usually RHF.
         """
@@ -286,9 +277,7 @@ class FFS_EXPVAL:
             return True
         if self.ket is None:
             return True
-        if self.bra is not None and self.bra == self.ket:
-            return True
-        return False
+        return bool(self.bra is not None and self.bra == self.ket)
 
     @property
     def U(self):
@@ -323,15 +312,15 @@ class FFS_EXPVAL:
         return array([wvf[i] for i in self._cistrings])
 
     def build_operator(
-        self, operator: Union[str, FermionOperator, QubitHamiltonian] = None
-    ) -> Union[None, Callable, ffsim.FermionOperator]:
+        self, operator: str | FermionOperator | QubitHamiltonian = None
+    ) -> None | Callable | ffsim.FermionOperator:
         """
         Build the expectation value operator.
         Even if it is accepted a QubitHamiltonian, we disencorage its use here for fermionic states limitations.
         It will be applied to the ci_vector and kept these results which doesn't leave the ci_vector.
         """
 
-        def from_string(operator: str) -> Union[ffsim.FermionOperator, LinearOperator]:
+        def from_string(operator: str) -> ffsim.FermionOperator | LinearOperator:
             if operator.upper() == "I":
                 return LinearOperator(
                     shape=(len(self._cistrings), len(self._cistrings)),

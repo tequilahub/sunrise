@@ -1,6 +1,6 @@
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 from scipy.linalg import orthogonal_procrustes
+from scipy.spatial.transform import Rotation as R
 
 
 class VectorUtils:
@@ -119,7 +119,7 @@ class MatrixUtils:
         C = np.dot(P_centered.T, Q_centered)
 
         # Singular value decomposition (SVD) of the covariance matrix
-        U, S, Vt = np.linalg.svd(C)
+        U, _S, Vt = np.linalg.svd(C)
 
         # Compute the rotation matrix (enforcing proper rotation if necessary)
         R = np.dot(U, Vt)
@@ -138,7 +138,7 @@ class MatrixUtils:
         :return: Rotation matrix R.
         """
         H = np.dot(P.T, Q)  # Covariance matrix
-        U, S, Vt = np.linalg.svd(H)
+        U, _S, Vt = np.linalg.svd(H)
         d = np.linalg.det(np.dot(Vt.T, U.T))  # Determinant of rotation matrix
         D = np.eye(3)  # Identity matrix
         if d < 0:
@@ -160,7 +160,7 @@ class MatrixUtils:
         )
 
         # Find the quaternion that best aligns P to Q
-        rotation, rmsd = R.align_vectors(Q, P)
+        rotation, _rmsd = R.align_vectors(Q, P)
         return rotation.as_matrix()
 
     @staticmethod
@@ -206,7 +206,7 @@ class MatrixUtils:
         Q : ndarray
             Strictly unitary matrix.
         """
-        Q, R = np.linalg.qr(C)
+        Q, _R = np.linalg.qr(C)
         return Q
 
 
@@ -280,7 +280,7 @@ class HybridizationUtils:
         )
 
         # Find the rotation matrix using scipy's quaternion-based vector alignment
-        rotation, rmsd = R.align_vectors(
+        rotation, _rmsd = R.align_vectors(
             align_target, align_source
         )  # align_vectors aligns src -> tgt
         R_matrix = rotation.as_matrix()
@@ -304,7 +304,7 @@ class HybridizationUtils:
 
 
 class AtomUtils:
-    max_electrons_by_shell = [2, 8, 18, 32, 32, 18, 8]
+    max_electrons_by_shell = (2, 8, 18, 32, 32, 18, 8)
 
 
 class XYZUtils:

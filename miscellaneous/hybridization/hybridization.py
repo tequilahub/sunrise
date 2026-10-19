@@ -1,7 +1,11 @@
-import numpy as np
+from __future__ import annotations
+
 from copy import deepcopy
-from .utils import HybridizationUtils, AtomUtils, MatrixUtils
+
+import numpy as np
+
 from .atom import Atom
+from .utils import AtomUtils, HybridizationUtils, MatrixUtils
 
 BOND_DISTANCE_TOLERANCE = 1.3
 
@@ -29,18 +33,16 @@ class Graph:
         bond_counts = {atom: 0 for atom in self.atoms}
         for i in range(num_atoms):
             for j in range(i + 1, num_atoms):
-                if bond_matrix[i, j]:
-                    # Only form a bond if both atoms can still accept more bonds.
-                    if (
-                        bond_counts[self.atoms[i]] < self.atoms[i].max_bonds
-                        and bond_counts[self.atoms[j]] < self.atoms[j].max_bonds
-                    ):
-                        self.bonds[self.atoms[i]].append(self.atoms[j])
-                        self.bonds[self.atoms[j]].append(self.atoms[i])
-                        self.bond_matrix[i][j] = self.bond_matrix[j][i] = 1
+                if bond_matrix[i, j] and (
+                    bond_counts[self.atoms[i]] < self.atoms[i].max_bonds
+                    and bond_counts[self.atoms[j]] < self.atoms[j].max_bonds
+                ):
+                    self.bonds[self.atoms[i]].append(self.atoms[j])
+                    self.bonds[self.atoms[j]].append(self.atoms[i])
+                    self.bond_matrix[i][j] = self.bond_matrix[j][i] = 1
 
-                        bond_counts[self.atoms[i]] += 1
-                        bond_counts[self.atoms[j]] += 1
+                    bond_counts[self.atoms[i]] += 1
+                    bond_counts[self.atoms[j]] += 1
         # Next, increase the bond multiplicity wherever possible.
         for i in range(num_atoms):
             # Preference in the bond multiplicity by smaller bonding, otherwise it would  be preference by order on the Zmatrix
@@ -274,7 +276,7 @@ class Graph:
         return None
 
     def align_orbitals(
-        self, atom: Atom, sp, preferred_atoms=[], strip_orbitals=False, try_align=True
+        self, atom: Atom, sp, preferred_atoms=None, strip_orbitals=False, try_align=True
     ):
         """
         Computes a hybridization matrix for a two-shell atom.
@@ -289,6 +291,8 @@ class Graph:
         :param preferred_atoms: Atoms given priority in bond alignment (not used currently).
         :param strip_orbitals: Whether or not to remove core 1s orbitals (for simplification).
         """
+        if preferred_atoms is None:
+            preferred_atoms = []
         bonded_atoms = self.get_bonds(atom)
         if (
             atom.number_of_shells == 1
@@ -576,7 +580,7 @@ class Graph:
                     )
         return coefficient_matrix
 
-    def get_HAO_orbitals(self, sp_list: list[int] = None) -> np.array:
+    def get_HAO_orbitals(self, sp_list: list[int] | None = None) -> np.array:
         if sp_list is None:
             matrices = [
                 self.apply_hybridization(atom, strip_orbitals=False)
@@ -687,7 +691,7 @@ class Graph:
                         edges.append((index,))
                         remaining_unbondable_electrons -= 1
                         index += 1
-        for atom in edges_to_append:
+        for atom in edges_to_append.items():
             for bond in edges_to_append[atom]:
                 assert bond in edges_to_append[atom]
                 assert atom in edges_to_append[bond]

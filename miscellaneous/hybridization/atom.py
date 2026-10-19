@@ -1,7 +1,8 @@
-from numpy import sqrt, array
-from .utils import XYZUtils
 from re import split
 
+from numpy import array, sqrt
+
+from .utils import XYZUtils
 
 BOND_DISTANCE_TOLERANCE = 1.3
 
