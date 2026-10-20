@@ -34,6 +34,8 @@ class OptimizeOrbitalsResult:
     mcscf_local_data: dict = None
     mo_coeff = None  # the optimized mo coefficients
     energy: float = None  # the optimized energy
+    U: Union[FCircuit, QCircuit] = None  # the circuit used in the last VQE run
+    variables: dict = None  # the optimized circuit variables from the last VQE run
     iterations: int = 0
 
     def __call__(self, local_data, *args, **kwargs):
@@ -287,6 +289,9 @@ def optimizer(
     result.old_molecule = molecule
     result.mo_coeff = mo_coeff
     result.energy = mc.e_tot
+    result.U = wrapper.circuit
+    if len(wrapper.history) > 0:
+        result.variables = wrapper.history[-1].variables
 
     if return_mcscf:
         result.mcscf_object = mc
