@@ -1,8 +1,9 @@
 import time
 import warnings
 
-import sunrise as sun
 import tequila as tq
+
+import sunrise as sun
 from sunrise.MCVBT.gnm import mcvbt
 
 warnings.filterwarnings("ignore", category=tq.TequilaWarning)

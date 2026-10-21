@@ -4,11 +4,12 @@ from unittest import mock
 
 import numpy as np
 import pytest
+import tequila as tq
+from numpy import isclose
+
 import sunrise as sn
 import sunrise.expval.minimize as sn_minimize
 import sunrise.expval.simulate_circuit as sn_simulate_circuit
-import tequila as tq
-from numpy import isclose
 from sunrise.expval import (
     INSTALLED_FERMIONIC_BACKENDS,
     SUPPORTED_FERMIONIC_BACKENDS,

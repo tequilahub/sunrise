@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
-import sunrise as sun
 import tequila as tq
+
+import sunrise as sun
 from sunrise.symmetry_adaptation import (
     FockSpaceState,
     IrrepProvider,

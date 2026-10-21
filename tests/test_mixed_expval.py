@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
-import sunrise as sn
 import tequila as tq
 from numpy import isclose
-from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS
 from tequila.utils import to_float
+
+import sunrise as sn
+from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS
 
 
 @pytest.mark.parametrize(

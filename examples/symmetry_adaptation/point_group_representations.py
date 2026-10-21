@@ -1,8 +1,9 @@
 # Scenario: Building different Point Group Representations for H2 in the canonical basis
 
 import numpy as np
-import sunrise as sun
 import tequila as tq
+
+import sunrise as sun
 from sunrise.symmetry_adaptation import (
     FockSpaceState,
     IrrepProvider,

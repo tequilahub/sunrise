@@ -1,6 +1,7 @@
 import numpy as np
-import sunrise as sun
 import tequila as tq
+
+import sunrise as sun
 
 # Create the molecule
 mol = sun.chemistry.Molecule(

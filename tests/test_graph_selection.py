@@ -2,8 +2,9 @@ import random
 
 import numpy as np
 import pytest
-import sunrise as sn
 import tequila as tq
+
+import sunrise as sn
 from sunrise.graph_selection import (
     ant_colony_opt,
     blossom_scaled,

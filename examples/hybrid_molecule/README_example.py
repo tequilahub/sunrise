@@ -1,5 +1,6 @@
-import sunrise as sun
 import tequila as tq
+
+import sunrise as sun
 
 ### INITIALIZE YOUR MOLECULE
 

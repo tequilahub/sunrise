@@ -1,8 +1,9 @@
 import random
 from datetime import datetime
 
-import sunrise as sun
 import tequila as tq
+
+import sunrise as sun
 
 # --- 1. Chemistry Ansatz & Personalized Styling ---
 geom_BeH2 = "H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"

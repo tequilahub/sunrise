@@ -1,9 +1,10 @@
 from copy import deepcopy
 
 import networkx as nx
-import sunrise as sn
 import tequila as tq
 from numpy import eye, pi
+
+import sunrise as sn
 
 # Step 1: Molecule intialization
 n_atoms = 8
