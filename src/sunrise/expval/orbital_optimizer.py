@@ -38,12 +38,14 @@ class OptimizeOrbitalsResult:
     molecule: QuantumChemistryBase = (
         None  # the new tequila molecule with transformed orbitals
     )
-    mcscf_object: object = None  # the pyscf mcscf object
-    mcscf_local_data: dict = None
+    mcscf_object: object | None = None  # the pyscf mcscf object
+    mcscf_local_data: dict | None = None
     mo_coeff = None  # the optimized mo coefficients
-    energy: float = None  # the optimized energy
-    U: Union[FCircuit, QCircuit] = None  # the circuit used in the last VQE run
-    variables: dict = None  # the optimized circuit variables from the last VQE run
+    energy: float | None = None  # the optimized energy
+    U: FCircuit | QCircuit | None = None  # the circuit used in the last VQE run
+    variables: dict | None = (
+        None  # the optimized circuit variables from the last VQE run
+    )
     iterations: int = 0
 
     def __call__(self, local_data, *args, **kwargs):
