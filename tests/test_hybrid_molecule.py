@@ -122,3 +122,35 @@ def test_UpCCGSD_FER(system,hcb_optimization):
 #    tqwfn = tq.simulate(tqU, variables=tqres.variables)
 #    assert numpy.isclose(res.energy, tqres.energy, atol=1.e-4)
 #    assert numpy.isclose(abs(tqwfn.inner(wfn)), 1.0, atol=1.e-4)
+
+@pytest.mark.parametrize("transformation,encoding",[("BravyiKitaev",{"select":"BFFB","condense":False}),
+                                                    ("ReorderedBravyiKitaev",{"select":"FBFB"}),
+                                                    ("BravyiKitaevTree",{"select":"FBBF","two_qubit":True}),
+                                                    ("TaperedBinary",{"select":"FFFF"})])
+def test_encodings(transformation,encoding):
+    geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
+    jw = "ReorderedJordanWigner" if "Reordered" in transformation else "JordanWigner"
+    mol_jw = sn.Molecule(geometry=geom, basis_set="sto-3g", backend='pyscf', nature='hybrid', transformation=jw, **encoding)
+    mol = sn.Molecule(geometry=geom, basis_set="sto-3g", backend='pyscf', nature='hybrid', transformation=transformation, **encoding)
+    # BravyiKitaevTree has no hcb_to_me
+    name = "SPA" if transformation == "BravyiKitaevTree" else "UpCCGSD"
+    U_jw = mol_jw.make_ansatz(name)
+    variables = {k: 0.1 * (i + 1) for i, k in enumerate(U_jw.extract_variables())}
+    E_jw = tq.simulate(tq.ExpectationValue(H=mol_jw.make_hamiltonian(), U=U_jw), variables=variables)
+    E = tq.simulate(tq.ExpectationValue(H=mol.make_hamiltonian(), U=mol.make_ansatz(name)), variables=variables)
+    assert numpy.isclose(E, E_jw, atol=1.e-6)
+
+def test_tapered_binary_mixed():
+    # the pairs moving between B and F orbitals change the electron parities of the fermionic orbitals
+    with pytest.raises(Exception):
+        sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8", basis_set="sto-3g",
+                    backend='pyscf', nature='hybrid', select="FBFB", transformation="TaperedBinary")
+
+@pytest.mark.parametrize("select",["FFFF","FBFB"])
+def test_encodings_spectrum(select):
+    # all fermionic and mixed orbitals: every encoding gives the spectrum of Jordan-Wigner
+    geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
+    H_jw = sn.Molecule(geometry=geom, basis_set="sto-3g", backend='pyscf', nature='hybrid', select=select).make_hamiltonian()
+    for transformation in ["BravyiKitaev","BravyiKitaevTree","ReorderedBravyiKitaev"]:
+        H = sn.Molecule(geometry=geom, basis_set="sto-3g", backend='pyscf', nature='hybrid', select=select, transformation=transformation).make_hamiltonian()
+        assert numpy.allclose(numpy.linalg.eigvalsh(H.to_matrix()), numpy.linalg.eigvalsh(H_jw.to_matrix()))
