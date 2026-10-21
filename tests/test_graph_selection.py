@@ -1,28 +1,29 @@
 import random
 
-import pytest
 import numpy as np
-import sunrise as sn
+import pytest
 import tequila as tq
+
+import sunrise as sn
 from sunrise.graph_selection import (
-    generate_min_global_distance_edges,
-    random_matching,
-    generate_all_possible_edges,
-    total_distance,
-    brute_force,
-    nearest_insertion,
-    two_opt,
-    simulated_annealing,
-    genetic_algorithm,
-    minimum_weight_perfect_performance,
-    blossom_scaled,
     ant_colony_opt,
+    blossom_scaled,
+    brute_force,
+    generate_all_possible_edges,
+    generate_min_global_distance_edges,
+    genetic_algorithm,
     genetic_algorithm_best_n_solutions,
-    simulated_annealing_best_n_solutions,
-    two_opt_best_n_solutions,
+    minimum_weight_perfect_performance,
+    nearest_insertion,
     random_blossom,
     random_blossom_scaled,
+    random_matching,
     run_spa_optimization,
+    simulated_annealing,
+    simulated_annealing_best_n_solutions,
+    total_distance,
+    two_opt,
+    two_opt_best_n_solutions,
 )
 
 
@@ -31,7 +32,6 @@ def is_valid_matching(edges, num_atoms):
         return False
     atoms = set()
     for edge in edges:
-
         a, b = int(edge[0]), int(edge[1])
         if a == b or len(edge) != 2:
             return False
@@ -128,31 +128,49 @@ def test_best_n_heuristics_return_valid_edges(heuristic, fixed_coordinates):
 def test_optimal_on_separated_pairs():
     # two well separated H2 units, the atom order interleaves them
     coordinates = np.array([[0.0, 0, 0], [10.0, 0, 0], [0.5, 0, 0], [10.5, 0, 0]])
-    for edges in [generate_min_global_distance_edges(coordinates), minimum_weight_perfect_performance(4, coordinates)]:
-        assert sorted(tuple(sorted(int(i) for i in edge)) for edge in edges) == [(0, 2), (1, 3)]
+    for edges in [
+        generate_min_global_distance_edges(coordinates),
+        minimum_weight_perfect_performance(4, coordinates),
+    ]:
+        assert sorted(tuple(sorted(int(i) for i in edge)) for edge in edges) == [
+            (0, 2),
+            (1, 3),
+        ]
 
 
 def test_nearest_neighbour_atom_indices(fixed_coordinates):
     # the edges have to refer to the original atom order for every start point
     edges = generate_min_global_distance_edges(fixed_coordinates)
     optimal = brute_force(6, fixed_coordinates)
-    assert total_distance(edges, fixed_coordinates) >= total_distance(optimal, fixed_coordinates) - 1e-10
-    assert total_distance(minimum_weight_perfect_performance(6, fixed_coordinates), fixed_coordinates) == pytest.approx(
-        total_distance(optimal, fixed_coordinates)
+    assert (
+        total_distance(edges, fixed_coordinates)
+        >= total_distance(optimal, fixed_coordinates) - 1e-10
     )
+    assert total_distance(
+        minimum_weight_perfect_performance(6, fixed_coordinates), fixed_coordinates
+    ) == pytest.approx(total_distance(optimal, fixed_coordinates))
 
 
 def test_run_spa_optimization():
     # no spatial symmetry, so that the default FCI guess finds the ground state
-    coordinates = np.array([[0.0, 0.0, 0.0], [0.8, 0.1, 0.0], [1.1, 1.5, 0.2], [-0.2, 1.3, 0.4]])
+    coordinates = np.array(
+        [[0.0, 0.0, 0.0], [0.8, 0.1, 0.0], [1.1, 1.5, 0.2], [-0.2, 1.3, 0.4]]
+    )
     geometry = "".join(f"h {x} {y} {z}\n" for x, y, z in coordinates)
     mol = sn.Molecule(geometry=geometry, basis_set="sto-3g")
-    result = run_spa_optimization(mol, coordinates=coordinates, key_heuristic=minimum_weight_perfect_performance)
+    result = run_spa_optimization(
+        mol, coordinates=coordinates, key_heuristic=minimum_weight_perfect_performance
+    )
 
     fci = mol.compute_energy("fci")
     hf = mol.compute_energy("hf")
     assert fci - 1e-8 <= result["energy"] < hf
 
     # the readout angles are close to the optimal SPA angles in the optimized orbitals
-    vqe = tq.minimize(tq.ExpectationValue(H=result["molecule"].make_hamiltonian(), U=result["circuit"]), silent=True)
+    vqe = tq.minimize(
+        tq.ExpectationValue(
+            H=result["molecule"].make_hamiltonian(), U=result["circuit"]
+        ),
+        silent=True,
+    )
     assert result["energy"] == pytest.approx(vqe.energy, abs=1e-4)

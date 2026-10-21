@@ -1,18 +1,24 @@
-import numpy
-import typing
+from __future__ import annotations
+
 import copy
+import typing
 import warnings
 from dataclasses import dataclass, field
 
-from tequila import QCircuit, ExpectationValue, TequilaWarning, TequilaException
-from ..molecules.qubit_base.qc_base import QuantumChemistryBase, ParametersQC, NBodyTensor
-from sunrise.fermionic_operations.circuit import FCircuit
-from sunrise.expval import Braket, INSTALLED_FERMIONIC_BACKENDS, pick_backend
+import numpy
+from tequila import ExpectationValue, QCircuit, TequilaException, TequilaWarning
+
+from sunrise.expval import INSTALLED_FERMIONIC_BACKENDS, Braket, pick_backend
 from sunrise.expval.minimize import minimize
-from sunrise.molecules.fermionic_base.fer_base import FermionicBase
-from sunrise.molecules.hybrid_base.HybridBase import HybridBase
+from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.molecules import MoleculeFromSunrise
-from typing import Union
+from sunrise.molecules.fermionic_base.fer_base import FermionicBase
+from sunrise.molecules.hybrid_base.hybridbase import HybridBase
+
+from ..molecules.qubit_base.qc_base import (
+    NBodyTensor,
+    QuantumChemistryBase,
+)
 
 """
 Small application that wraps a tequila VQE object and passes it to the PySCF CASSCF solver.
@@ -29,7 +35,9 @@ Currently this is a beta version (not extensively used in real life), so be care
 @dataclass
 class OptimizeOrbitalsResult:
     old_molecule: QuantumChemistryBase = None  # the old tequila molecule
-    molecule: QuantumChemistryBase = None  # the new tequila molecule with transformed orbitals
+    molecule: QuantumChemistryBase = (
+        None  # the new tequila molecule with transformed orbitals
+    )
     mcscf_object: object = None  # the pyscf mcscf object
     mcscf_local_data: dict = None
     mo_coeff = None  # the optimized mo coefficients
@@ -57,11 +65,11 @@ def optimize_orbitals(
     molecule_factory=None,
     molecule_arguments=None,
     restrict_to_active_space=True,
-    read_chkfile: str = None,
-    save_chkfile: str = None,
+    read_chkfile: str | None = None,
+    save_chkfile: str | None = None,
     *args,
     **kwargs,
-)->OptimizeOrbitalsResult:
+) -> OptimizeOrbitalsResult:
     """
 
     Parameters
@@ -92,34 +100,60 @@ def optimize_orbitals(
     """
 
     class solver:
-        def __init__(self, fermionic_backend:str=None, backend:str=None, circuit:FCircuit=None):
+        def __init__(
+            self,
+            fermionic_backend: str | None = None,
+            backend: str | None = None,
+            circuit: FCircuit | None = None,
+        ):
             self.fermionic_backend = fermionic_backend
             self.backend = backend
             self.U = circuit
+
         def __call__(self, H, circuit, molecule, **vqe_solver_arguments):
-            return minimize(Braket(molecule=molecule, ket=circuit, operator="H"), fermionic_backend=self.fermionic_backend, backend=self.backend, **vqe_solver_arguments)
-    if isinstance(molecule,HybridBase):
+            return minimize(
+                Braket(molecule=molecule, ket=circuit, operator="H"),
+                fermionic_backend=self.fermionic_backend,
+                backend=self.backend,
+                **vqe_solver_arguments,
+            )
+
+    if isinstance(molecule, HybridBase):
         use_hcb = False
         if molecule_arguments is None:
-            molecule_arguments = {"select": molecule.select, "condense": molecule.condense,
-                                  "two_qubit": molecule.two_qubit,
-                                  "integral_tresh": molecule.integral_tresh,"parameters": molecule.parameters,
-                                  "transformation": molecule.transformation,"backend":'pyscf'}
+            molecule_arguments = {
+                "select": molecule.select,
+                "condense": molecule.condense,
+                "two_qubit": molecule.two_qubit,
+                "integral_tresh": molecule.integral_tresh,
+                "parameters": molecule.parameters,
+                "transformation": molecule.transformation,
+                "backend": "pyscf",
+            }
         else:
-            mol_args = {"select": molecule.select, "condense": molecule.condense,
-                                  "two_qubit": molecule.two_qubit,
-                                  "integral_tresh": molecule.integral_tresh,"parameters": molecule.parameters,
-                                  "transformation": molecule.transformation,"backend":'pyscf'}
+            mol_args = {
+                "select": molecule.select,
+                "condense": molecule.condense,
+                "two_qubit": molecule.two_qubit,
+                "integral_tresh": molecule.integral_tresh,
+                "parameters": molecule.parameters,
+                "transformation": molecule.transformation,
+                "backend": "pyscf",
+            }
             mol_args.update(molecule_arguments)
             molecule_arguments = mol_args
-            if isinstance(circuit,FCircuit):
+            if isinstance(circuit, FCircuit):
                 circuit = circuit.to_qcircuit(molecule=molecule)
         if molecule_factory is None:
             molecule_factory = HybridBase
-    elif isinstance(molecule,FermionicBase):
-        if isinstance(circuit,QCircuit):
-            molecule = MoleculeFromSunrise(mol=molecule, transformation='reordered-jordan-wigner')
-            warnings.warn("Qcircuit detected but Fermionic Molecule provided. Converting the molecule to qubit_base with transformation = reordered-jordan-wigner")
+    elif isinstance(molecule, FermionicBase):
+        if isinstance(circuit, QCircuit):
+            molecule = MoleculeFromSunrise(
+                mol=molecule, transformation="reordered-jordan-wigner"
+            )
+            warnings.warn(
+                "Qcircuit detected but Fermionic Molecule provided. Converting the molecule to qubit_base with transformation = reordered-jordan-wigner"
+            )
         else:
             if "fermionic_backend" in kwargs:
                 fbackend = kwargs["fermionic_backend"]
@@ -127,7 +161,10 @@ def optimize_orbitals(
             elif "fbackend" in kwargs:
                 fbackend = kwargs["fbackend"]
                 kwargs.pop("fbackend")
-            elif "backend" in kwargs and kwargs["backend"] in INSTALLED_FERMIONIC_BACKENDS:
+            elif (
+                "backend" in kwargs
+                and kwargs["backend"] in INSTALLED_FERMIONIC_BACKENDS
+            ):
                 # backward compatible: `backend` used to select the fermionic backend
                 fbackend = kwargs["backend"]
                 kwargs.pop("backend")
@@ -142,28 +179,52 @@ def optimize_orbitals(
                 molecule_factory = FermionicBase
             molecule.fermionic_backend = fbackend
             if molecule_arguments is None:
-                molecule_arguments = {"fermionic_backend" : fbackend, "parameters" : molecule.parameters}
-            else: 
+                molecule_arguments = {
+                    "fermionic_backend": fbackend,
+                    "parameters": molecule.parameters,
+                }
+            else:
                 molecule_arguments["fermionic_backend"] = fbackend
                 if "parameters" not in molecule_arguments:
                     molecule_arguments["parameters"] = molecule.parameters
             if use_hcb:
                 if vqe_solver_arguments is None:
                     vqe_solver_arguments = {}
-                vqe_solver_arguments['restrict_to_hcb'] = True
+                vqe_solver_arguments["restrict_to_hcb"] = True
             if vqe_solver is None:
-                vqe_solver = solver(backend=backend,circuit=circuit, fermionic_backend=fbackend)
-    else: #Plain Qubit molecule
-        if isinstance(circuit,FCircuit):
+                vqe_solver = solver(
+                    backend=backend, circuit=circuit, fermionic_backend=fbackend
+                )
+    else:  # Plain Qubit molecule
+        if isinstance(circuit, FCircuit):
             circuit = circuit.to_qcircuit(molecule=molecule)
-    result = optimizer(molecule=molecule, use_hcb=use_hcb, circuit=circuit, pyscf_arguments=pyscf_arguments, silent=silent, initial_guess=initial_guess,
-                       return_mcscf=return_mcscf, molecule_factory=molecule_factory, molecule_arguments=molecule_arguments,
-                       restrict_to_active_space=restrict_to_active_space, vqe_solver_arguments=vqe_solver_arguments,
-                       save_chkfile=save_chkfile, read_chkfile=read_chkfile, vqe_solver=vqe_solver, *args, **kwargs)
-    if isinstance(molecule,HybridBase):
-        result.molecule = HybridBase(**molecule_arguments, integral_manager=result.molecule.integral_manager)
-    elif isinstance(molecule,FermionicBase):
-        result.molecule = FermionicBase(parameters=result.molecule.parameters, integral_manager=result.molecule.integral_manager)
+    result = optimizer(
+        *args,
+        molecule=molecule,
+        use_hcb=use_hcb,
+        circuit=circuit,
+        pyscf_arguments=pyscf_arguments,
+        silent=silent,
+        initial_guess=initial_guess,
+        return_mcscf=return_mcscf,
+        molecule_factory=molecule_factory,
+        molecule_arguments=molecule_arguments,
+        restrict_to_active_space=restrict_to_active_space,
+        vqe_solver_arguments=vqe_solver_arguments,
+        save_chkfile=save_chkfile,
+        read_chkfile=read_chkfile,
+        vqe_solver=vqe_solver,
+        **kwargs,
+    )
+    if isinstance(molecule, HybridBase):
+        result.molecule = HybridBase(
+            **molecule_arguments, integral_manager=result.molecule.integral_manager
+        )
+    elif isinstance(molecule, FermionicBase):
+        result.molecule = FermionicBase(
+            parameters=result.molecule.parameters,
+            integral_manager=result.molecule.integral_manager,
+        )
     return result
 
 
@@ -180,23 +241,28 @@ def optimizer(
     molecule_factory=None,
     molecule_arguments=None,
     restrict_to_active_space=True,
-    read_chkfile: str = None,
-    save_chkfile: str = None,
+    read_chkfile: str | None = None,
+    save_chkfile: str | None = None,
     *args,
     **kwargs,
 ):
     try:
-        from pyscf import mcscf, lib
+        from pyscf import lib, mcscf
+
         from ..molecules.qubit_base.pyscf_interface import QuantumChemistryPySCF
-    except Exception as exception:
-        raise Exception("{}\noptimize_orbitals: Need pyscf to run (pip install pyscf)".format(str(exception)))
+    except Exception as exception:  # noqa: BLE001
+        raise TequilaException(
+            f"{exception}\noptimize_orbitals: Need pyscf to run (pip install pyscf)"
+        )
 
     if pyscf_arguments is None:
         pyscf_arguments = {"max_cycle_macro": 10, "max_cycle_micro": 3}
     no = molecule.n_orbitals
 
     if not isinstance(molecule, QuantumChemistryPySCF):
-        pyscf_molecule = QuantumChemistryPySCF.from_tequila(molecule=molecule, transformation=molecule.transformation)
+        pyscf_molecule = QuantumChemistryPySCF.from_tequila(
+            molecule=molecule, transformation=molecule.transformation
+        )
     else:
         pyscf_molecule = molecule
 
@@ -209,7 +275,9 @@ def optimizer(
     c = pyscf_molecule.compute_constant_part()
 
     if circuit is None and vqe_solver is None:
-        raise Exception("optimize_orbitals: Either provide a circuit or a callable vqe_solver")
+        raise TequilaException(
+            "optimize_orbitals: Either provide a circuit or a callable vqe_solver"
+        )
 
     if use_hcb:
         if vqe_solver_arguments is None:
@@ -220,16 +288,18 @@ def optimizer(
         n_orbitals = molecule.n_orbitals
         if n_qubits > n_orbitals:
             warnings.warn(
-                "Potential inconsistency in orbital optimization: use_hcb is switched on but we have\n n_qubits={} in the circuit\n n_orbital={} in the molecule\n".format(
-                    n_qubits, n_orbitals
-                ),
+                f"Potential inconsistency in orbital optimization: use_hcb is switched on but we have\n n_qubits={n_qubits} in the circuit\n n_orbital={n_orbitals} in the molecule\n",
                 TequilaWarning,
             )
 
     if molecule_arguments is None:
-        molecule_arguments = {"parameters": pyscf_molecule.parameters, "transformation": molecule.transformation}
+        molecule_arguments = {
+            "parameters": pyscf_molecule.parameters,
+            "transformation": molecule.transformation,
+        }
 
     wrapper = PySCFVQEWrapper(
+        *args,
         molecule_arguments=molecule_arguments,
         n_electrons=pyscf_molecule.n_electrons,
         const_part=c,
@@ -238,7 +308,6 @@ def optimizer(
         silent=silent,
         vqe_solver=vqe_solver,
         molecule_factory=molecule_factory,
-        *args,
         **kwargs,
     )
     mc.fcisolver = wrapper
@@ -248,25 +317,34 @@ def optimizer(
             if hasattr(mc, str(k)):
                 setattr(mc, str(k), v)
             else:
-                print("unknown arguments: {}".format(k))
+                print(f"unknown arguments: {k}")
     if not silent:
         print("Optimizing Orbitals with PySCF and VQE Solver:")
         print("{:25} : {}".format("pyscf_arguments", pyscf_arguments))
         print(wrapper)
     if initial_guess is not None:
         if hasattr(initial_guess, "lower"):
-            if "random" or "near_zero" in initial_guess.lower():
+            if (
+                "random" in initial_guess.lower()
+                or "near_zero" in initial_guess.lower()
+            ):
                 scale = 1.0e-3
                 if "random" in initial_guess.lower():
                     scale = 1.0
                 loc = 0.0
                 if "scale" in kwargs:
-                    scale = float(initial_guess.split("scale")[1].split("_")[0].split("=")[1])
+                    scale = float(
+                        initial_guess.split("scale")[1].split("_")[0].split("=")[1]
+                    )
                 if "loc" in kwargs:
-                    loc = float(initial_guess.split("loc")[1].split("_")[0].split("=")[1])
-                initial_guess = numpy.eye(no) + numpy.random.normal(scale=scale, loc=loc, size=no * no).reshape(no, no)
+                    loc = float(
+                        initial_guess.split("loc")[1].split("_")[0].split("=")[1]
+                    )
+                initial_guess = numpy.eye(no) + numpy.random.normal(
+                    scale=scale, loc=loc, size=no * no
+                ).reshape(no, no)
             else:
-                raise Exception("Unknown initial_guess={}".format(initial_guess.lower()))
+                raise TequilaException(f"Unknown initial_guess={initial_guess.lower()}")
 
         assert len(initial_guess.shape) == 2
         assert initial_guess.shape[0] == no
@@ -276,13 +354,15 @@ def optimizer(
     elif read_chkfile is not None:
         chk = lib.chkfile.load(read_chkfile, "mcscf")
         mo_coeff = chk["mo_coeff"]
-        ci0 = chk["ci"] if "ci" in chk.keys() else None
+        ci0 = chk.get("ci", None)
         mc.kernel(mo_coeff=mo_coeff, ci0=ci0)
     else:
         mc.kernel()
     # make new molecule
     mo_coeff = mc.mo_coeff
-    transformed_molecule = pyscf_molecule.transform_orbitals(orbital_coefficients=mo_coeff, name="optimized")
+    transformed_molecule = pyscf_molecule.transform_orbitals(
+        orbital_coefficients=mo_coeff, name="optimized"
+    )
     result.molecule = transformed_molecule
     result.old_molecule = molecule
     result.mo_coeff = mo_coeff
@@ -315,7 +395,7 @@ class PySCFVQEWrapper:
     const_part: float = 0.0
     silent: bool = False
     vqe_solver: typing.Callable = None
-    circuit: Union[FCircuit, QCircuit] = None
+    circuit: FCircuit | QCircuit | None = None
     vqe_solver_arguments: dict = field(default_factory=dict)
     molecule_factory: typing.Callable = None
 
@@ -363,19 +443,29 @@ class PySCFVQEWrapper:
             vqe_solver_arguments = {}
             if self.vqe_solver_arguments is not None:
                 vqe_solver_arguments = self.vqe_solver_arguments
-            result = self.vqe_solver(H=H, circuit=self.circuit, molecule=molecule, **vqe_solver_arguments)
+            result = self.vqe_solver(
+                H=H, circuit=self.circuit, molecule=molecule, **vqe_solver_arguments
+            )
             if hasattr(self.vqe_solver, "compute_rdms"):
                 rdm1, rdm2 = self.vqe_solver.compute_rdms(
-                    U=self.circuit, variables=result.variables, molecule=molecule, use_hcb=restrict_to_hcb
+                    U=self.circuit,
+                    variables=result.variables,
+                    molecule=molecule,
+                    use_hcb=restrict_to_hcb,
                 )
                 rdm2 = self.reorder(rdm2, "dirac", "mulliken")
         elif self.circuit is None:
-            raise Exception("Orbital Optimizer: Either provide a callable vqe_solver or a circuit")
+            raise TequilaException(
+                "Orbital Optimizer: Either provide a callable vqe_solver or a circuit"
+            )
         else:
             U = self.circuit
             E = ExpectationValue(H=H, U=U)
             optimizer_arguments = {}
-            if self.vqe_solver_arguments is not None and "optimizer_arguments" in self.vqe_solver_arguments:
+            if (
+                self.vqe_solver_arguments is not None
+                and "optimizer_arguments" in self.vqe_solver_arguments
+            ):
                 optimizer_arguments = self.vqe_solver_arguments["optimizer_arguments"]
             if self.silent is not None and "silent" not in optimizer_arguments:
                 optimizer_arguments["silent"] = True
@@ -391,14 +481,27 @@ class PySCFVQEWrapper:
 
         if rdm1 is None or rdm2 is None:
             rdm1, rdm2 = molecule.compute_rdms(
-                U=U, variables=result.variables, spin_free=True, get_rdm1=True, get_rdm2=True, use_hcb=restrict_to_hcb
+                U=U,
+                variables=result.variables,
+                spin_free=True,
+                get_rdm1=True,
+                get_rdm2=True,
+                use_hcb=restrict_to_hcb,
             )
             rdm2 = self.reorder(rdm2, "dirac", "mulliken")
         if not self.silent:
             print("{:20} : {}".format("energy", result.energy))
             if len(self.history) > 0:
-                print("{:20} : {}".format("deltaE", result.energy - self.history[-1].energy))
-                print("{:20} : {}".format("||delta RDM1||", numpy.linalg.norm(self.rdm1 - rdm1)))
+                print(
+                    "{:20} : {}".format(
+                        "deltaE", result.energy - self.history[-1].energy
+                    )
+                )
+                print(
+                    "{:20} : {}".format(
+                        "||delta RDM1||", numpy.linalg.norm(self.rdm1 - rdm1)
+                    )
+                )
         self.history.append(result)
         self.rdm1 = rdm1
         self.rdm2 = rdm2
@@ -410,12 +513,12 @@ class PySCFVQEWrapper:
         return self.rdm1, self.rdm2
 
     def __str__(self):
-        result = "{}\n".format(type(self).__name__)
+        result = f"{type(self).__name__}\n"
         for k, v in self.__dict__.items():
             if k == "circuit" and v is not None:
                 result += "{:30} : {}\n".format(
-                    k, "{} gates, {} parameters".format(len(v.gates), len(v.extract_variables()))
+                    k, f"{len(v.gates)} gates, {len(v.extract_variables())} parameters"
                 )
             else:
-                result += "{:30} : {}\n".format(k, v)
+                result += f"{k:30} : {v}\n"
         return result

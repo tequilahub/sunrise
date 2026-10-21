@@ -1,10 +1,11 @@
-import random
-import numpy as np
 import math
+import random
+
 import networkx as nx
+import numpy as np
+from scipy.spatial.distance import pdist, squareform
 
 from .shared import matrix_scaling
-from scipy.spatial.distance import pdist, squareform
 
 
 def total_distance(edges: list[tuple[int, int]], coordinates: np.ndarray):
@@ -210,13 +211,11 @@ def simulated_annealing_best_n_solutions(
     current_distance = total_distance(current_edges, coordinates=coordinates)
 
     solutions = {}
-    best_edges, best_distance = current_edges[:], current_distance
 
     T = start
     i = 0
     no_improv = 0
     while start > end and i < max_iter:
-
         i += 1
         new_edges = random_neighbour(current_edges)
         new_distance = total_distance(new_edges, coordinates=coordinates)
@@ -231,8 +230,6 @@ def simulated_annealing_best_n_solutions(
             solutions[key] = (current_distance, current_edges[:])
 
             if difference < 0:
-                best_edges = current_edges
-                best_distance = current_distance
                 no_improv = 0
             else:
                 no_improv += 1
@@ -309,7 +306,6 @@ def random_blossom(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10)
     distance_matrix = squareform(pdist(coordinates))
 
     for _ in range(best_n_solutions):
-
         graph = nx.Graph()
         for i in range(num_atoms):
             for j in range(i + 1, num_atoms):
@@ -338,7 +334,6 @@ def random_blossom_scaled(num_atoms: int, coordinates: np.ndarray, best_n_soluti
     distance_matrix = squareform(pdist(coordinates))
     scaled_matrix = matrix_scaling(distance_matrix)
     for _ in range(best_n_solutions):
-
         graph = nx.Graph()
         for i in range(num_atoms):
             for j in range(i + 1, num_atoms):
