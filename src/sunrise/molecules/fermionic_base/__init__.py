@@ -1,28 +1,43 @@
-import typing
+from __future__ import annotations
+
 import warnings
 
 from tequila import TequilaWarning
-from .fer_base import FermionicBase 
+
 from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC
 
-SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf", "psi4"]  #, "madness"
-INSTALLED_QCHEMISTRY_BACKENDS = {"base": FermionicBase} #"madness": QuantumChemistryMadness
+from .fer_base import FermionicBase
+
+SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf", "psi4"]  # , "madness"
+INSTALLED_QCHEMISTRY_BACKENDS = {
+    "base": FermionicBase
+}  # "madness": QuantumChemistryMadness
 
 try:
     from .psi4_interface import QuantumChemistryPsi4
+
     INSTALLED_QCHEMISTRY_BACKENDS["psi4"] = QuantumChemistryPsi4
 except ImportError:
     pass
 
 try:
-    import pyscf
     from .pyscf_interface import QuantumChemistryPySCF
+
     INSTALLED_QCHEMISTRY_BACKENDS["pyscf"] = QuantumChemistryPySCF
 except ImportError:
     pass
 
 
-def FerMolecule(geometry: str = None,basis_set: str = None,orbital_type: str = None,backend: str = None,guess_wfn=None,name: str = None,*args,**kwargs) -> FermionicBase:
+def FerMolecule(
+    geometry: str | None = None,
+    basis_set: str | None = None,
+    orbital_type: str | None = None,
+    backend: str | None = None,
+    guess_wfn=None,
+    name: str | None = None,
+    *args,
+    **kwargs,
+) -> FermionicBase:
     """
 
     Parameters
@@ -50,41 +65,59 @@ def FerMolecule(geometry: str = None,basis_set: str = None,orbital_type: str = N
     # failsafe for common mistake
     if "basis" in kwargs:
         warnings.warn(
-            "called molecule with keyword \"basis={0}\" converting it to \"basis_set={0}\"".format(kwargs["basis"]),
-            TequilaWarning)
+            'called molecule with keyword "basis={0}" converting it to "basis_set={0}"'.format(
+                kwargs["basis"]
+            ),
+            TequilaWarning,
+        )
         if basis_set is not None:
-            warnings.warn("did not convert as \"basis_set={}\" was already given".format(basis_set), TequilaWarning)
+            warnings.warn(
+                f'did not convert as "basis_set={basis_set}" was already given',
+                TequilaWarning,
+            )
         basis_set = kwargs["basis"]
 
     keyvals = {}
     for k, v in kwargs.items():
-        if k in ParametersQC.__dict__.keys():
+        if k in ParametersQC.__dict__:
             keyvals[k] = v
 
     if "parameters" in kwargs:
         parameters = kwargs["parameters"]
         kwargs.pop("parameters")
     else:
-        parameters = ParametersQC(name=name, geometry=geometry, basis_set=basis_set, multiplicity=1, **keyvals)
+        parameters = ParametersQC(
+            name=name, geometry=geometry, basis_set=basis_set, multiplicity=1, **keyvals
+        )
 
-    integrals_provided = all([key in kwargs for key in ["one_body_integrals", "two_body_integrals"]])
+    integrals_provided = all(
+        key in kwargs for key in ["one_body_integrals", "two_body_integrals"]
+    )
     if integrals_provided and backend is None:
         backend = "base"
-    #
     if backend is None:
         if basis_set is None or basis_set.lower() in ["madness", "mra", "pno"]:
             backend = "madness"
             basis_set = "mra"
             parameters.basis_set = basis_set
-            if orbital_type is not None and orbital_type.lower() not in ["pno", "mra-pno"]:
+            if orbital_type is not None and orbital_type.lower() not in [
+                "pno",
+                "mra-pno",
+            ]:
                 warnings.warn(
-                    "only PNOs supported as orbital_type without basis set. Setting to pno - You gave={}".format(orbital_type), TequilaWarning)
+                    f"only PNOs supported as orbital_type without basis set. Setting to pno - You gave={orbital_type}",
+                    TequilaWarning,
+                )
             orbital_type = "pno"
         else:
-            if orbital_type is not None and orbital_type.lower() not in ["hf", "native"]:
+            if orbital_type is not None and orbital_type.lower() not in [
+                "hf",
+                "native",
+            ]:
                 warnings.warn(
-                    "only hf and native supported as orbital_type with basis-set. Setting to hf - You gave={}".format(
-                        orbital_type), TequilaWarning)
+                    f"only hf and native supported as orbital_type with basis-set. Setting to hf - You gave={orbital_type}",
+                    TequilaWarning,
+                )
                 orbital_type = "hf"
             if orbital_type is None:
                 orbital_type = "hf"
@@ -94,28 +127,42 @@ def FerMolecule(geometry: str = None,basis_set: str = None,orbital_type: str = N
             elif "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS:
                 backend = "pyscf"
             else:
-                raise Exception("No quantum chemistry backends installed on your system")
+                raise ImportError(
+                    "No quantum chemistry backends installed on your system"
+                )
 
     elif backend == "base":
         if not integrals_provided:
-            raise Exception("No quantum chemistry backends installed on your system\n"
-                            "To use the base functionality you need to pass the following tensors via keyword\n"
-                            "one_body_integrals, two_body_integrals\n")
+            raise ValueError(
+                "No quantum chemistry backends installed on your system\n"
+                "To use the base functionality you need to pass the following tensors via keyword\n"
+                "one_body_integrals, two_body_integrals\n"
+            )
         else:
             backend = "base"
 
     if backend not in SUPPORTED_QCHEMISTRY_BACKENDS:
-        raise Exception(str(backend) + " is not (yet) supported by Fermionic Molecule")
+        raise ValueError(str(backend) + " is not (yet) supported by Fermionic Molecule")
     if backend not in INSTALLED_QCHEMISTRY_BACKENDS:
-        raise Exception(str(backend) + " was not found on your system")
+        raise ImportError(str(backend) + " was not found on your system")
 
-    if guess_wfn is not None and backend != 'psi4':
-        raise Exception("guess_wfn only works for psi4")
+    if guess_wfn is not None and backend != "psi4":
+        raise ValueError("guess_wfn only works for psi4")
 
-    if basis_set is None and backend.lower() not in ["base", "madness"] and not integrals_provided:
-        raise Exception("no basis_set or integrals provided for backend={}".format(backend))
+    if (
+        basis_set is None
+        and backend.lower() not in ["base", "madness"]
+        and not integrals_provided
+    ):
+        raise ValueError(f"no basis_set or integrals provided for backend={backend}")
     elif basis_set is None:
         basis_set = "custom"
         parameters.basis_set = basis_set
 
-    return INSTALLED_QCHEMISTRY_BACKENDS[backend.lower()](parameters=parameters,orbital_type=orbital_type, guess_wfn=guess_wfn, *args, **kwargs)
+    return INSTALLED_QCHEMISTRY_BACKENDS[backend.lower()](
+        *args,
+        parameters=parameters,
+        orbital_type=orbital_type,
+        guess_wfn=guess_wfn,
+        **kwargs,
+    )

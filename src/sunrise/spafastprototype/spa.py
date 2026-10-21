@@ -1,99 +1,199 @@
-import tequila as tq
-from sunrise import optimize_orbitals, FCircuit
-import numpy
-import time
-import warnings
-from .fast_rdm import fast_rdm
-from .fast_qtensor import fast_qtensor
-from .decompose import decompose, make_decomposed_clusters
-from ..expval.orbital_optimizer import OptimizeOrbitalsResult
-from tequila.optimizers.optimizer_base import OptimizerResults
-from tequila import TequilaWarning
-from typing import Union
-from .spa_classical_solver import spa_solve_graph, spa_rdms
+from __future__ import annotations
 
-def run_spa(mol, edges, initial_guess=None, decompose=True, silent=True,grouping:Union[int,list[int],None]=None,backend:str='qulacs', fast_rdm=True, **kwargs)->OptimizeOrbitalsResult:
+import warnings
+
+import numpy
+import tequila as tq
+from tequila import TequilaWarning
+from tequila.optimizers.optimizer_base import OptimizerResults
+
+from sunrise import FCircuit, optimize_orbitals
+
+from ..expval.orbital_optimizer import OptimizeOrbitalsResult
+from .decompose import decompose, make_decomposed_clusters
+from .fast_qtensor import fast_qtensor
+from .fast_rdm import fast_rdm
+from .spa_classical_solver import spa_rdms, spa_solve_graph
+
+
+def run_spa(
+    mol,
+    edges,
+    initial_guess=None,
+    decompose=True,
+    silent=True,
+    grouping: int | list[int] | None = None,
+    backend: str = "qulacs",
+    fast_rdm=True,
+    **kwargs,
+) -> OptimizeOrbitalsResult:
 
     if edges is None:
         U = mol.make_ansatz(name="HCB-SPA")
-    elif isinstance(edges,(tq.QCircuit,FCircuit)):
+    elif isinstance(edges, (tq.QCircuit, FCircuit)):
         U = edges
     else:
         U = mol.make_ansatz(name="HCB-SPA", edges=edges)
     if initial_guess is None:
         initial_guess = make_initial_orbital_guess(edges)
         mol = mol.use_native_orbitals()
-    if isinstance(initial_guess,bool):
+    if isinstance(initial_guess, bool):
         if initial_guess:
             initial_guess = make_initial_orbital_guess(edges)
             mol = mol.use_native_orbitals()
-        else: initial_guess = None
+        else:
+            initial_guess = None
     grouping = make_decomposed_clusters(U, grouping)
 
-    vqe_solver = SPASolver(decompose=decompose,grouping=grouping,backend=backend, fast_rdm=fast_rdm, edges=edges)
-    opt = optimize_orbitals(circuit=U, molecule=mol, initial_guess=initial_guess, vqe_solver=vqe_solver, silent=silent, use_hcb=True,vqe_solver_arguments={"optimizer_arguments":{"backend":backend}}, **kwargs)
+    vqe_solver = SPASolver(
+        decompose=decompose,
+        grouping=grouping,
+        backend=backend,
+        fast_rdm=fast_rdm,
+        edges=edges,
+    )
+    opt = optimize_orbitals(
+        circuit=U,
+        molecule=mol,
+        initial_guess=initial_guess,
+        vqe_solver=vqe_solver,
+        silent=silent,
+        use_hcb=True,
+        vqe_solver_arguments={"optimizer_arguments": {"backend": backend}},
+        **kwargs,
+    )
     return opt
 
-class SPASolver:
 
-    def __init__(self, decompose=False,grouping:Union[int,list[int],None]=None,backend:str='qulacs', fast_rdm=True, restrict_to_hcb=True, edges:list[tuple[int]]=None):
-        self.decompose=decompose
+class SPASolver:
+    def __init__(
+        self,
+        decompose=False,
+        grouping: int | list[int] | None = None,
+        backend: str = "qulacs",
+        fast_rdm=True,
+        restrict_to_hcb=True,
+        edges: list[tuple[int]] | None = None,
+    ):
+        self.decompose = decompose
         self.rdm_qtensors = None
         self.variables = None
-        self.grouping =grouping
-        self.backend=backend
-        self.restart_from_previous_runs=True
-        self.restrict_to_hcb = restrict_to_hcb # need to change to "use_hcb" for consistency, but also needs to be changted in tequila
-        self.fast_rdm=fast_rdm
+        self.grouping = grouping
+        self.backend = backend
+        self.restart_from_previous_runs = True
+        self.restrict_to_hcb = restrict_to_hcb  # need to change to "use_hcb" for consistency, but also needs to be changted in tequila
+        self.fast_rdm = fast_rdm
         self.edges = edges
-        
+
     def __call__(self, *args, **kwargs):
         return self.vqe(*args, **kwargs)
-    
+
     def vqe(self, H, circuit, molecule, *args, **kwargs) -> OptimizerResults:
-        if self.edges is not None and isinstance(self.edges,list) and isinstance(self.edges[0],(tuple,list)) and isinstance(self.edges[0][0],int) and all([len(edge) < 3 for edge in self.edges]):
-            variables, energy = spa_solve_graph(mol=molecule,graph=self.edges)
+        if (
+            self.edges is not None
+            and isinstance(self.edges, list)
+            and isinstance(self.edges[0], (tuple, list))
+            and isinstance(self.edges[0][0], int)
+            and all(len(edge) < 3 for edge in self.edges)
+        ):
+            variables, energy = spa_solve_graph(mol=molecule, graph=self.edges)
             return OptimizerResults(energy=energy, history=None, variables=variables)
-        
+
         if "restrict_to_hcb" in kwargs:
             self.restrict_to_hcb = kwargs
         # failsave:
         if self.restrict_to_hcb:
             n = molecule.n_orbitals
-            if len(circuit.qubits)>n:
-                warnings.warn(f"VQE: restrict_to_hcb is True but more than {n} qubits in the circuit: {circuit.qubits}", TequilaWarning)
-            if len(H.qubits)>n:
-                warnings.warn(f"VQE: restrict_to_hcb is True but more than {n} qubits in the Hamiltonian: {circuit.qubits}", TequilaWarning)
+            if len(circuit.qubits) > n:
+                warnings.warn(
+                    f"VQE: restrict_to_hcb is True but more than {n} qubits in the circuit: {circuit.qubits}",
+                    TequilaWarning,
+                )
+            if len(H.qubits) > n:
+                warnings.warn(
+                    f"VQE: restrict_to_hcb is True but more than {n} qubits in the Hamiltonian: {circuit.qubits}",
+                    TequilaWarning,
+                )
 
         if len(circuit.qubits) != len(H.qubits):
-            warnings.warn(f"VQE: Hamiltonian with {H.qubits} qubits and circuit with {circuit.qubits} qubits?!? restrict_to_hcb={self.restrict_to_hcb}", TequilaWarning)
+            warnings.warn(
+                f"VQE: Hamiltonian with {H.qubits} qubits and circuit with {circuit.qubits} qubits?!? restrict_to_hcb={self.restrict_to_hcb}",
+                TequilaWarning,
+            )
 
         if self.decompose:
-            E = decompose(H=H, U=circuit,grouping=self.grouping)
-            result = tq.minimize(E, silent=True, initial_values=self.variables, gradient="2-point",method_options={"finite_diff_rel_step":1.e-4},backend=self.backend,*args,**kwargs)
+            E = decompose(H=H, U=circuit, grouping=self.grouping)
+            result = tq.minimize(
+                E,
+                *args,
+                silent=True,
+                initial_values=self.variables,
+                gradient="2-point",
+                method_options={"finite_diff_rel_step": 1.0e-4},
+                backend=self.backend,
+                **kwargs,
+            )
         else:
             E = tq.ExpectationValue(H=H, U=circuit)
-            result = tq.minimize(E, silent=True, initial_values=self.variables,backend=self.backend,*args,**kwargs)
-        if self.restart_from_previous_runs: self.variables = result.variables
-        #analyse()
+            result = tq.minimize(
+                E,
+                *args,
+                silent=True,
+                initial_values=self.variables,
+                backend=self.backend,
+                **kwargs,
+            )
+        if self.restart_from_previous_runs:
+            self.variables = result.variables
+        # analyse()
         return result
 
-    def compute_rdms(self, U, variables, molecule, use_hcb=False ):
-        start = time.time()
+    def compute_rdms(self, U, variables, molecule, use_hcb=False):
+        # start = time.time()
         if self.fast_rdm:
-            if self.edges is not None and isinstance(self.edges,list) and isinstance(self.edges[0],(tuple,list)) and isinstance(self.edges[0][0],int) and all([len(edge) < 3 for edge in self.edges]):
-                return spa_rdms(edges=self.edges, variables=variables, n_orbitals=molecule.n_orbitals)
+            if (
+                self.edges is not None
+                and isinstance(self.edges, list)
+                and isinstance(self.edges[0], (tuple, list))
+                and isinstance(self.edges[0][0], int)
+                and all(len(edge) < 3 for edge in self.edges)
+            ):
+                return spa_rdms(
+                    edges=self.edges,
+                    variables=variables,
+                    n_orbitals=molecule.n_orbitals,
+                )
             # needs hacked tq version where molecule.compute_rdms gives back the raw list of qops
-            rdm1, rdm2 = fast_rdm(U=U, mol=molecule, clusters=self.grouping, variables=variables,backend=self.backend)
+            rdm1, rdm2 = fast_rdm(
+                U=U,
+                mol=molecule,
+                clusters=self.grouping,
+                variables=variables,
+                backend=self.backend,
+            )
         else:
-            if self.rdm_qtensors is None or str(U)!=self.rdm_qtensors[-1]:
+            if self.rdm_qtensors is None or str(U) != self.rdm_qtensors[-1]:
                 rdm1, rdm2 = molecule.compute_rdms(U=U, evaluate=False, use_hcb=use_hcb)
-                rdm1, shape1 = fast_qtensor(rdm1, variables=variables, do_decompose=self.decompose, evaluate=False,grouping=self.grouping,backend=self.backend)
-                rdm2, shape2 = fast_qtensor(rdm2, variables=variables, do_decompose=self.decompose, evaluate=False,grouping=self.grouping,backend=self.backend)
-                self.rdm_qtensors = ((rdm1,shape1),(rdm2,shape2),str(U))
+                rdm1, shape1 = fast_qtensor(
+                    rdm1,
+                    variables=variables,
+                    do_decompose=self.decompose,
+                    evaluate=False,
+                    grouping=self.grouping,
+                    backend=self.backend,
+                )
+                rdm2, shape2 = fast_qtensor(
+                    rdm2,
+                    variables=variables,
+                    do_decompose=self.decompose,
+                    evaluate=False,
+                    grouping=self.grouping,
+                    backend=self.backend,
+                )
+                self.rdm_qtensors = ((rdm1, shape1), (rdm2, shape2), str(U))
 
             else:
-                rdm1, rdm2, checksum = self.rdm_qtensors
+                rdm1, rdm2, _checksum = self.rdm_qtensors
                 rdm1, shape1 = rdm1
                 rdm2, shape2 = rdm2
 
@@ -102,17 +202,16 @@ class SPASolver:
             rdm2 = [x(variables) for x in rdm2]
             rdm2 = numpy.asarray(rdm2).reshape(shape2)
 
-        #print("RDMs took {}s".format(time.time()-start))
+        # print("RDMs took {}s".format(time.time()-start))
 
         return rdm1, rdm2
 
 
-
 def make_initial_orbital_guess(edges):
 
-    result = numpy.eye(2*len(edges))
-    for  edge in edges:
-        if len(edge) -1:
+    result = numpy.eye(2 * len(edges))
+    for edge in edges:
+        if len(edge) - 1:
             result[edge[0]][edge[1]] = 1.0
             result[edge[1]][edge[0]] = -1.0
     return result.T

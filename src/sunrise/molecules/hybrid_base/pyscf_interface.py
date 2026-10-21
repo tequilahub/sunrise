@@ -1,14 +1,20 @@
-from tequila import TequilaException, QubitWaveFunction
-from .HybridBase import HybridBase
-from sunrise.molecules.qubit_base import ParametersQC, NBodyTensor
+from __future__ import annotations
+
+import typing
+
+import numpy
 import pyscf
 from pyscf import fci
+from tequila import QubitWaveFunction, TequilaException
 
-import numpy, typing
+from sunrise.molecules.qubit_base import NBodyTensor, ParametersQC
+
+from .hybridbase import HybridBase
 
 
 class OpenVQEEPySCFException(TequilaException):
     pass
+
 
 def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
     """
@@ -34,22 +40,26 @@ def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
     phase = (-1) ** sum([(alpha_str & 2**i - 1).bit_count() for i in set_bits_beta])
     return int(merged_str, 2), phase
 
-class PySCF(HybridBase):
-    def __init__(self, parameters: ParametersQC,select: typing.Union[str,dict]={},
-                 transformation: typing.Union[str, typing.Callable] = None,
-                 *args, **kwargs):
+
+class PyscfHybridBase(HybridBase):
+    def __init__(
+        self,
+        parameters: ParametersQC,
+        select: str | dict | None = None,
+        transformation: str | typing.Callable | None = None,
+        *args,
+        **kwargs,
+    ):
+        if select is None:
+            select = {}
 
         if "one_body_integrals" not in kwargs:
-
             geometry = parameters.get_geometry()
             pyscf_geomstring = ""
             for atom in geometry:
-                pyscf_geomstring += "{} {} {} {};".format(atom[0], atom[1][0], atom[1][1], atom[1][2])
+                pyscf_geomstring += f"{atom[0]} {atom[1][0]} {atom[1][1]} {atom[1][2]};"
 
-            if "point_group" in kwargs:
-                point_group = kwargs["point_group"]
-            else:
-                point_group = None
+            point_group = kwargs.get("point_group", None)
 
             mol = pyscf.gto.Mole()
             mol.atom = pyscf_geomstring
@@ -60,7 +70,10 @@ class PySCF(HybridBase):
                 if point_group.lower() != "c1":
                     mol.symmetry = True
                     # PySCF only computes in Abelian groups, for the others (e.g. D4h) it takes the largest Abelian subgroup
-                    if pyscf.symm.std_symb(point_group) in pyscf.symm.param.CHARACTER_TABLE:
+                    if (
+                        pyscf.symm.std_symb(point_group)
+                        in pyscf.symm.param.CHARACTER_TABLE
+                    ):
                         mol.symmetry_subgroup = point_group
                 else:
                     mol.symmetry = False
@@ -85,12 +98,10 @@ class PySCF(HybridBase):
             else:
                 self.irreps = None
 
-            orbital_energies = mf.mo_energy
-
             # compute mo integrals
             mo_coeff = mf.mo_coeff
-            h_ao = mol.intor('int1e_kin') + mol.intor('int1e_nuc')
-            g_ao = mol.intor('int2e', aosym='s1')
+            h_ao = mol.intor("int1e_kin") + mol.intor("int1e_nuc")
+            g_ao = mol.intor("int2e", aosym="s1")
             S = mol.intor_symmetric("int1e_ovlp")
             g_ao = NBodyTensor(elems=g_ao, ordering="mulliken")
 
@@ -104,8 +115,14 @@ class PySCF(HybridBase):
 
             if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()
-        super().__init__(parameters=parameters, transformation=transformation,select=select, *args, **kwargs)
-    
+        super().__init__(
+            *args,
+            parameters=parameters,
+            transformation=transformation,
+            select=select,
+            **kwargs,
+        )
+
     def compute_fci(self, get_wfn=False, ci0=None, use_hcb=False, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="chem")
         norb = self.n_orbitals
@@ -141,7 +158,9 @@ class PySCF(HybridBase):
                     for i, alpha_str in enumerate(alpha_strs):
                         for j, beta_str in enumerate(beta_strs):
                             if not self.transformation.up_then_down:
-                                merged_str, phase = _merge_alpha_beta_strs(alpha_str, beta_str, norb)
+                                merged_str, phase = _merge_alpha_beta_strs(
+                                    alpha_str, beta_str, norb
+                                )
                                 wfn[merged_str] = phase * fcivec[i, j]
                             else:
                                 alpha_str_b = bin(alpha_str)[2:].zfill(norb)
@@ -158,8 +177,8 @@ class PySCF(HybridBase):
 
     def compute_energy(self, method: str, *args, **kwargs) -> float:
         method = method.lower()
-        if 'hybrid' in method:
-            return super().compute_energy(method,*args,**kwargs)
+        if "hybrid" in method:
+            return super().compute_energy(method, *args, **kwargs)
         elif method == "hf":
             return self._get_hf(do_not_solve=False, **kwargs).e_tot
         elif method == "mp2":
@@ -171,11 +190,13 @@ class PySCF(HybridBase):
             return self._run_ccsd(**kwargs).e_tot
         elif method == "ccsd(t)":
             ccsd = self._run_ccsd(**kwargs)
-            return ccsd.e_tot + self._compute_perturbative_triples_correction(ccsd=ccsd, **kwargs)
+            return ccsd.e_tot + self._compute_perturbative_triples_correction(
+                ccsd=ccsd, **kwargs
+            )
         elif method == "fci":
             return self.compute_fci(**kwargs)
         else:
-            raise TequilaException("unknown method: {}".format(method))
+            raise TequilaException(f"unknown method: {method}")
 
     def _get_hf(self, do_not_solve=True, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="mulliken")
@@ -184,7 +205,7 @@ class PySCF(HybridBase):
 
         mo_coeff = numpy.eye(norb)
         mo_occ = numpy.zeros(norb)
-        mo_occ[:nelec // 2] = 2
+        mo_occ[: nelec // 2] = 2
 
         pyscf_mol = pyscf.gto.M(verbose=0, parse_arg=False)
         pyscf_mol.nelectron = nelec
@@ -206,6 +227,7 @@ class PySCF(HybridBase):
 
     def _run_ccsd(self, hf=None, **kwargs):
         from pyscf import cc
+
         if hf is None:
             hf = self._get_hf()
         ccsd = cc.RCCSD(hf)
@@ -220,6 +242,7 @@ class PySCF(HybridBase):
 
     def _run_cisd(self, hf=None, **kwargs):
         from pyscf import ci
+
         if hf is None:
             hf = self._get_hf(**kwargs)
         cisd = ci.RCISD(hf)
@@ -228,6 +251,7 @@ class PySCF(HybridBase):
 
     def _run_mp2(self, hf=None, **kwargs):
         from pyscf import mp
+
         if hf is None:
             hf = self._get_hf(**kwargs)
         mp2 = mp.MP2(hf)
@@ -238,10 +262,13 @@ class PySCF(HybridBase):
         base = super().__str__()
         try:
             if hasattr(self, "pyscf_molecule"):
-                base += "{:15} : {} ({})\n".format("point_group", self.pyscf_molecule.groupname,
-                                                   self.pyscf_molecule.topgroup)
+                base += "{:15} : {} ({})\n".format(
+                    "point_group",
+                    self.pyscf_molecule.groupname,
+                    self.pyscf_molecule.topgroup,
+                )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)
-        except:
+        except Exception:  # noqa: BLE001
             return base
         return base

@@ -18,9 +18,8 @@ Two strategies are provided:
   so the O(2**n_qubits) cost is paid once at construction time instead of on every
   evaluation.
 """
-from __future__ import annotations
 
-from typing import Optional, Tuple
+from __future__ import annotations
 
 import numpy as np
 from openfermion import FermionOperator
@@ -34,7 +33,7 @@ TOL = 1e-9
 
 def extract_restricted_integrals(
     operator: FermionOperator, n_orb: int
-) -> Optional[Tuple[np.ndarray, np.ndarray, float]]:
+) -> tuple[np.ndarray, np.ndarray, float] | None:
     """
     Try to express `operator` (up_then_down spin-orbital indexed, 0..n_orb-1 in one
     spin block and n_orb..2*n_orb-1 in the other) as a spin-restricted one- and
@@ -122,7 +121,9 @@ def extract_restricted_integrals(
     return int1e, int2e, constant
 
 
-def build_sparse_ci_operator(operator: FermionOperator, n_qubits: int, ci_strings) -> csr_matrix:
+def build_sparse_ci_operator(
+    operator: FermionOperator, n_qubits: int, ci_strings
+) -> csr_matrix:
     """
     General fallback: build the Jordan-Wigner sparse matrix once (O(2**n_qubits),
     paid only at construction time) and restrict it to the CI-string basis so that

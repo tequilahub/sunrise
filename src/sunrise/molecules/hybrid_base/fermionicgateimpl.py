@@ -1,25 +1,41 @@
-from tequila.circuit import gates
-from tequila import assign_variable
-from numpy import pi
+from __future__ import annotations
+
 import typing
-from numbers import Real
-from tequila import Variable,QCircuit,compile_circuit
 from copy import deepcopy
+from numbers import Real
 
-
+from numpy import pi
+from tequila import QCircuit, Variable, assign_variable, compile_circuit
+from tequila.circuit import gates
 
 
 class FermionicGateImpl(gates.QubitExcitationImpl):
     """
-        Small helper class for Fermionic Excictation Gates
-        Mainly so that "FermionicGate is displayed when circuits are printed
+    Small helper class for Fermionic Excictation Gates
+    Mainly so that "FermionicGate is displayed when circuits are printed
     """
-    def __init__(self, generator, p0, transformation,select=None ,indices=None,condense=False,up_then_down=False,two_qubit=False,*args, **kwargs):
+
+    def __init__(
+        self,
+        generator,
+        p0,
+        transformation,
+        select=None,
+        indices=None,
+        condense=False,
+        up_then_down=False,
+        two_qubit=False,
+        *args,
+        **kwargs,
+    ):
         if "opt" in kwargs:
             self.opt = kwargs["opt"]
             kwargs.pop("opt")
-        else: self.opt =False
-        super().__init__(generator=generator, target=generator.qubits, p0=p0, *args, **kwargs)
+        else:
+            self.opt = False
+        super().__init__(
+            *args, generator=generator, target=generator.qubits, p0=p0, **kwargs
+        )
         self._name = "FermionicExcitation"
         self.transformation = transformation
         self.indices = indices
@@ -30,24 +46,43 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         self.n_orbitals = len(select)
         self.FER_SO, self.pos = self.select_to_list()
         if not hasattr(indices[0], "__len__"):
-            self.indices = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
+            self.indices = [
+                (indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)
+            ]
         self.sign = self.format_excitation_variables(self.indices)
         self.indices = self.format_excitation_indices(self.indices)
-    def fermionic_excitation(self, angle: typing.Union[Real, Variable, typing.Hashable], indices: typing.List,
-                             control: typing.Union[int, typing.List] = None,) -> QCircuit:
-        '''
-            Excitation [(i,j),(k,l)],... compiled following https://doi.org/10.1103/PhysRevA.102.062612
-            opt: whether to optimized CNOT H CNOT --> Rz Rz CNOT Rz
-        '''
+
+    def fermionic_excitation(
+        self,
+        angle: Real | Variable | typing.Hashable,
+        indices: list,
+        control: int | list | None = None,
+    ) -> QCircuit:
+        """
+        Excitation [(i,j),(k,l)],... compiled following https://doi.org/10.1103/PhysRevA.102.062612
+        opt: whether to optimized CNOT H CNOT --> Rz Rz CNOT Rz
+        """
         lto = []
         lfrom = []
         angle = assign_variable(angle)
-        if isinstance(indices, tuple) and not hasattr(indices[0],"__len__"):
-            indices = [(indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)]
+        if isinstance(indices, tuple) and not hasattr(indices[0], "__len__"):
+            indices = [
+                (indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)
+            ]
         for pair in indices:
-            if self.select is None or self.select[pair[0] // 2] == "F" or (self.select[pair[0] // 2] == "B" and not pair[0] % 2) or self.two_qubit:
+            if (
+                self.select is None
+                or self.select[pair[0] // 2] == "F"
+                or (self.select[pair[0] // 2] == "B" and not pair[0] % 2)
+                or self.two_qubit
+            ):
                 lfrom.append(self.pos[pair[0]])
-            if self.select is None or self.select[pair[1] // 2] == "F" or (self.select[pair[1] // 2] == "B" and not pair[1] % 2) or self.two_qubit:
+            if (
+                self.select is None
+                or self.select[pair[1] // 2] == "F"
+                or (self.select[pair[1] // 2] == "B" and not pair[1] % 2)
+                or self.two_qubit
+            ):
                 lto.append(self.pos[pair[1]])
         Upair = QCircuit()
         for i in range(len(lfrom) - 1):
@@ -67,7 +102,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         orbs = []
         for o in range(len(idx) // 2):
             orbs += [*range(idx[2 * o] + 1, idx[2 * o + 1])]
-        orbs = [self.pos[i] for i in orbs if self.select[i//2]=="F"]
+        orbs = [self.pos[i] for i in orbs if self.select[i // 2] == "F"]
         if len(orbs):
             for o in range(len(orbs) - 1):
                 Uladder += gates.CNOT(orbs[o], orbs[o + 1])
@@ -86,7 +121,11 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             Ur.gates.pop(-1)
             Upair2.gates.pop(0)
             Ur += gates.Rz(pi / 2, target=lto[-1]) + gates.Rz(-pi / 2, target=lfrom[-1])
-            Ur += gates.CNOT(lto[-1], lfrom[-1]) + gates.Rz(pi / 2, target=lfrom[-1]) + gates.H(lfrom[-1])
+            Ur += (
+                gates.CNOT(lto[-1], lfrom[-1])
+                + gates.Rz(pi / 2, target=lfrom[-1])
+                + gates.H(lfrom[-1])
+            )
         return Upair + Uladder + Ur + Uladder.dagger() + Upair2
 
     def compile(self, *args, **kwargs):
@@ -94,13 +133,24 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             target = []
             for x in self.indices:
                 for y in x:
-                    target.append(y)
-            U = gates.QubitExcitation(target=target, angle=self.parameter, control=self.control)
+                    target.append(y.copy)
+            U = gates.QubitExcitation(
+                target=target, angle=self.parameter, control=self.control
+            )
         else:
             if self.transformation.lower().strip("_") == "jordanwigner":
-                U =  self.fermionic_excitation(angle=self.sign*self.parameter, indices=self.indices, control=self.control)
+                U = self.fermionic_excitation(
+                    angle=self.sign * self.parameter,
+                    indices=self.indices,
+                    control=self.control,
+                )
             else:
-                U = gates.Trotterized(generator=self.generator, control=self.control, angle=self.parameter, steps=1)
+                U = gates.Trotterized(
+                    generator=self.generator,
+                    control=self.control,
+                    angle=self.parameter,
+                    steps=1,
+                )
         return U
 
     def format_excitation_indices(self, idx):
@@ -132,21 +182,29 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
                     sig *= -1
         return sig
 
-    def cCRy(self, target: int, dcontrol: typing.Union[list, int], control: typing.Union[list, int],
-             angle: typing.Union[Real, Variable, typing.Hashable], case: int = 1) -> QCircuit:
-        '''
+    def cCRy(
+        self,
+        target: int,
+        dcontrol: list | int,
+        control: list | int,
+        angle: Real | Variable | typing.Hashable,
+        case: int = 1,
+    ) -> QCircuit:
+        """
         Compilation of CRy as on https://doi.org/10.1103/PhysRevA.102.062612
         If not control passed, Ry returned
         Parameters
         ----------
         case: if 1 employs eq. 12 from the paper, if 0 eq. 13
-        '''
+        """
         if control is not None and not len(control):
             control = None
         if isinstance(dcontrol, int):
             dcontrol = [dcontrol]
         if not len(dcontrol):
-            return compile_circuit(gates.Ry(angle=angle, target=target, control=control))
+            return compile_circuit(
+                gates.Ry(angle=angle, target=target, control=control)
+            )
         else:
             if isinstance(angle, str):
                 angle = Variable(angle)
@@ -155,19 +213,61 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             ctr = deepcopy(dcontrol)
             ctr.pop(0)
             if case:
-                U += self.cCRy(target=target, dcontrol=ctr, angle=angle / 2, case=1, control=control) + gates.H(aux) + gates.CNOT(target, aux)
-                U += self.cCRy(target=target, dcontrol=ctr, angle=-angle / 2, case=0, control=control) + gates.CNOT(target, aux) + gates.H(aux)
+                U += (
+                    self.cCRy(
+                        target=target,
+                        dcontrol=ctr,
+                        angle=angle / 2,
+                        case=1,
+                        control=control,
+                    )
+                    + gates.H(aux)
+                    + gates.CNOT(target, aux)
+                )
+                U += (
+                    self.cCRy(
+                        target=target,
+                        dcontrol=ctr,
+                        angle=-angle / 2,
+                        case=0,
+                        control=control,
+                    )
+                    + gates.CNOT(target, aux)
+                    + gates.H(aux)
+                )
             else:
-                U += gates.H(aux) + gates.CNOT(target, aux) + self.cCRy(target=target, dcontrol=ctr, angle=-angle / 2,case=0, control=control)
-                U += gates.CNOT(target, aux) + gates.H(aux) + self.cCRy(target=target, dcontrol=ctr, angle=angle / 2, case=1, control=control)
+                U += (
+                    gates.H(aux)
+                    + gates.CNOT(target, aux)
+                    + self.cCRy(
+                        target=target,
+                        dcontrol=ctr,
+                        angle=-angle / 2,
+                        case=0,
+                        control=control,
+                    )
+                )
+                U += (
+                    gates.CNOT(target, aux)
+                    + gates.H(aux)
+                    + self.cCRy(
+                        target=target,
+                        dcontrol=ctr,
+                        angle=angle / 2,
+                        case=1,
+                        control=control,
+                    )
+                )
             return U
+
     def __str(self):
         if self.indices is not None:
-            return "FermionicExcitation({})".format(str(self.indices))
+            return f"FermionicExcitation({self.indices!s})"
         return "FermionicExcitation"
 
     def __repr__(self):
         return self.__str__()
+
     def is_convertable_to_qubit_excitation(self):
         """
         spin-paired double excitations (both electrons occupy the same spatial orbital and are excited to another spatial orbital)
@@ -178,11 +278,13 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
         """
         return False
-        if not self.transformation.lower().strip("_") == "jordanwigner": return False
-        if not len(self.indices) == 2: return False
-        if not self.indices[0][0] // 2 == self.indices[1][0] // 2: return False
-        if not self.indices[0][1] // 2 == self.indices[1][1] // 2: return False
-        return True
+        if self.transformation.lower().strip("_") != "jordanwigner":
+            return False
+        if len(self.indices) != 2:
+            return False
+        if self.indices[0][0] // 2 != self.indices[1][0] // 2:
+            return False
+        return self.indices[0][1] // 2 == self.indices[1][1] // 2
 
     def select_to_list(self):
         """
@@ -198,7 +300,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         up = self.up_then_down
         two = self.two_qubit
         for i in sel:
-            if (sel[i] == "B"):
+            if sel[i] == "B":
                 pos[2 * i] = i + (i - hcb) * (not up)
                 if two:
                     pos[2 * i + 1] = i + self.n_orbitals * up + (not up) * (i + 1)

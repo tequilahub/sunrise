@@ -14,7 +14,9 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: Mark a test or option as slow to run")
-    config.addinivalue_line("markers", "dependencies: Mark a test that needs optional dependencies")
+    config.addinivalue_line(
+        "markers", "dependencies: Mark a test that needs optional dependencies"
+    )
 
 
 def pytest_collection_modifyitems(config, items):
