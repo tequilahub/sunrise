@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-import typing
 import json
+import typing
 import warnings
+from typing import Callable
+
 import h5py
 import pyscf
-from pyscf.gto import Mole
 from numpy import ndarray
-from typing import Callable
-from typing import Union
+from pyscf.gto import Mole
 from tequila import TequilaException, TequilaWarning
-from sunrise.molecules import qubit_base, hybrid_base, fermionic_base
+
+from sunrise.molecules import fermionic_base, hybrid_base, qubit_base
 from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 from sunrise.molecules.qubit_base.chemistry_tools import (
     NBodyTensor,
@@ -178,21 +179,39 @@ def load_molecule(filename: str) -> QuantumChemistryBase:
     """
     with h5py.File(filename, "r") as f:
         data = json.loads(f["molecule"][()])
-        integrals = {k: f[k][()] for k in ("one_body_integrals", "two_body_integrals", "overlap_integrals", "orbital_coefficients")}
-    integrals["two_body_integrals"] = NBodyTensor(elems=integrals["two_body_integrals"], ordering="chem")
+        integrals = {
+            k: f[k][()]
+            for k in (
+                "one_body_integrals",
+                "two_body_integrals",
+                "overlap_integrals",
+                "orbital_coefficients",
+            )
+        }
+    integrals["two_body_integrals"] = NBodyTensor(
+        elems=integrals["two_body_integrals"], ordering="chem"
+    )
 
     backends = NATURE_BACKENDS[data["nature"]]
     backend = data["backend"]
     if backend not in ("base", "pyscf") or backend not in backends:
         # psi4 and madness would compute the integrals again
         fallback = "pyscf" if "pyscf" in backends else "base"
-        warnings.warn("molecule was saved with the {} backend, it is loaded with the {} backend".format(backend, fallback), TequilaWarning)
+        warnings.warn(
+            f"molecule was saved with the {backend} backend, it is loaded with the {fallback} backend",
+            TequilaWarning,
+        )
         backend = fallback
 
     kwargs = {**integrals, **data["settings"]}
     if data["transformation"] is not None:
         kwargs["transformation"] = data["transformation"]["name"]
-        kwargs.update({"transformation__" + k: v for k, v in data["transformation"]["arguments"].items()})
+        kwargs.update(
+            {
+                "transformation__" + k: v
+                for k, v in data["transformation"]["arguments"].items()
+            }
+        )
     mol = backends[backend](
         parameters=ParametersQC(**data["parameters"]),
         nuclear_repulsion=data["constant_term"],
@@ -208,7 +227,9 @@ def load_molecule(filename: str) -> QuantumChemistryBase:
     mol.integral_manager._orbital_type = data["orbital_type"]
     for o, stored in zip(mol.integral_manager.orbitals, data["orbitals"]):
         # idx is the index in the active space, already set by it
-        o.irrep, o.idx_irrep, o.idx_total, o.energy, o.occ = (stored[k] for k in ("irrep", "idx_irrep", "idx_total", "energy", "occ"))
+        o.irrep, o.idx_irrep, o.idx_total, o.energy, o.occ = (
+            stored[k] for k in ("irrep", "idx_irrep", "idx_total", "energy", "occ")
+        )
         o.pair = None if stored["pair"] is None else tuple(stored["pair"])
     if data["irreps"] is not None:
         mol.irreps = data["irreps"]

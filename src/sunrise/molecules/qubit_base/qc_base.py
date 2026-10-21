@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import copy
+import inspect
+import json
 import numbers
 import typing
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from itertools import product
 
+import h5py
 import numpy
 import pyscf
 import tequila
@@ -35,7 +38,7 @@ from .chemistry_tools import (
     ParametersQC,
     prepare_product_state,
 )
-from .encodings import known_encodings
+from .encodings import EncodingBase, known_encodings
 
 try:
     # if you are experiencing import errors you need to update openfermion
@@ -190,34 +193,54 @@ class QuantumChemistryBase:
         from sunrise.molecules import NATURE_BACKENDS
 
         nature, backend = next(
-            ((n, b) for n in ("qubit", "hybrid", "fermionic") for b, cls in NATURE_BACKENDS[n].items() if type(self) is cls),
+            (
+                (n, b)
+                for n in ("qubit", "hybrid", "fermionic")
+                for b, cls in NATURE_BACKENDS[n].items()
+                if type(self) is cls
+            ),
             (None, None),
         )
         if nature is None:
-            raise TequilaException("can not save molecules of type {}".format(type(self).__name__))
+            raise TequilaException(
+                f"can not save molecules of type {type(self).__name__}"
+            )
 
         parameters = asdict(self.parameters)
         if parameters["geometry"].split(".")[-1] == "xyz":
             # keep the coordinates instead of the file name, the file is not around where the molecule is loaded
-            parameters["geometry"], comment = self.parameters.read_xyz_from_file(parameters["geometry"])
+            parameters["geometry"], comment = self.parameters.read_xyz_from_file(
+                parameters["geometry"]
+            )
             if not parameters["description"]:
                 parameters["description"] = comment
 
         transformation = None
         if isinstance(self.transformation, EncodingBase):
             # the molecule sets the sizes and the select, the ordering is in the name
-            given = ("self", "n_electrons", "n_orbitals", "up_then_down", "select", "args", "kwargs")
+            given = (
+                "self",
+                "n_electrons",
+                "n_orbitals",
+                "up_then_down",
+                "select",
+                "args",
+                "kwargs",
+            )
             transformation = {
-                "name": ("Reordered" if self.transformation.up_then_down else "") + type(self.transformation).__name__,
+                "name": ("Reordered" if self.transformation.up_then_down else "")
+                + type(self.transformation).__name__,
                 "arguments": {
                     k: getattr(self.transformation, k)
-                    for k in inspect.signature(type(self.transformation).__init__).parameters
+                    for k in inspect.signature(
+                        type(self.transformation).__init__
+                    ).parameters
                     if k not in given and hasattr(self.transformation, k)
                 },
             }
         elif self.transformation is not None:
             warnings.warn(
-                "transformation {} can not be saved, the loaded molecule has the default one".format(self.transformation),
+                f"transformation {self.transformation} can not be saved, the loaded molecule has the default one",
                 TequilaWarning,
             )
 
@@ -245,17 +268,23 @@ class QuantumChemistryBase:
             "active_orbitals": manager.active_space.active_orbitals,
             "reference_orbitals": manager.active_space.reference_orbitals,
             "orbitals": [asdict(o) for o in manager.orbitals],
-            "point_group": None if self._point_group is None else self._point_group.schoenflies_label,
+            "point_group": None
+            if self._point_group is None
+            else self._point_group.schoenflies_label,
             "transformation": transformation,
             "settings": settings,
             "irreps": getattr(self, "irreps", None),
-            "pyscf_molecule": self.pyscf_molecule.dumps() if hasattr(self, "pyscf_molecule") else None,
+            "pyscf_molecule": self.pyscf_molecule.dumps()
+            if hasattr(self, "pyscf_molecule")
+            else None,
         }
         with h5py.File(filename, "w") as f:
             # numpy scalars and arrays (e.g. orbital energies) as python types
             f["molecule"] = json.dumps(data, default=lambda x: x.tolist())
             f["one_body_integrals"] = manager.one_body_integrals
-            f["two_body_integrals"] = manager.two_body_integrals.reorder(to="chem").elems
+            f["two_body_integrals"] = manager.two_body_integrals.reorder(
+                to="chem"
+            ).elems
             f["overlap_integrals"] = manager.overlap_integrals
             f["orbital_coefficients"] = manager.orbital_coefficients
 

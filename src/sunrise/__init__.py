@@ -12,6 +12,7 @@ from sunrise.molecules import (
     MoleculeFromSunrise,
     MoleculeFromPyscf,
     MoleculeToPyscf,
+    load_molecule,
 )
 from sunrise.molecules.qubit_base import QuantumChemistryBase, ParametersQC, NBodyTensor
 from sunrise.plot_mo import plot_MO
@@ -81,6 +82,7 @@ __all__ = [
     "grad",
     "graph_selection",
     "graphical",
+    "load_molecule",
     "mcvbt",
     "measurement",
     "minimize",
