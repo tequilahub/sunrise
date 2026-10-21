@@ -1,13 +1,18 @@
 # Scenario: Building different Point Group Representations for H2 in the canonical basis
 
-import tequila as tq
-import sunrise as sun
 import numpy as np
+import tequila as tq
 
-from sunrise.symmetry_adaptation import FockSpaceState, IrrepProvider, SpinSymmetrizationProcedure
+import sunrise as sun
+from sunrise.symmetry_adaptation import (
+    FockSpaceState,
+    IrrepProvider,
+)
 
 # Create the molecule, its point group (D2h) is detected from the geometry
-mol = sun.chemistry.Molecule(geometry="H 0. 0. 0. \n H 0. 0. 0.74804",basis_set='sto-3g', backend="pyscf")
+mol = sun.chemistry.Molecule(
+    geometry="H 0. 0. 0. \n H 0. 0. 0.74804", basis_set="sto-3g", backend="pyscf"
+)
 provider_canonical = IrrepProvider(mol, "canon")
 states = FockSpaceState.non_ionic_states(mol, provider_canonical)
 
@@ -25,8 +30,10 @@ rep_qcircuit = mol.qcircuit_representation()
 # There is an abstraction to apply an operation to a state abstracted
 # of the representation they are in, but if you know their types you
 # can apply the operation directly
-rep_ao.apply(rep_ao.operations["i"], np.ones(2)) # is the same as
-rep_ao.operations["i"] @  np.ones(2)
+rep_ao.apply(rep_ao.operations["i"], np.ones(2))  # is the same as
+rep_ao.operations["i"] @ np.ones(2)
 
-rep_qcircuit.apply(rep_qcircuit.operations["i"], states[0].wavefunction) # is the same as
+rep_qcircuit.apply(
+    rep_qcircuit.operations["i"], states[0].wavefunction
+)  # is the same as
 tq.simulate(rep_qcircuit.operations["i"], initial_state=states[0].wavefunction)

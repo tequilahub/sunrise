@@ -1,11 +1,13 @@
-from typing import Union,List,Optional
+from __future__ import annotations
+
 from openfermion.ops.operators.fermion_operator import FermionOperator
-from tequila import TequilaException, Objective
+from tequila import Objective, TequilaException
 from tequila.objective.objective import identity
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
 from sunrise.fermionic_operations.circuit import FCircuit
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
 from .fermionic_braket import FermBraketImpl
-from tequila import QTensor
 
 # in order of preference when no backend is chosen: spex is sunrise's own simulator
 SUPPORTED_FERMIONIC_BACKENDS = ["spex", "tcc", "fqe", "tequila"]
@@ -13,27 +15,32 @@ INSTALLED_FERMIONIC_BACKENDS = {}
 
 try:
     from .tcc.tcc_expval import TCCBraket
+
     INSTALLED_FERMIONIC_BACKENDS["tcc"] = TCCBraket
 except ImportError:
     pass
 
 try:
     from .fqe.fqe_expval import FQEBraKet
+
     INSTALLED_FERMIONIC_BACKENDS["fqe"] = FQEBraKet
 except ImportError:
     pass
 try:
     from .spex.spex_expval import SpexExpval
+
     INSTALLED_FERMIONIC_BACKENDS["spex"] = SpexExpval
 except (ImportError, AttributeError):
     pass
 
 from .tequila_expval import TequilaBraket
+
 INSTALLED_FERMIONIC_BACKENDS["tequila"] = TequilaBraket
+
 
 def show_available_modules():
     print("Available Fermionic Modules:")
-    for k in INSTALLED_FERMIONIC_BACKENDS.keys():
+    for k in INSTALLED_FERMIONIC_BACKENDS:
         print(k)
 
 
@@ -41,7 +48,9 @@ def show_supported_modules():
     print(SUPPORTED_FERMIONIC_BACKENDS)
 
 
-def pick_backend(backend: str = None, samples: int = None, noise=None, device=None) -> str:
+def pick_backend(
+    backend: str | None = None, samples: int | None = None, noise=None, device=None
+) -> str:
     """
     choose, or verify, a fermionic backend for the user.
     Parameters
@@ -84,6 +93,7 @@ def pick_backend(backend: str = None, samples: int = None, noise=None, device=No
         if needs_tequila:
             return "tequila"
         import random
+
         return random.choice(list(INSTALLED_FERMIONIC_BACKENDS.keys()))
 
     if backend not in SUPPORTED_FERMIONIC_BACKENDS:
@@ -91,11 +101,20 @@ def pick_backend(backend: str = None, samples: int = None, noise=None, device=No
     elif backend not in INSTALLED_FERMIONIC_BACKENDS:
         raise TequilaException(f"Fermionic backend {backend} not installed")
     elif needs_tequila and backend != "tequila":
-        raise TequilaException(f"Fermionic backend {backend} does not support samples, noise or devices, use the tequila backend")
+        raise TequilaException(
+            f"Fermionic backend {backend} does not support samples, noise or devices, use the tequila backend"
+        )
 
     return backend
 
-def Fidelity(ket: FCircuit, bra: FCircuit, mol : Optional[QuantumChemistryBase] = None, *args, **kwargs) -> Objective:
+
+def Fidelity(
+    ket: FCircuit,
+    bra: FCircuit,
+    mol: QuantumChemistryBase | None = None,
+    *args,
+    **kwargs,
+) -> Objective:
     """
 
     Convenience initialization of an tq.Objective that corresponds to the fidelity |<bra|ket>|^2 between two quantum states
@@ -118,9 +137,23 @@ def Fidelity(ket: FCircuit, bra: FCircuit, mol : Optional[QuantumChemistryBase] 
     A tq.Objective that evaluated to the fidelity between the two states
 
     """
-    return Objective(args=[Braket(ket=ket, bra=bra, molecule=mol, operator='I', *args, **kwargs).args[0]], transformation=lambda x: abs(x)**2)
+    return Objective(
+        args=[
+            Braket(*args, ket=ket, bra=bra, molecule=mol, operator="I", **kwargs).args[
+                0
+            ]
+        ],
+        transformation=lambda x: abs(x) ** 2,
+    )
 
-def Overlap(ket : FCircuit, bra : FCircuit, mol : Optional[QuantumChemistryBase] = None, *args, **kwargs) -> Objective:
+
+def Overlap(
+    ket: FCircuit,
+    bra: FCircuit,
+    mol: QuantumChemistryBase | None = None,
+    *args,
+    **kwargs,
+) -> Objective:
     """
 
     Function that calculates the overlap between two quantum states.
@@ -136,15 +169,17 @@ def Overlap(ket : FCircuit, bra : FCircuit, mol : Optional[QuantumChemistryBase]
     A tq.Objective that evaluated to the overlap between the two states
 
     """
-    return Braket(ket=ket, bra=bra, operator=None, mol=mol, *args, **kwargs)
+    return Braket(*args, ket=ket, bra=bra, operator=None, mol=mol, **kwargs)
+
 
 def Braket(
-        ket : FCircuit,
-        bra : Optional[FCircuit] = None,
-        operator : Optional[Union[str,List[FermionOperator],FermionOperator]] =  None,
-        mol: Optional[QuantumChemistryBase] = None,
-        *args,
-        **kwargs) -> Objective:
+    ket: FCircuit,
+    bra: FCircuit | None = None,
+    operator: str | list[FermionOperator] | FermionOperator | None = None,
+    mol: QuantumChemistryBase | None = None,
+    *args,
+    **kwargs,
+) -> Objective:
     """Function that allows to calculate different quantities
        depending on the passed parameters:
        1) If only ket is passed, returns the overlap with itself (1).
@@ -160,7 +195,7 @@ def Braket(
                                   Defaults to None.
         operator (FermionOperator, optional): Operator of which we want to
                                                calculate the transition element.
-                                               Defaults to None unless molecule provided, then the fermionic 
+                                               Defaults to None unless molecule provided, then the fermionic
                                                Hamiltonian is taken as default.
         mol: (QuantumChemistryBase, Optional) Sunrise Molecule to get the information (n electrons, integrals...)
                                                 if not enough data provided
@@ -168,7 +203,7 @@ def Braket(
     Returns:
         tq.Objective representing the BraKet
     """
-    if 'molecule' in kwargs:
+    if "molecule" in kwargs:
         if mol is not None:
             raise TequilaException("Two molecules provided?")
         else:
@@ -179,31 +214,56 @@ def Braket(
     if bra is not None and ket is None:
         ket = bra
         bra = None
-    if isinstance(operator,list):
-        return [Braket(ket=ket, bra=bra, operator=op, mol=mol, *args, **kwargs) for op in operator]
+    if isinstance(operator, list):
+        return [
+            Braket(*args, ket=ket, bra=bra, operator=op, mol=mol, **kwargs)
+            for op in operator
+        ]
         # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
     if bra is None and operator is None:
         return Objective() + 1.0
-    return Objective(args=[FermBraketImpl(ket=ket, bra=bra, operator=operator, molecule=mol, *args, **kwargs)], transformation=identity)
+    return Objective(
+        args=[
+            FermBraketImpl(
+                *args, ket=ket, bra=bra, operator=operator, molecule=mol, **kwargs
+            )
+        ],
+        transformation=identity,
+    )
 
-def ExpectationValue(U : FCircuit, H : Union[str,List[FermionOperator],FermionOperator] = 'H', mol : Optional[QuantumChemistryBase] = None, *args, **kwargs) -> Objective:
-    """
-        Function that calculates the Expectation Value of an Hamiltonian operator for a given quantum states.
-    
-        Parameters
-        ----------
-        U : FCircuit sunrise object, corresponding to the quantum state.
-    
-        H : QubitHamiltonian tequila object
-    
-        Returns
-        -------
-        Tequila objectives to be simulated or compiled.
-    
-    """
-    return Braket(ket=U,operator=H, mol=mol, *args, **kwargs)
 
-def RealBraKet(ket : FCircuit, bra : Optional[FCircuit]=None, operator: Union[str,List[FermionOperator],FermionOperator] = None, mol : Optional[QuantumChemistryBase] = None, *args, **kwargs):
+def ExpectationValue(
+    U: FCircuit,
+    H: str | list[FermionOperator] | FermionOperator | None = "H",
+    mol: QuantumChemistryBase | None = None,
+    *args,
+    **kwargs,
+) -> Objective:
+    """
+    Function that calculates the Expectation Value of an Hamiltonian operator for a given quantum states.
+
+    Parameters
+    ----------
+    U : FCircuit sunrise object, corresponding to the quantum state.
+
+    H : QubitHamiltonian tequila object
+
+    Returns
+    -------
+    Tequila objectives to be simulated or compiled.
+
+    """
+    return Braket(*args, ket=U, operator=H, mol=mol, **kwargs)
+
+
+def RealBraKet(
+    ket: FCircuit,
+    bra: FCircuit | None = None,
+    operator: str | list[FermionOperator] | FermionOperator | None = None,
+    mol: QuantumChemistryBase | None = None,
+    *args,
+    **kwargs,
+):
     """
     Function that calculates the Reak part of a given Expectation Value of an Hamiltonian operator for a given quantum states.
 
@@ -216,14 +276,15 @@ def RealBraKet(ket : FCircuit, bra : Optional[FCircuit]=None, operator: Union[st
     Returns
     -------
     Tequila objectives to be simulated or compiled.
-        
+
     """
-    return Braket(bra=bra, ket=ket, operator=operator, mol=mol, *args, **kwargs) 
+    return Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+
 
 def ImagBraKet(*args, **kwargs):
     """
     Function that calculates the Imaginary part of a given Expectation Value of an Hamiltonian operator for a given quantum states.
-    Defined just for consistency with Tequila, since chemistry molecules should be always real 
+    Defined just for consistency with Tequila, since chemistry molecules should be always real
 
     Parameters
     ----------

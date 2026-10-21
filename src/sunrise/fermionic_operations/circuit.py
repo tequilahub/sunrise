@@ -1,20 +1,29 @@
 from __future__ import annotations
-from tequila.circuit._gates_impl import assign_variable
-from tequila.circuit.gates import QubitExcitationImpl,X,Phase
-from tequila import Variable,BitString,BitNumbering
+
+import copy
+import numbers
+import warnings
+from collections import defaultdict
+from collections.abc import Iterable
+from copy import deepcopy
+from typing import Callable
+
+from numpy import argwhere, array, isclose, ndarray, pi, where
+from tequila import (
+    BitNumbering,
+    BitString,
+    QCircuit,
+    QubitWaveFunction,
+    Variable,
+    assign_variable,
+)
+from tequila.circuit.gates import Phase, QubitExcitationImpl, X
+from tequila.utils.exceptions import TequilaException, TequilaWarning
+
+import sunrise
 from sunrise.molecules.qubit_base.chemistry_tools import FermionicGateImpl
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from tequila.utils.exceptions import TequilaException, TequilaWarning
-from tequila import assign_variable,QCircuit,QubitWaveFunction
-from typing import List,Union,Iterable,Optional,Callable
-import copy
-from collections import defaultdict
-from numpy import ndarray,where,isclose,pi,array,argwhere
-import warnings
-import numbers
-from copy import deepcopy
-import sunrise
-from tequila.circuit.gates import X,I
+
 
 class FCircuit:
     """
@@ -36,7 +45,7 @@ class FCircuit:
         returns a list of qubits acted upon by the circuit.
     initial_state:
         returns QubitWaveFunction which defines initial state. It must be on UPTHENDOWN
-        
+
 
     Methods
     -------
@@ -45,7 +54,12 @@ class FCircuit:
 
     """
 
-    def __init__(self, gates:list=None, initial_state:Union[QCircuit,QubitWaveFunction,str,int]=None, parameter_map=None):
+    def __init__(
+        self,
+        gates: list | None = None,
+        initial_state: QCircuit | QubitWaveFunction | str | int | None = None,
+        parameter_map=None,
+    ):
         """
         init
         Parameters
@@ -69,33 +83,37 @@ class FCircuit:
             self._parameter_map = self.make_parameter_map()
         else:
             self._parameter_map = parameter_map
-        self.initial_state = initial_state 
+        self.initial_state = initial_state
         self.verify()
-    
+
     @property
-    def initial_state(self)->QubitWaveFunction:
+    def initial_state(self) -> QubitWaveFunction:
         return self._initial_state
 
     @initial_state.setter
-    def initial_state(self,initial_state=None):
-        '''
+    def initial_state(self, initial_state=None):
+        """
         IT MUST BE UPTHENDOWN
-        '''
-        if initial_state is None or isinstance(initial_state,QubitWaveFunction):
+        """
+        if initial_state is None or isinstance(initial_state, QubitWaveFunction):
             pass
-        elif isinstance(initial_state,(QCircuit,FCircuit)):
-            initial_state = sunrise.simulate(initial_state,variables={})
-        elif isinstance(initial_state,str):
+        elif isinstance(initial_state, (QCircuit, FCircuit)):
+            initial_state = sunrise.simulate(initial_state, variables={})
+        elif isinstance(initial_state, str):
             initial_state = QubitWaveFunction.from_string(initial_state)
-        elif isinstance(initial_state,(list,ndarray)):
+        elif isinstance(initial_state, (list, ndarray)):
             initial_state = QubitWaveFunction.from_array(initial_state)
         else:
             try:
-                initial_state = QubitWaveFunction.convert_from(val=initial_state,n_qubits=self.n_qubits)
-            except:
-                raise TequilaException(f'Init_state format not recognized, provided {type(initial_state).__name__}')
+                initial_state = QubitWaveFunction.convert_from(
+                    val=initial_state, n_qubits=self.n_qubits
+                )
+            except Exception:  # noqa: BLE001
+                raise TequilaException(
+                    f"Init_state format not recognized, provided {type(initial_state).__name__}"
+                )
         if initial_state is not None:
-            self.n_qubits = max(self.n_qubits,initial_state.n_qubits)
+            self.n_qubits = max(self.n_qubits, initial_state.n_qubits)
             initial_state._n_qubits = self.n_qubits
             self._initial_state = initial_state
             self._verify_state()
@@ -112,7 +130,7 @@ class FCircuit:
         return len(self.gates)
 
     @property
-    def gates(self)->List[sunrise.fermionic_excitation.fgateimpl.FGateImpl]:
+    def gates(self) -> list[sunrise.fermionic_excitation.fgateimpl.FGateImpl]:
         if self._gates is None:
             return []
         else:
@@ -129,22 +147,24 @@ class FCircuit:
             accumulate += list(g.qubits)
         if self._initial_state is not None:
             accumulate.extend([*range(self._initial_state.n_qubits)])
-        return sorted(list(set(accumulate)))
+        return sorted(set(accumulate))
 
     @property
     def n_qubits(self):
         idx = max(self.max_qubit() + 1, self._min_n_qubits)
         wvf = self._initial_state.n_qubits if self._initial_state is not None else 0
-        return max(idx,wvf)
-    
+        return max(idx, wvf)
+
     @property
     def n_electrons(self):
         if self.initial_state is None:
             return None
-        elif isinstance(self.initial_state._state,dict):
-            return bin([*self.initial_state._state.keys()][0])[2:].count('1')
+        elif isinstance(self.initial_state._state, dict):
+            return bin(next(iter(self.initial_state._state.keys())))[2:].count("1")
         else:
-            return bin(argwhere(self.initial_state._state>1.e-6)[0][0])[2:].count('1')
+            return bin(argwhere(self.initial_state._state > 1.0e-6)[0][0])[2:].count(
+                "1"
+            )
 
     @n_qubits.setter
     def n_qubits(self, other):
@@ -159,10 +179,10 @@ class FCircuit:
         return self
 
     @property
-    def variables(self)->list:
+    def variables(self) -> list:
         v = []
         for gate in self.gates:
-            if gate._name == 'UR':
+            if gate._name == "UR":
                 v.append(gate.variables)
             v.append(gate.variables)
         return v
@@ -191,7 +211,9 @@ class FCircuit:
         """
         return len(self.gates) == 1
 
-    def replace_gates(self, positions: list, circuits: list, replace: list = None):
+    def replace_gates(
+        self, positions: list, circuits: list, replace: list | None = None
+    ):
         """
         Notes
         ----------
@@ -253,7 +275,9 @@ class FCircuit:
         """
         See replace_gates
         """
-        return self.replace_gates(positions=positions, circuits=gates, replace=[False] * len(gates))
+        return self.replace_gates(
+            positions=positions, circuits=gates, replace=[False] * len(gates)
+        )
 
     def dagger(self):
         """
@@ -338,13 +362,14 @@ class FCircuit:
         for g in self.gates:
             qmax = max(qmax, g.max_qubit)
         if self.initial_state is not None:
-            qmax = max(qmax,self.initial_state.n_qubits-1)
+            qmax = max(qmax, self.initial_state.n_qubits - 1)
         return qmax
 
     def __iadd__(self, other):
-        if hasattr(other,'initial_state'):
+        if hasattr(other, "initial_state"):
             w = other.initial_state
-        else: w = None
+        else:
+            w = None
         other = self.wrap_gate(gate=other.gates)
         other.initial_state = w
         offset = len(self.gates)
@@ -355,14 +380,19 @@ class FCircuit:
         self._min_n_qubits = max(self._min_n_qubits, other._min_n_qubits)
         if self._initial_state is None:
             self._initial_state = other._initial_state
-        elif other._initial_state is not None:# and other._initial_state != self._initial_state:
-            raise TequilaException(f"FermionicCircuit + FermionicCircuit with two different initial states:\n{self._initial_state}, {other._initial_state}")
+        elif (
+            other._initial_state is not None
+        ):  # and other._initial_state != self._initial_state:
+            raise TequilaException(
+                f"FermionicCircuit + FermionicCircuit with two different initial states:\n{self._initial_state}, {other._initial_state}"
+            )
         return self
 
     def __add__(self, other):
-        if hasattr(other,'initial_state'):
+        if hasattr(other, "initial_state"):
             w = other.initial_state
-        else: w = None
+        else:
+            w = None
         other = self.wrap_gate(gate=other.gates)
         other.initial_state = w
         gates = [deepcopy(g) for g in (self.gates + other.gates)]
@@ -370,19 +400,23 @@ class FCircuit:
         result._min_n_qubits = max(self._min_n_qubits, other._min_n_qubits)
         initial_state = self.initial_state
         if self._initial_state is None:
-                initial_state = other._initial_state
-        elif other._initial_state is not None: #  and other._initial_state != self._initial_state:
-            raise TequilaException(f"FermionicCircuit + FermionicCircuit with two different initial states:\n{self._initial_state}, {other._initial_state}")
+            initial_state = other._initial_state
+        elif (
+            other._initial_state is not None
+        ):  #  and other._initial_state != self._initial_state:
+            raise TequilaException(
+                f"FermionicCircuit + FermionicCircuit with two different initial states:\n{self._initial_state}, {other._initial_state}"
+            )
         result.initial_state = initial_state
         return result
 
     def __str__(self):
         result = "Fermionic circuit: \n"
         if self.initial_state is not None:
-            result += 'with Initial State: \n'
-            result += str(self.initial_state) +'\n'
+            result += "with Initial State: \n"
+            result += str(self.initial_state) + "\n"
         if len(self.gates):
-            result += 'with gates:\n'
+            result += "with gates:\n"
             for g in self.gates:
                 result += str(g) + "\n"
         return result
@@ -390,23 +424,25 @@ class FCircuit:
     def __eq__(self, other) -> bool:
         if len(self.gates) != len(other.gates):
             return False
-        for i,gate in enumerate(self.gates):
+        for i, gate in enumerate(self.gates):
             if gate != other.gates[i]:
                 return False
-        return True # IDEA avoiding initial state comparations to avoid
+        return True  # IDEA avoiding initial state comparations to avoid
         if len(self.initial_state.to_array()) != len(other.initial_state.to_array()):
             return False
         if self.initial_state.numbering != other.initial_state.numbering:
             return False
-        return isclose(self.initial_state.inner(other=other.initial_state),1.,atol=1.e-4)
+        return isclose(
+            self.initial_state.inner(other=other.initial_state), 1.0, atol=1.0e-4
+        )
 
     def __repr__(self):
         return self.__str__()
 
-    def to_upthendown(self, norb) -> "FCircuit":
-        '''
+    def to_upthendown(self, norb) -> FCircuit:
+        """
         Initial State can't be reordered, it must always be on upthendown
-        '''
+        """
         u = []
         for gate in self.gates:
             g = deepcopy(gate)
@@ -415,15 +451,13 @@ class FCircuit:
                 g.reordered = True
             u.append(g)
         return FCircuit(
-            gates=u,
-            parameter_map=self._parameter_map,
-            initial_state=self.initial_state
+            gates=u, parameter_map=self._parameter_map, initial_state=self.initial_state
         )
 
-    def to_udud(self, norb) -> "FCircuit":
-        '''
+    def to_udud(self, norb) -> FCircuit:
+        """
         Initial State can't be reordered, it must always be on upthendown
-        '''
+        """
         u = []
         for gate in self.gates:
             g = deepcopy(gate)
@@ -432,70 +466,91 @@ class FCircuit:
                 g.reordered = False
             u.append(g)
         return FCircuit(
-            gates=u,
-            parameter_map=self._parameter_map,
-            initial_state=self.initial_state
+            gates=u, parameter_map=self._parameter_map, initial_state=self.initial_state
         )
 
     @classmethod
-    def from_Qcircuit(cls,circuit:QCircuit,**kwargs):
+    def from_Qcircuit(cls, circuit: QCircuit, **kwargs):
         operations = FCircuit()
         reference = QCircuit()
-        if 'reordered' in kwargs:
-            reordered = kwargs['reordered']
-        else: reordered = True 
+        reordered = kwargs.get("reordered", True)
         begining = True
-        if 'variables' in kwargs:
-            circuit = circuit.map_variables(kwargs['variables'])
+        if "variables" in kwargs:
+            circuit = circuit.map_variables(kwargs["variables"])
             kwargs.pop("variables")
         for gate in circuit.gates:
-            if begining and not hasattr(gate,'_parameter') or isinstance(gate._parameter,numbers.Number):
+            if (
+                begining
+                and not hasattr(gate, "_parameter")
+                or isinstance(gate._parameter, numbers.Number)
+            ):
                 reference += gate
-            elif isinstance(gate,QubitExcitationImpl): #maybe we can consider other gates but basic implementation for the moment
-                if isinstance(gate._parameter,numbers.Number):
+            elif isinstance(
+                gate, QubitExcitationImpl
+            ):  # maybe we can consider other gates but basic implementation for the moment
+                if isinstance(gate._parameter, numbers.Number):
                     reference += gate
-                elif isinstance(gate,FermionicGateImpl):
-                    begining = False 
-                    operations += sunrise.gates.FermionicExcitation(indices=gate.indices,variables=gate.parameter,reordered=reordered)
+                elif isinstance(gate, FermionicGateImpl):
+                    begining = False
+                    operations += sunrise.gates.FermionicExcitation(
+                        indices=gate.indices,
+                        variables=gate.parameter,
+                        reordered=reordered,
+                    )
                 else:
                     temp = []
-                    for i in range(len(gate._target)//2):
-                        temp.append((gate._target[2*i],gate._target[2*i+1]))
-                    operations += sunrise.gates.FermionicExcitation(indices=temp,variables=gate.parameter,reordered=reordered)
+                    for i in range(len(gate._target) // 2):
+                        temp.append((gate._target[2 * i], gate._target[2 * i + 1]))
+                    operations += sunrise.gates.FermionicExcitation(
+                        indices=temp, variables=gate.parameter, reordered=reordered
+                    )
             else:
-                raise TequilaException(f'Gate {gate._name}({gate._parameter}) not allowed')
+                raise TequilaException(
+                    f"Gate {gate._name}({gate._parameter}) not allowed"
+                )
         if not reordered and len(reference.gates):
-            raise TequilaException('reordered=False only allowed if any initial_state provided due to backend restrictions')
-        return cls(gates=operations._gates,initial_state=reference)
+            raise TequilaException(
+                "reordered=False only allowed if any initial_state provided due to backend restrictions"
+            )
+        return cls(gates=operations._gates, initial_state=reference)
 
     @classmethod
-    def from_edges(cls,edges:Union[list,tuple],label=None,n_orb:int=0, use_units_of_pi=False,ladder=True):
+    def from_edges(
+        cls,
+        edges: list | tuple | None,
+        label=None,
+        n_orb: int = 0,
+        use_units_of_pi=False,
+        ladder=True,
+    ):
         operations = FCircuit()
         if n_orb:
             include_reference = True
-            n_state = [0]*2*n_orb
-            reference = QubitWaveFunction(n_qubits=2*n_orb, dense=False,numbering=BitNumbering.LSB)
-        else: 
+            n_state = [0] * 2 * n_orb
+            reference = QubitWaveFunction(
+                n_qubits=2 * n_orb, dense=False, numbering=BitNumbering.LSB
+            )
+        else:
             include_reference = False
             reference = None
         for edge in edges:
             if include_reference:
                 n_state[edge[0]] = 1
-                n_state[edge[0]+n_orb] = 1
+                n_state[edge[0] + n_orb] = 1
             previous = edge[0]
             for i in edge[1:]:
-                angle = Variable(((previous,i),'D',label))
+                angle = Variable(((previous, i), "D", label))
                 if use_units_of_pi:
                     angle = angle * pi
-                operations += sunrise.gates.UC(i=previous,j=i,variables=angle)
+                operations += sunrise.gates.UC(i=previous, j=i, variables=angle)
                 if ladder:
                     previous = i
         if include_reference:
-            reference[BitString.from_array(n_state)] = 1.
-        return cls(gates=operations._gates,initial_state=reference)
+            reference[BitString.from_array(n_state)] = 1.0
+        return cls(gates=operations._gates, initial_state=reference)
 
     @staticmethod
-    def wrap_gate(gate)->FCircuit:
+    def wrap_gate(gate) -> FCircuit:
         """
         take a gate and return a qcircuit containing only that gate.
         Parameters
@@ -527,7 +582,10 @@ class FCircuit:
         if not len(self._gates) is None and self.initial_state is None:
             return True
         test = []
-        for (k,v,) in self._parameter_map.items():
+        for (
+            k,
+            v,
+        ) in self._parameter_map.items():
             test = [self.gates[x[0]] == x[1] for x in v]
             test += [k in self._gates[x[0]].extract_variables() for x in v]
         return all(test)
@@ -550,7 +608,7 @@ class FCircuit:
         new_gates = [gate.map_qubits(qubit_map) for gate in self.gates]
         # could speed up by applying qubit_map to parameter_map here
         # currently its recreated in the init function
-        return FCircuit(gates=new_gates) #TODO: initial state?
+        return FCircuit(gates=new_gates)  # TODO: initial state?
 
     def map_variables(self, variables: dict, *args, **kwargs):
         """
@@ -565,135 +623,204 @@ class FCircuit:
 
         """
 
-        variables = {assign_variable(k): assign_variable(v) for k, v in variables.items()}
+        variables = {
+            assign_variable(k): assign_variable(v) for k, v in variables.items()
+        }
 
         # failsafe
         my_variables = self.extract_variables()
-        for k, v in variables.items():
+        for k in variables:
             if k not in my_variables:
                 warnings.warn(
-                    "map_variables: variable {} is not part of circuit with variables {}".format(k, my_variables),
+                    f"map_variables: variable {k} is not part of circuit with variables {my_variables}",
                     TequilaWarning,
                 )
 
-        new_gates = [copy.deepcopy(gate).map_variables(variables) for gate in self.gates]
+        new_gates = [
+            copy.deepcopy(gate).map_variables(variables) for gate in self.gates
+        ]
 
-        return FCircuit(gates=new_gates,initial_state=self.initial_state)
+        return FCircuit(gates=new_gates, initial_state=self.initial_state)
 
-    def to_matrix(self, variables=None): #TODO:  Should we?
-        pass 
+    def to_matrix(self, variables=None):  # TODO:  Should we?
+        pass
 
-    def add_controls(self, control, inpl: Optional[bool] = False) -> Optional[FCircuit]: #TODO
-        pass 
-      
-    def to_qcircuit(self,molecule:QuantumChemistryBase=None,transformation:Callable=None) -> QCircuit: 
-        '''
+    def add_controls(self, control, inpl: bool = False) -> FCircuit | None:  # TODO
+        pass
+
+    def to_qcircuit(
+        self,
+        molecule: QuantumChemistryBase | None = None,
+        transformation: Callable | None = None,
+    ) -> QCircuit:
+        """
         Transform from FCircuit to Qcircuit
         :param molecule Any kind of Tequila/Sunrise Molecule with molecule.make_excitation_gate function
-        :param transformation Callable function such as transformation(FCircuit) -> QCircuit 
-        '''
+        :param transformation Callable function such as transformation(FCircuit) -> QCircuit
+        """
         U = deepcopy(self)
         if molecule is not None:
             res = QCircuit()
             U = U.to_udud(molecule.n_orbitals)
             molecule.transformation.upthendown = True
             if self.initial_state is not None:
-                idx = where(array(self._initial_state.to_array())>1.e-6)[0] #TODO change to dict
+                idx = where(array(self._initial_state.to_array()) > 1.0e-6)[
+                    0
+                ]  # TODO change to dict
                 if not len(idx):
                     pass
-                elif len(idx)>1:
-                    warnings.warn("Don't now how to prepare the circuit initial state, skyped for safety",TequilaWarning)
+                elif len(idx) > 1:
+                    warnings.warn(
+                        "Don't now how to prepare the circuit initial state, skyped for safety",
+                        TequilaWarning,
+                    )
                 else:
-                    res += X(target=[i for i in range(len(bin(idx[0])[2:])) if bin(idx[0])[2:][i]=='1'])
+                    res += X(
+                        target=[
+                            i
+                            for i in range(len(bin(idx[0])[2:]))
+                            if bin(idx[0])[2:][i] == "1"
+                        ]
+                    )
             for gate in U.gates:
-                if gate.name == 'UR':
-                    res += molecule.make_excitation_gate(indices=gate.indices[0],angle=gate.variables)#TODO: Control
-                    res += molecule.make_excitation_gate(indices=gate.indices[1],angle=gate.variables)#TODO: Control
-                elif gate.name in ['UC', 'FermionicExcitation', 'GenericFermionic']:
-                    res += molecule.make_excitation_gate(indices=gate.indices[0],angle=gate.variables)#TODO: Control
-                elif gate.name == 'Ph':
-                    res +=  Phase(target=(gate.indices[0][0][0]//2 + (gate.indices[0][0][0]%2)*molecule.n_orbitals),angle=gate.variables)  #TODO: Control
+                if gate.name == "UR":
+                    res += molecule.make_excitation_gate(
+                        indices=gate.indices[0], angle=gate.variables
+                    )  # TODO: Control
+                    res += molecule.make_excitation_gate(
+                        indices=gate.indices[1], angle=gate.variables
+                    )  # TODO: Control
+                elif gate.name in ["UC", "FermionicExcitation", "GenericFermionic"]:
+                    res += molecule.make_excitation_gate(
+                        indices=gate.indices[0], angle=gate.variables
+                    )  # TODO: Control
+                elif gate.name == "Ph":
+                    res += Phase(
+                        target=(
+                            gate.indices[0][0][0] // 2
+                            + (gate.indices[0][0][0] % 2) * molecule.n_orbitals
+                        ),
+                        angle=gate.variables,
+                    )  # TODO: Control
                 else:
-                    raise TequilaException(f'Gate {gate} not idenified')
+                    raise TequilaException(f"Gate {gate} not idenified")
             return res
         elif transformation is not None:
             return transformation(U)
         else:
-            raise TequilaException("No Possible to transform from FCircuit to QCircuit without further information")
-    
+            raise TequilaException(
+                "No Possible to transform from FCircuit to QCircuit without further information"
+            )
+
     def _verify_state(self):
-        if  isinstance(self.initial_state._state,dict):
-            nozero = [bin(i)[2:] for i in self._initial_state._state.keys()]
-            ne = nozero[0].count('1')
-            if not all([st.count('1')==ne for st in nozero]):
-                raise TequilaException('The Initial State is not Particle-conserving')
-            if not all([isclose(i.imag,0.,atol=1.e-6) for i in self._initial_state._state.values()]):
-                raise TequilaException('No Imaginary states for Chemistry States')
+        if isinstance(self.initial_state._state, dict):
+            nozero = [bin(i)[2:] for i in self._initial_state._state]
+            ne = nozero[0].count("1")
+            if not all(st.count("1") == ne for st in nozero):
+                raise TequilaException("The Initial State is not Particle-conserving")
+            if not all(
+                isclose(i.imag, 0.0, atol=1.0e-6)
+                for i in self._initial_state._state.values()
+            ):
+                raise TequilaException("No Imaginary states for Chemistry States")
         else:
-            return True # Since dense QubitWavefunction scales 2^N, it becomes quickly intractable
-        
+            return True  # Since dense QubitWavefunction scales 2^N, it becomes quickly intractable
 
     def _is_upthendown(self):
         """True if the gates currently carry upthendown indices."""
-        return any(getattr(g, 'reordered', False) for g in self.gates)
+        return any(getattr(g, "reordered", False) for g in self.gates)
 
     def _is_mixed_ordering(self):
         """True if the circuit contains both reordered and non-reordered fermionic gates."""
-        flags = set(getattr(g, 'reordered', False) for g in self.gates if hasattr(g, '_render'))
+        flags = {
+            getattr(g, "reordered", False) for g in self.gates if hasattr(g, "_render")
+        }
         return len(flags) > 1
-        
+
     def render(self, state, style, show_spatial_orbitals=True):
         # Inline initial wires logic
         iw = set()
         if self.initial_state is not None:
-            from numpy import where, abs as nabs, argmax
+            from numpy import abs as nabs
+            from numpy import argmax, where
+
             arr = nabs(self.initial_state.to_array())
             idx = where(arr > 1e-6)[0]
-            if len(idx) != 1: idx = [int(argmax(arr))]
+            if len(idx) != 1:
+                idx = [int(argmax(arr))]
             n_state = self.initial_state.n_qubits
             n = max(n_state, self.n_qubits)
-            bits = format(int(idx[0]), f'0{n_state}b').ljust(n, '0')
+            bits = format(int(idx[0]), f"0{n_state}b").ljust(n, "0")
             norb = n // 2
-            occ = [q for q, b in enumerate(bits) if b == '1']
-            
-            is_upthendown = any(getattr(g, 'reordered', False) for g in self.gates if hasattr(g, '_render'))
-            if show_spatial_orbitals: iw = set(q if q < norb else q - norb for q in occ)
-            elif is_upthendown: iw = set(occ)
-            else: iw = set(2 * (q % norb) + (q >= norb) for q in occ)
+            occ = [q for q, b in enumerate(bits) if b == "1"]
+
+            is_upthendown = any(
+                getattr(g, "reordered", False)
+                for g in self.gates
+                if hasattr(g, "_render")
+            )
+            if show_spatial_orbitals:
+                iw = {q if q < norb else q - norb for q in occ}
+            elif is_upthendown:
+                iw = set(occ)
+            else:
+                iw = {2 * (q % norb) + (q >= norb) for q in occ}
 
         chunks = []
         if iw:
             chunks.append(" ".join(f"a{q}" for q in sorted(iw)) + " G I ")
-            
+
         pending = []
         for gate in self.gates:
             if hasattr(gate, "_render"):
                 if pending:
-                    chunks.append(" ".join(f"a{q}" for q in sorted(set(pending))) + " G G ")
+                    chunks.append(
+                        " ".join(f"a{q}" for q in sorted(set(pending))) + " G G "
+                    )
                     pending = []
                 chunks.append(gate._render(state, style, show_spatial_orbitals))
             else:
                 pending += list(gate.qubits)
-                
+
         if pending:
             chunks.append(" ".join(f"a{q}" for q in sorted(set(pending))) + " G G ")
-            
+
         out = "\n".join(chunks) + "\n"
         if style.group_together:
             out += "\n" + state.all_names() + " TOUCH\n"
         return out
-    
-    def export_qpic(self, filename, filepath=None, style={}, show_spatial_orbitals=True,
-                    labels={}, colors={}, wire_colors={}, select=None, **kwargs):
-        from sunrise.graphical.core.state import CircuitState
-        from sunrise.graphical.core.color import DefaultColors
-        from sunrise.graphical.core.style import parse_circuit_style
+
+    def export_qpic(
+        self,
+        filename,
+        filepath=None,
+        style=None,
+        show_spatial_orbitals=True,
+        labels=None,
+        colors=None,
+        wire_colors=None,
+        select=None,
+        **kwargs,
+    ):
         from os import path
 
+        from sunrise.graphical.core.color import DefaultColors
+        from sunrise.graphical.core.state import CircuitState
+        from sunrise.graphical.core.style import parse_circuit_style
+
+        if style is None:
+            style = {}
+        if labels is None:
+            labels = {}
+        if colors is None:
+            colors = {}
+        if wire_colors is None:
+            wire_colors = {}
         if not len(wire_colors) and select is not None:
             wire_colors = dict(wire_colors)
             for s in select:
-                if select[s] == 'B': wire_colors[s] = "red"
+                if select[s] == "B":
+                    wire_colors[s] = "red"
 
         result = ""
         style_obj, colors = parse_circuit_style(style, colors)
@@ -707,28 +834,42 @@ class FCircuit:
         norb = self.n_qubits // 2
         wires = set()
         if self.initial_state is not None:
-            from numpy import where, abs as nabs, argmax
+            from numpy import abs as nabs
+            from numpy import argmax, where
+
             arr = nabs(self.initial_state.to_array())
             idx = where(arr > 1e-6)[0]
-            if len(idx) != 1: idx = [int(argmax(arr))]
+            if len(idx) != 1:
+                idx = [int(argmax(arr))]
             n_state = self.initial_state.n_qubits
             n = max(n_state, self.n_qubits)
-            bits = format(int(idx[0]), f'0{n_state}b').ljust(n, '0')
-            occ = [q for q, b in enumerate(bits) if b == '1']
-            is_upthendown = any(getattr(g, 'reordered', False) for g in self.gates if hasattr(g, '_render'))
-            if show_spatial_orbitals: wires.update(q if q < norb else q - norb for q in occ)
-            elif is_upthendown: wires.update(occ)
-            else: wires.update(2 * (q % norb) + (q >= norb) for q in occ)
+            bits = format(int(idx[0]), f"0{n_state}b").ljust(n, "0")
+            occ = [q for q, b in enumerate(bits) if b == "1"]
+            is_upthendown = any(
+                getattr(g, "reordered", False)
+                for g in self.gates
+                if hasattr(g, "_render")
+            )
+            if show_spatial_orbitals:
+                wires.update(q if q < norb else q - norb for q in occ)
+            elif is_upthendown:
+                wires.update(occ)
+            else:
+                wires.update(2 * (q % norb) + (q >= norb) for q in occ)
 
         for g in self.gates:
             if hasattr(g, "_render"):
-                if not show_spatial_orbitals: wires.update(g.qubits)
-                elif getattr(g, "reordered", False): wires.update(q if q < norb else q - norb for q in g.qubits)
-                else: wires.update(q // 2 for q in g.qubits)
+                if not show_spatial_orbitals:
+                    wires.update(g.qubits)
+                elif getattr(g, "reordered", False):
+                    wires.update(q if q < norb else q - norb for q in g.qubits)
+                else:
+                    wires.update(q // 2 for q in g.qubits)
             else:
                 wires.update(g.qubits)
 
-        if not wires: wires = {0}
+        if not wires:
+            wires = {0}
         max_wire = max(wires)
 
         for wire in range(max_wire + 1):
@@ -748,7 +889,9 @@ class FCircuit:
 
     def export_to(self, filename: str, *args, **kwargs):
         from copy import deepcopy
+
         from tequila import TequilaException
+
         from sunrise.graphical.qpic_visualization import qpic_to_pdf, qpic_to_png
 
         U = deepcopy(self)
@@ -760,40 +903,55 @@ class FCircuit:
         filepath = kwargs.get("filepath", None)
 
         # Inline _is_mixed_ordering check
-        flags = set(getattr(g, 'reordered', False) for g in U.gates if hasattr(g, '_render'))
+        flags = {
+            getattr(g, "reordered", False) for g in U.gates if hasattr(g, "_render")
+        }
         if len(flags) > 1:
-            try: U = U.to_upthendown(n_orb)
-            except AttributeError: pass
+            try:
+                U = U.to_upthendown(n_orb)
+            except AttributeError:
+                pass
 
         if show_spatial_orbitals:
-            try: U = U.to_udud(n_orb)
-            except AttributeError: pass
+            try:
+                U = U.to_udud(n_orb)
+            except AttributeError:
+                pass
 
         filename_tmp = filename.split(".")
-        if len(filename_tmp) == 1: ftype, fname = "pdf", filename
-        else: ftype, fname = filename_tmp[-1], ".".join(filename_tmp[:-1])
+        if len(filename_tmp) == 1:
+            ftype, fname = "pdf", filename
+        else:
+            ftype, fname = filename_tmp[-1], ".".join(filename_tmp[:-1])
 
         if ftype == "qpic":
-            U.export_qpic(fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs)
+            U.export_qpic(
+                fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs
+            )
         elif ftype == "pdf":
-            U.export_qpic(fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs)
+            U.export_qpic(
+                fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs
+            )
             qpic_to_pdf(filename=fname, filepath=filepath)
         elif ftype == "png":
-            U.export_qpic(fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs)
+            U.export_qpic(
+                fname, *args, show_spatial_orbitals=show_spatial_orbitals, **kwargs
+            )
             qpic_to_png(filename=fname, filepath=filepath)
         else:
             raise TequilaException(f"Extension {ftype} not supported directly.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import tequila as tq
+
     import sunrise as sun
-    
-    U = sun.gates.FermionicExcitation([(0,2),(1,3)],"a")
-    U.initial_state = tq.gates.X([0,4])
-    U += sun.gates.UC(0,1,"b")
-    U = U + sun.gates.UR(1,2,'c')
-    U += sun.gates.FermionicExcitation([(1,2)],'d',reordered=True)
+
+    U = sun.gates.FermionicExcitation([(0, 2), (1, 3)], "a")
+    U.initial_state = tq.gates.X([0, 4])
+    U += sun.gates.UC(0, 1, "b")
+    U = U + sun.gates.UR(1, 2, "c")
+    U += sun.gates.FermionicExcitation([(1, 2)], "d", reordered=True)
     print(U)
     # print(U.make_parameter_map())
     # print(U.max_qubit())
@@ -806,9 +964,9 @@ if __name__ == '__main__':
     # print(A.make_parameter_map())
     E = A.to_udud(4)
     print(E)
-    B = FCircuit.from_edges([(0,1),(2,3)])
+    B = FCircuit.from_edges([(0, 1), (2, 3)])
     print(B.extract_variables())
     print(B.extract_indices())
     print(B)
-    C = FCircuit.from_edges([(0,1),(2,3)],n_orb=4)
+    C = FCircuit.from_edges([(0, 1), (2, 3)], n_orb=4)
     print(C)

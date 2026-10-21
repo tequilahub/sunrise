@@ -1,14 +1,22 @@
-from tequila import BraKet, ExpectationValue, Objective
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from openfermion import FermionOperator
-from .fermionic_braket import FermBraketImpl
-from tequila.hamiltonian.paulis import from_string, I
+from tequila import BraKet, ExpectationValue, Objective
+from tequila.hamiltonian.paulis import I, from_string
 
-def TequilaBraket(braket:"FermBraketImpl", *args, **kwargs) -> Objective:
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
+from .fermionic_braket import FermBraketImpl
+
+
+def TequilaBraket(braket: FermBraketImpl, *args, **kwargs) -> Objective:
     from sunrise.molecules.fermionic_base import FermionicBase
+
     mol = braket.molecule
-    if isinstance(mol,FermionicBase):
-        mol = QuantumChemistryBase(parameters=mol.parameters, transformation='REORDEREDJORDANWIGNER', integral_manager=mol.integral_manager)
+    if isinstance(mol, FermionicBase):
+        mol = QuantumChemistryBase(
+            parameters=mol.parameters,
+            transformation="REORDEREDJORDANWIGNER",
+            integral_manager=mol.integral_manager,
+        )
     bra = braket.bra
     if bra is not None:
         bra = bra.to_upthendown(mol.n_orbitals).to_qcircuit(mol)
@@ -16,17 +24,17 @@ def TequilaBraket(braket:"FermBraketImpl", *args, **kwargs) -> Objective:
     operator = braket.operator
     if operator is None:
         operator = "H"
-    if isinstance(operator,str):
-        if operator == 'H':
+    if isinstance(operator, str):
+        if operator == "H":
             operator = mol.make_hamiltonian()
         elif operator == "HCB":
             operator = mol.make_hardcore_boson_hamiltonian()
-        elif operator == 'I':
+        elif operator == "I":
             operator = I([braket.qubits])
         else:
             operator = from_string(operator)
-    elif isinstance(operator,FermionOperator):
+    elif isinstance(operator, FermionOperator):
         operator = mol.transformation(operator)
     if braket.is_diagonal:
-        return ExpectationValue(U=ket, H=operator, *args, **kwargs)
-    return BraKet(ket=ket, bra=bra, operator=operator, *args, **kwargs)
+        return ExpectationValue(*args, U=ket, H=operator, **kwargs)
+    return BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)
