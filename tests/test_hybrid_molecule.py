@@ -145,3 +145,12 @@ def test_tapered_binary_mixed():
     with pytest.raises(Exception):
         sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8", basis_set="sto-3g",
                     backend='pyscf', nature='hybrid', select="FBFB", transformation="TaperedBinary")
+
+@pytest.mark.parametrize("select",["FFFF","FBFB"])
+def test_encodings_spectrum(select):
+    # all fermionic and mixed orbitals: every encoding gives the spectrum of Jordan-Wigner
+    geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
+    H_jw = sn.Molecule(geometry=geom, basis_set="sto-3g", backend='pyscf', nature='hybrid', select=select).make_hamiltonian()
+    for transformation in ["BravyiKitaev","BravyiKitaevTree","ReorderedBravyiKitaev"]:
+        H = sn.Molecule(geometry=geom, basis_set="sto-3g", backend='pyscf', nature='hybrid', select=select, transformation=transformation).make_hamiltonian()
+        assert numpy.allclose(numpy.linalg.eigvalsh(H.to_matrix()), numpy.linalg.eigvalsh(H_jw.to_matrix()))
