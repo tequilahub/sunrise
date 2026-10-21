@@ -53,7 +53,7 @@ class FermBraketImpl(QuantumArg):
         return Objective(args=[self], transformation=identity)
 
     def grad(self, variable: Variable = None, *args, **kwargs) -> Objective:
-        return _grad_FermBraket(objective=self, variable=variable, args=args, **kwargs)
+        return _grad_FermBraket(*args, objective=self, variable=variable, **kwargs)
 
     def extract_variables(self) -> list:
         var = list(self.ket.extract_variables())
@@ -75,8 +75,8 @@ class FermBraketImpl(QuantumArg):
 
     def map_variables(self, variables: dict, *args, **kwargs) -> FermBraketImpl:
         return FermBraketImpl(
-            ket=self.ket.map_variables(variables, args=args, **kwargs),
-            bra=self.bra.map_variables(variables, args=args, **kwargs)
+            ket=self.ket.map_variables(variables, *args, **kwargs),
+            bra=self.bra.map_variables(variables, *args, **kwargs)
             if self.bra is not None
             else None,
             operator=self.operator,

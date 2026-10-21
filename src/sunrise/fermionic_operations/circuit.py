@@ -108,7 +108,7 @@ class FCircuit:
                 initial_state = QubitWaveFunction.convert_from(
                     val=initial_state, n_qubits=self.n_qubits
                 )
-            except TequilaException:
+            except Exception:  # noqa: BLE001
                 raise TequilaException(
                     f"Init_state format not recognized, provided {type(initial_state).__name__}"
                 )
@@ -629,7 +629,7 @@ class FCircuit:
 
         # failsafe
         my_variables = self.extract_variables()
-        for k in variables.items():
+        for k in variables:
             if k not in my_variables:
                 warnings.warn(
                     f"map_variables: variable {k} is not part of circuit with variables {my_variables}",
@@ -714,7 +714,7 @@ class FCircuit:
 
     def _verify_state(self):
         if isinstance(self.initial_state._state, dict):
-            nozero = [bin(i)[2:] for i in self._initial_state._state.items()]
+            nozero = [bin(i)[2:] for i in self._initial_state._state]
             ne = nozero[0].count("1")
             if not all(st.count("1") == ne for st in nozero):
                 raise TequilaException("The Initial State is not Particle-conserving")

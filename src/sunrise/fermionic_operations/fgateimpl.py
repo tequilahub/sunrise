@@ -79,7 +79,7 @@ class FGateImpl:
             return False
         if self.reordered != other.reordered:
             return False
-        if self.extract_variables() != other.extract_variables():
+        if self.variables != other.variables:
             return False
         return self.indices == other.indices
 
@@ -200,7 +200,7 @@ class FGateImpl:
         except (TypeError, ValueError):
             try:
                 value = float(self.variables())
-            except ValueError:
+            except Exception:  # noqa: BLE001
                 value = None
 
         if value is None and style.parametrized_marking is not None:

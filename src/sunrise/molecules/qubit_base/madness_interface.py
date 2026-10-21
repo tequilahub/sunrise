@@ -82,7 +82,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         try:
             with open(f"plot2cube_{orbital}.log", "w") as logfile:
                 subprocess.call(callist, stdout=logfile)
-        except OSError:
+        except Exception:  # noqa: BLE001
             print("plotting failed ....")
             print(f"see plot2cube_{orbital}.log")
 
@@ -210,7 +210,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
 
                 if pairinfo is not None:
                     break
-            except FileNotFoundError:
+            except Exception:  # noqa: BLE001, S112
                 continue
 
         if pairinfo is None:
@@ -262,6 +262,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         # active space data will be set in baseclass constructor
         reference_orbitals = [x.idx_total for x in reference_orbitals]
         super().__init__(
+            *args,
             parameters=parameters,
             transformation=transformation,
             active_orbitals=active_orbitals,
@@ -271,7 +272,6 @@ class QuantumChemistryMadness(QuantumChemistryBase):
             n_orbitals=n_orbitals_total,
             orbitals=orbitals,
             reference_orbitals=reference_orbitals,
-            args=args,
             **kwargs,
         )
 
@@ -309,9 +309,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
     def run_madness(self, *args, **kwargs):
         if self.executable is None:
             return "\n\n----> pno_integrals executable not found <----\n\n"
-        self.write_madness_input(
-            n_pno=self.n_pno, n_virt=self.n_virt, args=args, **kwargs
-        )
+        self.write_madness_input(*args, n_pno=self.n_pno, n_virt=self.n_virt, **kwargs)
 
         # prevent reading in old files
         self.cleanup(warn=True, delete_all_files=True)
@@ -342,12 +340,12 @@ class QuantumChemistryMadness(QuantumChemistryBase):
 
         try:
             h = numpy.load(f"{path}_htensor.{filetype}")
-        except (OSError, ValueError):
+        except Exception:  # noqa: BLE001
             h = "failed"
 
         try:
             g = numpy.load(f"{path}_gtensor.{filetype}")
-        except (OSError, ValueError):
+        except Exception:  # noqa: BLE001
             g = "failed"
 
         return h, g
@@ -404,9 +402,9 @@ class QuantumChemistryMadness(QuantumChemistryBase):
             E = ExpectationValue(H=H, U=U)
             from tequila import minimize
 
-            return minimize(objective=E, args=args, **kwargs).energy
+            return minimize(*args, objective=E, **kwargs).energy
         else:
-            return super().compute_energy(method=method, args=args, **kwargs)
+            return super().compute_energy(*args, method=method, **kwargs)
 
     def local_qubit_map(self, hcb=False, up_then_down=False):
         # re-arrange orbitals to result in more local circuits
@@ -487,7 +485,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         # check if the used qubit encoding has a hcb transformation
         try:
             have_hcb_trafo = self.transformation.hcb_to_me() is not None
-        except (TequilaException, NotImplementedError, AttributeError):
+        except Exception:  # noqa: BLE001
             have_hcb_trafo = False
         name = name.upper()
 
@@ -553,7 +551,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     order = int(name.split("-")[0])
                 else:
                     order = 1
-            except (ValueError, AttributeError):
+            except Exception:  # noqa: BLE001
                 order = 1
 
         # first layer
@@ -570,11 +568,11 @@ class QuantumChemistryMadness(QuantumChemistryBase):
 
             indices0 = [k.name[0] for k in U.extract_variables()]
             indices1 = self.make_upccgsd_indices(
-                label=label, name=name, exclude=indices0, args=args, **kwargs
+                *args, label=label, name=name, exclude=indices0, **kwargs
             )
             if "D" in excitations:
                 U += self.make_hardcore_boson_upccgd_layer(
-                    indices=indices1, label=(label, 0), args=args, **kwargs
+                    *args, indices=indices1, label=(label, 0), **kwargs
                 )
             indices = indices0 + indices1
             if "HCB" not in name and len(U.gates) > 0:
@@ -583,45 +581,45 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                 assert "S" not in excitations
             if "S" in excitations:
                 U += self.make_upccgsd_singles(
+                    *args,
                     indices=indices,
                     label=(label, 0),
                     neglect_z=neglect_z,
-                    args=args,
                     **kwargs,
                 )
         else:
             indices = self.make_upccgsd_indices(
-                label=(label, 0), name=name, args=args, **kwargs
+                *args, label=(label, 0), name=name, **kwargs
             )
             if include_reference:
                 U = self.prepare_reference()
             U += self.make_upccgsd_layer(
+                *args,
                 indices=indices,
                 include_singles="S" in excitations,
                 include_doubles="D" in excitations,
                 label=(label, 0),
                 neglect_z=neglect_z,
-                args=args,
                 **kwargs,
             )
 
         if order > 1:
             for layer in range(1, order):
                 indices = self.make_upccgsd_indices(
-                    label=(label, layer), name=name, args=args, **kwargs
+                    *args, label=(label, layer), name=name, **kwargs
                 )
                 if "HCB" in name:
                     U += self.make_hardcore_boson_upccgd_layer(
-                        indices=indices, label=(label, layer), args=args, **kwargs
+                        *args, indices=indices, label=(label, layer), **kwargs
                     )
                 else:
                     U += self.make_upccgsd_layer(
+                        *args,
                         indices=indices,
                         include_singles="S" in excitations,
                         include_doubles="D" in excitations,
                         label=(label, layer),
                         neglect_z=neglect_z,
-                        args=args,
                         **kwargs,
                     )
         return U
@@ -901,7 +899,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         try:
             with open(f"{name}_pnoinfo.txt", "r") as f1:
                 pnoinfo = f1.read().strip()
-        except FileNotFoundError as E:
+        except Exception as E:  # noqa: BLE001
             pnoinfo = f"failed\n{E!s}\n"
 
         if datadir is not None:
@@ -911,7 +909,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     open(f"{path}_pnoinfo.txt", "w") as f2,
                 ):
                     f2.write(f1.read().strip())
-            except FileNotFoundError as E:
+            except Exception as E:  # noqa: BLE001
                 pnoinfo = f"failed\n{E!s}\n"
             try:
                 with (
@@ -919,7 +917,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     open(f"{path}_pno_integrals.out", "w") as f2,
                 ):
                     f2.write(f1.read().strip())
-            except FileNotFoundError:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
         return h, g, pnoinfo

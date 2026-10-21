@@ -34,7 +34,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         else:
             self.opt = False
         super().__init__(
-            generator=generator, target=generator.qubits, p0=p0, args=args, **kwargs
+            *args, generator=generator, target=generator.qubits, p0=p0, **kwargs
         )
         self._name = "FermionicExcitation"
         self.transformation = transformation

@@ -40,7 +40,7 @@ INSTALLED_FERMIONIC_BACKENDS["tequila"] = TequilaBraket
 
 def show_available_modules():
     print("Available Fermionic Modules:")
-    for k in INSTALLED_FERMIONIC_BACKENDS.items():
+    for k in INSTALLED_FERMIONIC_BACKENDS:
         print(k)
 
 
@@ -139,9 +139,9 @@ def Fidelity(
     """
     return Objective(
         args=[
-            Braket(
-                ket=ket, bra=bra, molecule=mol, operator="I", args=args, **kwargs
-            ).args[0]
+            Braket(*args, ket=ket, bra=bra, molecule=mol, operator="I", **kwargs).args[
+                0
+            ]
         ],
         transformation=lambda x: abs(x) ** 2,
     )
@@ -169,7 +169,7 @@ def Overlap(
     A tq.Objective that evaluated to the overlap between the two states
 
     """
-    return Braket(ket=ket, bra=bra, operator=None, mol=mol, args=args, **kwargs)
+    return Braket(*args, ket=ket, bra=bra, operator=None, mol=mol, **kwargs)
 
 
 def Braket(
@@ -216,7 +216,7 @@ def Braket(
         bra = None
     if isinstance(operator, list):
         return [
-            Braket(ket=ket, bra=bra, operator=op, mol=mol, args=args, **kwargs)
+            Braket(*args, ket=ket, bra=bra, operator=op, mol=mol, **kwargs)
             for op in operator
         ]
         # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
@@ -225,7 +225,7 @@ def Braket(
     return Objective(
         args=[
             FermBraketImpl(
-                ket=ket, bra=bra, operator=operator, molecule=mol, args=args, **kwargs
+                *args, ket=ket, bra=bra, operator=operator, molecule=mol, **kwargs
             )
         ],
         transformation=identity,
@@ -253,7 +253,7 @@ def ExpectationValue(
     Tequila objectives to be simulated or compiled.
 
     """
-    return Braket(ket=U, operator=H, mol=mol, args=args, **kwargs)
+    return Braket(*args, ket=U, operator=H, mol=mol, **kwargs)
 
 
 def RealBraKet(
@@ -278,7 +278,7 @@ def RealBraKet(
     Tequila objectives to be simulated or compiled.
 
     """
-    return Braket(bra=bra, ket=ket, operator=operator, mol=mol, args=args, **kwargs)
+    return Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
 
 
 def ImagBraKet(*args, **kwargs):

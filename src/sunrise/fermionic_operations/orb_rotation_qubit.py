@@ -35,7 +35,8 @@ class OrbitalRotation(QGateImpl):
             geom = ""
             for k in range(2 * (len(self.coeff) // 2 + 1)):
                 geom += f"h 0.0 0.0 {1.5 * k}\n"
-            dummy = QubitMolecule(geometry=geom, basis_set="sto-3g")
+
+            dummy = QubitMolecule(geometry=geom, basis_set="sto-3g", units="a")
             self.molecule = dummy
         else:
             self.molecule = molecule

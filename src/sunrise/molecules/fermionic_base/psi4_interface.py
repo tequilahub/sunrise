@@ -244,11 +244,11 @@ class QuantumChemistryPsi4(FermionicBase):
 
         # psi4 active space will be formed later
         super().__init__(
+            *args,
             parameters=parameters,
             active_orbitals=None,
             reference_orbitals=reference_orbitals,
             frozen_orbitals=[],
-            args=args,
             **kwargs,
         )
 
@@ -317,10 +317,22 @@ class QuantumChemistryPsi4(FermionicBase):
         if kwargs.get("point_group") is not None:
             # the molecule took the point group, psi4 computes in its Abelian one
             kwargs["point_group"] = self._psi4_point_group
-        self.compute_energy(method="hf", recompute=True, args=args, **kwargs)
+        self.compute_energy(*args, method="hf", recompute=True, **kwargs)
         self.ref_wfn = self.logs["hf"].wfn
 
         self.kwargs = kwargs
+
+    def __deepcopy__(self, memo):
+        # psi4.core objects are C++ bindings that cannot be pickled, so deepcopy fails on them.
+        # They are only read after construction, so the copy shares them instead of duplicating them.
+        memo[id(self.psi4_mol)] = self.psi4_mol
+        for log in self.logs.values():
+            memo[id(log.wfn)] = log.wfn
+            memo[id(log.mol)] = log.mol
+        result = self.__class__.__new__(self.__class__)
+        memo[id(self)] = result
+        result.__dict__.update(copy.deepcopy(self.__dict__, memo))
+        return result
 
     @property
     def nirrep(self):
@@ -613,12 +625,12 @@ class QuantumChemistryPsi4(FermionicBase):
             psi4.core.clean_options()
             psi4.core.clean_variables()
             _energy, wfn = self._run_psi4(
+                *args,
                 method=method,
                 options=options,
                 point_group="c1",
                 ref_wfn=self.ref_wfn.c1_deep_copy(self.ref_wfn.basisset()),
                 filename=filename,
-                args=args,
                 **kwargs,
             )
             all_amplitudes = wfn.get_amplitudes()
@@ -687,10 +699,10 @@ class QuantumChemistryPsi4(FermionicBase):
                 "Warning: Active space is not Psi4 representable", TequilaWarning
             )
         return self._run_psi4(
+            *args,
             method=method,
             options=options,
             ignore_active_space=ignore_active_space,
-            args=args,
             **kwargs,
         )[0]
 

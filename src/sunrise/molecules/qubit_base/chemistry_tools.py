@@ -67,7 +67,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
     def __init__(self, generator, p0, transformation, indices=None, *args, **kwargs):
         super().__init__(
-            generator=generator, target=generator.qubits, p0=p0, args=args, **kwargs
+            *args, generator=generator, target=generator.qubits, p0=p0, **kwargs
         )
         self._name = "FermionicExcitation"
         self.transformation = transformation
@@ -430,7 +430,7 @@ class ParametersQC:
             atom = "".join(atom)
             element = pt.elements.symbol(atom)
             return element.number
-        except ImportError:
+        except Exception:  # noqa: BLE001
             raise TequilaException(
                 f"can not assign atomic number to element {atom}\npip install periodictable will fix it"
             )
@@ -1111,7 +1111,7 @@ class NBodyTensor:
                         warnings.warn(
                             f"Auto identified ordering of NBTensor does not match given ordering: {auto_ordering} vs {ordering}"
                         )
-                except TequilaException:
+                except Exception:  # noqa: BLE001
                     warnings.warn(f"could not verify odering {ordering}")
             self.ordering = self.Ordering(ordering)
         else:

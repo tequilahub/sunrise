@@ -111,6 +111,7 @@ class HybridBase(qc_base):
             self.integral_manager = kwargs["integral_manager"]
         else:
             self.integral_manager = self.initialize_integral_manager(
+                *args,
                 active_orbitals=active_orbitals,
                 reference_orbitals=reference_orbitals,
                 orbitals=orbitals,
@@ -119,7 +120,6 @@ class HybridBase(qc_base):
                 basis_name=self.parameters.basis_set,
                 condense=self.condense,
                 two_qubit=self.two_qubit,
-                args=args,
                 **kwargs,
             )
 
@@ -128,7 +128,7 @@ class HybridBase(qc_base):
         # tq init overwriten bcs I need the number of orbitals for select->transformation
         if not isinstance(transformation, typing.Callable):
             self.transformation: EncodingBase = self._initialize_transformation(
-                transformation=transformation, args=args, **kwargs
+                *args, transformation=transformation, **kwargs
             )  # here select set only to full-HCB. changed afterwards
         else:
             self.transformation: EncodingBase = transformation
@@ -259,7 +259,7 @@ class HybridBase(qc_base):
         else:
             try:
                 select = verify_selection_list(select=select, n_orb=n_orb)
-            except TypeError:
+            except Exception:  # noqa: BLE001
                 raise TequilaException(
                     f"Warning, encoding format not recognised: {type(select)}.\n Please choose either a Str, Dict, List or Tuple."
                 )
@@ -292,6 +292,7 @@ class HybridBase(qc_base):
         parameters = molecule.parameters
 
         return cls(
+            *args,
             nuclear_repulsion=c,
             one_body_integrals=h1,
             two_body_integrals=h2,
@@ -302,7 +303,6 @@ class HybridBase(qc_base):
             orbital_type=molecule.integral_manager._orbital_type,
             parameters=parameters,
             reference_orbitals=molecule.integral_manager.active_space.reference_orbitals,
-            args=args,
             **kwargs,
         )
 
@@ -1676,19 +1676,19 @@ class HybridBase(qc_base):
                 angle = Variable(name=("R", i, j, label)) * numpy.pi
 
         circuit = self.make_excitation_gate(
+            *args,
             indices=[(2 * i, 2 * j)],
             angle=angle,
             assume_real=assume_real,
             control=control,
-            args=args,
             **kwargs,
         )
         circuit += self.make_excitation_gate(
+            *args,
             indices=[(2 * i + 1, 2 * j + 1)],
             angle=angle,
             assume_real=assume_real,
             control=control,
-            args=args,
             **kwargs,
         )
         return circuit
@@ -1742,11 +1742,11 @@ class HybridBase(qc_base):
             )
         else:
             return self.make_excitation_gate(
+                *args,
                 indices=[(2 * i, 2 * j), (2 * i + 1, 2 * j + 1)],
                 angle=angle,
                 control=control,
                 assume_real=assume_real,
-                args=args,
                 **kwargs,
             )
 
@@ -1999,7 +1999,7 @@ class HybridBase(qc_base):
         if "+" in name:
             U = QCircuit()
             subparts = name.split("+")
-            U = self.make_ansatz(name=subparts[0], args=args, **kwargs)
+            U = self.make_ansatz(*args, name=subparts[0], **kwargs)
             # making sure the there are is no undesired behaviour in layers after +
             # reference should not be included since we are not starting from |00...0> anymore
             if "include_reference" in kwargs:
@@ -2014,8 +2014,8 @@ class HybridBase(qc_base):
                 kwargs.pop("label")
             for i, subpart in enumerate(subparts[1:]):
                 U += self.make_ansatz(
+                    *args,
                     name=subpart,
-                    args=args,
                     label=(label, i),
                     include_reference=False,
                     hcb_optimization=False,
@@ -2024,16 +2024,16 @@ class HybridBase(qc_base):
             return U
 
         if name == "uccsd":
-            return self.make_uccsd_ansatz(args=args, **kwargs)
+            return self.make_uccsd_ansatz(*args, **kwargs)
         elif "spa" in name.lower():
             if "hcb" not in kwargs:
                 hcb = False
                 if "hcb" in name.lower():
                     hcb = True
                 kwargs["hcb"] = hcb
-            return self.make_spa_ansatz(args=args, **kwargs)
+            return self.make_spa_ansatz(*args, **kwargs)
         elif "d" in name or "s" in name:
-            return self.make_upccgsd_ansatz(name=name, args=args, **kwargs)
+            return self.make_upccgsd_ansatz(*args, name=name, **kwargs)
         else:
             raise TequilaException(f"unknown ansatz with name={name}")
 
@@ -2086,7 +2086,7 @@ class HybridBase(qc_base):
         if optimize is None:
             try:
                 have_hcb_to_me = self.hcb_to_me() is not None
-            except NotImplementedError:
+            except Exception:  # noqa: BLE001
                 have_hcb_to_me = False
             if have_hcb_to_me or not len(self.FER_SO):
                 optimize = True
@@ -2220,7 +2220,7 @@ class HybridBase(qc_base):
                     order = int(name.split("-")[0])
                 else:
                     order = 1
-            except ValueError:
+            except Exception:  # noqa: BLE001
                 order = 1
 
         indices = self.make_upccgsd_indices(key=name)
@@ -2258,6 +2258,7 @@ class HybridBase(qc_base):
                 U = self.prepare_reference()
 
             U += self.make_upccgsd_layer(
+                *args,
                 include_singles=S,
                 include_doubles=D,
                 indices=indices,
@@ -2266,7 +2267,6 @@ class HybridBase(qc_base):
                 spin_adapt_singles=spin_adapt_singles,
                 mix_sd=mix_sd,
                 firts_double=firts_double,
-                args=args,
                 **kwargs,
             )
         else:
@@ -2275,21 +2275,21 @@ class HybridBase(qc_base):
                 U = self.prepare_hardcore_boson_reference()
             if D:
                 U += self.make_hardcore_boson_upccgd_layer(
+                    *args,
                     indices=indices,
                     assume_real=assume_real,
                     label=(label, 0),
-                    args=args,
                     **kwargs,
                 )
             U += self.transformation.hcb_to_me()
             if S:
                 U += self.make_upccgsd_singles(
+                    *args,
                     indices=indices,
                     assume_real=assume_real,
                     label=(label, 0),
                     spin_adapt_singles=spin_adapt_singles,
                     neglect_z=neglect_z,
-                    args=args,
                     **kwargs,
                 )
 
@@ -2567,9 +2567,9 @@ class HybridBase(qc_base):
             method = method.replace("hybrid", "").strip()
             if method[0] == "-":
                 method = method[1:]
-            return self.compute_restricted_energy(method, args=args, **kwargs)
+            return self.compute_restricted_energy(method, *args, **kwargs)
         else:
-            return super().compute_energy(method, args=args, **kwargs)
+            return super().compute_energy(method, *args, **kwargs)
 
     def compute_restricted_energy(self, method: str, *args, **kwargs) -> float:
         """
@@ -2634,7 +2634,7 @@ class HybridBase(qc_base):
             backend="pyscf",
             transformation=self.transformation.name,
             n_electrons=self.n_electrons,
-        ).compute_energy(method=method, args=args, **kwargs)
+        ).compute_energy(*args, method=method, **kwargs)
 
     def get_restricted_integrals(
         self, *args, **kwargs

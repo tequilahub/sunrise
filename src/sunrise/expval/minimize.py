@@ -51,8 +51,7 @@ def minimize(
     ):
         dE = grad(objective=objective, variable=variables, args=args, kwargs=kwargs)
         dE = {
-            g: compile(dE[g], fbackend=fbackend, backend=kwargs["backend"])
-            for g in dE.items()
+            g: compile(dE[g], fbackend=fbackend, backend=kwargs["backend"]) for g in dE
         }
         nargs = [
             compile(Objective(args=[arg]), fbackend=fbackend, backend=kwargs["backend"])
@@ -61,6 +60,7 @@ def minimize(
         objective = Objective(args=nargs, transformation=objective.transformation)
         kwargs["backend"] = None
         return tminimize(
+            *args,
             objective=objective,
             gradient=dE,
             method=method,
@@ -68,18 +68,17 @@ def minimize(
             initial_values=initial_values,
             maxiter=maxiter,
             silent=silent,
-            args=args,
             **kwargs,
         )
     else:
         return tminimize(
+            *args,
             objective=objective,
             method=method,
             variables=variables,
             initial_values=initial_values,
             maxiter=maxiter,
             silent=silent,
-            args=args,
             **kwargs,
         )
 
@@ -113,14 +112,14 @@ def grad(
         type(arg).__name__ == "FermBraketImpl" for arg in objective.args
     ):
         return tqgrad(
-            objective=objective, variable=variable, no_compile=True, args=args, **kwargs
+            *args, objective=objective, variable=variable, no_compile=True, **kwargs
         )
     else:
         return tqgrad(
+            *args,
             objective=objective,
             variable=variable,
             no_compile=no_compile,
-            args=args,
             **kwargs,
         )
 
@@ -183,31 +182,31 @@ def simulate(
                 noise,
                 device,
                 initial_state,
-                args=args,
+                *args,
                 **kwargs,
             )
             for op in objective
         ]  # TODO Multidimensional
     if isinstance(objective, FCircuit):
         return simulate_fcircuit(
-            U=objective, variables=variables, backend=backend, args=args, **kwargs
+            *args, U=objective, variables=variables, backend=backend, **kwargs
         )
 
     compiled_objective = compile(
+        *args,
         objective=objective,
         samples=samples,
         variables=variables,
         backend=backend,
         noise=noise,
         device=device,
-        args=args,
         **kwargs,
     )
     return compiled_objective(
+        *args,
         variables=variables,
         samples=samples,
         initial_state=initial_state,
-        args=args,
         **kwargs,
     )
 
@@ -277,10 +276,11 @@ def compile(
                 if type(arg).__name__ == "FermBraketImpl":
                     if id(arg) not in expectationvalues:
                         compiled_expval = compile_fexpval(
-                            objective=arg, backend=fbackend, args=args, **kwargs
+                            *args, objective=arg, backend=fbackend, **kwargs
                         )
                         if fbackend == "tequila":
                             compiled_expval = tq_compile(
+                                *args,
                                 objective=compiled_expval,
                                 variables=variables,
                                 samples=samples,
@@ -288,7 +288,6 @@ def compile(
                                 backend=backend,
                                 noise=noise,
                                 device=device,
-                                args=args,
                                 **kwargs,
                             ).args[0]
                         expectationvalues[id(arg)] = compiled_expval
@@ -302,6 +301,7 @@ def compile(
             args=compiled_sets[0], transformation=objective.transformation
         )
     res = tq_compile(
+        *args,
         objective=objective,
         variables=variables,
         samples=samples,
@@ -309,7 +309,6 @@ def compile(
         backend=backend,
         noise=noise,
         device=device,
-        args=args,
         **kwargs,
     )
     return res

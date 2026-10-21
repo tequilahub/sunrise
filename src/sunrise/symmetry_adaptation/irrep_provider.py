@@ -163,4 +163,4 @@ def IrrepProvider(
     ADD SOMETHING
     """
     # any kwargs and circuit form should be managed inside each class
-    return INSTALLED_IRREP_PROVIDERS[provider.lower()](mol=mol, args=args, **kwargs)
+    return INSTALLED_IRREP_PROVIDERS[provider.lower()](*args, mol=mol, **kwargs)

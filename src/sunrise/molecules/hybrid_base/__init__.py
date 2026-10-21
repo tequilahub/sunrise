@@ -164,10 +164,10 @@ def HyMolecule(
         parameters.basis_set = basis_set
 
     return INSTALLED_QCHEMISTRY_BACKENDS[backend.lower()](
+        *args,
         parameters=parameters,
         transformation=transformation,
         orbital_type=orbital_type,
         guess_wfn=guess_wfn,
-        args=args,
         **kwargs,
     )

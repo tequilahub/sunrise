@@ -125,22 +125,22 @@ class SPASolver:
             E = decompose(H=H, U=circuit, grouping=self.grouping)
             result = tq.minimize(
                 E,
+                *args,
                 silent=True,
                 initial_values=self.variables,
                 gradient="2-point",
                 method_options={"finite_diff_rel_step": 1.0e-4},
                 backend=self.backend,
-                args=args,
                 **kwargs,
             )
         else:
             E = tq.ExpectationValue(H=H, U=circuit)
             result = tq.minimize(
                 E,
+                *args,
                 silent=True,
                 initial_values=self.variables,
                 backend=self.backend,
-                args=args,
                 **kwargs,
             )
         if self.restart_from_previous_runs:

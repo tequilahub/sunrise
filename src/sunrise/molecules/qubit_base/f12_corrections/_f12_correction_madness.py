@@ -51,7 +51,7 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
                 f12 = f12_data.reshape(sds)
                 f12_filename = f12_filename[:-3] + "npy"
                 numpy.save(f12_filename, arr=f12)
-            except TequilaException:
+            except Exception:  # noqa: BLE001
                 print(f"Error while trying to read {f12_filename}!")
         elif not f12_filename.endswith(".npy"):
             raise TequilaException

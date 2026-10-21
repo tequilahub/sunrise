@@ -146,7 +146,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
                 ):
                     frozen_docc = None
                     print(
-                        "active space not CAS type: frozen_docc of {irrep} ",
+                        f"active space not CAS type: frozen_docc of {irrep} ",
                         sorted_array,
                     )
                     break
@@ -244,12 +244,12 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
 
         # psi4 active space will be formed later
         super().__init__(
+            *args,
             parameters=parameters,
             transformation=transformation,
             active_orbitals=None,
             reference_orbitals=reference_orbitals,
             frozen_orbitals=[],
-            args=args,
             **kwargs,
         )
 
@@ -318,14 +318,26 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         if kwargs.get("point_group") is not None:
             # the molecule took the point group, psi4 computes in its Abelian one
             kwargs["point_group"] = self._psi4_point_group
-        self.compute_energy(method="hf", recompute=True, args=args, **kwargs)
+        self.compute_energy(*args, method="hf", recompute=True, **kwargs)
         self.ref_wfn = self.logs["hf"].wfn
 
         self.transformation = self._initialize_transformation(
-            transformation=transformation, args=args, **kwargs
+            *args, transformation=transformation, **kwargs
         )
 
         self.kwargs = kwargs
+
+    def __deepcopy__(self, memo):
+        # psi4.core objects are C++ bindings that cannot be pickled, so deepcopy fails on them.
+        # They are only read after construction, so the copy shares them instead of duplicating them.
+        memo[id(self.psi4_mol)] = self.psi4_mol
+        for log in self.logs.values():
+            memo[id(log.wfn)] = log.wfn
+            memo[id(log.mol)] = log.mol
+        result = self.__class__.__new__(self.__class__)
+        memo[id(self)] = result
+        result.__dict__.update(copy.deepcopy(self.__dict__, memo))
+        return result
 
     @property
     def nirrep(self):
@@ -618,12 +630,12 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
             psi4.core.clean_options()
             psi4.core.clean_variables()
             _energy, wfn = self._run_psi4(
+                *args,
                 method=method,
                 options=options,
                 point_group="c1",
                 ref_wfn=self.ref_wfn.c1_deep_copy(self.ref_wfn.basisset()),
                 filename=filename,
-                args=args,
                 **kwargs,
             )
             all_amplitudes = wfn.get_amplitudes()
@@ -692,10 +704,10 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
                 "Warning: Active space is not Psi4 representable", TequilaWarning
             )
         return self._run_psi4(
+            *args,
             method=method,
             options=options,
             ignore_active_space=ignore_active_space,
-            args=args,
             **kwargs,
         )[0]
 
@@ -770,12 +782,12 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
             psi4_options = {}
         if not psi4_method:
             return super().compute_rdms(
+                *args,
                 U=U,
                 variables=variables,
                 spin_free=spin_free,
                 get_rdm1=get_rdm1,
                 get_rdm2=get_rdm2,
-                args=args,
                 **kwargs,
             )
         else:

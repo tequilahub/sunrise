@@ -69,7 +69,7 @@ class JordanWigner(EB):
         :return:
             The openfermion QubitOperator of this class ecoding
         """
-        fop = self.do_transform(fermion_operator=fermion_operator, args=args, **kwargs)
+        fop = self.do_transform(*args, fermion_operator=fermion_operator, **kwargs)
         return self.post_processing(fop)
 
     def post_processing(self, op, *args, **kwargs):

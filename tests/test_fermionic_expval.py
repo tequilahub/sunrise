@@ -29,10 +29,10 @@ HAS_TCC = "tcc" in INSTALLED_FERMIONIC_BACKENDS
 @pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
 def test_spa(geom, backend):
     mol = sn.Molecule(
-        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner"
+        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner", backend="pyscf"
     ).use_native_orbitals()
     edges = sn.Molecule(
-        geometry=geom, basis_set="sto-3g", nature="hybrid"
+        geometry=geom, basis_set="sto-3g", nature="hybrid", backend="pyscf"
     ).get_spa_edges()
     U = mol.make_ansatz("SPA", edges=edges, optimize=False)
     circuit = sn.FCircuit.from_edges(edges=edges, n_orb=mol.n_orbitals)
@@ -102,10 +102,10 @@ def test_transition(backend):
 def test_mapped_variables(geom, backend):
     random.seed(datetime.now().timestamp())
     mol = sn.Molecule(
-        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner"
+        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner", backend="pyscf"
     ).use_native_orbitals()
     edges = sn.Molecule(
-        geometry=geom, basis_set="sto-3g", nature="hybrid"
+        geometry=geom, basis_set="sto-3g", nature="hybrid", backend="pyscf"
     ).get_spa_edges()
     U = mol.make_ansatz("SPA", edges=edges, optimize=False)
     mapa = {d: random.random() * np.pi for d in U.extract_variables()}
@@ -130,10 +130,10 @@ def test_mapped_variables(geom, backend):
 def test_optimize_orbitals(geom, backend):
     if backend == "fqe":
         pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
-    snmol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="f")
+    snmol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="f", backend='pyscf')
     snmol, edges = snmol.use_CLPO_orbitals_and_edges()
     tqmol = sn.Molecule(
-        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner"
+        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner", backend="pyscf"
     )
     tqmol = sn.CLPO.generate_CLPO_molecule(tqmol)
     snU = snmol.make_ansatz("SPA", edges=edges)

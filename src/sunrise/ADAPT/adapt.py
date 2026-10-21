@@ -85,7 +85,7 @@ class ObjectiveFactoryBase:
             )
         else:
             return ExpectationValue(
-                H=self.H, U=self.Upre + U + self.Upost, args=args, **kwargs
+                *args, H=self.H, U=self.Upre + U + self.Upost, **kwargs
             )
 
     def grad_objective(self, *args, **kwargs):
@@ -102,10 +102,10 @@ class Adapt:
 
     def make_objective(self, U, variables=None, *args, **kwargs):
         return self.objective_factory(
+            *args,
             U=U,
             variables=variables,
             molecule=self.molecule,
-            args=args,
             **{**self.parameters.compile_args, **kwargs},
         )
 
@@ -133,7 +133,7 @@ class Adapt:
                 self.molecule = getattr(operator_pool, "molecule", None)
         if objective_factory is None:
             self.objective_factory = ObjectiveFactoryBase(
-                H, molecule=self.molecule, args=args, **kwargs
+                H, *args, molecule=self.molecule, **kwargs
             )
         else:
             self.objective_factory = objective_factory
@@ -264,7 +264,7 @@ class Adapt:
                     )
 
             op_names = []
-            for count, k in enumerate(gradients):
+            for count, k in enumerate(gradients, start=1):
                 Ux = self.operator_pool.make_unitary(k, label=current_label)
                 U += Ux
                 op_names.append(Ux.extract_variables())
@@ -322,7 +322,7 @@ class Adapt:
             ):
                 if not self.parameters.silent:
                     print(
-                        "energy difference is {diff:+2.8f}, convergence criterion met"
+                        f"energy difference is {diff:+2.8f}, convergence criterion met"
                     )
                 break
 
@@ -586,7 +586,7 @@ class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
     def __init__(self, H, circuits: list, factors: list, *args, **kwargs):
         self.circuits = circuits
         self.factors = factors
-        super().__init__(H=H, args=args, **kwargs)
+        super().__init__(*args, H=H, **kwargs)
 
     def __call__(self, U, *args, **kwargs):
         circuit = self.Upre + U + self.Upost
@@ -638,12 +638,12 @@ def run_molecular_adapt(
         H = molecule.make_hamiltonian()
 
     solver = Adapt(
+        *args,
         operator_pool=operator_pool,
         Upre=Upre,
         Upost=Upost,
         H=H,
         backend=backend,
-        args=args,
         **kwargs,
     )
 

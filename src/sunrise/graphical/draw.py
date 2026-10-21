@@ -37,9 +37,7 @@ def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
                 print(f"variables          = {len(variables)}")
                 fname = f"{filename or 'obj'}_{i}.png"
                 print(f"circuit            = {fname}")
-                draw(
-                    E.U, filename=fname, width=width, height=height, args=args, **kwargs
-                )
+                draw(E.U, *args, filename=fname, width=width, height=height, **kwargs)
             drawn[E] = i
         return
 
@@ -60,11 +58,11 @@ def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
 
     # Route to Sunrise FCircuit engine, or fallback to Tequila for standard QCircuits
     if hasattr(circuit, "export_to"):
-        circuit.export_to(filename, args=args, **kwargs)
+        circuit.export_to(filename, *args, **kwargs)
     else:
         import tequila as tq
 
-        tq.draw(circuit, filename=filename, args=args, **kwargs)
+        tq.draw(circuit, *args, filename=filename, **kwargs)
         return
 
     # Display inline if running in a Jupyter Notebook / IPython environment

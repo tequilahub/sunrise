@@ -111,7 +111,7 @@ class QuantumChemistryPySCF(FermionicBase):
             if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()
 
-        super().__init__(parameters=parameters, orbitals=orbitals, args=args, **kwargs)
+        super().__init__(*args, parameters=parameters, orbitals=orbitals, **kwargs)
 
     def compute_fci(self, get_wfn=False, ci0=None, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="chem")
@@ -243,7 +243,7 @@ class QuantumChemistryPySCF(FermionicBase):
                 )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)
-        except AttributeError:
+        except Exception:  # noqa: BLE001
             return base
         return base
 

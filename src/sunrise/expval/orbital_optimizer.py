@@ -199,6 +199,7 @@ def optimize_orbitals(
         if isinstance(circuit, FCircuit):
             circuit = circuit.to_qcircuit(molecule=molecule)
     result = optimizer(
+        *args,
         molecule=molecule,
         use_hcb=use_hcb,
         circuit=circuit,
@@ -213,7 +214,6 @@ def optimize_orbitals(
         save_chkfile=save_chkfile,
         read_chkfile=read_chkfile,
         vqe_solver=vqe_solver,
-        args=args,
         **kwargs,
     )
     if isinstance(molecule, HybridBase):
@@ -250,7 +250,7 @@ def optimizer(
         from pyscf import lib, mcscf
 
         from ..molecules.qubit_base.pyscf_interface import QuantumChemistryPySCF
-    except ImportError as exception:
+    except Exception as exception:  # noqa: BLE001
         raise TequilaException(
             f"{exception}\noptimize_orbitals: Need pyscf to run (pip install pyscf)"
         )
@@ -299,6 +299,7 @@ def optimizer(
         }
 
     wrapper = PySCFVQEWrapper(
+        *args,
         molecule_arguments=molecule_arguments,
         n_electrons=pyscf_molecule.n_electrons,
         const_part=c,
@@ -307,7 +308,6 @@ def optimizer(
         silent=silent,
         vqe_solver=vqe_solver,
         molecule_factory=molecule_factory,
-        args=args,
         **kwargs,
     )
     mc.fcisolver = wrapper

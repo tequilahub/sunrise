@@ -45,7 +45,7 @@ try:
     import openfermion
     from openfermion.ops import FermionOperator as OFFermionOperator
     from openfermion.utils import hermitian_conjugated
-except ImportError:
+except Exception:  # noqa: BLE001
     try:
         pass
     except Exception as E:
@@ -127,13 +127,13 @@ class FermionicBase(QuantumChemistryBase):
             self.integral_manager = kwargs["integral_manager"]
         else:
             self.integral_manager = self.initialize_integral_manager(
+                *args,
                 active_orbitals=active_orbitals,
                 reference_orbitals=reference_orbitals,
                 orbitals=orbitals,
                 frozen_orbitals=frozen_orbitals,
                 orbital_type=orbital_type,
                 basis_name=self.parameters.basis_set,
-                args=args,
                 **kwargs,
             )
 
@@ -160,6 +160,7 @@ class FermionicBase(QuantumChemistryBase):
             kwargs.pop("active_orbitals")
         parameters = molecule.parameters
         return cls(
+            *args,
             nuclear_repulsion=c,
             one_body_integrals=h1,
             two_body_integrals=h2,
@@ -169,7 +170,6 @@ class FermionicBase(QuantumChemistryBase):
             orbital_type=molecule.integral_manager._orbital_type,
             parameters=parameters,
             reference_orbitals=molecule.integral_manager.active_space.reference_orbitals,
-            args=args,
             **kwargs,
         )
 
@@ -213,7 +213,7 @@ class FermionicBase(QuantumChemistryBase):
             multiplicity=molecule.multiplicity,
             charge=molecule.charge,
         )
-        return cls(parameters=parameters, molecule=molecule, args=args, **kwargs)
+        return cls(*args, parameters=parameters, molecule=molecule, **kwargs)
 
     def make_excitation_generator(
         self,
@@ -802,7 +802,7 @@ class FermionicBase(QuantumChemistryBase):
         if "+" in name:
             U = FCircuit()
             subparts = name.split("+")
-            U = self.make_ansatz(name=subparts[0], args=args, **kwargs)
+            U = self.make_ansatz(*args, name=subparts[0], **kwargs)
             # making sure the there are is no undesired behaviour in layers after +
             # reference should not be included since we are not starting from |00...0> anymore
             if "include_reference" in kwargs:
@@ -817,8 +817,8 @@ class FermionicBase(QuantumChemistryBase):
                 kwargs.pop("label")
             for i, subpart in enumerate(subparts[1:]):
                 U += self.make_ansatz(
+                    *args,
                     name=subpart,
-                    args=args,
                     label=(label, i),
                     include_reference=False,
                     hcb_optimization=False,
@@ -827,13 +827,13 @@ class FermionicBase(QuantumChemistryBase):
             return U
 
         if name == "uccsd":
-            return self.make_uccsd_ansatz(args=args, **kwargs)
+            return self.make_uccsd_ansatz(*args, **kwargs)
         elif "spa" in name.lower():
             if "hcb" in kwargs or "hcb" in name.lower():
                 raise ValueError("No HCB operations in Fermionic Backends")
-            return self.make_spa_ansatz(args=args, **kwargs)
+            return self.make_spa_ansatz(*args, **kwargs)
         elif "d" in name or "s" in name:
-            return self.make_upccgsd_ansatz(name=name, args=args, **kwargs)
+            return self.make_upccgsd_ansatz(*args, name=name, **kwargs)
         else:
             raise ValueError(f"unknown ansatz with name={name}")
 
@@ -888,7 +888,7 @@ class FermionicBase(QuantumChemistryBase):
                     order = int(name.split("-")[0])
                 else:
                     order = 1
-            except ValueError:
+            except Exception:  # noqa: BLE001
                 order = 1
 
         indices = self.make_upccgsd_indices(key=name)
@@ -905,13 +905,13 @@ class FermionicBase(QuantumChemistryBase):
         if include_reference:
             U = self.prepare_reference()
         U += self.make_upccgsd_layer(
+            *args,
             include_singles=S,
             include_doubles=D,
             indices=indices,
             label=(label, 0),
             mix_sd=mix_sd,
             spin_adapt_singles=spin_adapt_singles,
-            args=args,
             **kwargs,
         )
         for k in range(1, order):
@@ -1670,7 +1670,7 @@ class FermionicBase(QuantumChemistryBase):
             E = Braket(operator=H, ket=U, mol=self)
             from sunrise import minimize
 
-            return minimize(objective=E, args=args, **kwargs).energy
+            return minimize(*args, objective=E, **kwargs).energy
         else:
             from sunrise.molecules.qubit_base import INSTALLED_QCHEMISTRY_BACKENDS
 

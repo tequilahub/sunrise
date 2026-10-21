@@ -121,10 +121,10 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()
 
         super().__init__(
+            *args,
             parameters=parameters,
             transformation=transformation,
             orbitals=orbitals,
-            args=args,
             **kwargs,
         )
 
@@ -355,7 +355,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                 )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)
-        except AttributeError:
+        except Exception:  # noqa: BLE001
             return base
         return base
 

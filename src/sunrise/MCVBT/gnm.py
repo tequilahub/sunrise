@@ -152,10 +152,10 @@ class mcvbt:
                         init_vars[gate.variables] = np.pi / 2
                 r = sn.minimize(
                     E_preopt,
+                    *args,
                     silent=self.silent,
                     initial_values=init_vars,
                     fbackend=self.solver,
-                    args=args,
                     **kwargs,
                 )
                 energies.append(r.energy)
@@ -174,10 +174,10 @@ class mcvbt:
                         init_vars[vs] = 0.01
                 result = sn.minimize(
                     E_preopt,
+                    *args,
                     silent=self.silent,
                     initial_values=init_vars,
                     backend=self.solver,
-                    args=args,
                     **kwargs,
                 )
 

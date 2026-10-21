@@ -116,10 +116,10 @@ class PyscfHybridBase(HybridBase):
             if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()
         super().__init__(
+            *args,
             parameters=parameters,
             transformation=transformation,
             select=select,
-            args=args,
             **kwargs,
         )
 
@@ -269,6 +269,6 @@ class PyscfHybridBase(HybridBase):
                 )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)
-        except AttributeError:
+        except Exception:  # noqa: BLE001
             return base
         return base

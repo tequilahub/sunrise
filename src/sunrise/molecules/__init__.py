@@ -70,13 +70,13 @@ def Molecule(
         kwargs["units"] = "angstrom"
     if nature.lower() in ("qubit", "q", "tequila", "t"):
         return QubitMolecule(
+            *args,
             geometry=geometry,
             basis_set=basis_set,
             orbital_type=orbital_type,
             backend=backend,
             guess_wfn=guess_wfn,
             name=name,
-            args=args,
             **kwargs,
         )
     elif nature.lower() == "hybrid" or nature.lower() == "h":
@@ -86,6 +86,7 @@ def Molecule(
         else:
             select = {}
         return HyMolecule(
+            *args,
             geometry=geometry,
             select=select,
             basis_set=basis_set,
@@ -93,18 +94,17 @@ def Molecule(
             backend=backend,
             guess_wfn=guess_wfn,
             name=name,
-            args=args,
             **kwargs,
         )
     elif nature.lower() == "fermionic" or nature.lower() == "f":
         return FerMolecule(
+            *args,
             geometry=geometry,
             basis_set=basis_set,
             orbital_type=orbital_type,
             backend=backend,
             guess_wfn=guess_wfn,
             name=name,
-            args=args,
             **kwargs,
         )
     else:
@@ -151,13 +151,13 @@ def MoleculeFromSunrise(
             # hybrid molecules set their encoding through select
             kwargs["select"] = mol.select
     return backends[backend.lower()](
+        *args,
         parameters=parameters,
         transformation=transformation,
         n_electrons=mol.n_electrons,
         one_body_integrals=h,
         two_body_integrals=g,
         nuclear_repulsion=c,
-        args=args,
         **kwargs,
     )
 
@@ -208,7 +208,7 @@ def MoleculeFromOpenFermion(
         if "frozen_orbitals" not in kwargs:
             kwargs["frozen_orbitals"] = []
     result = NATURE_BACKENDS[nature.lower()][backend].from_openfermion(
-        molecule=molecule, transformation=transformation, args=args, **kwargs
+        *args, molecule=molecule, transformation=transformation, **kwargs
     )
     if use_integrals:
         result.parameters.frozen_core = False
@@ -302,13 +302,13 @@ def MoleculeFromPyscf(
     else:
         units = "a"
     tqmol = NATURE_BACKENDS[nature.lower()]["base"](
+        *args,
         parameters=parameters,
         transformation=transformation,
         active_orbitals=active_orbitals,
         frozen_orbitals=frozen_orbitals,
         point_group=molecule.symmetry_subgroup,
         units=units,
-        args=args,
         **kwargs,
     )
     tqmol.integral_manager.orbital_coefficients = mo_coeff

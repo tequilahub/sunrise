@@ -244,9 +244,9 @@ def rotate_and_hcb(
             EX = tq.ExpectationValue(U=tcircuit, H=hcb_mol.make_hamiltonian())
             incr = tq.simulate(
                 EX,
+                *args,
                 variables=variables,
                 initial_state=initial_state,
-                args=args,
                 **kwargs,
             )
             approx += incr

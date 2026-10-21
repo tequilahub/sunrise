@@ -36,6 +36,19 @@ from ...fermionic_operations.circuit import FCircuit
 from ..fermionic_braket import FermBraketImpl
 
 
+def _is_pyscf_molecule(molecule) -> bool:
+    # imported here and not at the top: sunrise.molecules imports sunrise.expval while it loads
+    from sunrise.molecules.fermionic_base.pyscf_interface import (
+        QuantumChemistryPySCF as FermionicPySCF,
+    )
+    from sunrise.molecules.hybrid_base.pyscf_interface import PyscfHybridBase
+    from sunrise.molecules.qubit_base.pyscf_interface import (
+        QuantumChemistryPySCF as QubitPySCF,
+    )
+
+    return isinstance(molecule, (QubitPySCF, FermionicPySCF, PyscfHybridBase))
+
+
 class TCCBraket:
     def __init__(self, braket: FermBraketImpl, *args, **kwargs):
         self.operator = None
@@ -70,6 +83,15 @@ class TCCBraket:
             ket is None or ket.initial_state is None
         )
         mo_coeff = molecule.integral_manager.orbital_coefficients
+        if not allclose(mo_coeff, eye(len(mo_coeff))) and not _is_pyscf_molecule(
+            molecule
+        ):
+            # the pyscf path below applies mo_coeff to pyscf's AO basis, which only matches pyscf-backed molecules
+            # (psi4 e.g. orders the p orbitals differently), so other backends go through their MO integrals instead
+            from sunrise.molecules import MoleculeFromSunrise
+
+            molecule = MoleculeFromSunrise(molecule)
+            mo_coeff = molecule.integral_manager.orbital_coefficients
         aslst = [i.idx_total for i in molecule.integral_manager.active_orbitals]
         active_space = (molecule.n_electrons, molecule.n_orbitals)
         if allclose(
@@ -249,9 +271,9 @@ class TCCBraket:
         """Tequila Circuit Bra variables."""
         bar: dict = deepcopy(self.BK.var_to_param_bra)
         if bar is not None:
-            for i in bar.items():  # Here to tequila
-                if isinstance(bar[i], (Number, FixedVariable)):
-                    bar[i] = assign_variable(-2 * (bar[i]))
+            for i, v in bar.items():  # Here to tequila
+                if isinstance(v, (Number, FixedVariable)):
+                    bar[i] = assign_variable(-2 * v)
         return bar
 
     @property
@@ -282,7 +304,7 @@ class TCCBraket:
         """Tequila circuit Ket parameters."""
         bar = deepcopy(self.BK.var_to_param_ket)
         if bar is not None:
-            for i in bar.items():  # to tequila
+            for i in bar:  # to tequila
                 if isinstance(bar[i], (Number, FixedVariable)):
                     bar[i] = assign_variable(-2 * (bar[i]))
         return bar
@@ -313,9 +335,9 @@ class TCCBraket:
         """Tequila circuit variables."""
         bar: dict = deepcopy(self.BK.var_to_param)
         if bar is not None:
-            for i in bar.items():  # Here to tequila
-                if isinstance(bar[i], (Number, FixedVariable)):
-                    bar[i] = assign_variable(-2 * bar[i])
+            for i, v in bar.items():  # Here to tequila
+                if isinstance(v, (Number, FixedVariable)):
+                    bar[i] = assign_variable(-2 * v)
         return bar
 
     @property

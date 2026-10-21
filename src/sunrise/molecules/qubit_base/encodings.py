@@ -87,7 +87,7 @@ class EncodingBase(metaclass=abc.ABCMeta):
         else:
             op = fermion_operator
 
-        fop = self.do_transform(fermion_operator=op, args=args, **kwargs)
+        fop = self.do_transform(*args, fermion_operator=op, **kwargs)
         fop.compress()
         return self.post_processing(QubitHamiltonian.from_openfermion(fop))
 
@@ -354,10 +354,10 @@ class TaperedBravyKitaev(EncodingBase):
                 f"Don't pass up_then_down argument to {type(self).__name__}, it can't be changed"
             )
         super().__init__(
+            *args,
             n_orbitals=n_orbitals,
             n_electrons=n_electrons,
             up_then_down=False,
-            args=args,
             **kwargs,
         )
 
@@ -378,7 +378,7 @@ class TaperedBravyKitaev(EncodingBase):
         non_tapered_trafo = BravyiKitaevTree(
             up_then_down=True, n_electrons=self.n_electrons, n_orbitals=self.n_orbitals
         )
-        key = non_tapered_trafo.map_state(state=state, args=args, **kwargs)
+        key = non_tapered_trafo.map_state(*args, state=state, **kwargs)
         n_qubits = self.n_orbitals * 2
         active_qubits = [
             i for i in range(n_qubits) if i not in [n_qubits - 1, n_qubits // 2 - 1]
@@ -420,10 +420,10 @@ class TaperedBinary(EncodingBase):
         else:
             self.active_orbitals = active_orbitals
         super().__init__(
+            *args,
             n_orbitals=n_orbitals,
             n_electrons=n_electrons,
             up_then_down=up_then_down,
-            args=args,
             **kwargs,
         )
         self.spin_parity = bool(
@@ -441,7 +441,7 @@ class TaperedBinary(EncodingBase):
         :return:
             The openfermion QubitOperator of this class ecoding
         """
-        fop = self.do_transform(fermion_operator=fermion_operator, args=args, **kwargs)
+        fop = self.do_transform(*args, fermion_operator=fermion_operator, **kwargs)
         fop.compress()
         return self.post_processing(QubitHamiltonian.from_openfermion(fop))
 

@@ -36,5 +36,5 @@ def TequilaBraket(braket: FermBraketImpl, *args, **kwargs) -> Objective:
     elif isinstance(operator, FermionOperator):
         operator = mol.transformation(operator)
     if braket.is_diagonal:
-        return ExpectationValue(U=ket, H=operator, args=args, **kwargs)
-    return BraKet(ket=ket, bra=bra, operator=operator, args=args, **kwargs)
+        return ExpectationValue(*args, U=ket, H=operator, **kwargs)
+    return BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)
