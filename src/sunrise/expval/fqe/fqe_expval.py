@@ -1,18 +1,18 @@
 from __future__ import annotations
-from typing import Union, Tuple, List, Any, Dict
-import tequila as tq
-from numpy.ma.core import shape
-from tequila import QubitWaveFunction, TequilaException
-from tequila.objective.objective import Objective, Variables, Variable
+
 import fqe
-from sunrise.expval.fqe.fqe_utils import *
+import tequila as tq
+from tequila import QubitWaveFunction, TequilaException
+
 from sunrise.expval.fqe.fermionic_utils import *
+from sunrise.expval.fqe.fqe_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
+
 from ..fermionic_braket import FermBraketImpl
 
 
 class FQEBraKet:
-    def __init__(self, braket: "FermBraketImpl", *args, **kwargs):
+    def __init__(self, braket: FermBraketImpl, *args, **kwargs):
         self.ket_instructions = None
         self.ket_angles = None  # all variables including function objects
         self.ket_extract_variables_names = None  # only unique variables
@@ -43,7 +43,7 @@ class FQEBraKet:
             elif operator.lower() == "i" or operator.lower() == "identity":
                 self.h_fqe = None
             else:
-                raise TequilaException("Not implemented operator {}".format(operator))
+                raise TequilaException(f"Not implemented operator {operator}")
         elif isinstance(
             operator, openfermion.ops.operators.fermion_operator.FermionOperator
         ):
@@ -56,7 +56,7 @@ class FQEBraKet:
                 operator, norb=mol.n_orbitals
             )
         else:
-            raise TequilaException("Not recognized format {}".format(operator))
+            raise TequilaException(f"Not recognized format {type(operator)}")
 
         bin_dict = generate_of_binary_dict(self.n_orbitals, self.n_ele // 2)
 
@@ -92,7 +92,7 @@ class FQEBraKet:
         self.ket_time_evolved = None
         self.bra_time_evolved = None
 
-    def __call__(self, variables: Union[dict, list] = {}, *args, **kwargs) -> float:
+    def __call__(self, variables: dict | list | None = None, *args, **kwargs) -> float:
         """
 
         :param variables: Variables to be used on the time evolution. Can be a list, dict or tequila.Variables object
@@ -100,7 +100,14 @@ class FQEBraKet:
         :param kwargs:
         :return: Expectation value <bra|H|ket> or <ket|ket> if no Hamiltonian is provided
         """
-
+        if variables is None:
+            variables = {}
+        if self.is_diagonal:
+            parameters = self.ket_extract_variables_names
+        else:
+            parameters = (
+                self.ket_extract_variables_names + self.bra_extract_variables_names
+            )
         if isinstance(variables, list):
             assert len(variables) == len(self.extract_variables())
             variables = {
@@ -111,23 +118,13 @@ class FQEBraKet:
             raise TequilaException(
                 "Objective did not receive all variables:\n"
                 "You gave\n"
-                " {}\n"
+                f" {variables}\n"
                 " but the objective depends on\n"
-                " {}\n"
+                f" {self.extract_variables()}\n"
                 " missing values for\n"
-                " {}".format(
-                    variables,
-                    self.extract_variables(),
-                    [k for k, v in check_variables.items() if not v],
-                )
+                f" {[k for k, v in check_variables.items() if not v]}"
             )
         internal_variables = deepcopy(variables)
-        if self.is_diagonal:
-            parameters = self.ket_extract_variables_names
-        else:
-            parameters = (
-                self.ket_extract_variables_names + self.bra_extract_variables_names
-            )
         internal_variables = tq.format_variable_dictionary(internal_variables)
 
         angle_internal_ket = [x(internal_variables) for x in self.ket_angles]
@@ -280,17 +277,16 @@ class FQEBraKet:
 
 
 def set_init_state(
-    wfn: "fqe.Wavefunction",
+    wfn: fqe.Wavefunction,
     n_ele,
     n_orb,
-    init_state: Union[
-        List[Union[Tuple[str, int], QubitWaveFunction, np.array]], QubitWaveFunction
-    ],
+    init_state: list[tuple[str, int] | QubitWaveFunction | np.array]
+    | QubitWaveFunction,
     bin_dict: dict,
 ) -> None:
     coeff = wfn.get_coeff((n_ele, 0))
 
-    if isinstance(init_state, Tuple):
+    if isinstance(init_state, tuple):
         for state in init_state:
             if len(state[0]) != n_ele:
                 raise TequilaException("initial state is to long")
@@ -324,9 +320,7 @@ def set_init_state(
         wfn.normalize()
 
     else:
-        raise TequilaException(
-            "unkown intitial state type {}".format(type(init_state[0]))
-        )
+        raise TequilaException(f"unkown intitial state type {type(init_state[0])}")
 
 
 def init_state_from_wavefunction(wvf: QubitWaveFunction, n_orb: int, bin_dict: dict):

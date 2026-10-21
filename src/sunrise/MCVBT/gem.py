@@ -1,18 +1,19 @@
 import numpy as np
 import scipy
-from sunrise.expval import Braket, Overlap
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+from tequila import INSTALLED_BACKENDS
 from tequila import BraKet as tqBraket
 from tequila import Overlap as tqOverlap
 from tequila.utils import to_float
+
 from sunrise import simulate
-from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS
-from tequila import INSTALLED_BACKENDS
+from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS, Braket, Overlap
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
-    """ """
+    """
     # todo add description and rename function evtl.
+    """
     transition_matrix = np.eye(len(circuits))
     overlap_matrix = np.eye(len(circuits))
 
@@ -38,7 +39,7 @@ def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True
                     tqOverlap(circuits[i], circuits[j]), variables
                 )
             else:
-                raise ValueError("Unknown solver {}".format(solver))
+                raise ValueError(f"Unknown solver {solver}")
             transition_matrix[i, j] = to_float(transition_element)
             transition_matrix[j, i] = transition_matrix[i, j]
 

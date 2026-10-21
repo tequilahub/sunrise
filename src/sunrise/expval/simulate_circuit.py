@@ -1,13 +1,14 @@
-from sunrise.fermionic_operations import FCircuit
-from tequila.objective.objective import Variables
-from tequila.objective import format_variable_dictionary
-from tequila import QubitWaveFunction, TequilaException
-from sunrise.molecules.qubit_base import Molecule
+from __future__ import annotations
+
+from numpy import ceil, zeros
+from tequila import SUPPORTED_BACKENDS, QCircuit, QubitWaveFunction, TequilaException
 from tequila import simulate as tq_simulate
-from typing import Union
-from numpy import zeros, ceil
-from tequila import SUPPORTED_BACKENDS, QCircuit
+from tequila.objective import format_variable_dictionary
+from tequila.objective.objective import Variables
+
 from sunrise.expval import pick_backend
+from sunrise.fermionic_operations import FCircuit
+from sunrise.molecules.qubit_base import Molecule
 
 SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR = ["fqe", "tcc", "spex"]
 INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR = {}
@@ -34,7 +35,10 @@ except (ImportError, AttributeError):
 
 
 def simulate_fcircuit(
-    U: FCircuit, variables: Union[Variables, dict], backend: str = None, **kwargs
+    U: FCircuit,
+    variables: Variables | dict | None,
+    backend: str | None = None,
+    **kwargs,
 ) -> QubitWaveFunction:
     """
     Interface with Fermionic Backends to sumulate FCircuits
@@ -44,14 +48,14 @@ def simulate_fcircuit(
 
     If qubit based backend (see tequila.SUPPORTED_BACKENDS) the n_orb/molecule/FCircuit->QCircuit callable is required.
     """
+    if variables is None:
+        variables = {}
     if isinstance(U, QCircuit):
         return tq_simulate(U, variables, backend=backend, **kwargs)
     variables = format_variable_dictionary(variables)
     if variables is None and not (len(U.extract_variables()) == 0):
         raise TequilaException(
-            "You called simulate for a parametrized type but forgot to pass down the variables: {}".format(
-                U.extract_variables()
-            )
+            f"You called simulate for a parametrized type but forgot to pass down the variables: {U.extract_variables()}"
         )
     if backend is None:
         backend = pick_backend(samples=kwargs.get("samples"), noise=kwargs.get("noise"))

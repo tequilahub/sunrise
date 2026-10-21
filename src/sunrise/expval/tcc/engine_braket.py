@@ -3,39 +3,35 @@
 #  This file is distributed under ACADEMIC PUBLIC LICENSE
 #  and WITHOUT ANY WARRANTY. See the LICENSE file for details.
 
+from __future__ import annotations
 
-from functools import partial
-from typing import Tuple
 import logging
+from functools import partial
 
-import tensorcircuit as tc
-from tencirchem.utils.backend import jit, value_and_grad
-from tencirchem.static.hamiltonian import apply_op
+from numpy import conj, real
 from tencirchem.static.ci_utils import get_ci_strings
-from tencirchem.static.evolve_civector import get_civector_nocache
-from tencirchem.static.ucc import translate_init_state
+from tencirchem.static.engine_ucc import civector_to_statevector, get_ket
 from tencirchem.static.evolve_civector import get_civector as get_civector_
+from tencirchem.static.evolve_civector import get_civector_nocache
+from tencirchem.static.evolve_pyscf import get_civector_pyscf
 from tencirchem.static.evolve_statevector import get_statevector as get_statevector_
 from tencirchem.static.evolve_tensornetwork import get_statevector_tensornetwork
-from tencirchem.static.evolve_pyscf import get_civector_pyscf
+from tencirchem.static.hamiltonian import apply_op
+from tencirchem.static.ucc import translate_init_state
+from tencirchem.utils.backend import jit, value_and_grad
+from tequila import Objective, Variable, simulate
 
-from sunrise.expval.tcc.evolve_pyscf import (
-    get_expval_and_grad_pyscf,
-    get_energy_and_grad_pyscf,
-    params_to_tcc,
-)
 from sunrise.expval.tcc.evolve_civector import (
     get_energy_and_grad_civector,
     get_energy_and_grad_civector_nocache,
-)
-from sunrise.expval.tcc.evolve_civector import (
     get_expval_and_grad_civector,
     get_expval_and_grad_civector_nocache,
 )
-from tequila import Variable, Objective, simulate
-from tencirchem.static.engine_ucc import get_ket, civector_to_statevector
-from numpy import real, conj
-
+from sunrise.expval.tcc.evolve_pyscf import (
+    get_energy_and_grad_pyscf,
+    get_expval_and_grad_pyscf,
+    params_to_tcc,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +52,12 @@ def get_expval(
     n_elec_s,
     total_variables,
     params,
-    ex_ops: Tuple,
+    ex_ops: tuple,
     engine,
     mode: str = "fermion",
     init_state=None,
     params_bra=None,
-    ex_ops_bra: Tuple = None,
+    ex_ops_bra: tuple | None = None,
     init_state_bra=None,
 ):
     "Now retuns also the overlap betwen states"
@@ -74,7 +70,7 @@ def get_expval(
     assert len(angles) == len(total_variables)
     map_params = params_to_tcc(params, angles, total_variables)
     map_params_bra = params_to_tcc(params_bra, angles, total_variables)
-    logger.info(f"Entering `get_energy`")
+    logger.info("Entering `get_expval`")
     ci_strings = get_ci_strings(n_qubits, n_elec_s, mode)
     init_state_ket = translate_init_state(init_state, n_qubits, ci_strings)
     init_state_bra = translate_init_state(init_state_bra, n_qubits, ci_strings)
@@ -83,7 +79,7 @@ def get_expval(
         n_qubits,
         n_elec_s,
         tuple(ex_ops),
-        tuple([*range(len(ex_ops))]),
+        (*range(len(ex_ops)),),
         mode=mode,
         init_state=init_state_ket,
     )
@@ -92,7 +88,7 @@ def get_expval(
         n_qubits,
         n_elec_s,
         tuple(ex_ops_bra),
-        tuple([*range(len(ex_ops_bra))]),
+        (*range(len(ex_ops_bra)),),
         mode=mode,
         init_state=init_state_bra,
     )
@@ -114,7 +110,7 @@ def get_energy(
 ):
     assert len(angles) == len(total_variables)
     map_params = params_to_tcc(params, angles, total_variables)
-    logger.info(f"Entering `get_energy`")
+    logger.info("Entering `get_energy`")
     ci_strings = get_ci_strings(n_qubits, n_elec_s, mode)
     init_state = translate_init_state(init_state, n_qubits, ci_strings)
     ket = GETVECTOR_MAP[engine](
@@ -122,7 +118,7 @@ def get_energy(
         n_qubits,
         n_elec_s,
         tuple(ex_ops),
-        tuple([*range(len(ex_ops))]),
+        (*range(len(ex_ops)),),
         mode=mode,
         init_state=init_state,
     )
@@ -232,11 +228,11 @@ def get_expval_and_grad(
     engine,
     mode: str,
     total_variables,
-    ex_ops: Tuple,
+    ex_ops: tuple,
     params,
     params_bra,
     init_state,
-    ex_ops_bra: Tuple = None,
+    ex_ops_bra: tuple | None = None,
     init_state_bra=None,
 ):
     if engine not in EXPVAL_AND_GRAD_MAP:

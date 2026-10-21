@@ -1,12 +1,9 @@
-import tequila as tq
-from tequila import QCircuit, QubitWaveFunction, QubitHamiltonian
-from tequila.objective.objective import Variables
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as tqMolecule
 import numpy as np
-from scipy.linalg import logm, eigh
-import itertools
-import math
-from typing import List, Tuple, Union
+import tequila as tq
+from tequila import QCircuit, QubitWaveFunction
+from tequila.objective.objective import Variables
+
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as tqMolecule
 
 
 class Input_State:

@@ -1,15 +1,18 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from re import sub
-import tequila
-import pandas as pd
-from itertools import groupby, combinations, product as iproduct
+from itertools import groupby
+from itertools import product as iproduct
+from typing import TYPE_CHECKING
+
 import numpy
-from .irrep_provider import IrrepProviderBase
+import pandas as pd
+import tequila
+
 from .fock_space_state import FockSpaceState
-import math
+from .irrep_provider import IrrepProviderBase
 
 if TYPE_CHECKING:
     # only for type hints, importing it at runtime would be circular
@@ -23,7 +26,6 @@ class SymmetrizationProcedure(ABC):
     @abstractmethod
     def symmetrize(self, states: pd.DataFrame) -> pd.DataFrame:
         """Given a state in Fock space, returns a new state that is a symmetry-adapted linear combination of the original state and its images under the symmetry operations of the point group."""
-        pass
 
 
 @dataclass
@@ -686,9 +688,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         )
 
         # Inside build_physical_state, at the very end before returning:
-        all_orbitals = sorted(
-            list(set((closed_shell_orbitals or []) + open_shell_orbitals))
-        )
+        all_orbitals = sorted(set((closed_shell_orbitals or []) + open_shell_orbitals))
 
         # Fallback to all_orbitals if symmetry_domain is None to preserve old behavior
         final_fragment = (
@@ -728,9 +728,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
             or list(range(n_orb))
         )
         irrep_provider = state_list[0].irrep_provider or self.irrep_provider
-        n_electrons = int(
-            round(sum(state_list[0].mo_occ[i] for i in fragment_orbitals))
-        )
+        n_electrons = round(sum(state_list[0].mo_occ[i] for i in fragment_orbitals))
 
         all_states: list[FockSpaceState] = []
         for mo_occ in self._occupation_patterns(len(fragment_orbitals), n_electrons):

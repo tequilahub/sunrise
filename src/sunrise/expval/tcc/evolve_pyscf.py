@@ -1,8 +1,7 @@
 from tencirchem.static.evolve_pyscf import *
 from tencirchem.static.evolve_pyscf import _get_gradients_pyscf
-from tequila import simulate, grad, QTensor
-from tequila.objective.objective import FixedVariable, Objective, Variable
-from numpy import zeros
+from tequila import grad, simulate
+from tequila.objective.objective import Objective, Variable
 
 
 def get_expval_and_grad_pyscf(

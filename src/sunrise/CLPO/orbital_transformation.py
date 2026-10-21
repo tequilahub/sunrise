@@ -1,25 +1,24 @@
 from __future__ import annotations
-import os
+
 import contextlib
+import os
 import tempfile
-import numpy as np
 from copy import deepcopy
-from warnings import warn
-from typing import Tuple, List
-from numbers import Number
 from dataclasses import dataclass
+from numbers import Number
+from warnings import warn
 
-from pyscf import scf, mp
-from pyscf.tools import molden as pyscf_molden
-
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise import MoleculeToPyscf
-from sunrise.molecules.utils_orbital_transformation import transform, orthogonalize
-
+import numpy as np
+from janpa.clpo.lodesc import LO_TYPE_BD, LO_TYPE_LP, LO_TYPE_NB, LO_TYPE_RY
+from janpa.clpo.lpo import CLPOOptions, create_clpos
 from janpa.io.molden import MoldenFile
 from janpa.npa.npa import run_npa
-from janpa.clpo.lpo import create_clpos, CLPOOptions
-from janpa.clpo.lodesc import LO_TYPE_RY, LO_TYPE_LP, LO_TYPE_BD, LO_TYPE_NB
+from pyscf import mp, scf
+from pyscf.tools import molden as pyscf_molden
+
+from sunrise import MoleculeToPyscf
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+from sunrise.molecules.utils_orbital_transformation import orthogonalize, transform
 
 
 @dataclass
@@ -31,7 +30,7 @@ class __custom_mf_conteiner:
 
 def extract_clpo_graph(
     npa_res, clpo_res, avisar: bool = True
-) -> tuple[List[Tuple[int, ...]], str]:
+) -> tuple[list[tuple[int, ...]], str]:
     """Extracts the CLPO graph (edges) directly from janpa-py results."""
     Q = clpo_res.clpo.nao_to_hybrids @ clpo_res.clpo.lo_to_hybrids.T
     sds_clpo = Q.T @ npa_res.sds_nao @ Q
@@ -87,62 +86,52 @@ def _run_janpa_pipeline(
     avisar: bool = True,
 ):
     """Internal helper to run the JANPA pipeline entirely in memory/tempfiles."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory() as tmpdir, open(os.devnull, "w") as devnull:
         molden_in = os.path.join(tmpdir, "temp.molden")
-        devnull = open(os.devnull, "w")
         ctx = (
             contextlib.redirect_stdout(devnull) if silent else contextlib.nullcontext()
         )
 
-        try:
-            with ctx:
-                pyscf_molden.from_mo(
-                    pfmol, molden_in, mo_coeff, occ=mo_occ, ene=mo_energy
-                )
-                molden_file = MoldenFile.load(molden_in)
-                molden_file.coords_to_au()
-                molden_file.to_unnormalized_primitive_coefs()
+        with ctx:
+            pyscf_molden.from_mo(pfmol, molden_in, mo_coeff, occ=mo_occ, ene=mo_energy)
+            molden_file = MoldenFile.load(molden_in)
+            molden_file.coords_to_au()
+            molden_file.to_unnormalized_primitive_coefs()
 
-                npa_res = run_npa(molden_file)
+            npa_res = run_npa(molden_file)
 
-                clpo_opts = CLPOOptions(
-                    hybr_opt_conv_thresh=thres, hybr_opt_max_iter=1000
-                )
-                if custom_edges is not None:
-                    clpo_opts.edges = str(custom_edges)
+            clpo_opts = CLPOOptions(hybr_opt_conv_thresh=thres, hybr_opt_max_iter=1000)
+            if custom_edges is not None:
+                clpo_opts.edges = str(custom_edges)
 
-                clpo_res = create_clpos(
-                    npa_res.sds_nao, npa_res.nao, molden_file.centers, clpo_opts
-                )
-                graph, aviso = extract_clpo_graph(npa_res, clpo_res, avisar)
+            clpo_res = create_clpos(
+                npa_res.sds_nao, npa_res.nao, molden_file.centers, clpo_opts
+            )
+            graph, aviso = extract_clpo_graph(npa_res, clpo_res, avisar)
 
-                # CRITICAL: These matrices have shape (n_orb, n_ao) where ROWS are orbitals.
-                # Tequila expects (n_ao, n_orb) where COLUMNS are orbitals.
-                # We transpose here so callers can assign directly to integral_manager.
-                aho_to_ao = clpo_res.clpo.nao_to_hybrids.T @ npa_res.nao_to_ao
-                clpo_to_ao = clpo_res.clpo.lo_to_hybrids @ aho_to_ao
+            # CRITICAL: These matrices have shape (n_orb, n_ao) where ROWS are orbitals.
+            # Tequila expects (n_ao, n_orb) where COLUMNS are orbitals.
+            # We transpose here so callers can assign directly to integral_manager.
+            aho_to_ao = clpo_res.clpo.nao_to_hybrids.T @ npa_res.nao_to_ao
+            clpo_to_ao = clpo_res.clpo.lo_to_hybrids @ aho_to_ao
 
-                # Transpose: (n_orb, n_ao) -> (n_ao, n_orb) to match Tequila/PySCF convention
-                aho_to_ao = aho_to_ao.T
-                clpo_to_ao = clpo_to_ao.T
-
-        finally:
-            if silent:
-                devnull.close()
+            # Transpose: (n_orb, n_ao) -> (n_ao, n_orb) to match Tequila/PySCF convention
+            aho_to_ao = aho_to_ao.T
+            clpo_to_ao = clpo_to_ao.T
 
     return aho_to_ao, clpo_to_ao, graph, aviso
 
 
 def generate_CLPO_molecule_edges(
     mol: QuantumChemistryBase,
-    edges: list[tuple[int]] = None,
+    edges: list[tuple[int]] | None = None,
     thres: Number = 1.0e-12,
     silent: bool = True,
     use_active: bool = True,
     return_aviso: bool = False,
     use_mp2: bool = False,
     **kwargs,
-) -> Tuple[QuantumChemistryBase, list]:
+) -> tuple[QuantumChemistryBase, list]:
     """
     Interface sunrise molecules with janpa for CLPO molecule generation.
 
@@ -218,7 +207,7 @@ def generate_CLPO_molecule_edges(
 
         ncore = len(mol_out.integral_manager.orbital_coefficients) - mol_out.n_orbitals
         graph = [
-            tuple([to_active[i] - ncore for i in edge if i in to_active.keys()])
+            tuple([to_active[i] - ncore for i in edge if i in to_active])
             for edge in graph_full
         ]
         graph = [g for g in graph if len(g)]
@@ -336,7 +325,7 @@ def generate_HAO_molecule(
 
 def generate_CLPO_molecule(
     mol: QuantumChemistryBase,
-    edges: list = None,
+    edges: list | None = None,
     thres: Number = 1.0e-12,
     silent: bool = True,
     use_active: bool = True,
@@ -382,7 +371,9 @@ def generate_CLPO_molecule(
 
 
 def __map_aviso(
-    aviso: list[tuple[int, int, float]], to_active: dict[int, int], ncore: int = 0
+    aviso: list[tuple[int, int, float]],
+    to_active: dict[int, int] | None,
+    ncore: int = 0,
 ) -> list[tuple[int, int, float]]:
     """Moves the aviso orbital indices from the full CLPO list to the active space, None for those in the frozen core."""
     return [
@@ -393,7 +384,7 @@ def __map_aviso(
 
 def __raise_aviso(
     aviso: list[tuple[int, int, float]],
-    to_active: dict[int, int] = None,
+    to_active: dict[int, int] | None = None,
     ncore: int = 0,
 ):
     """Warns about the aviso orbitals, given by their index in the full CLPO list. With to_active the indices are shown in

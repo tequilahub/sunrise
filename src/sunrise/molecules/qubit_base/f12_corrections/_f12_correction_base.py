@@ -1,10 +1,9 @@
-import tequila as tq
-from tequila import TequilaException, TequilaWarning
-
-from ..chemistry_tools import NBodyTensor
+from __future__ import annotations
 
 import numpy
-from itertools import product
+from tequila import TequilaException
+
+from ..chemistry_tools import NBodyTensor
 
 
 class ExplicitCorrelationCorrection:
@@ -26,11 +25,11 @@ class ExplicitCorrelationCorrection:
     def __init__(
         self,
         mol=None,
-        rdm1: numpy.ndarray = None,
-        rdm2: numpy.ndarray = None,
+        rdm1: numpy.ndarray | None = None,
+        rdm2: numpy.ndarray | None = None,
         gamma: int = 1.4,
-        n_ri: int = None,
-        external_info: dict = None,
+        n_ri: int | None = None,
+        external_info: dict | None = None,
         **kwargs,
     ):
         """
@@ -219,7 +218,7 @@ class ExplicitCorrelationCorrection:
         #     ordering = "openfermion"
         # g = NBodyTensor(elems=self.mol.molecule.two_body_integrals, ordering=ordering,
         #                 active_indices=self.active, size_full=self.n_ri)
-        c, h, g = self.mol.integral_manager.get_integrals(ignore_active_space=True)
+        _c, h, g = self.mol.integral_manager.get_integrals(ignore_active_space=True)
         g = NBodyTensor(
             elems=g.elems,
             ordering=g.ordering,

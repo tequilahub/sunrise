@@ -1,7 +1,12 @@
-import numpy
+from __future__ import annotations
+
 import time
+
+import numpy
 import tequila as tq
+
 from sunrise.molecules.qubit_base import Molecule as QubitMolecule
+
 from .decompose import decompose
 
 
@@ -15,7 +20,7 @@ def fast_qtensor(
     variables,
     do_decompose=False,
     evaluate=True,
-    grouping: int = None,
+    grouping: int | None = None,
     backend="qulacs",
 ):
     simple = True
@@ -26,7 +31,7 @@ def fast_qtensor(
     flat = qtensor.reshape([n])
     ulist = {}
     circuit_ids = {}
-    start = time.time()
+    # start = time.time()
     for i in range(n):
         E = flat[i]
         if len(E.get_expectationvalues()) > 1:
@@ -47,7 +52,7 @@ def fast_qtensor(
             ulist[idx] = {i: H}
 
     # print("first half: {}s".format(time.time()-start))
-    start = time.time()
+    # start = time.time()
     if not simple:
         # print("are we here?")
         return tq.simulate(qtensor, variables)
@@ -66,11 +71,7 @@ def fast_qtensor(
 
         if evaluate:
             # print("we evaluate?")
-            vars = {
-                x: variables[x]
-                for x in variables.keys()
-                if x in tmp.extract_variables()
-            }
+            vars = {x: variables[x] for x in variables if x in tmp.extract_variables()}
             tmp = tq.simulate(tmp, vars, backend=backend)
         else:
             # xstart = time.time()

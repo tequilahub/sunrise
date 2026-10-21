@@ -1,11 +1,13 @@
-from tequila import BraKet, ExpectationValue, Objective
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from openfermion import FermionOperator
+from tequila import BraKet, ExpectationValue, Objective
+from tequila.hamiltonian.paulis import I, from_string
+
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
 from .fermionic_braket import FermBraketImpl
-from tequila.hamiltonian.paulis import from_string, I
 
 
-def TequilaBraket(braket: "FermBraketImpl", *args, **kwargs) -> Objective:
+def TequilaBraket(braket: FermBraketImpl, *args, **kwargs) -> Objective:
     from sunrise.molecules.fermionic_base import FermionicBase
 
     mol = braket.molecule
@@ -34,5 +36,5 @@ def TequilaBraket(braket: "FermBraketImpl", *args, **kwargs) -> Objective:
     elif isinstance(operator, FermionOperator):
         operator = mol.transformation(operator)
     if braket.is_diagonal:
-        return ExpectationValue(U=ket, H=operator, *args, **kwargs)
-    return BraKet(ket=ket, bra=bra, operator=operator, *args, **kwargs)
+        return ExpectationValue(U=ket, H=operator, args=args, **kwargs)
+    return BraKet(ket=ket, bra=bra, operator=operator, args=args, **kwargs)

@@ -1,10 +1,11 @@
-import random
-import numpy as np
 import math
+import random
+
 import networkx as nx
+import numpy as np
+from scipy.spatial.distance import pdist, squareform
 
 from .shared import matrix_scaling
-from scipy.spatial.distance import pdist, squareform
 
 
 def total_distance(edges: list[tuple[int, int]], coordinates: np.ndarray):
@@ -210,7 +211,6 @@ def simulated_annealing_best_n_solutions(
     current_distance = total_distance(current_edges, coordinates=coordinates)
 
     solutions = {}
-    best_edges, best_distance = current_edges[:], current_distance
 
     T = start
     i = 0
@@ -230,8 +230,6 @@ def simulated_annealing_best_n_solutions(
             solutions[key] = (current_distance, current_edges[:])
 
             if difference < 0:
-                best_edges = current_edges
-                best_distance = current_distance
                 no_improv = 0
             else:
                 no_improv += 1

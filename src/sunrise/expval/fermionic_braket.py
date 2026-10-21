@@ -1,28 +1,31 @@
 from __future__ import annotations
-from typing import Any, Union, Optional, Callable
+
+from copy import deepcopy
+from math import pi, sqrt
+from typing import Any, Callable
+
 from openfermion.ops.operators.fermion_operator import FermionOperator
-from tequila import TequilaException, Objective, assign_variable
+from tequila import Objective, TequilaException, assign_variable
 from tequila import grad as tqgrad
-from tequila.objective.objective import Variable, identity, FixedVariable
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+from tequila.objective.objective import FixedVariable, Variable, identity
+from tequila.objective.quantum_arg import QuantumArg
+
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.fermionic_operations.fgateimpl import FGateImpl
 from sunrise.fermionic_operations.gates import FermionicExcitation
-from copy import deepcopy
-from math import pi, sqrt
-from tequila.objective.quantum_arg import QuantumArg
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 class FermBraketImpl(QuantumArg):
     def __init__(
         self,
         ket: FCircuit,
-        bra: Optional[FCircuit] = None,
-        operator: Optional[Union[str, FermionOperator]] = None,
-        molecule: Optional[QuantumChemistryBase] = None,
-        contraction: Optional[Callable] = None,
-        shape: Optional[tuple] = None,
-        samples: Optional[int] = None,
+        bra: FCircuit | None = None,
+        operator: str | FermionOperator | None = None,
+        molecule: QuantumChemistryBase | None = None,
+        contraction: Callable | None = None,
+        shape: tuple | None = None,
+        samples: int | None = None,
         *args,
         **kwargs,
     ):
@@ -30,13 +33,13 @@ class FermBraketImpl(QuantumArg):
         if ket is None:
             raise TequilaException("BraKet requires a ket circuit")
 
-        self._contraction: Optional[Callable] = contraction
-        self._shape: Optional[tuple] = shape
-        self.samples: Optional[int] = samples
-        self.molecule: Optional[QuantumChemistryBase] = molecule
+        self._contraction = contraction
+        self._shape = shape
+        self.samples = samples
+        self.molecule = molecule
         self.ket = ket
         self.bra = bra
-        self.operator: Optional[Union[str, FermionOperator]] = operator
+        self.operator = operator
         self._args = args
         self._kwargs = kwargs
 
@@ -50,7 +53,7 @@ class FermBraketImpl(QuantumArg):
         return Objective(args=[self], transformation=identity)
 
     def grad(self, variable: Variable = None, *args, **kwargs) -> Objective:
-        return _grad_FermBraket(objective=self, variable=variable, *args, **kwargs)
+        return _grad_FermBraket(objective=self, variable=variable, args=args, **kwargs)
 
     def extract_variables(self) -> list:
         var = list(self.ket.extract_variables())
@@ -72,15 +75,15 @@ class FermBraketImpl(QuantumArg):
 
     def map_variables(self, variables: dict, *args, **kwargs) -> FermBraketImpl:
         return FermBraketImpl(
-            ket=self.ket.map_variables(variables, *args, **kwargs),
-            bra=self.bra.map_variables(variables, *args, **kwargs)
+            ket=self.ket.map_variables(variables, args=args, **kwargs),
+            bra=self.bra.map_variables(variables, args=args, **kwargs)
             if self.bra is not None
             else None,
             operator=self.operator,
             contraction=self._contraction,
             shape=self._shape,
             samples=self.samples,
-            *self._args,
+            args=self._args,
             **self._kwargs,
         )
 
@@ -98,7 +101,7 @@ class FermBraketImpl(QuantumArg):
             contraction=self._contraction,
             shape=self._shape,
             samples=self.samples,
-            *self._args,
+            args=self._args,
             **self._kwargs,
         )
 
@@ -109,7 +112,7 @@ class FermBraketImpl(QuantumArg):
     @property
     def H(self) -> tuple:
         if self.operator is None:
-            return tuple()
+            return ()
         return (self.operator,)
 
     @property
@@ -187,10 +190,6 @@ class FermBraketImpl(QuantumArg):
     def operator(self, operator):
         self._operator = operator
 
-    @property
-    def is_compiled(self):
-        return False
-
     def __repr__(self) -> str:
         if self.operator:
             return f"FermBraKetImpl(<bra|H|ket>, qubits={self.qubits})"
@@ -205,9 +204,7 @@ _C2 = 0.25 * (sqrt(2) - 1) / sqrt(2)
 _SHIFTS = [(pi / 2, _C1), (-pi / 2, -_C1), (3 * pi / 2, -_C2), (-3 * pi / 2, _C2)]
 
 
-def _grad_FermBraket(
-    objective: "FermBraketImpl", variable: Variable = None
-) -> Objective:
+def _grad_FermBraket(objective: FermBraketImpl, variable: Variable = None) -> Objective:
     if variable is None:
         # None means that all components are created
         variables = objective.extract_variables()

@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
 from dataclasses import dataclass
-from numpy.typing import NDArray
-import tequila
+from typing import TYPE_CHECKING
+
 import numpy
+import tequila
+from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     # only for type hints, importing it at runtime would be circular
@@ -71,7 +73,7 @@ class GeometricTransformationHelper:
 
     @classmethod
     def homogeneous_operation(
-        cls, M: NDArray[numpy.float64], center: NDArray[numpy.float64] = numpy.zeros(3)
+        cls, M: NDArray[numpy.float64], center: NDArray[numpy.float64] | None = None
     ) -> NDArray[numpy.float64]:
         """
         Construct the homogeneous representation of a linear operation.
@@ -89,7 +91,8 @@ class GeometricTransformationHelper:
         center
                 Point about which the operation is applied.
         """
-
+        if center is None:
+            center = numpy.zeros(3)
         M_h = numpy.eye(4)
         M_h[:3, :3] = M
         M_h[:3, 3] = center - (M @ center)

@@ -1,6 +1,7 @@
-from itertools import combinations
-from .fermionic_utils import make_excitation_generator_op
 from collections import defaultdict
+from itertools import combinations
+
+from .fermionic_utils import make_excitation_generator_op
 
 
 def create_fermionic_generators(instructions, angles, form: str = "fermionic") -> dict:

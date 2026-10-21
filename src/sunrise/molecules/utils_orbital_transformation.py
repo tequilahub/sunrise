@@ -1,9 +1,12 @@
-import numpy
-from typing import Tuple
+from __future__ import annotations
+
 from copy import deepcopy
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.molecules.hybrid_base import HybridBase
+
+import numpy
+
 from sunrise.molecules.fermionic_base import FermionicBase
+from sunrise.molecules.hybrid_base import HybridBase
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 def orthogonalize(c: numpy.ndarray, s: numpy.ndarray) -> numpy.ndarray:
@@ -134,10 +137,10 @@ def get_core(
 def transform(
     modified: QuantumChemistryBase,
     original: QuantumChemistryBase,
-    orbital_type: str = None,
+    orbital_type: str | None = None,
     *args,
     **kwargs,
-) -> Tuple[QuantumChemistryBase, dict]:
+) -> tuple[QuantumChemistryBase, dict]:
     """
     Procedure similar to what is done in use_native_orbitals but for arbitrary basis keeped insied modified. Keeps frozen orbitals canHF
     orthogonalized with the active modified ones

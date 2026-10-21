@@ -1,20 +1,24 @@
+from __future__ import annotations
+
+import sys
+
+from numpy import ix_, ndarray, zeros
 from pyscf import gto, scf
 from pyscf.tools import cubegen
+
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.utils.bar import giuseppe_bar
-import sys
-from numpy import ndarray, zeros, ix_
 
 
 def plot_MO(
     molecule: QuantumChemistryBase,
-    filename: str = None,
-    orbital: list[int] = None,
+    filename: str | None = None,
+    orbital: list[int] | None = None,
     use_active: bool = True,
     print_orbital: bool = True,
     density: bool = False,
     mep: bool = False,
-    rdm1: ndarray = None,
+    rdm1: ndarray | None = None,
     exclude_core: bool = False,
 ):
     """
@@ -66,8 +70,7 @@ def plot_MO(
         else:
             mo_coeff = molecule.integral_manager.orbital_coefficients
             if (
-                not rdm1.shape[0]
-                == molecule.integral_manager.orbital_coefficients.shape[1]
+                rdm1.shape[0] != molecule.integral_manager.orbital_coefficients.shape[1]
             ):  # already provided on frozen_core = False
                 assert rdm1.shape[0] == molecule.n_orbitals, (
                     f"RDM1 provided with unexpected shape ({rdm1.shape}), expected either the number of active orbitals ({molecule.n_orbitals})\n or the number of total orbitals ({molecule.integral_manager.orbital_coefficients.shape[1]})"

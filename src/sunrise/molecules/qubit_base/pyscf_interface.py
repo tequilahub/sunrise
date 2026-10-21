@@ -1,15 +1,15 @@
-from tequila import TequilaException, QubitWaveFunction, BitNumbering
-from .qc_base import QuantumChemistryBase
-from .encodings import JordanWigner
-from .chemistry_tools import ParametersQC, NBodyTensor
-import pyscf
-from pyscf import fci
+from __future__ import annotations
 
-from .chemistry_tools import OrbitalData
-
-import numpy
 import typing
 import warnings
+
+import numpy
+import pyscf
+from pyscf import fci
+from tequila import BitNumbering, QubitWaveFunction, TequilaException
+
+from .chemistry_tools import NBodyTensor, OrbitalData, ParametersQC
+from .qc_base import QuantumChemistryBase
 
 
 def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
@@ -33,7 +33,7 @@ def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
 
     # Position of filled orbitals
     set_bits_beta = [i for i in range(norb) if (beta_str >> i) & 1]
-    phase = (-1) ** sum([(alpha_str & 2**i - 1).bit_count() for i in set_bits_beta])
+    phase = (-1) ** sum((alpha_str & 2**i - 1).bit_count() for i in set_bits_beta)
     return int(merged_str, 2), phase
 
 
@@ -45,7 +45,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
     def __init__(
         self,
         parameters: ParametersQC,
-        transformation: typing.Union[str, typing.Callable] = None,
+        transformation: str | typing.Callable | None = None,
         *args,
         **kwargs,
     ):
@@ -54,14 +54,9 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
             geometry = parameters.get_geometry(ghost="pyscf")
             pyscf_geomstring = ""
             for atom in geometry:
-                pyscf_geomstring += "{} {} {} {};".format(
-                    atom[0], atom[1][0], atom[1][1], atom[1][2]
-                )
+                pyscf_geomstring += f"{atom[0]} {atom[1][0]} {atom[1][1]} {atom[1][2]};"
 
-            if "point_group" in kwargs:
-                point_group = kwargs["point_group"]
-            else:
-                point_group = None
+            point_group = kwargs.get("point_group", None)
 
             mol = pyscf.gto.Mole()
             mol.atom = pyscf_geomstring
@@ -129,7 +124,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
             parameters=parameters,
             transformation=transformation,
             orbitals=orbitals,
-            *args,
+            args=args,
             **kwargs,
         )
 
@@ -255,7 +250,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                     phase = (-1) ** sum(
                         [(alpha_int & 2**i - 1).bit_count() for i in set_bits_beta]
                     )
-                except AttributeError as error:
+                except AttributeError:
                     phase = (-1) ** sum(
                         [bin(alpha_int & 2**i - 1).count("1") for i in set_bits_beta]
                     )
@@ -287,7 +282,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
         elif method == "fci":
             return self.compute_fci(**kwargs)
         else:
-            raise TequilaException("unknown method: {}".format(method))
+            raise TequilaException(f"unknown method: {method}")
 
     def _get_hf(self, do_not_solve=True, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="mulliken")
@@ -360,7 +355,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                 )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)
-        except Exception:
+        except AttributeError:
             return base
         return base
 

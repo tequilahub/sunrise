@@ -1,6 +1,9 @@
-from typing import Tuple, Union, List
+from __future__ import annotations
+
+from tequila import TequilaException
+
+from .color import RGB, Color, ColorRange, Colors
 from .state import CircuitStyle
-from .color import Color, Colors, ColorRange, RGB
 
 
 def hex_to_three_letters(hex_color: str) -> str:
@@ -24,7 +27,7 @@ def hex_to_three_letters(hex_color: str) -> str:
     return "".join(result_letters)
 
 
-def hex_to_rgb(hex_str: str) -> Tuple:
+def hex_to_rgb(hex_str: str) -> tuple:
     rgb = []
     for i in (0, 2, 4):
         decimal = int(hex_str[i : i + 2], 16) / 255
@@ -33,8 +36,10 @@ def hex_to_rgb(hex_str: str) -> Tuple:
 
 
 def parse_color(
-    color: Union[Color, Tuple, List, str], color_dict: dict = {}
-) -> Tuple[Color, dict]:
+    color: Color | tuple | list | str, color_dict: dict | None = None
+) -> tuple[Color, dict]:
+    if color_dict is None:
+        color_dict = {}
     if isinstance(color, Color):
         return color, color_dict
     if isinstance(color, str):
@@ -49,17 +54,21 @@ def parse_color(
             color = Color(name)
         else:
             color = Color(color)
-    elif isinstance(color, (List, Tuple)):
+    elif isinstance(color, (list, tuple)):
         assert len(color) == 3, f"Three RGB components expected, received {len(color)}"
         color = RGB(color[0], color[1], color[2])
     else:
-        raise Exception("No color format indicated")
+        raise TequilaException("No color format indicated")
     return color, color_dict
 
 
 def parse_circuit_style(
-    style: dict = {}, color_dict: dict = {}
-) -> Tuple[CircuitStyle, dict]:
+    style: dict | None = None, color_dict: dict | None = None
+) -> tuple[CircuitStyle, dict]:
+    if style is None:
+        style = {}
+    if color_dict is None:
+        color_dict = {}
     style = dict(style) if style else {}
     color_dict = dict(color_dict) if color_dict else {}
 
@@ -83,9 +92,9 @@ def parse_circuit_style(
 
     if "color_range" in style:
         color_range = style["color_range"]
-        if isinstance(color_range, (List, Tuple)):
+        if isinstance(color_range, (list, tuple)):
             if not len(color_range) == 2:
-                raise Exception("Only 2 colors accepted")
+                raise TequilaException("Only 2 colors accepted")
             c0, color_dict = parse_color(color_range[0], color_dict)
             c1, color_dict = parse_color(color_range[1], color_dict)
             color_range = ColorRange(c0, c1)

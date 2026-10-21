@@ -1,11 +1,27 @@
+from __future__ import annotations
+
 import typing
 import warnings
 
 from tequila import TequilaWarning
-from .qc_base import QuantumChemistryBase
-from .chemistry_tools import ParametersQC, NBodyTensor
-from .madness_interface import QuantumChemistryMadness
+
+from .chemistry_tools import NBodyTensor, ParametersQC
 from .encodings import known_encodings
+from .madness_interface import QuantumChemistryMadness
+from .qc_base import QuantumChemistryBase
+
+__all__ = [
+    "INSTALLED_QCHEMISTRY_BACKENDS",
+    "SUPPORTED_QCHEMISTRY_BACKENDS",
+    "Molecule",
+    "NBodyTensor",
+    "ParametersQC",
+    "QuantumChemistryBase",
+    "QuantumChemistryMadness",
+    "known_encodings",
+    "show_available_modules",
+    "show_supported_modules",
+]
 
 SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "psi4", "madness", "pyscf"]
 INSTALLED_QCHEMISTRY_BACKENDS = {
@@ -30,7 +46,7 @@ except ImportError:
 
 def show_available_modules():
     print("Available QuantumChemistry Modules:")
-    for k in INSTALLED_QCHEMISTRY_BACKENDS.keys():
+    for k in INSTALLED_QCHEMISTRY_BACKENDS:
         print(k)
 
 
@@ -39,13 +55,13 @@ def show_supported_modules():
 
 
 def Molecule(
-    geometry: str = None,
-    basis_set: str = None,
-    transformation: typing.Union[str, typing.Callable] = None,
-    orbital_type: str = None,
-    backend: str = None,
+    geometry: str | None = None,
+    basis_set: str | None = None,
+    transformation: str | typing.Callable | None = None,
+    orbital_type: str | None = None,
+    backend: str | None = None,
     guess_wfn=None,
-    name: str = None,
+    name: str | None = None,
     *args,
     **kwargs,
 ) -> QuantumChemistryBase:
@@ -85,14 +101,14 @@ def Molecule(
         )
         if basis_set is not None:
             warnings.warn(
-                'did not convert as "basis_set={}" was already given'.format(basis_set),
+                f'did not convert as "basis_set={basis_set}" was already given',
                 TequilaWarning,
             )
         basis_set = kwargs["basis"]
 
     keyvals = {}
     for k, v in kwargs.items():
-        if k in ParametersQC.__dict__.keys():
+        if k in ParametersQC.__dict__:
             keyvals[k] = v
 
     if "parameters" in kwargs:
@@ -104,7 +120,7 @@ def Molecule(
         )
 
     integrals_provided = all(
-        [key in kwargs for key in ["one_body_integrals", "two_body_integrals"]]
+        key in kwargs for key in ["one_body_integrals", "two_body_integrals"]
     )
     if integrals_provided and backend is None:
         backend = "base"
@@ -119,9 +135,7 @@ def Molecule(
                 "mra-pno",
             ]:
                 warnings.warn(
-                    "only PNOs supported as orbital_type without basis set. Setting to pno - You gave={}".format(
-                        orbital_type
-                    ),
+                    f"only PNOs supported as orbital_type without basis set. Setting to pno - You gave={orbital_type}",
                     TequilaWarning,
                 )
             orbital_type = "pno"
@@ -131,9 +145,7 @@ def Molecule(
                 "native",
             ]:
                 warnings.warn(
-                    "only hf and native supported as orbital_type with basis-set. Setting to hf - You gave={}".format(
-                        orbital_type
-                    ),
+                    f"only hf and native supported as orbital_type with basis-set. Setting to hf - You gave={orbital_type}",
                     TequilaWarning,
                 )
                 orbital_type = "hf"
@@ -145,13 +157,13 @@ def Molecule(
             elif "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS:
                 backend = "pyscf"
             else:
-                raise Exception(
+                raise ImportError(
                     "No quantum chemistry backends installed on your system"
                 )
 
     elif backend == "base":
         if not integrals_provided:
-            raise Exception(
+            raise ValueError(
                 "No quantum chemistry backends installed on your system\n"
                 "To use the base functionality you need to pass the following tensors via keyword\n"
                 "one_body_integrals, two_body_integrals\n"
@@ -160,22 +172,20 @@ def Molecule(
             backend = "base"
 
     if backend not in SUPPORTED_QCHEMISTRY_BACKENDS:
-        raise Exception(str(backend) + " is not (yet) supported by sunrise")
+        raise ValueError(str(backend) + " is not (yet) supported by sunrise")
 
     if backend not in INSTALLED_QCHEMISTRY_BACKENDS:
-        raise Exception(str(backend) + " was not found on your system")
+        raise ImportError(str(backend) + " was not found on your system")
 
     if guess_wfn is not None and backend != "psi4":
-        raise Exception("guess_wfn only works for psi4")
+        raise ValueError("guess_wfn only works for psi4")
 
     if (
         basis_set is None
         and backend.lower() not in ["base", "madness"]
         and not integrals_provided
     ):
-        raise Exception(
-            "no basis_set or integrals provided for backend={}".format(backend)
-        )
+        raise ValueError(f"no basis_set or integrals provided for backend={backend}")
     elif basis_set is None:
         basis_set = "custom"
         parameters.basis_set = basis_set
@@ -185,6 +195,6 @@ def Molecule(
         transformation=transformation,
         orbital_type=orbital_type,
         guess_wfn=guess_wfn,
-        *args,
+        args=args,
         **kwargs,
     )

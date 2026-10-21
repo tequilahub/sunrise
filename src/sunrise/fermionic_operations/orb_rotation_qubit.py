@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import tequila as tq
-from sunrise.molecules.qubit_base import Molecule as QubitMolecule
+from numpy import allclose, array, eye, ndarray, zeros
 from tequila import QCircuit, QTensor
-from numpy import zeros, eye, allclose, ndarray, array
-from typing import Union, List
-from tequila.circuit._gates_impl import ParametrizedGateImpl, QGateImpl
+from tequila.circuit._gates_impl import QGateImpl
+
+from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 
 
 def OR(*args, **kwargs):
@@ -15,8 +17,8 @@ def OR(*args, **kwargs):
 class OrbitalRotation(QGateImpl):
     def __init__(
         self,
-        orbitals: List[int] = None,
-        matrix: Union[QTensor, ndarray, list] = None,
+        orbitals: list[int] | None = None,
+        matrix: QTensor | ndarray | list | None = None,
         molecule=None,
     ):
         if isinstance(matrix, list):

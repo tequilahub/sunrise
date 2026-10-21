@@ -1,12 +1,12 @@
+import numpy as np
 import tequila as tq
+from scipy.linalg import eigh
+from scipy.optimize import minimize as scp_min
 from tequila import QCircuit, QubitWaveFunction
 from tequila.objective.objective import Variables
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as tqMolecule
-import numpy as np
-from scipy.linalg import eigh
-from sunrise.orbital_correlation.density_matrix_utils import *
-from scipy.optimize import minimize as scp_min
+
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+from sunrise.orbital_correlation.density_matrix_utils import *
 
 
 # Quantum entropy S(rho)
@@ -165,7 +165,7 @@ def one_orb_mutual_info(
     """
     rho_a = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_a)
     if PSSR:
-        rho_a_evals, rho_a_evecs = eigh(rho_a)
+        rho_a_evals, _rho_a_evecs = eigh(rho_a)
         I = (
             (rho_a_evals[0] + rho_a_evals[3]) * np.log(rho_a_evals[0] + rho_a_evals[3])
             + (rho_a_evals[1] + rho_a_evals[2])
@@ -179,7 +179,7 @@ def one_orb_mutual_info(
             )
         )
     elif NSSR:
-        rho_a_evals, rho_a_evecs = eigh(rho_a)
+        rho_a_evals, _rho_a_evecs = eigh(rho_a)
         I = (
             rho_a_evals[0] * np.log(rho_a_evals[0])
             + (rho_a_evals[1] + rho_a_evals[2])
@@ -275,8 +275,8 @@ def one_orb_entanglement(
         float: The single-orbital entanglement entropy E_i.
     """
     rho_a = compute_one_orb_rdm(mol, circuit, variables, initial_state, orb_a)
-    if PSSR == True:
-        rho_a_evals, rho_a_evecs = eigh(rho_a)
+    if PSSR:
+        rho_a_evals, _rho_a_evecs = eigh(rho_a)
         # Eq.(29) https://doi.org/10.1021/acs.jctc.0c00559
         plnp = [
             (rho_a_evals[i] + rho_a_evals[-1 - i])
@@ -290,8 +290,8 @@ def one_orb_entanglement(
             for i in rho_a_evals
         ]
         E = (plnp[0] + plnp[1]) - (xlnx[0] + xlnx[1] + xlnx[2] + xlnx[3])
-    elif NSSR == True:
-        rho_a_evals, rho_a_evecs = eigh(rho_a)
+    elif NSSR:
+        rho_a_evals, _rho_a_evecs = eigh(rho_a)
         # Eq.(29) https://doi.org/10.1021/acs.jctc.0c00559
         xlnx = [
             i * np.log(i) if not np.isclose(i, 0, atol=1.0e-6) else 0.0

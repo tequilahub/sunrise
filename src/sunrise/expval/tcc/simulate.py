@@ -1,20 +1,24 @@
+from __future__ import annotations
+
+from warnings import warn
+
+import numpy as np
 from tequila import (
-    Variable,
+    BitNumbering,
     Objective,
-    simulate,
     QubitWaveFunction,
     TequilaWarning,
-    BitNumbering,
+    Variable,
+    simulate,
 )
 from tequila.objective.objective import Variables
+
 from sunrise.fermionic_operations import FCircuit
 from sunrise.molecules.qubit_base import Molecule
-import numpy as np
-from warnings import warn
 
 
 def tcc_circuit_simulator(
-    U: FCircuit, variables: Variables, n_orb: int = None, **backend_kwargs
+    U: FCircuit, variables: Variables, n_orb: int | None = None, **backend_kwargs
 ) -> QubitWaveFunction:
     """
     TCC FCircuit simulator based on the TCC.UCC utilities
@@ -24,6 +28,7 @@ def tcc_circuit_simulator(
     :param backend_kwargs: Backend kwargs for TCCBraket. Keywords accepted: engine,backend,dtype
     """
     from sunrise.expval.minimize import compile
+
     from .. import Braket
 
     if n_orb is None:

@@ -1,26 +1,23 @@
-import copy
-from dataclasses import dataclass
-from tequila import TequilaException, BitString, TequilaWarning
-from tequila.hamiltonian import QubitHamiltonian
-from sunrise.fermionic_operations import FCircuit
-from sunrise.fermionic_operations import gates
-from tequila.objective.objective import Variable, Variables, Objective
-from tequila import QTensor, QubitWaveFunction, BitNumbering
+from __future__ import annotations
 
-# from tequila.simulators.simulator_api import simulate
-from ...expval.minimize import simulate
-from ...expval import Braket
-from sunrise.molecules.qubit_base.chemistry_tools import (
-    prepare_product_state,
-    ClosedShellAmplitudes,
-    Amplitudes,
-    ParametersQC,
-    NBodyTensor,
-)
+import copy
 import typing
-from numbers import Number
-import numpy
 from itertools import product
+from numbers import Number
+
+import numpy
+from tequila import (
+    BitNumbering,
+    BitString,
+    QTensor,
+    QubitWaveFunction,
+    TequilaException,
+    TequilaWarning,
+)
+from tequila.hamiltonian import QubitHamiltonian
+from tequila.objective.objective import Objective, Variable, Variables
+
+from sunrise.fermionic_operations import FCircuit, gates
 from sunrise.fermionic_operations.givens_rotations import (
     get_givens_circuit as __get_givens_circuit,
 )
@@ -28,24 +25,33 @@ from sunrise.fermionic_operations.givens_rotations import n_rotation as __n_rota
 from sunrise.fermionic_operations.givens_rotations import (
     reconstruct_matrix_from_circuit,
 )
-
+from sunrise.molecules.qubit_base.chemistry_tools import (
+    Amplitudes,
+    ClosedShellAmplitudes,
+    NBodyTensor,
+    ParametersQC,
+)
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
+from ...expval import Braket
+
+# from tequila.simulators.simulator_api import simulate
+from ...expval.minimize import simulate
 
 try:
     # if you are experiencing import errors you need to update openfermion
     # required is version >= 1.0
     # otherwise replace with from openfermion.hamiltonians import MolecularData
     import openfermion
-    from openfermion.chem import MolecularData
     from openfermion.ops import FermionOperator as OFFermionOperator
     from openfermion.utils import hermitian_conjugated
-except Exception:
+except ImportError:
     try:
-        from openfermion.hamiltonians import MolecularData
+        pass
     except Exception as E:
-        raise Exception(
-            "{}\nIssue with Tequila Chemistry: Please update openfermion".format(str(E))
-        )
+        raise TequilaException(
+            f"{E!s}\nIssue with Tequila Chemistry: Please update openfermion"
+        ) from E
 import warnings
 
 OPTIMIZED_ORDERING = "Optimized"
@@ -62,11 +68,11 @@ class FermionicBase(QuantumChemistryBase):
     def __init__(
         self,
         parameters: ParametersQC,
-        active_orbitals: list = None,
-        frozen_orbitals: list = None,
-        orbital_type: str = None,
-        reference_orbitals: list = None,
-        orbitals: list = None,
+        active_orbitals: list | None = None,
+        frozen_orbitals: list | None = None,
+        orbital_type: str | None = None,
+        reference_orbitals: list | None = None,
+        orbitals: list | None = None,
         *args,
         **kwargs,
     ):
@@ -127,7 +133,7 @@ class FermionicBase(QuantumChemistryBase):
                 frozen_orbitals=frozen_orbitals,
                 orbital_type=orbital_type,
                 basis_name=self.parameters.basis_set,
-                *args,
+                args=args,
                 **kwargs,
             )
 
@@ -137,7 +143,7 @@ class FermionicBase(QuantumChemistryBase):
         self._rdm1 = None
         self._rdm2 = None
         # given with the point_group keyword, otherwise detected when it is first needed
-        self.point_group = kwargs.get("point_group")
+        self.point_group = kwargs.get("point_group", None)
 
     @classmethod
     def from_tequila(cls, molecule, *args, **kwargs):
@@ -163,7 +169,7 @@ class FermionicBase(QuantumChemistryBase):
             orbital_type=molecule.integral_manager._orbital_type,
             parameters=parameters,
             reference_orbitals=molecule.integral_manager.active_space.reference_orbitals,
-            *args,
+            args=args,
             **kwargs,
         )
 
@@ -207,12 +213,12 @@ class FermionicBase(QuantumChemistryBase):
             multiplicity=molecule.multiplicity,
             charge=molecule.charge,
         )
-        return cls(parameters=parameters, molecule=molecule, *args, **kwargs)
+        return cls(parameters=parameters, molecule=molecule, args=args, **kwargs)
 
     def make_excitation_generator(
         self,
-        indices: typing.Iterable[typing.Tuple[int, int]],
-        form: str = None,
+        indices: typing.Iterable[tuple[int, int]],
+        form: str | None = None,
     ) -> openfermion.FermionOperator:
         r"""
         Notes
@@ -241,9 +247,7 @@ class FermionicBase(QuantumChemistryBase):
 
         if not self.supports_ucc():
             raise TequilaException(
-                "Molecule with transformation {} does not support general UCC operations".format(
-                    self.transformation
-                )
+                f"Molecule with transformation {self.transformation} does not support general UCC operations"
             )
 
         # check indices and convert to list of tuples if necessary
@@ -255,7 +259,7 @@ class FermionicBase(QuantumChemistryBase):
                     "make_excitation_generator: unexpected input format of indices\n"
                     "use list of tuples as [(i_0, a_0),(i_1, a_1) ...]\n"
                     "or list as [i_0, a_0, i_1, a_1, ... ]\n"
-                    "you gave: {}".format(indices)
+                    f"you gave: {indices}"
                 )
             converted = [
                 (indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)
@@ -324,9 +328,7 @@ class FermionicBase(QuantumChemistryBase):
                 op += openfermion.FermionOperator(Ni + Ma, -1.0)
             else:
                 raise TequilaException(
-                    "Unknown generator form {}, supported are G, P+, P-, G+, G- and P0".format(
-                        form
-                    )
+                    f"Unknown generator form {form}, supported are G, P+, P-, G+, G- and P0"
                 )
         return op
 
@@ -418,12 +420,14 @@ class FermionicBase(QuantumChemistryBase):
                 Will reduce potential gradient costs by a factor of 2
         """
         if control is not None:
-            raise NotImplementedError("Not implemented yet for Fermionic Backends")
+            raise NotImplementedError(
+                "Not implemented yet for Fermionic Backends"
+            )  # TODO
         return gates.FermionicExcitation(indices=indices, variables=angle)
 
     def transform_orbitals(
         self,
-        orbital_coefficients: typing.Union[FCircuit, numpy.array],
+        orbital_coefficients: FCircuit | numpy.array,
         ignore_active_space=False,
         name=None,
         *args,
@@ -470,7 +474,9 @@ class FermionicBase(QuantumChemistryBase):
         )
         return result
 
-    def use_native_orbitals(self, inplace=False, core: list = None, *args, **kwargs):
+    def use_native_orbitals(
+        self, inplace=False, core: list | None = None, *args, **kwargs
+    ):
         """
         Parameters
         ----------
@@ -565,9 +571,7 @@ class FermionicBase(QuantumChemistryBase):
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
-                    orbital_type="orthonormalized-{}-basis".format(
-                        self.integral_manager._basis_name
-                    ),
+                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
                 )
                 return self
             else:
@@ -582,9 +586,7 @@ class FermionicBase(QuantumChemistryBase):
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
-                    orbital_type="orthonormalized-{}-basis".format(
-                        self.integral_manager._basis_name
-                    ),
+                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
                 )
                 parameters = copy.deepcopy(self.parameters)
                 result = FermionicBase(
@@ -730,7 +732,7 @@ class FermionicBase(QuantumChemistryBase):
     def make_hardcore_boson_upccgd_layer(
         self,
         indices: list = "UpCCGD",
-        label: str = None,
+        label: str | None = None,
         assume_real: bool = True,
         *args,
         **kwargs,
@@ -751,7 +753,7 @@ class FermionicBase(QuantumChemistryBase):
         """
 
         if edges is None:
-            raise TequilaException(
+            raise ValueError(
                 "SPA ansatz within a standard orbital basis needs edges. Please provide with the keyword edges.\nExample: edges=[(0,1,2),(3,4)] would correspond to two edges created from orbitals (0,1,2) and (3,4), note that orbitals can only be assigned to a single edge"
             )
 
@@ -759,17 +761,12 @@ class FermionicBase(QuantumChemistryBase):
         # current SPA implementation needs even number of electrons
         if self.n_electrons % 2 != 0:
             raise TequilaException(
-                "need even number of electrons for SPA ansatz.\n{} active electrons".format(
-                    self.n_electrons
-                )
+                f"need even number of electrons for SPA ansatz.\n{self.n_electrons} active electrons"
             )
         # making sure that enough edges are assigned
-        n_edges = len(edges)
         if len(edges) != self.n_electrons // 2:
-            raise TequilaException(
-                "number of edges need to be equal to number of active electrons//2\n{} edges given\n{} active electrons\nfrozen core is {}".format(
-                    len(edges), self.n_electrons, self.parameters.frozen_core
-                )
+            raise ValueError(
+                f"number of edges need to be equal to number of active electrons//2\n{len(edges)} edges given\n{self.n_electrons} active electrons\nfrozen core is {self.parameters.frozen_core}"
             )
         # making sure that orbitals are uniquely assigned to edges
         for edge_qubits in edges:
@@ -778,10 +775,8 @@ class FermionicBase(QuantumChemistryBase):
                     if edge2 == edge_qubits:
                         continue
                     elif q1 in edge2:
-                        raise TequilaException(
-                            "make_spa_ansatz: faulty list of edges, orbitals are overlapping e.g. orbital {} is in edge {} and edge {}".format(
-                                q1, edge_qubits, edge2
-                            )
+                        raise ValueError(
+                            f"make_spa_ansatz: faulty list of edges, orbitals are overlapping e.g. orbital {q1} is in edge {edge_qubits} and edge {edge2}"
                         )
 
         # auto assign if the circuit construction is optimized
@@ -807,7 +802,7 @@ class FermionicBase(QuantumChemistryBase):
         if "+" in name:
             U = FCircuit()
             subparts = name.split("+")
-            U = self.make_ansatz(name=subparts[0], *args, **kwargs)
+            U = self.make_ansatz(name=subparts[0], args=args, **kwargs)
             # making sure the there are is no undesired behaviour in layers after +
             # reference should not be included since we are not starting from |00...0> anymore
             if "include_reference" in kwargs:
@@ -823,7 +818,7 @@ class FermionicBase(QuantumChemistryBase):
             for i, subpart in enumerate(subparts[1:]):
                 U += self.make_ansatz(
                     name=subpart,
-                    *args,
+                    args=args,
                     label=(label, i),
                     include_reference=False,
                     hcb_optimization=False,
@@ -832,24 +827,22 @@ class FermionicBase(QuantumChemistryBase):
             return U
 
         if name == "uccsd":
-            return self.make_uccsd_ansatz(*args, **kwargs)
+            return self.make_uccsd_ansatz(args=args, **kwargs)
         elif "spa" in name.lower():
-            if "hcb" not in kwargs:
-                hcb = False
-                if "hcb" in name.lower():
-                    raise TequilaException("No HCB operations in Fermionic Backends")
-            return self.make_spa_ansatz(*args, **kwargs)
+            if "hcb" in kwargs or "hcb" in name.lower():
+                raise ValueError("No HCB operations in Fermionic Backends")
+            return self.make_spa_ansatz(args=args, **kwargs)
         elif "d" in name or "s" in name:
-            return self.make_upccgsd_ansatz(name=name, *args, **kwargs)
+            return self.make_upccgsd_ansatz(name=name, args=args, **kwargs)
         else:
-            raise TequilaException("unknown ansatz with name={}".format(name))
+            raise ValueError(f"unknown ansatz with name={name}")
 
     def make_upccgsd_ansatz(
         self,
         include_reference: bool = True,
         name: str = "UpCCGSD",
-        label: str = None,
-        order: int = None,
+        label: str | None = None,
+        order: int | None = None,
         spin_adapt_singles: bool = True,
         mix_sd: bool = False,
         *args,
@@ -895,13 +888,13 @@ class FermionicBase(QuantumChemistryBase):
                     order = int(name.split("-")[0])
                 else:
                     order = 1
-            except Exception:
+            except ValueError:
                 order = 1
 
         indices = self.make_upccgsd_indices(key=name)
 
         if "HCB" in name:
-            raise TequilaException("No HCB operations in Fermionic Backends")
+            raise ValueError("No HCB operations in Fermionic Backends")
 
         # convenience
         S = "S" in name.upper()
@@ -918,7 +911,7 @@ class FermionicBase(QuantumChemistryBase):
             label=(label, 0),
             mix_sd=mix_sd,
             spin_adapt_singles=spin_adapt_singles,
-            *args,
+            args=args,
             **kwargs,
         )
         for k in range(1, order):
@@ -949,7 +942,7 @@ class FermionicBase(QuantumChemistryBase):
         for idx in indices:
             assert len(idx) == 1
             idx = idx[0]
-            angle = (tuple([idx]), "D", label)
+            angle = ((idx,), "D", label)
             if include_doubles:
                 U += self.UC(i=idx[0], j=idx[1], angle=angle, **kwargs)
             if include_singles and mix_sd:
@@ -1008,7 +1001,7 @@ class FermionicBase(QuantumChemistryBase):
     def make_uccsd_ansatz(
         self,
         trotter_steps: int = 1,
-        initial_amplitudes: typing.Union[str, Amplitudes, ClosedShellAmplitudes] = None,
+        initial_amplitudes: str | Amplitudes | ClosedShellAmplitudes | None = None,
         include_reference_ansatz=True,
         parametrized=True,
         threshold=1.0e-8,
@@ -1080,10 +1073,8 @@ class FermionicBase(QuantumChemistryBase):
                     )
                 except Exception as exc:
                     raise TequilaException(
-                        "{}\nDon't know how to initialize '{}' amplitudes".format(
-                            exc, initial_amplitudes
-                        )
-                    )
+                        f"{exc}\nDon't know how to initialize '{initial_amplitudes}' amplitudes"
+                    ) from exc
         if amplitudes is None:
             tia = None
             if add_singles:
@@ -1139,19 +1130,19 @@ class FermionicBase(QuantumChemistryBase):
                                 2 * key[2] + 1,
                                 2 * key[3] + 1,
                             )
-                            partner = tuple([key[2], key[1], key[0], key[3]])
+                            partner = (key[2], key[1], key[0], key[3])
                             anglex = 2.0 * (t - amplitudes[partner])
                             if parametrized:
                                 anglex = 2.0 * (Variable(name=key) - Variable(partner))
                             indices[idx_aaaa] = anglex
                             indices[idx_bbbb] = anglex
                 else:
-                    raise Exception(
+                    raise NotImplementedError(
                         "only closed-shell supported, please assemble yourself .... sorry :-)"
                     )
 
         factor = 1.0 / trotter_steps
-        for step in range(trotter_steps):
+        for _ in range(trotter_steps):
             for idx, angle in indices.items():
                 # the amplitudes list the virtual orbital first, (a, i): the excitation destroys i and creates a
                 converted = [(idx[2 * i + 1], idx[2 * i]) for i in range(len(idx) // 2)]
@@ -1193,15 +1184,15 @@ class FermionicBase(QuantumChemistryBase):
 
     def compute_rdms(
         self,
-        U: FCircuit = None,
-        variables: Variables = None,
+        U: FCircuit | None = None,
+        variables: Variables | None = None,
         spin_free: bool = True,
         get_rdm1: bool = True,
         get_rdm2: bool = True,
         ordering="dirac",
-        rdm_trafo: QubitHamiltonian = None,
+        rdm_trafo: QubitHamiltonian | None = None,
         evaluate=True,
-        backend: str = None,
+        backend: str | None = None,
         use_hcb: bool = False,
     ):
         """
@@ -1477,45 +1468,38 @@ class FermionicBase(QuantumChemistryBase):
                 for q in range(p):
                     for r in range(n_SOs):
                         for s in range(r):
-                            if p * n_SOs + q >= r * n_SOs + s:
-                                if (
-                                    (p // 2 == q // 2 and s == r)
-                                    or (p != q and r != s and p == r and s == q)
-                                    or (p != q and r != s and p == s and q == r)
-                                ):
-                                    op_tuple = (
-                                        ((p, 1), (q, 1), (s, 0), (r, 0))
-                                        if (
+                            if p * n_SOs + q >= r * n_SOs + s and (
+                                (p // 2 == q // 2 and s == r)
+                                or (p != q and r != s and p == r and s == q)
+                                or (p != q and r != s and p == s and q == r)
+                            ):
+                                op_tuple = (
+                                    ((p, 1), (q, 1), (s, 0), (r, 0))
+                                    if (
+                                        (
+                                            ((p == r and q == s) or (p == s and q == r))
+                                            and p % 2 == q % 2 == r % 2 == s % 2
+                                        )  # Spin aaaa and bbbb
+                                        or (
                                             (
-                                                (
-                                                    (p == r and q == s)
-                                                    or (p == s and q == r)
+                                                p % 2 == s % 2
+                                                and r % 2 == q % 2
+                                                and p % 2 != q % 2
+                                                and r % 2 != s % 2
+                                            )
+                                            and (
+                                                (p // 2 == q // 2 and r // 2 == s // 2)
+                                                or (
+                                                    q // 2 == s // 2
+                                                    and p // 2 == p // 2
                                                 )
-                                                and p % 2 == q % 2 == r % 2 == s % 2
-                                            )  # Spin aaaa and bbbb
-                                            or (
-                                                (
-                                                    p % 2 == s % 2
-                                                    and r % 2 == q % 2
-                                                    and p % 2 != q % 2
-                                                    and r % 2 != s % 2
-                                                )
-                                                and (
-                                                    (
-                                                        p // 2 == q // 2
-                                                        and r // 2 == s // 2
-                                                    )
-                                                    or (
-                                                        q // 2 == s // 2
-                                                        and p // 2 == p // 2
-                                                    )
-                                                )
-                                            )  # Spin abba and baab
-                                        )
-                                        else "0.0 []"
+                                            )
+                                        )  # Spin abba and baab
                                     )
-                                    op = _get_of_op(op_tuple)
-                                    ops += [op]
+                                    else "0.0 []"
+                                )
+                                op = _get_of_op(op_tuple)
+                                ops += [op]
             return ops
 
         def _build_2bdy_hcb_operators_spinfree() -> list:
@@ -1674,7 +1658,7 @@ class FermionicBase(QuantumChemistryBase):
         -------
 
         """
-        if any([x in method.upper() for x in ["U"]]):
+        if any(x in method.upper() for x in ["U"]):
             # simulate entirely in HCB representation if no singles are involved
             if "S" not in method.upper().split("-")[-1] and "HCB" not in method.upper():
                 method = "HCB-" + method
@@ -1686,15 +1670,13 @@ class FermionicBase(QuantumChemistryBase):
             E = Braket(operator=H, ket=U, mol=self)
             from sunrise import minimize
 
-            return minimize(objective=E, *args, **kwargs).energy
+            return minimize(objective=E, args=args, **kwargs).energy
         else:
             from sunrise.molecules.qubit_base import INSTALLED_QCHEMISTRY_BACKENDS
 
             if "pyscf" not in INSTALLED_QCHEMISTRY_BACKENDS:
                 raise TequilaException(
-                    "PySCF needs to be installed to compute {}/{}".format(
-                        method, self.parameters.basis_set
-                    )
+                    f"PySCF needs to be installed to compute {method}/{self.parameters.basis_set}"
                 )
             else:
                 from sunrise.molecules.fermionic_base import QuantumChemistryPySCF
@@ -1736,7 +1718,7 @@ class FermionicBase(QuantumChemistryBase):
         result = str(type(self)) + "\n"
         result += "Parameters\n"
         for k, v in self.parameters.__dict__.items():
-            result += "{key:15} : {value:15} \n".format(key=str(k), value=str(v))
+            result += f"{k!s:15} : {v!s:15} \n"
 
         result += "{key:15} : {value:15} \n".format(
             key="n_qubits", value=str(self.n_orbitals * 2)

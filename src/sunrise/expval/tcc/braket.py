@@ -1,45 +1,48 @@
-from tencirchem.static.ucc import *
-from functools import partial
+from __future__ import annotations
+
 from collections import defaultdict
-from time import time
-from typing import Tuple, Callable, Union
-from numbers import Number
 from copy import deepcopy
+from functools import partial
+from numbers import Number
+from time import time
+from typing import Callable
+
 import numpy as np
-from scipy.optimize import minimize
 import pandas as pd
+import tensorcircuit as tc
 from pyscf.gto.mole import Mole
 from pyscf.scf import RHF
-import tensorcircuit as tc
-
+from scipy.optimize import minimize
 from tencirchem.constants import DISCARD_EPS
-from tencirchem.utils.misc import scipy_opt_wrap
-from tencirchem.utils.circuit import get_circuit_dataframe
-from tencirchem.static.engine_ucc import (
-    get_civector,
-    translate_init_state,
-)
 from tencirchem.static.ci_utils import (
     get_ci_strings,
     get_ex_bitstring,
     get_init_civector,
 )
+from tencirchem.static.engine_ucc import (
+    get_civector,
+    translate_init_state,
+)
 from tencirchem.static.evolve_tensornetwork import get_circuit
+from tencirchem.static.ucc import *
+from tencirchem.utils.circuit import get_circuit_dataframe
+from tencirchem.utils.misc import scipy_opt_wrap
+from tequila import Objective, Variable, assign_variable, simulate
+from tequila.objective.objective import FixedVariable
+
 from sunrise.expval.tcc.engine_braket import (
     get_energy,
+    get_energy_and_grad,
     get_expval,
     get_expval_and_grad,
-    get_energy_and_grad,
     get_statevector,
 )
-from tequila import Objective, Variable, simulate, assign_variable
-from tequila.objective.objective import Variables, FixedVariable
 
 
 class EXPVAL(UCC):
     def __init__(
         self,
-        mol: Union[Mole, RHF],
+        mol: Mole | RHF | None,
         init_method="mp2",
         active_space=None,
         aslst=None,
@@ -128,7 +131,7 @@ class EXPVAL(UCC):
 
     def get_opt_function(
         self, with_time: bool = False
-    ) -> Union[Callable, Tuple[Callable, float]]:
+    ) -> Callable | tuple[Callable, float] | None:
         """
         Returns the cost function in SciPy format for optimization.
         The gradient is included.
@@ -170,22 +173,19 @@ class EXPVAL(UCC):
         Check is bra==ket, also if bra == None -> bra = ket
         """
         if all(
-            [i is None for i in [self.init_state_bra, self.ex_ops_bra, self.params_bra]]
+            i is None for i in [self.init_state_bra, self.ex_ops_bra, self.params_bra]
         ):
             return True
         if not (
-            all([ex in self.ex_ops_bra for ex in self.ex_ops_ket])
-            and all([ex in self.ex_ops_ket for ex in self.ex_ops_bra])
+            all(ex in self.ex_ops_bra for ex in self.ex_ops_ket)
+            and all(ex in self.ex_ops_ket for ex in self.ex_ops_bra)
         ):
             return False
         if not np.allclose(self.init_state_bra, self.init_state_ket):
             return False
-        if not (
-            all([pa in self.params_bra for pa in self.params_ket])
-            and all([pa in self.params_ket for pa in self.params_bra])
-        ):
-            return False
-        return True
+        return all(pa in self.params_bra for pa in self.params_ket) and all(
+            pa in self.params_ket for pa in self.params_bra
+        )
 
     def kernel(self) -> float:
         """
@@ -247,7 +247,7 @@ class EXPVAL(UCC):
         return opt_res.e
 
     def expval(
-        self, angles: Tensor = None, engine: str = None, hamiltonian=None
+        self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
     ) -> float:
         """
         Evaluate the total Expectation Value.
@@ -328,7 +328,7 @@ class EXPVAL(UCC):
         return float(e) + self.e_core * s
 
     def energy(
-        self, angles: Tensor = None, engine: str = None, hamiltonian=None
+        self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
     ) -> float:
         """
         Evaluate the total Expectation Value.
@@ -403,8 +403,8 @@ class EXPVAL(UCC):
         return float(e) + self.e_core
 
     def expval_and_grad(
-        self, angles: Tensor = None, engine: str = None, hamiltonian=None
-    ) -> Tuple[float, Tensor]:
+        self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
+    ) -> tuple[float, Tensor]:
         """
         Evaluate the total Expectation Value and parameter gradients.
 
@@ -468,8 +468,8 @@ class EXPVAL(UCC):
         return float(e + self.e_core * s), tc.backend.numpy(g)
 
     def energy_and_grad(
-        self, angles: Tensor = None, engine: str = None, hamiltonian=None
-    ) -> Tuple[float, Tensor]:
+        self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
+    ) -> tuple[float, Tensor]:
         """
         Evaluate the total energy and parameter gradients.
 
@@ -553,7 +553,7 @@ class EXPVAL(UCC):
         pass
 
     def civector(
-        self, params: Tensor = None, engine: str = None, ket: bool = True
+        self, params: Tensor = None, engine: str | None = None, ket: bool = True
     ) -> Tensor:
         """
         Evaluate the configuration interaction (CI) vector.
@@ -636,7 +636,7 @@ class EXPVAL(UCC):
     ci_strings = get_ci_strings
 
     def statevector(
-        self, angles: Tensor = None, engine: str = None, ket: bool = True
+        self, angles: Tensor = None, engine: str | None = None, ket: bool = True
     ) -> Tensor:
         """
         Evaluate the circuit state vector.
@@ -1075,7 +1075,7 @@ class EXPVAL(UCC):
         return len(Objective(self.variables_ket).extract_variables())
 
     @property
-    def variables_ket(self) -> List[Variable]:
+    def variables_ket(self) -> list[Variable]:
         return self._variables_ket
 
     @property
@@ -1132,7 +1132,7 @@ class EXPVAL(UCC):
             return self.var_to_param_bra.update(self.var_to_param_ket)
 
     @property
-    def total_variables(self) -> Union[list[Variable], None]:
+    def total_variables(self) -> list[Variable] | None:
         if self.variables_bra is not None and self.variables_bra is not None:
             return Objective(
                 self.variables_bra + self.variables_ket
@@ -1158,7 +1158,7 @@ class EXPVAL(UCC):
         self._init_guess = init_guess
 
 
-def map_variables(x: Union[Variable, Objective], dvariables: dict):
+def map_variables(x: Variable | Objective | None, dvariables: dict):
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):

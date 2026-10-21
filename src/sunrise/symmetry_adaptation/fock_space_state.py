@@ -1,15 +1,15 @@
 from __future__ import annotations
-from dataclasses import dataclass
+
 from collections.abc import Generator
-from itertools import product
-import gc
-from typing import Any, TYPE_CHECKING
-import tequila
-import numpy
-from pandas import DataFrame
-from sunrise.symmetry_adaptation.irrep_provider import IrrepProviderBase
+from dataclasses import dataclass
 from functools import cached_property
-from itertools import combinations
+from itertools import combinations, product
+from typing import TYPE_CHECKING, Any
+
+import tequila
+from pandas import DataFrame
+
+from sunrise.symmetry_adaptation.irrep_provider import IrrepProviderBase
 
 if TYPE_CHECKING:
     # only for type hints, importing it at runtime would be circular
@@ -140,7 +140,7 @@ class FockSpaceState:
     def bitstring(self) -> str | None:
         if self.is_superposition:
             return None
-        bs_int = int(list(self.wavefunction.keys())[0])
+        bs_int = int(next(iter(self.wavefunction.keys())))
         bits = []
         for i in range(self.mol.n_orbitals):
             bits.append(str((bs_int >> (2 * i)) & 1))
@@ -154,7 +154,7 @@ class FockSpaceState:
             return None
         if self._fragment_orbitals is None:
             return self.bitstring
-        bs_int = int(list(self.wavefunction.keys())[0])
+        bs_int = int(next(iter(self.wavefunction.keys())))
         bits = []
         for i in self._fragment_orbitals:
             bits.append(str((bs_int >> (2 * i)) & 1))
@@ -287,7 +287,7 @@ class FockSpaceState:
         if self._irrep is not None:
             return self._irrep
         if not isinstance(self.irrep_provider, IrrepProviderBase):
-            raise ValueError(
+            raise TypeError(
                 f"Cannot determine the irrep of this FockSpaceState: irrep_provider is "
                 f"{self.irrep_provider!r}, not an IrrepProviderBase. Construct the state with a real "
                 f"IrrepProviderBase (e.g. LocalizedIrrepProvider or PySCFCanonicalIrrepProvider) if irrep "
@@ -296,7 +296,7 @@ class FockSpaceState:
         return self.irrep_provider.get_irrep(self)
 
     @classmethod
-    def dataframe(cls, states: list["FockSpaceState"]) -> DataFrame:
+    def dataframe(cls, states: list[FockSpaceState]) -> DataFrame:
         """Returns a pandas DataFrame representation of a list of FockSpaceStates."""
 
         return DataFrame(
@@ -328,7 +328,7 @@ class FockSpaceState:
     @classmethod
     def all_states(
         cls, mol: QuantumChemistryBase, provider: IrrepProviderBase
-    ) -> list["FockSpaceState"]:
+    ) -> list[FockSpaceState]:
         """Generates all possible Fock space states for a given molecule."""
         return cls.by_filter(mol, provider)
 
@@ -339,7 +339,7 @@ class FockSpaceState:
         provider: IrrepProviderBase,
         fragment_orbitals: list[int] | None = None,
         fragment_electrons: int | None = None,
-    ) -> list["FockSpaceState"]:
+    ) -> list[FockSpaceState]:
         """Generates all non-ionic Fock space states for a given molecule."""
         if fragment_orbitals is None:
             n_qubits = 2 * mol.n_orbitals
@@ -367,7 +367,7 @@ class FockSpaceState:
         bitstring_generator: Generator[str, None, None] | None = None,
         fragment_orbitals: list[int] | None = None,
         fragment_electrons: int | None = None,
-    ) -> list["FockSpaceState"]:
+    ) -> list[FockSpaceState]:
         """Efficiently generates Fock space states for a given molecule taking various filters into account."""
         # import pyscf
 
@@ -416,33 +416,29 @@ class FockSpaceState:
                 )
             generator = mo_occ_bitstring_generator(mo_occ)
 
-        states: list["FockSpaceState"] = []
+        states: list[FockSpaceState] = []
         for i in generator:
             # only return the max of max_count states
-            if max_count is not None:
-                if len(states) >= max_count:
-                    return states
+            if max_count is not None and len(states) >= max_count:
+                return states
 
             # if generator delivers a range of integers, convert to bitstring, otherwise assume it's already a bitstring
             bitstring = i if isinstance(i, str) else format(i, f"0{n_qubits}b")
             state = cls(mol, bitstring, provider, fragment_orbitals=fragment_orbitals)
-            if non_ionic:
-                if sum(state.mo_occ) != mol.n_electrons:
-                    continue
-            if mo_occ is not None:
-                if state.mo_occ != mo_occ:
-                    continue
-            if m_s is not None:
-                if state.m_s != m_s:
-                    continue
-            if S2 is not None:
-                if state.S2 != S2:
-                    continue
-            if spin_multiplicity is not None:
-                if state.spin_multiplicity != spin_multiplicity:
-                    continue
-            if irrep is not None:
-                if state.irrep != irrep:
-                    continue
+            if non_ionic and sum(state.mo_occ) != mol.n_electrons:
+                continue
+            if mo_occ is not None and state.mo_occ != mo_occ:
+                continue
+            if m_s is not None and state.m_s != m_s:
+                continue
+            if S2 is not None and state.S2 != S2:
+                continue
+            if (
+                spin_multiplicity is not None
+                and state.spin_multiplicity != spin_multiplicity
+            ):
+                continue
+            if irrep is not None and state.irrep != irrep:
+                continue
             states.append(state)
         return states

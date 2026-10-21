@@ -3,15 +3,17 @@ Collections of Fermion-to-Qubit encodings known to tequila
 Adapted to the encoding
 """
 
-import typing
-from tequila import TequilaException
+from __future__ import annotations
+
+from copy import deepcopy
+
+import openfermion
+from tequila import QubitHamiltonian, TequilaException
 from tequila.circuit.circuit import QCircuit
 from tequila.circuit.gates import X
-from tequila.hamiltonian.paulis import Sp, Sm, Z
-from tequila import QubitHamiltonian
-import openfermion
+from tequila.hamiltonian.paulis import Sm, Sp, Z
+
 from sunrise.molecules.qubit_base.encodings import EncodingBase as EB
-from copy import deepcopy
 
 
 def known_encodings():
@@ -67,7 +69,7 @@ class JordanWigner(EB):
         :return:
             The openfermion QubitOperator of this class ecoding
         """
-        fop = self.do_transform(fermion_operator=fermion_operator, *args, **kwargs)
+        fop = self.do_transform(fermion_operator=fermion_operator, args=args, **kwargs)
         return self.post_processing(fop)
 
     def post_processing(self, op, *args, **kwargs):
@@ -75,7 +77,7 @@ class JordanWigner(EB):
 
     def do_transform(
         self,
-        fermion_operator: typing.Union[openfermion.FermionOperator, list, tuple],
+        fermion_operator: openfermion.FermionOperator | list | tuple,
         *args,
         **kwargs,
     ) -> QubitHamiltonian:
@@ -151,13 +153,11 @@ class JordanWigner(EB):
             bos = False
 
         if bos and self.condense:
-            raise TequilaException("hcb_to_me called with bos with condensed encoding")
+            raise ValueError("hcb_to_me called with bos with condensed encoding")
         if bos and alle:
-            raise TequilaException("hcb_to_me called with all and bos both True")
+            raise ValueError("hcb_to_me called with all and bos both True")
         if alle and self.condense:
-            raise TequilaException(
-                "hcb_to me asked for all orbitals in condensed encoding"
-            )
+            raise ValueError("hcb_to me asked for all orbitals in condensed encoding")
         U = QCircuit()
         pos = deepcopy(self.pos)
         if not self.two_qubit and bos:
@@ -184,11 +184,9 @@ class JordanWigner(EB):
     def map_state(self, state: list, *args, **kwargs):
         state = state + [0] * (2 * self.n_orbitals - len(state))
         if not all(
-            [
-                state[2 * i] == state[2 * i + 1]
-                for i in range(self.n_orbitals)
-                if self.select[i] == "B"
-            ]
+            state[2 * i] == state[2 * i + 1]
+            for i in range(self.n_orbitals)
+            if self.select[i] == "B"
         ):
             raise TequilaException("Incompatible state and encoding selection")
         for i in range(len(state) // 2):
@@ -219,11 +217,11 @@ class JordanWigner(EB):
     def down(self, i):
         try:
             return self.pos[2 * i + 1]
-        except:
+        except KeyError:
             return None
 
     def update_select(
-        self, select: typing.Union[str, dict, list, tuple], n_orb: int = None
+        self, select: str | dict | list | tuple, n_orb: int | None = None
     ):
         """
         Parameters
@@ -248,12 +246,12 @@ class JordanWigner(EB):
                 select = select[:n_orb]
             else:
                 select += (n_orb - len(select)) * "B"
-            for i in range(len(select)):
-                if select[i] in ["F", "B"]:
-                    sel.update({i: select[i]})
+            for i, enc in enumerate(select):
+                if enc in ["F", "B"]:
+                    sel.update({i: enc})
                 else:
-                    raise TequilaException(
-                        f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic)."
+                    raise ValueError(
+                        f"Warning, encoding character not recognised on position {i}: {enc}.\n Please choose between F (Fermionic) and B (Bosonic)."
                     )
             return sel
 
@@ -269,18 +267,14 @@ class JordanWigner(EB):
                     if select[i] in ["F", "B"]:
                         sel.update({i: select[i]})
                     else:
-                        raise TequilaException(
-                            "Warning, encoding character not recognised on entry {it}.\n Please choose between F (Fermionic) and B (Bosonic).".format(
-                                it={i: sel[i]}
-                            )
+                        raise ValueError(
+                            f"Warning, encoding character not recognised on entry { ({i: sel[i]}) }.\n Please choose between F (Fermionic) and B (Bosonic)."
                         )
                 else:
                     sel.update({i: "B"})
             return sel
 
-        def verify_selection_list(
-            select: typing.Union[list, tuple], n_orb: int
-        ) -> dict:
+        def verify_selection_list(select: list | tuple, n_orb: int) -> dict:
             """
             Internal function
             Checks if the orbital selection string has the appropiated lenght, otherwise corrects it
@@ -335,11 +329,8 @@ class JordanWigner(EB):
         elif type(select) is list or type(select) is tuple:
             select = verify_selection_list(select=select, n_orb=n_orb)
         else:
-            try:
-                select = verify_selection_list(select=select, n_orb=n_orb)
-            except:
-                raise TequilaException(
-                    f"Warning, encoding format not recognised: {type(select)}.\n Please choose either a Str, Dict, List or Tuple."
-                )
+            raise TypeError(
+                f"Warning, encoding format not recognised: {type(select)}.\n Please choose either a Str, Dict, List or Tuple."
+            )
         self.FER_SO, self.pos = select_to_list(select)
         self.select = select

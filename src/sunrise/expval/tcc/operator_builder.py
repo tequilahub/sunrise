@@ -21,8 +21,6 @@ Two strategies are provided:
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 import numpy as np
 from openfermion import FermionOperator
 from openfermion.linalg import get_sparse_operator
@@ -35,7 +33,7 @@ TOL = 1e-9
 
 def extract_restricted_integrals(
     operator: FermionOperator, n_orb: int
-) -> Optional[Tuple[np.ndarray, np.ndarray, float]]:
+) -> tuple[np.ndarray, np.ndarray, float] | None:
     """
     Try to express `operator` (up_then_down spin-orbital indexed, 0..n_orb-1 in one
     spin block and n_orb..2*n_orb-1 in the other) as a spin-restricted one- and

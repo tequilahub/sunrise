@@ -7,7 +7,6 @@ class Shape(abc.ABC):
     @abc.abstractmethod
     def to_qpic(self) -> str:
         """Returns the qpic string identifying this shape."""
-        pass
 
     def __format__(self, format_spec) -> str:
         return self.to_qpic()

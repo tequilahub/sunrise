@@ -1,6 +1,7 @@
-import tequila as tq
-from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 import numpy as np
+import tequila as tq
+
+from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 
 
 class input_state:
@@ -242,11 +243,11 @@ def rotate_and_hcb(
             # Compute expectation values and error
             EX = tq.ExpectationValue(U=tcircuit, H=hcb_mol.make_hamiltonian())
             incr = tq.simulate(
-                EX, variables=variables, initial_state=initial_state, *args, **kwargs
-            )
-            EY = tq.ExpectationValue(U=tcircuit, H=res_mol.make_hamiltonian())
-            rest = tq.simulate(
-                EY, variables=variables, initial_state=initial_state, *args, **kwargs
+                EX,
+                variables=variables,
+                initial_state=initial_state,
+                args=args,
+                **kwargs,
             )
             approx += incr
 
@@ -255,7 +256,7 @@ def rotate_and_hcb(
             print(f"Approximation:         {approx}")
             print(f"Increment:             {incr}")
             print(f"Error in new basis:    {target - approx}")
-            # print(f"test:                  {target-approx-rest}")
+            # print(f"test:                  {target-approx-tq.simulate(tq.ExpectationValue(U=tcircuit, H=res_mol.make_hamiltonian()), variables=variables, initial_state=initial_state, args=args, **kwargs)}")
 
         # Update values
         hcb_mols.append(hcb_mol)
@@ -351,8 +352,7 @@ def compute_num_meas(
             M_l = ((abs(op.coeff) * np.sqrt(var)) / eps) ** 2
 
             # Pick the largest number of measurements
-            if M_l > M_group:
-                M_group = M_l
+            M_group = max(M_group, M_l)
 
         M_tot += M_group
 

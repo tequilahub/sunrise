@@ -1,7 +1,8 @@
-import numpy as np
-import random
 import math
+import random
+
 import networkx as nx
+import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
 
@@ -87,12 +88,9 @@ def generate_local_optimal_edges_from_vertices(vertices: np.ndarray, start=0):
         for b, vertex_b in enumerate(our_vertices):
             if np.array_equal(vertex_a, vertex_b) or tuple(vertex_b.tolist()) in done:
                 continue
-            if nearest_vertex is None:
-                nearest_vertex_index = b
-                nearest_vertex = vertex_b
-            elif np.linalg.norm(vertex_a - nearest_vertex) > np.linalg.norm(
-                vertex_a - vertex_b
-            ):
+            if nearest_vertex is None or np.linalg.norm(
+                vertex_a - nearest_vertex
+            ) > np.linalg.norm(vertex_a - vertex_b):
                 nearest_vertex_index = b
                 nearest_vertex = vertex_b
 

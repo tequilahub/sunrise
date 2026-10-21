@@ -1,20 +1,25 @@
-from tequila import TequilaException, TequilaWarning
-
-from tequila.circuit import QCircuit
-from tequila.objective.objective import Variables
-from .qc_base import QuantumChemistryBase
-from .chemistry_tools import ClosedShellAmplitudes, Amplitudes
-from .chemistry_tools import ParametersQC, NBodyTensor
-
-from .chemistry_tools import ActiveSpaceData, OrbitalData
+from __future__ import annotations
 
 import copy
-import numpy
 import typing
-import psi4
 import warnings
-
 from dataclasses import dataclass
+
+import numpy
+import psi4
+from tequila import TequilaException, TequilaWarning
+from tequila.circuit import QCircuit
+from tequila.objective.objective import Variables
+
+from .chemistry_tools import (
+    ActiveSpaceData,
+    Amplitudes,
+    ClosedShellAmplitudes,
+    NBodyTensor,
+    OrbitalData,
+    ParametersQC,
+)
+from .qc_base import QuantumChemistryBase
 
 
 class TequilaPsi4Exception(TequilaException):
@@ -27,11 +32,13 @@ class OpenVQEEPySCFException(TequilaException):
 
 @dataclass
 class Psi4Results:
-    variables: dict = None  # psi4 variables dictionary, storing all computed values
-    filename: str = None  # psi4 output file
-    wfn: typing.Union[
-        psi4.core.Wavefunction, psi4.core.CCWavefunction, psi4.core.CIWavefunction
-    ] = None  # psi4 wavefunction
+    variables: dict | None = (
+        None  # psi4 variables dictionary, storing all computed values
+    )
+    filename: str | None = None  # psi4 output file
+    wfn: (
+        psi4.core.Wavefunction | psi4.core.CCWavefunction | psi4.core.CIWavefunction
+    ) = None  # psi4 wavefunction
     mol: psi4.core.Molecule = None
 
 
@@ -139,7 +146,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
                 ):
                     frozen_docc = None
                     print(
-                        "active space not CAS type: frozen_docc of {} ".format(irrep),
+                        "active space not CAS type: frozen_docc of {irrep} ",
                         sorted_array,
                     )
                     break
@@ -180,7 +187,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
     def __init__(
         self,
         parameters: ParametersQC,
-        transformation: typing.Union[str, typing.Callable] = None,
+        transformation: str | typing.Callable | None = None,
         active_orbitals=None,
         reference_orbitals=None,
         frozen_orbitals=None,
@@ -242,7 +249,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
             active_orbitals=None,
             reference_orbitals=reference_orbitals,
             frozen_orbitals=[],
-            *args,
+            args=args,
             **kwargs,
         )
 
@@ -311,11 +318,11 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         if kwargs.get("point_group") is not None:
             # the molecule took the point group, psi4 computes in its Abelian one
             kwargs["point_group"] = self._psi4_point_group
-        self.compute_energy(method="hf", recompute=True, *args, **kwargs)
+        self.compute_energy(method="hf", recompute=True, args=args, **kwargs)
         self.ref_wfn = self.logs["hf"].wfn
 
         self.transformation = self._initialize_transformation(
-            transformation=transformation, *args, **kwargs
+            transformation=transformation, args=args, **kwargs
         )
 
         self.kwargs = kwargs
@@ -325,7 +332,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         return self.ref_wfn.nirrep()
 
     def orbital_energies(
-        self, irrep: typing.Union[int, str] = None, beta: bool = False, wfn=None
+        self, irrep: int | str | None = None, beta: bool = False, wfn=None
     ):
         """
         Returns orbital energies of a given irrep
@@ -424,10 +431,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
 
         oenergies = sorted(oenergies, key=lambda x: x[2])
 
-        if "orbitals" in kwargs:
-            orbitals = kwargs["orbitals"]
-        else:
-            orbitals = None
+        orbitals = kwargs.get("orbitals", None)
 
         if orbitals is None:
             orbitals = [OrbitalData(idx_total=i) for i in range(h.shape[0])]
@@ -455,7 +459,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         method=None,
         return_wfn=True,
         point_group=None,
-        filename: str = None,
+        filename: str | None = None,
         guess_wfn=None,
         ref_wfn=None,
         ignore_active_space=False,
@@ -470,7 +474,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
             psi4.set_num_threads(nthread=kwargs["threads"])
 
         if filename is None:
-            filename = "{}_{}.out".format(self.parameters.filename, method)
+            filename = f"{self.parameters.filename}_{method}.out"
 
         psi4.core.set_output_file(filename)
 
@@ -535,9 +539,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         """
         Internal function that helps to convert CCSD amplitudes if an actice space was set
         """
-        if self.integral_manager.active_space is None:
-            return arr
-        elif (
+        if self.integral_manager.active_space is None or (
             len(self.integral_manager.active_space.active_orbitals)
             == self.integral_manager.one_body_integrals.shape[0]
         ):
@@ -598,8 +600,13 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
     #    return self._extract_active_space(super().compute_mp2_amplitudes(*args, **kwargs))
 
     def compute_amplitudes(
-        self, method: str, options: dict = None, filename: str = None, *args, **kwargs
-    ) -> typing.Union[Amplitudes, ClosedShellAmplitudes]:
+        self,
+        method: str,
+        options: dict | None = None,
+        filename: str | None = None,
+        *args,
+        **kwargs,
+    ) -> Amplitudes | ClosedShellAmplitudes:
         if options is None:
             options = {}
 
@@ -610,13 +617,13 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         try:
             psi4.core.clean_options()
             psi4.core.clean_variables()
-            energy, wfn = self._run_psi4(
+            _energy, wfn = self._run_psi4(
                 method=method,
                 options=options,
                 point_group="c1",
                 ref_wfn=self.ref_wfn.c1_deep_copy(self.ref_wfn.basisset()),
                 filename=filename,
-                *args,
+                args=args,
                 **kwargs,
             )
             all_amplitudes = wfn.get_amplitudes()
@@ -634,12 +641,12 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
                 return Amplitudes(
                     **{k: v.to_array() for k, v in all_amplitudes.items()}
                 )
-        except Exception as err:
+        except Exception as e:
             raise TequilaPsi4Exception(
-                "\nFailed to compute {} amplitudes.\n"
+                f"\nFailed to compute {method} amplitudes.\n"
                 "Make sure that you don't read in previous wavefunctions."
-                "Active spaces might get you in trouble.".format(method)
-            )
+                "Active spaces might get you in trouble."
+            ) from e
 
     def compute_energy(
         self,
@@ -673,9 +680,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
                 "detci",
             ]:
                 print(
-                    "There are known issues with some psi4 methods and frozen virtual orbitals. Proceed with fingers crossed for {}.".format(
-                        method
-                    )
+                    f"There are known issues with some psi4 methods and frozen virtual orbitals. Proceed with fingers crossed for {method}."
                 )
             options["frozen_uocc"] = self.active_space.frozen_uocc
         if (
@@ -690,7 +695,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
             method=method,
             options=options,
             ignore_active_space=ignore_active_space,
-            *args,
+            args=args,
             **kwargs,
         )[0]
 
@@ -729,8 +734,8 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         spin_free: bool = True,
         get_rdm1: bool = True,
         get_rdm2: bool = True,
-        psi4_method: str = None,
-        psi4_options: dict = {},
+        psi4_method: str | None = None,
+        psi4_options: dict | None = None,
         *args,
         **kwargs,
     ):
@@ -761,6 +766,8 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         Returns
         -------
         """
+        if psi4_options is None:
+            psi4_options = {}
         if not psi4_method:
             return super().compute_rdms(
                 U=U,
@@ -768,7 +775,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
                 spin_free=spin_free,
                 get_rdm1=get_rdm1,
                 get_rdm2=get_rdm2,
-                *args,
+                args=args,
                 **kwargs,
             )
         else:
@@ -783,14 +790,11 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
             psi4_options = {
                 k.lower(): v for k, v in psi4_options.items()
             }  # set to lower-case for string comparison
-            if "detci__opdm" not in psi4_options.keys():
+            if "detci__opdm" not in psi4_options:
                 psi4_options.update({"detci__opdm": get_rdm1})
-            if "detci__tpdm" not in psi4_options.keys():
+            if "detci__tpdm" not in psi4_options:
                 psi4_options.update({"detci__tpdm": get_rdm2})
-            if (
-                psi4_method.lower() == "detci"
-                and "detci__ex_level" not in psi4_options.keys()
-            ):
+            if psi4_method.lower() == "detci" and "detci__ex_level" not in psi4_options:
                 psi4_options.update({"detci__ex_level": 2})  # use CISD as default
                 print(psi4_options)
 
@@ -815,12 +819,12 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
 
     def perturbative_f12_correction(
         self,
-        rdm1: numpy.ndarray = None,
-        rdm2: numpy.ndarray = None,
+        rdm1: numpy.ndarray | None = None,
+        rdm2: numpy.ndarray | None = None,
         gamma: float = 1.4,
-        n_ri: int = None,
+        n_ri: int | None = None,
         cabs_type: str = "active",
-        cabs_options: dict = None,
+        cabs_options: dict | None = None,
         **kwargs,
     ) -> float:
         """

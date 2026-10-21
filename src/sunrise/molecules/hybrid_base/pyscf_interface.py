@@ -1,10 +1,15 @@
-from tequila import TequilaException, QubitWaveFunction
-from .HybridBase import HybridBase
-from sunrise.molecules.qubit_base import ParametersQC, NBodyTensor
+from __future__ import annotations
+
+import typing
+
+import numpy
 import pyscf
 from pyscf import fci
+from tequila import QubitWaveFunction, TequilaException
 
-import numpy, typing
+from sunrise.molecules.qubit_base import NBodyTensor, ParametersQC
+
+from .hybridbase import HybridBase
 
 
 class OpenVQEEPySCFException(TequilaException):
@@ -36,28 +41,25 @@ def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
     return int(merged_str, 2), phase
 
 
-class PySCF(HybridBase):
+class PyscfHybridBase(HybridBase):
     def __init__(
         self,
         parameters: ParametersQC,
-        select: typing.Union[str, dict] = {},
-        transformation: typing.Union[str, typing.Callable] = None,
+        select: str | dict | None = None,
+        transformation: str | typing.Callable | None = None,
         *args,
         **kwargs,
     ):
+        if select is None:
+            select = {}
 
         if "one_body_integrals" not in kwargs:
             geometry = parameters.get_geometry()
             pyscf_geomstring = ""
             for atom in geometry:
-                pyscf_geomstring += "{} {} {} {};".format(
-                    atom[0], atom[1][0], atom[1][1], atom[1][2]
-                )
+                pyscf_geomstring += f"{atom[0]} {atom[1][0]} {atom[1][1]} {atom[1][2]};"
 
-            if "point_group" in kwargs:
-                point_group = kwargs["point_group"]
-            else:
-                point_group = None
+            point_group = kwargs.get("point_group", None)
 
             mol = pyscf.gto.Mole()
             mol.atom = pyscf_geomstring
@@ -96,8 +98,6 @@ class PySCF(HybridBase):
             else:
                 self.irreps = None
 
-            orbital_energies = mf.mo_energy
-
             # compute mo integrals
             mo_coeff = mf.mo_coeff
             h_ao = mol.intor("int1e_kin") + mol.intor("int1e_nuc")
@@ -119,7 +119,7 @@ class PySCF(HybridBase):
             parameters=parameters,
             transformation=transformation,
             select=select,
-            *args,
+            args=args,
             **kwargs,
         )
 
@@ -196,7 +196,7 @@ class PySCF(HybridBase):
         elif method == "fci":
             return self.compute_fci(**kwargs)
         else:
-            raise TequilaException("unknown method: {}".format(method))
+            raise TequilaException(f"unknown method: {method}")
 
     def _get_hf(self, do_not_solve=True, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="mulliken")
@@ -269,6 +269,6 @@ class PySCF(HybridBase):
                 )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)
-        except:
+        except AttributeError:
             return base
         return base

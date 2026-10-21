@@ -1,9 +1,11 @@
+import numpy
 import tequila as tq
+
 from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 from sunrise.molecules.qubit_base import NBodyTensor
+
+from ._compute_rdms import _assemble_rdm1, _assemble_rdm2, compute_rdms
 from .decompose import make_decomposed_circuits
-import numpy
-from ._compute_rdms import compute_rdms, _assemble_rdm2, _assemble_rdm1
 
 
 def fast_rdm(U, mol, clusters, variables, test=False, backend="qulacs"):
@@ -31,9 +33,9 @@ def fast_rdm(U, mol, clusters, variables, test=False, backend="qulacs"):
     circuits = make_decomposed_circuits(U, clusters=clusters)
 
     # needs hackend version that gives back the raw qops
-    qops, asd = compute_rdms(self=mol, U=U, use_hcb=True, evaluate=False)
+    qops, _asd = compute_rdms(self=mol, U=U, use_hcb=True, evaluate=False)
 
-    all_ps = sum([op.paulistrings for op in qops], [])
+    all_ps = [ps for op in qops for ps in op.paulistrings]
 
     all_ps_evaluated = {}
     all_psi_evaluated = {}
@@ -88,7 +90,7 @@ def fast_rdm(U, mol, clusters, variables, test=False, backend="qulacs"):
 
         if test and not numpy.isclose(tmp, testus[x]):
             print(x, " ", op)
-            print("{} vs {}".format(tmp, testus[x]))
+            print(f"{tmp} vs {testus[x]}")
             print(trace)
 
     len_1 = n_MOs * (n_MOs + 1) // 2

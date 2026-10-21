@@ -1,15 +1,17 @@
-from tequila import TequilaException, TequilaWarning
-from tequila.hamiltonian import QubitHamiltonian
-from tequila.hamiltonian.paulis import Sp, Sm, Zero
-from tequila.objective.objective import ExpectationValue
-from tequila.simulators.simulator_api import simulate
-from sunrise.molecules.qubit_base import NBodyTensor
 import warnings
-import numpy
 from itertools import product
 from numbers import Number
-from sunrise.molecules.hybrid_base import HybridBase
+
+import numpy
 import openfermion
+from tequila import TequilaException, TequilaWarning
+from tequila.hamiltonian import QubitHamiltonian
+from tequila.hamiltonian.paulis import Sm, Sp, Zero
+from tequila.objective.objective import ExpectationValue
+from tequila.simulators.simulator_api import simulate
+
+from sunrise.molecules.hybrid_base import HybridBase
+from sunrise.molecules.qubit_base import NBodyTensor
 
 
 def compute_rdms(
@@ -158,14 +160,12 @@ def compute_rdms_hybrid(
         """Returns Hermitian part of Fermion operator as QubitHamiltonian"""
         qop = self.transformation(of_operator)
         # qop = QubitHamiltonian(self.transformation(of_operator))
-        real, imag = qop.split(hermitian=True)
+        real, _imag = qop.split(hermitian=True)
         if real:
             return real
         elif not real:
             raise TequilaException(
-                "Qubit Hamiltonian does not have a Hermitian part. Operator ={}".format(
-                    of_operator
-                )
+                f"Qubit Hamiltonian does not have a Hermitian part. Operator ={of_operator}"
             )
 
     def _build_1bdy_operators_mix() -> list:
@@ -942,14 +942,12 @@ def compute_rdms_tequila(
         """Returns Hermitian part of Fermion operator as QubitHamiltonian"""
         qop = self.transformation(of_operator)
         # qop = QubitHamiltonian(self.transformation(of_operator))
-        real, imag = qop.split(hermitian=True)
+        real, _imag = qop.split(hermitian=True)
         if real:
             return real
         elif not real:
             raise TequilaException(
-                "Qubit Hamiltonian does not have a Hermitian part. Operator ={}".format(
-                    of_operator
-                )
+                f"Qubit Hamiltonian does not have a Hermitian part. Operator ={of_operator}"
             )
 
     def _build_1bdy_operators_spinful() -> list:
@@ -1160,9 +1158,7 @@ def compute_rdms_tequila(
     else:
         if use_hcb:
             raise TequilaException(
-                "compute_rdms: spin_free={} and use_hcb={} are not compatible".format(
-                    spin_free, use_hcb
-                )
+                f"compute_rdms: spin_free={spin_free} and use_hcb={use_hcb} are not compatible"
             )
         qops += _build_1bdy_operators_spinful() if get_rdm1 else []
         qops += _build_2bdy_operators_spinful() if get_rdm2 else []

@@ -1,6 +1,5 @@
 import numpy as np
-
-from scipy.spatial.distance import squareform, pdist
+from scipy.spatial.distance import pdist, squareform
 
 
 def ant_colony_opt(

@@ -1,16 +1,19 @@
-import tequila as tq
-from sunrise import optimize_orbitals, FCircuit
-import numpy
-import time
+from __future__ import annotations
+
 import warnings
-from .fast_rdm import fast_rdm
-from .fast_qtensor import fast_qtensor
-from .decompose import decompose, make_decomposed_clusters
-from ..expval.orbital_optimizer import OptimizeOrbitalsResult
-from tequila.optimizers.optimizer_base import OptimizerResults
+
+import numpy
+import tequila as tq
 from tequila import TequilaWarning
-from typing import Union
-from .spa_classical_solver import spa_solve_graph, spa_rdms
+from tequila.optimizers.optimizer_base import OptimizerResults
+
+from sunrise import FCircuit, optimize_orbitals
+
+from ..expval.orbital_optimizer import OptimizeOrbitalsResult
+from .decompose import decompose, make_decomposed_clusters
+from .fast_qtensor import fast_qtensor
+from .fast_rdm import fast_rdm
+from .spa_classical_solver import spa_rdms, spa_solve_graph
 
 
 def run_spa(
@@ -19,7 +22,7 @@ def run_spa(
     initial_guess=None,
     decompose=True,
     silent=True,
-    grouping: Union[int, list[int], None] = None,
+    grouping: int | list[int] | None = None,
     backend: str = "qulacs",
     fast_rdm=True,
     **kwargs,
@@ -66,11 +69,11 @@ class SPASolver:
     def __init__(
         self,
         decompose=False,
-        grouping: Union[int, list[int], None] = None,
+        grouping: int | list[int] | None = None,
         backend: str = "qulacs",
         fast_rdm=True,
         restrict_to_hcb=True,
-        edges: list[tuple[int]] = None,
+        edges: list[tuple[int]] | None = None,
     ):
         self.decompose = decompose
         self.rdm_qtensors = None
@@ -91,7 +94,7 @@ class SPASolver:
             and isinstance(self.edges, list)
             and isinstance(self.edges[0], (tuple, list))
             and isinstance(self.edges[0][0], int)
-            and all([len(edge) < 3 for edge in self.edges])
+            and all(len(edge) < 3 for edge in self.edges)
         ):
             variables, energy = spa_solve_graph(mol=molecule, graph=self.edges)
             return OptimizerResults(energy=energy, history=None, variables=variables)
@@ -127,7 +130,7 @@ class SPASolver:
                 gradient="2-point",
                 method_options={"finite_diff_rel_step": 1.0e-4},
                 backend=self.backend,
-                *args,
+                args=args,
                 **kwargs,
             )
         else:
@@ -137,7 +140,7 @@ class SPASolver:
                 silent=True,
                 initial_values=self.variables,
                 backend=self.backend,
-                *args,
+                args=args,
                 **kwargs,
             )
         if self.restart_from_previous_runs:
@@ -146,14 +149,14 @@ class SPASolver:
         return result
 
     def compute_rdms(self, U, variables, molecule, use_hcb=False):
-        start = time.time()
+        # start = time.time()
         if self.fast_rdm:
             if (
                 self.edges is not None
                 and isinstance(self.edges, list)
                 and isinstance(self.edges[0], (tuple, list))
                 and isinstance(self.edges[0][0], int)
-                and all([len(edge) < 3 for edge in self.edges])
+                and all(len(edge) < 3 for edge in self.edges)
             ):
                 return spa_rdms(
                     edges=self.edges,
@@ -190,7 +193,7 @@ class SPASolver:
                 self.rdm_qtensors = ((rdm1, shape1), (rdm2, shape2), str(U))
 
             else:
-                rdm1, rdm2, checksum = self.rdm_qtensors
+                rdm1, rdm2, _checksum = self.rdm_qtensors
                 rdm1, shape1 = rdm1
                 rdm2, shape2 = rdm2
 

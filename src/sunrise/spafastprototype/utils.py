@@ -16,10 +16,10 @@ def analyse(data=None):
         vmax = max(v)
         vmin = min(v)
 
-        print("{:30}".format(k))
-        print("max : {:2.5f}s".format(vmax))
-        print("min : {:2.5f}s".format(vmin))
-        print("av  : {:2.5f}s".format(average))
+        print(f"{k:30}")
+        print(f"max : {vmax:2.5f}s")
+        print(f"min : {vmin:2.5f}s")
+        print(f"av  : {average:2.5f}s")
 
         return average, vmax, vmin
 
@@ -30,7 +30,7 @@ def timing(f, *args, **kwargs):
         result = f(*args, **kwargs)
         end = time.time()
         if not _silent:
-            print("{:30} took {}s".format(f.__name__, end - start))
+            print(f"{f.__name__:30} took {end - start}s")
         if f.__name__ in _all_timinings:
             _all_timinings[f.__name__] += [end - start]
         else:

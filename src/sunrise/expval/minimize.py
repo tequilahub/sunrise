@@ -1,32 +1,35 @@
-from tequila.optimizers import minimize as tminimize
-import typing
-from tequila.objective.objective import Objective, Variable, assign_variable
-from tequila.circuit.noise import NoiseModel
-from tequila import TequilaException, QCircuit, QubitWaveFunction
-from tequila.objective import QTensor, format_variable_dictionary
-from tequila.simulators.simulator_api import compile as tq_compile
-from tequila.autograd_imports import __AUTOGRAD__BACKEND__
-from typing import Dict, Union, Hashable, Callable
+from __future__ import annotations
+
+from collections.abc import Hashable
 from numbers import Number
 from numbers import Real as RealNumber
-from ..fermionic_operations import FCircuit
-from .simulate_circuit import simulate_fcircuit
-from tequila.simulators.simulator_base import BackendCircuit
+from typing import Callable
+
+from tequila import SUPPORTED_BACKENDS, QCircuit, QubitWaveFunction, TequilaException
 from tequila import grad as tqgrad
-from tequila import SUPPORTED_BACKENDS
+from tequila.circuit.noise import NoiseModel
+from tequila.objective import QTensor, format_variable_dictionary
+from tequila.objective.objective import Objective, Variable, assign_variable
+from tequila.optimizers import minimize as tminimize
+from tequila.simulators.simulator_api import compile as tq_compile
+from tequila.simulators.simulator_base import BackendCircuit
+
 from sunrise.expval import (
     INSTALLED_FERMIONIC_BACKENDS,
     SUPPORTED_FERMIONIC_BACKENDS,
     pick_backend,
 )
 
+from ..fermionic_operations import FCircuit
+from .simulate_circuit import simulate_fcircuit
+
 
 def minimize(
     objective,
     method: str = "bfgs",
-    variables: list = None,
-    initial_values: Union[dict, Number, Callable] = 0.0,
-    maxiter: int = None,
+    variables: list | None = None,
+    initial_values: dict | Number | Callable = 0.0,
+    maxiter: int | None = None,
     silent: bool = True,
     *args,
     **kwargs,
@@ -44,12 +47,12 @@ def minimize(
     if "backend" not in kwargs:
         kwargs["backend"] = None
     if hasattr(objective, "args") and any(
-        [type(arg).__name__ == "FermBraketImpl" for arg in objective.args]
+        type(arg).__name__ == "FermBraketImpl" for arg in objective.args
     ):
         dE = grad(objective=objective, variable=variables, args=args, kwargs=kwargs)
         dE = {
             g: compile(dE[g], fbackend=fbackend, backend=kwargs["backend"])
-            for g in dE.keys()
+            for g in dE.items()
         }
         nargs = [
             compile(Objective(args=[arg]), fbackend=fbackend, backend=kwargs["backend"])
@@ -65,7 +68,7 @@ def minimize(
             initial_values=initial_values,
             maxiter=maxiter,
             silent=silent,
-            *args,
+            args=args,
             **kwargs,
         )
     else:
@@ -76,13 +79,13 @@ def minimize(
             initial_values=initial_values,
             maxiter=maxiter,
             silent=silent,
-            *args,
+            args=args,
             **kwargs,
         )
 
 
 def grad(
-    objective: Union[Objective, QTensor],
+    objective: Objective | QTensor | None,
     variable: Variable = None,
     no_compile=False,
     *args,
@@ -107,32 +110,32 @@ def grad(
         }
 
     if hasattr(objective, "args") and any(
-        [type(arg).__name__ == "FermBraketImpl" for arg in objective.args]
+        type(arg).__name__ == "FermBraketImpl" for arg in objective.args
     ):
         return tqgrad(
-            objective=objective, variable=variable, no_compile=True, *args, **kwargs
+            objective=objective, variable=variable, no_compile=True, args=args, **kwargs
         )
     else:
         return tqgrad(
             objective=objective,
             variable=variable,
             no_compile=no_compile,
-            *args,
+            args=args,
             **kwargs,
         )
 
 
 def simulate(
-    objective: typing.Union[FCircuit, "Objective", "QCircuit", "QTensor"],
-    variables: Dict[Union[Variable, Hashable], RealNumber] = None,
-    samples: int = None,
-    backend: str = None,
-    noise: NoiseModel = None,
-    device: str = None,
-    initial_state: Union[int, QubitWaveFunction] = 0,
+    objective: FCircuit | Objective | QCircuit | QTensor,
+    variables: dict[Variable | Hashable, RealNumber] | None = None,
+    samples: int | None = None,
+    backend: str | None = None,
+    noise: NoiseModel | None = None,
+    device: str | None = None,
+    initial_state: int | QubitWaveFunction = 0,
     *args,
     **kwargs,
-) -> Union[RealNumber, QubitWaveFunction]:
+) -> RealNumber | QubitWaveFunction | None:
     """Simulate a tequila objective or circuit
 
     Parameters
@@ -167,9 +170,7 @@ def simulate(
 
     if variables is None and not (len(objective.extract_variables()) == 0):
         raise TequilaException(
-            "You called simulate for a parametrized type but forgot to pass down the variables: {}".format(
-                objective.extract_variables()
-            )
+            f"You called simulate for a parametrized type but forgot to pass down the variables: {objective.extract_variables()}"
         )
 
     if isinstance(objective, list):
@@ -182,14 +183,14 @@ def simulate(
                 noise,
                 device,
                 initial_state,
-                *args,
+                args=args,
                 **kwargs,
             )
             for op in objective
         ]  # TODO Multidimensional
     if isinstance(objective, FCircuit):
         return simulate_fcircuit(
-            U=objective, variables=variables, backend=backend, *args, **kwargs
+            U=objective, variables=variables, backend=backend, args=args, **kwargs
         )
 
     compiled_objective = compile(
@@ -199,29 +200,29 @@ def simulate(
         backend=backend,
         noise=noise,
         device=device,
-        *args,
+        args=args,
         **kwargs,
     )
     return compiled_objective(
         variables=variables,
         samples=samples,
         initial_state=initial_state,
-        *args,
+        args=args,
         **kwargs,
     )
 
 
 def compile(
-    objective: typing.Union["Objective", "QCircuit", "QTensor", "FCircuit"],
-    variables: Dict[Union["Variable", Hashable], RealNumber] = None,
-    samples: int = None,
+    objective: Objective | QCircuit | QTensor | FCircuit,
+    variables: dict[Variable | Hashable, RealNumber] | None = None,
+    samples: int | None = None,
     simulate_density: bool = False,
-    backend: str = None,
-    noise: NoiseModel = None,
-    device: str = None,
+    backend: str | None = None,
+    noise: NoiseModel | None = None,
+    device: str | None = None,
     *args,
     **kwargs,
-) -> typing.Union["BackendCircuit", "Objective"]:
+) -> BackendCircuit | Objective | None:
     """Compile a tequila objective or circuit to a backend
 
     Parameters
@@ -276,7 +277,7 @@ def compile(
                 if type(arg).__name__ == "FermBraketImpl":
                     if id(arg) not in expectationvalues:
                         compiled_expval = compile_fexpval(
-                            objective=arg, backend=fbackend, *args, **kwargs
+                            objective=arg, backend=fbackend, args=args, **kwargs
                         )
                         if fbackend == "tequila":
                             compiled_expval = tq_compile(
@@ -287,7 +288,7 @@ def compile(
                                 backend=backend,
                                 noise=noise,
                                 device=device,
-                                *args,
+                                args=args,
                                 **kwargs,
                             ).args[0]
                         expectationvalues[id(arg)] = compiled_expval
@@ -308,14 +309,14 @@ def compile(
         backend=backend,
         noise=noise,
         device=device,
-        *args,
+        args=args,
         **kwargs,
     )
     return res
 
 
 def compile_fexpval(
-    objective=None, backend: str = None, *args, **kwargs
+    objective=None, backend: str | None = None, *args, **kwargs
 ):  # For now our fermionic backends don't support noise/samples... Variables not passed since already inside FermBraketImpl
     if backend.lower() in INSTALLED_FERMIONIC_BACKENDS:
         return INSTALLED_FERMIONIC_BACKENDS[backend.lower()](objective, *args, **kwargs)

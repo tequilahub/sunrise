@@ -1,11 +1,9 @@
-import tequila as tq
-from tequila import TequilaException, TequilaWarning
-
-from ..chemistry_tools import NBodyTensor
-from ._f12_correction_base import ExplicitCorrelationCorrection
+from __future__ import annotations
 
 import numpy
-from itertools import product
+from tequila import TequilaException
+
+from ._f12_correction_base import ExplicitCorrelationCorrection
 
 
 class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
@@ -16,9 +14,9 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
     def __init__(
         self,
         mol=None,
-        rdm1: numpy.ndarray = None,
-        rdm2: numpy.ndarray = None,
-        n_ri: int = None,
+        rdm1: numpy.ndarray | None = None,
+        rdm2: numpy.ndarray | None = None,
+        n_ri: int | None = None,
         gamma: int = 1.4,
         f12_filename: str = "molecule_f12tensor.bin",
         **kwargs,
@@ -53,8 +51,8 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
                 f12 = f12_data.reshape(sds)
                 f12_filename = f12_filename[:-3] + "npy"
                 numpy.save(f12_filename, arr=f12)
-            except Exception:
-                print("Error while trying to read {}!".format(f12_filename))
+            except TequilaException:
+                print(f"Error while trying to read {f12_filename}!")
         elif not f12_filename.endswith(".npy"):
             raise TequilaException
         external_info = {"f12_filename": f12_filename, "ordering": "chem"}

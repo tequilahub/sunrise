@@ -1,43 +1,43 @@
 from __future__ import annotations
-import numpy as np
-import tensorcircuit as tc
-import tencirchem as tcc
-from tencirchem.static.ci_utils import get_ci_strings
-from tencirchem.static.hamiltonian import get_h_fcifunc_from_integral
-from sunrise.expval.tcc.braket import EXPVAL
-from sunrise.expval.tcc.operator_builder import (
-    extract_restricted_integrals,
-    build_sparse_ci_operator,
-)
-from ...fermionic_operations.circuit import FCircuit
-from tequila import (
-    TequilaException,
-    QubitWaveFunction,
-    simulate,
-    Variable,
-    Objective,
-    assign_variable,
-    QubitHamiltonian,
-)
-from sunrise.molecules.qubit_base import Molecule
-from tequila import grad as tq_grad
-from tequila.objective.objective import Variables, FixedVariable
-from sunrise.molecules.qubit_base.chemistry_tools import NBodyTensor
-from sunrise.molecules.qubit_base import qc_base
-from tequila.utils.bitstrings import BitString, BitNumbering
-from numbers import Number
-from numpy import ceil, pi, prod, eye, zeros, allclose
-from copy import deepcopy
-from typing import Union, List, Tuple, Callable
+
 from collections import defaultdict
+from copy import deepcopy
+from numbers import Number
+from typing import Callable
+
+import numpy as np
+import tencirchem as tcc
+import tensorcircuit as tc
+from numpy import allclose, ceil, eye, pi, prod, zeros
 from openfermion import FermionOperator
 from openfermion.transforms.opconversions.term_reordering import reorder
 from openfermion.utils.indexing import up_then_down
+from tencirchem.static.ci_utils import get_ci_strings
+from tencirchem.static.hamiltonian import get_h_fcifunc_from_integral
+from tequila import (
+    Objective,
+    QubitHamiltonian,
+    QubitWaveFunction,
+    TequilaException,
+    Variable,
+    assign_variable,
+    simulate,
+)
+from tequila.objective.objective import FixedVariable, Variables
+from tequila.utils.bitstrings import BitNumbering, BitString
+
+from sunrise.expval.tcc.braket import EXPVAL
+from sunrise.expval.tcc.operator_builder import (
+    build_sparse_ci_operator,
+    extract_restricted_integrals,
+)
+
+from ...fermionic_operations.circuit import FCircuit
 from ..fermionic_braket import FermBraketImpl
 
 
 class TCCBraket:
-    def __init__(self, braket: "FermBraketImpl", *args, **kwargs):
+    def __init__(self, braket: FermBraketImpl, *args, **kwargs):
         self.operator = None
         if "backend_kwargs" in kwargs:
             backend_kwargs = kwargs["backend_kwargs"]
@@ -125,24 +125,22 @@ class TCCBraket:
         if operator is not None:
             self.operator = self.build_operator(operator)
 
-    def __call__(self, variables: Union[list, dict] = {}, *args, **kwargs) -> float:
+    def __call__(self, variables: list | dict | None = None, *args, **kwargs) -> float:
+        if variables is None:
+            variables = {}
         return self.simulate(variables=variables)
 
-    def simulate(self, variables: Union[list, dict] = None) -> float:
+    def simulate(self, variables: list | dict | None = None) -> float:
         check_variables = {k: k in variables for k in self.extract_variables()}
         if not all(list(check_variables.values())):
             raise TequilaException(
                 "Objective did not receive all variables:\n"
                 "You gave\n"
-                " {}\n"
+                f" {variables}\n"
                 " but the objective depends on\n"
-                " {}\n"
+                f" {self.extract_variables()}\n"
                 " missing values for\n"
-                " {}".format(
-                    variables,
-                    self.extract_variables(),
-                    [k for k, v in check_variables.items() if not v],
-                )
+                f" {[k for k, v in check_variables.items() if not v]}"
             )
         if isinstance(variables, Variables):
             variables = variables.store
@@ -194,7 +192,7 @@ class TCCBraket:
         return indices_tcc_to_tq(self.BK.ex_ops_bra)
 
     @bra.setter
-    def bra(self, bra: Union[List[List[Tuple[int]]], FCircuit]):
+    def bra(self, bra: list[list[tuple[int]]] | FCircuit | None):
         """
         Expected FCircuit or indices in [[(0,2),(1,3),...],[(a,b),(c,d),...],...] Format (Upthendown order)
         """
@@ -224,7 +222,7 @@ class TCCBraket:
         return indices_tcc_to_tq(self.BK.ex_ops_ket)
 
     @ket.setter
-    def ket(self, ket: Union[List[List[Tuple[int]]], FCircuit]):
+    def ket(self, ket: list[list[tuple[int]]] | FCircuit | None):
         """
         Expected FCircuit or indices in [[(0,2),(1,3),...],[(a,b),(c,d),...],...] Format (Upthendown order)
         """
@@ -251,7 +249,7 @@ class TCCBraket:
         """Tequila Circuit Bra variables."""
         bar: dict = deepcopy(self.BK.var_to_param_bra)
         if bar is not None:
-            for i in bar.keys():  # Here to tequila
+            for i in bar.items():  # Here to tequila
                 if isinstance(bar[i], (Number, FixedVariable)):
                     bar[i] = assign_variable(-2 * (bar[i]))
         return bar
@@ -284,7 +282,7 @@ class TCCBraket:
         """Tequila circuit Ket parameters."""
         bar = deepcopy(self.BK.var_to_param_ket)
         if bar is not None:
-            for i in bar.keys():  # to tequila
+            for i in bar.items():  # to tequila
                 if isinstance(bar[i], (Number, FixedVariable)):
                     bar[i] = assign_variable(-2 * (bar[i]))
         return bar
@@ -315,7 +313,7 @@ class TCCBraket:
         """Tequila circuit variables."""
         bar: dict = deepcopy(self.BK.var_to_param)
         if bar is not None:
-            for i in bar.keys():  # Here to tequila
+            for i in bar.items():  # Here to tequila
                 if isinstance(bar[i], (Number, FixedVariable)):
                     bar[i] = assign_variable(-2 * bar[i])
         return bar
@@ -464,8 +462,8 @@ class TCCBraket:
             )
 
     def build_operator(
-        self, operator: Union[str, FermionOperator, QubitHamiltonian, Number] = None
-    ) -> Union[None, Callable]:
+        self, operator: str | FermionOperator | QubitHamiltonian | Number | None = None
+    ) -> Callable | None:
         """
         Build the expectation value operator.
         Even if it is accepted a QubitHamiltonian, we disencorage its use here since TCC works on fermionic states.
@@ -542,11 +540,11 @@ class TCCBraket:
         self.BK.e_core = 0
 
         def callable_operator(
-            ci_vect: List[int],
+            ci_vect: list[int],
             operator: QubitHamiltonian,
             n_qubits: int,
-            ket: List[float],
-        ) -> List[float]:
+            ket: list[float],
+        ) -> list[float]:
             hket = zeros(len(ci_vect))
             wfv = QubitWaveFunction(
                 n_qubits=n_qubits, numbering=BitNumbering.LSB, dense=True
@@ -594,7 +592,7 @@ def init_state_from_array(wvf: QubitWaveFunction, tol=1e-6):
     return init_state
 
 
-def indices_tq_to_tcc(indices: List[List[Tuple[int]]] = None):
+def indices_tq_to_tcc(indices: list[list[tuple[int]]] | None = None):
     """
     Expected indices like [[(0,1),(n_mo+0,n_mo+1),...],[(a,b),(c,d),...],...] (in upthendown)
     Returned [(...,n_mo+0,0,1,n_mo+1,...),(...,c,a,b,d,...)]
@@ -622,7 +620,9 @@ def indices_tq_to_tcc(indices: List[List[Tuple[int]]] = None):
     return ex_ops, params, param_ids
 
 
-def indices_tcc_to_tq(indices: List[List[Tuple[int]]] = None) -> List[List[Tuple[int]]]:
+def indices_tcc_to_tq(
+    indices: list[list[tuple[int]]] | None = None,
+) -> list[list[tuple[int]]]:
     """
     Expected indices like [(...,n_mo+0,0,1,n_mo+1,...),(...,c,a,b,d,...)]
     Returned [[(0,1),(n_mo+0,n_mo+1),...],[(a,b),(c,d),...],...] (in upthendown)

@@ -5,12 +5,12 @@ Most are Interfaces to OpenFermion
 
 import abc
 
+import numpy
+import openfermion
 from tequila import TequilaException
 from tequila.circuit.circuit import QCircuit
-from tequila.circuit.gates import X, CNOT
+from tequila.circuit.gates import CNOT, X
 from tequila.hamiltonian.qubit_hamiltonian import QubitHamiltonian
-import openfermion
-import numpy
 
 
 def known_encodings():
@@ -87,7 +87,7 @@ class EncodingBase(metaclass=abc.ABCMeta):
         else:
             op = fermion_operator
 
-        fop = self.do_transform(fermion_operator=op, *args, **kwargs)
+        fop = self.do_transform(fermion_operator=op, args=args, **kwargs)
         fop.compress()
         return self.post_processing(QubitHamiltonian.from_openfermion(fop))
 
@@ -109,8 +109,8 @@ class EncodingBase(metaclass=abc.ABCMeta):
     def do_transform(
         self, fermion_operator: openfermion.FermionOperator, *args, **kwargs
     ) -> openfermion.QubitOperator:
-        raise Exception(
-            "{}::do_transform: called base class".format(type(self).__name__)
+        raise NotImplementedError(
+            f"{type(self).__name__}::do_transform: called base class"
         )
 
     def map_state(self, state: list, *args, **kwargs) -> list:
@@ -155,7 +155,7 @@ class EncodingBase(metaclass=abc.ABCMeta):
         wfn = QubitWaveFunction.from_basis_state(n_qubits, 0)
         wfn = wfn.apply_qubitoperator(operator=op)
         assert wfn.length() == 1
-        key = list(wfn.keys())[0].array
+        key = next(iter(wfn.keys())).array
         return key
 
     @abc.abstractmethod
@@ -163,7 +163,6 @@ class EncodingBase(metaclass=abc.ABCMeta):
         """
         This method needs to be implemented to enable default conversions via Jordan-Wigner
         """
-        pass
 
     # independent conversion methods, these are used for default conversions
     # arXiv:1808.10402 IV. B. 2, Eq. 57
@@ -234,7 +233,6 @@ class JordanWigner(EncodingBase):
 
     def map_state(self, state: list, *args, **kwargs):
         state = state + [0] * (2 * self.n_orbitals - len(state))
-        result = [0] * len(state)
         if self.up_then_down:
             return [state[2 * i] for i in range(self.n_orbitals)] + [
                 state[2 * i + 1] for i in range(self.n_orbitals)
@@ -295,9 +293,7 @@ class BravyiKitaevTree(EncodingBase):
         )
 
     def me_to_jw(self) -> QCircuit:
-        raise TequilaException(
-            "{}::me_to_jw: unimplemented".format(type(self).__name__)
-        )
+        raise TequilaException(f"{type(self).__name__}::me_to_jw: unimplemented")
 
 
 class BravyiKitaevFast(EncodingBase):
@@ -312,18 +308,14 @@ class BravyiKitaevFast(EncodingBase):
     ) -> openfermion.QubitOperator:
         n_qubits = openfermion.count_qubits(fermion_operator)
         if n_qubits != self.n_orbitals * 2:
-            raise Exception(
-                "BravyiKitaevFast transformation currently only possible for full Hamiltonians (no UCC generators).\nfermion_operator was {}".format(
-                    fermion_operator
-                )
+            raise NotImplementedError(
+                f"BravyiKitaevFast transformation currently only possible for full Hamiltonians (no UCC generators).\nfermion_operator was {fermion_operator}"
             )
         op = openfermion.get_interaction_operator(fermion_operator)
         return openfermion.bravyi_kitaev_fast(op)
 
     def me_to_jw(self) -> QCircuit:
-        raise TequilaException(
-            "{}::me_to_jw: unimplemented".format(type(self).__name__)
-        )
+        raise TequilaException(f"{type(self).__name__}::me_to_jw: unimplemented")
 
 
 class TaperedBravyKitaev(EncodingBase):
@@ -358,16 +350,14 @@ class TaperedBravyKitaev(EncodingBase):
             self.active_orbitals = active_orbitals
 
         if "up_then_down" in kwargs:
-            raise Exception(
-                "Don't pass up_then_down argument to {}, it can't be changed".format(
-                    type(self).__name__
-                )
+            raise TequilaException(
+                f"Don't pass up_then_down argument to {type(self).__name__}, it can't be changed"
             )
         super().__init__(
             n_orbitals=n_orbitals,
             n_electrons=n_electrons,
             up_then_down=False,
-            *args,
+            args=args,
             **kwargs,
         )
 
@@ -375,7 +365,9 @@ class TaperedBravyKitaev(EncodingBase):
         self, fermion_operator: openfermion.FermionOperator, *args, **kwargs
     ) -> openfermion.QubitOperator:
         if openfermion.count_qubits(fermion_operator) != self.n_orbitals * 2:
-            raise Exception("TaperedBravyiKitaev not ready for UCC generators yet")
+            raise NotImplementedError(
+                "TaperedBravyiKitaev not ready for UCC generators yet"
+            )
         return openfermion.symmetry_conserving_bravyi_kitaev(
             fermion_operator,
             active_orbitals=self.active_orbitals,
@@ -386,7 +378,7 @@ class TaperedBravyKitaev(EncodingBase):
         non_tapered_trafo = BravyiKitaevTree(
             up_then_down=True, n_electrons=self.n_electrons, n_orbitals=self.n_orbitals
         )
-        key = non_tapered_trafo.map_state(state=state, *args, **kwargs)
+        key = non_tapered_trafo.map_state(state=state, args=args, **kwargs)
         n_qubits = self.n_orbitals * 2
         active_qubits = [
             i for i in range(n_qubits) if i not in [n_qubits - 1, n_qubits // 2 - 1]
@@ -395,9 +387,7 @@ class TaperedBravyKitaev(EncodingBase):
         return key
 
     def me_to_jw(self) -> QCircuit:
-        raise TequilaException(
-            "{}::me_to_jw: unimplemented".format(type(self).__name__)
-        )
+        raise TequilaException(f"{type(self).__name__}::me_to_jw: unimplemented")
 
 
 class TaperedBinary(EncodingBase):
@@ -433,13 +423,12 @@ class TaperedBinary(EncodingBase):
             n_orbitals=n_orbitals,
             n_electrons=n_electrons,
             up_then_down=up_then_down,
-            *args,
+            args=args,
             **kwargs,
         )
         self.spin_parity = bool(
             (self.n_electrons / 2) % 2
         )  # total parity of all \sigma\in\{\alpha\beta\} SOs
-        from scipy.special import factorial
 
         self.modes = self.active_orbitals  # asumed n alpha = n beta
 
@@ -452,7 +441,7 @@ class TaperedBinary(EncodingBase):
         :return:
             The openfermion QubitOperator of this class ecoding
         """
-        fop = self.do_transform(fermion_operator=fermion_operator, *args, **kwargs)
+        fop = self.do_transform(fermion_operator=fermion_operator, args=args, **kwargs)
         fop.compress()
         return self.post_processing(QubitHamiltonian.from_openfermion(fop))
 

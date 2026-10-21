@@ -1,40 +1,42 @@
+from __future__ import annotations
+
+import copy
+import typing
 import warnings
-from tequila import TequilaException, BitString, TequilaWarning
+from itertools import product
+
+import numpy
+from openfermion import FermionOperator
+from tequila import BitString, TequilaException, TequilaWarning
+from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
 from tequila.hamiltonian.paulis import Zero
-
-from tequila.circuit import QCircuit, gates
-from tequila.objective.objective import Variable, Variables, ExpectationValue
-
+from tequila.objective.objective import ExpectationValue, Variable, Variables
 from tequila.simulators.simulator_api import simulate
 from tequila.utils import to_float
-from sunrise.molecules.qubit_base.chemistry_tools import (
-    prepare_product_state,
-    ParametersQC,
-    NBodyTensor,
-)
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as qc_base
-import typing, numpy
-from itertools import product
+
 from sunrise.molecules.hybrid_base.encodings import known_encodings
+from sunrise.molecules.hybrid_base.fermionicgateimpl import FermionicGateImpl
+from sunrise.molecules.qubit_base.chemistry_tools import (
+    NBodyTensor,
+    ParametersQC,
+    prepare_product_state,
+)
 from sunrise.molecules.qubit_base.encodings import EncodingBase
-from sunrise.molecules.hybrid_base.FermionicGateImpl import FermionicGateImpl
-from openfermion import FermionOperator
-import copy
-from typing import Union, Optional, List, Tuple
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as qc_base
 
 
 class HybridBase(qc_base):
     def __init__(
         self,
         parameters: ParametersQC,
-        select: typing.Union[str, dict] = {},
-        transformation: typing.Union[str, typing.Callable] = None,
-        active_orbitals: list = None,
-        frozen_orbitals: list = None,
-        orbital_type: str = None,
-        reference_orbitals: list = None,
-        orbitals: list = None,
+        select: str | dict | None = None,
+        transformation: str | typing.Callable | None = None,
+        active_orbitals: list | None = None,
+        frozen_orbitals: list | None = None,
+        orbital_type: str | None = None,
+        reference_orbitals: list | None = None,
+        orbitals: list | None = None,
         *args,
         **kwargs,
     ):
@@ -52,6 +54,8 @@ class HybridBase(qc_base):
         args
         kwargs
         """
+        if select is None:
+            select = {}
         self._select = {}
         self._rdm1 = None
         self._rdm2 = None
@@ -115,7 +119,7 @@ class HybridBase(qc_base):
                 basis_name=self.parameters.basis_set,
                 condense=self.condense,
                 two_qubit=self.two_qubit,
-                *args,
+                args=args,
                 **kwargs,
             )
 
@@ -124,7 +128,7 @@ class HybridBase(qc_base):
         # tq init overwriten bcs I need the number of orbitals for select->transformation
         if not isinstance(transformation, typing.Callable):
             self.transformation: EncodingBase = self._initialize_transformation(
-                transformation=transformation, *args, **kwargs
+                transformation=transformation, args=args, **kwargs
             )  # here select set only to full-HCB. changed afterwards
         else:
             self.transformation: EncodingBase = transformation
@@ -133,7 +137,7 @@ class HybridBase(qc_base):
 
     # Select Related Functions
     def update_select(
-        self, select: typing.Union[str, dict, list, tuple], n_orb: int = None
+        self, select: str | dict | list | tuple, n_orb: int | None = None
     ):
         """
         Parameters
@@ -162,7 +166,7 @@ class HybridBase(qc_base):
                 if select[i] in ["F", "B"]:
                     sel.update({i: select[i]})
                 else:
-                    raise TequilaException(
+                    raise ValueError(
                         f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic)."
                     )
             return sel
@@ -179,18 +183,14 @@ class HybridBase(qc_base):
                     if select[i] in ["F", "B"]:
                         sel.update({i: select[i]})
                     else:
-                        raise TequilaException(
-                            "Warning, encoding character not recognised on entry {it}.\n Please choose between F (Fermionic) and B (Bosonic).".format(
-                                it={i: sel[i]}
-                            )
+                        raise ValueError(
+                            f"Warning, encoding character not recognised on entry { ({i: sel[i]}) }.\n Please choose between F (Fermionic) and B (Bosonic)."
                         )
                 else:
                     sel.update({i: "B"})
             return sel
 
-        def verify_selection_list(
-            select: typing.Union[list, tuple], n_orb: int
-        ) -> dict:
+        def verify_selection_list(select: list | tuple, n_orb: int) -> dict:
             """
             Internal function
             Checks if the orbital selection string has the appropiated lenght, otherwise corrects it
@@ -213,7 +213,7 @@ class HybridBase(qc_base):
                     if select[i] in ["F", "B"]:
                         sel.update({i: select[i]})
                     else:
-                        TequilaException(
+                        raise ValueError(
                             f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic)."
                         )
             return sel
@@ -230,11 +230,11 @@ class HybridBase(qc_base):
             BOS_MO = []
             FER_MO = []
             FER_SO = []
-            for i in select:
-                if select[i] == "B":
+            for i, enc in select.items():
+                if enc == "B":
                     BOS_MO.append(i)
                     hcb += 1
-                elif select[i] == "F":
+                elif enc == "F":
                     FER_MO.append(i)
                     FER_SO.append(2 * i)
                     FER_SO.append(2 * i + 1)
@@ -259,7 +259,7 @@ class HybridBase(qc_base):
         else:
             try:
                 select = verify_selection_list(select=select, n_orb=n_orb)
-            except:
+            except TypeError:
                 raise TequilaException(
                     f"Warning, encoding format not recognised: {type(select)}.\n Please choose either a Str, Dict, List or Tuple."
                 )
@@ -302,11 +302,13 @@ class HybridBase(qc_base):
             orbital_type=molecule.integral_manager._orbital_type,
             parameters=parameters,
             reference_orbitals=molecule.integral_manager.active_space.reference_orbitals,
-            *args,
+            args=args,
             **kwargs,
         )
 
-    def use_native_orbitals(self, inplace=False, core: list = None, *args, **kwargs):
+    def use_native_orbitals(
+        self, inplace=False, core: list | None = None, *args, **kwargs
+    ):
         r"""
         Parameters
         ----------
@@ -385,7 +387,7 @@ class HybridBase(qc_base):
                 c_combined, s, core, [*to_active.values()]
             )
             if (
-                not all([i == to_active[i] for i in to_active])
+                not all(i == to_active[i] for i in to_active)
                 and len(self.BOS_MO)
                 and len(self.FER_MO)
             ):
@@ -394,9 +396,7 @@ class HybridBase(qc_base):
                 new_select = {i: self.select[i] for i in range(len(active))}
             else:
                 # do not shadow `s` (the overlap integrals) - still needed below
-                remaining = {
-                    i: self.select[i] for i in self.select.keys() if i not in core
-                }
+                remaining = {i: self.select[i] for i in self.select if i not in core}
                 new_select = {
                     i: remaining[[*remaining.keys()][i]] for i in range(len(remaining))
                 }
@@ -410,9 +410,7 @@ class HybridBase(qc_base):
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
-                    orbital_type="orthonormalized-{}-basis".format(
-                        self.integral_manager._basis_name
-                    ),
+                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
                 )
                 self.update_select(new_select)
                 return self
@@ -426,9 +424,7 @@ class HybridBase(qc_base):
                     frozen_orbitals=core,
                     orbital_coefficients=coeff,
                     overlap_integrals=s,
-                    orbital_type="orthonormalized-{}-basis".format(
-                        self.integral_manager._basis_name
-                    ),
+                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
                 )
                 parameters = copy.deepcopy(self.parameters)
                 result = HybridBase(
@@ -533,19 +529,17 @@ class HybridBase(qc_base):
             if transformation in encodings:
                 transformation = encodings[transformation](**trafo_args)
             else:
-                raise TequilaException(
-                    "Unkown Fermion-to-Qubit encoding {}. Try something like: {}".format(
-                        transformation, list(encodings.keys())
-                    )
+                raise ValueError(
+                    f"Unkown Fermion-to-Qubit encoding {transformation}. Try something like: {list(encodings.keys())}"
                 )
         return transformation
 
     def _new_transformation(
         self,
         transformation=None,
-        n_electrons: typing.Union[int, None] = None,
-        n_orbitals: Union[int, None] = None,
-        select: typing.Union[str, dict, list, tuple] = {},
+        n_electrons: int | None = None,
+        n_orbitals: int | None = None,
+        select: str | dict | list | tuple | None = None,
         condense: bool = True,
         two_qubit: bool = False,
         *args,
@@ -564,7 +558,8 @@ class HybridBase(qc_base):
         -------
 
         """
-
+        if select is None:
+            select = {}
         if transformation is None:
             transformation = "JordanWigner"
 
@@ -587,10 +582,8 @@ class HybridBase(qc_base):
             if transformation in encodings:
                 transformation = encodings[transformation](**trafo_args)
             else:
-                raise TequilaException(
-                    "Unkown Fermion-to-Qubit encoding {}. Try something like: {}".format(
-                        transformation, list(encodings.keys())
-                    )
+                raise ValueError(
+                    f"Unkown Fermion-to-Qubit encoding {transformation}. Try something like: {list(encodings.keys())}"
                 )
         return transformation
 
@@ -1598,7 +1591,7 @@ class HybridBase(qc_base):
 
     # Cicuit Related Functions
     def verify_excitation(
-        self, indices: typing.Iterable[typing.Tuple[int, int]], warning: bool = True
+        self, indices: typing.Iterable[tuple[int, int]], warning: bool = True
     ) -> bool:
         """
         Checks if the Bosonic restriction are accomplished by the excitation
@@ -1687,7 +1680,7 @@ class HybridBase(qc_base):
             angle=angle,
             assume_real=assume_real,
             control=control,
-            *args,
+            args=args,
             **kwargs,
         )
         circuit += self.make_excitation_gate(
@@ -1695,7 +1688,7 @@ class HybridBase(qc_base):
             angle=angle,
             assume_real=assume_real,
             control=control,
-            *args,
+            args=args,
             **kwargs,
         )
         return circuit
@@ -1753,13 +1746,13 @@ class HybridBase(qc_base):
                 angle=angle,
                 control=control,
                 assume_real=assume_real,
-                *args,
+                args=args,
                 **kwargs,
             )
 
     def make_excitation_gate(
         self,
-        indices: typing.Iterable[typing.Tuple[int, int]],
+        indices: typing.Iterable[tuple[int, int]],
         angle,
         control=None,
         assume_real=True,
@@ -1801,9 +1794,7 @@ class HybridBase(qc_base):
                 opt = False
             if not self.supports_ucc():
                 raise TequilaException(
-                    "Molecule with transformation {} does not support general UCC operations".format(
-                        self.transformation
-                    )
+                    f"Molecule with transformation {self.transformation} does not support general UCC operations"
                 )
             generator = self.make_excitation_generator(
                 indices=indices, remove_constant_term=control is None
@@ -1831,8 +1822,8 @@ class HybridBase(qc_base):
 
     def make_excitation_generator(
         self,
-        indices: typing.Iterable[typing.Tuple[int, int]],
-        form: str = None,
+        indices: typing.Iterable[tuple[int, int]],
+        form: str | None = None,
         remove_constant_term: bool = True,
     ) -> QubitHamiltonian:
         r"""
@@ -1861,9 +1852,7 @@ class HybridBase(qc_base):
         """
         if not self.supports_ucc():
             raise TequilaException(
-                "Molecule with transformation {} does not support general UCC operations".format(
-                    self.transformation
-                )
+                f"Molecule with transformation {self.transformation} does not support general UCC operations"
             )
         # check indices and convert to list of tuples if necessary
         if len(indices) == 0:
@@ -1874,7 +1863,7 @@ class HybridBase(qc_base):
                     "make_excitation_generator: unexpected input format of indices\n"
                     "use list of tuples as [(i_0, a_0),(i_1, a_1) ...]\n"
                     "or list as [i_0, a_0, i_1, a_1, ... ]\n"
-                    "you gave: {}".format(indices)
+                    f"you gave: {indices}"
                 )
             converted = [
                 (indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)
@@ -1943,15 +1932,13 @@ class HybridBase(qc_base):
                 op += FermionOperator(Ni + Ma, -1.0)
             else:
                 raise TequilaException(
-                    "Unknown generator form {}, supported are G, P+, P-, G+, G- and P0".format(
-                        form
-                    )
+                    f"Unknown generator form {form}, supported are G, P+, P-, G+, G- and P0"
                 )
         qop = self.transformation(op)
         # remove constant terms
         # they have no effect in the unitary (if not controlled)
         if remove_constant_term:
-            qop.qubit_operator.terms[tuple()] = 0.0
+            qop.qubit_operator.terms[()] = 0.0
 
         # check if the operator is hermitian and cast coefficients to floats
         # in order to avoid trouble with the simulation backends
@@ -2012,7 +1999,7 @@ class HybridBase(qc_base):
         if "+" in name:
             U = QCircuit()
             subparts = name.split("+")
-            U = self.make_ansatz(name=subparts[0], *args, **kwargs)
+            U = self.make_ansatz(name=subparts[0], args=args, **kwargs)
             # making sure the there are is no undesired behaviour in layers after +
             # reference should not be included since we are not starting from |00...0> anymore
             if "include_reference" in kwargs:
@@ -2028,7 +2015,7 @@ class HybridBase(qc_base):
             for i, subpart in enumerate(subparts[1:]):
                 U += self.make_ansatz(
                     name=subpart,
-                    *args,
+                    args=args,
                     label=(label, i),
                     include_reference=False,
                     hcb_optimization=False,
@@ -2037,18 +2024,18 @@ class HybridBase(qc_base):
             return U
 
         if name == "uccsd":
-            return self.make_uccsd_ansatz(*args, **kwargs)
+            return self.make_uccsd_ansatz(args=args, **kwargs)
         elif "spa" in name.lower():
             if "hcb" not in kwargs:
                 hcb = False
                 if "hcb" in name.lower():
                     hcb = True
                 kwargs["hcb"] = hcb
-            return self.make_spa_ansatz(*args, **kwargs)
+            return self.make_spa_ansatz(args=args, **kwargs)
         elif "d" in name or "s" in name:
-            return self.make_upccgsd_ansatz(name=name, *args, **kwargs)
+            return self.make_upccgsd_ansatz(name=name, args=args, **kwargs)
         else:
-            raise TequilaException("unknown ansatz with name={}".format(name))
+            raise TequilaException(f"unknown ansatz with name={name}")
 
     def make_spa_ansatz(
         self,
@@ -2076,17 +2063,12 @@ class HybridBase(qc_base):
         # current SPA implementation needs even number of electrons
         if self.n_electrons % 2 != 0:
             raise TequilaException(
-                "need even number of electrons for SPA ansatz.\n{} active electrons".format(
-                    self.n_electrons
-                )
+                f"need even number of electrons for SPA ansatz.\n{self.n_electrons} active electrons"
             )
         # making sure that enough edges are assigned
-        n_edges = len(edges)
         if len(edges) != self.n_electrons // 2:
             raise TequilaException(
-                "number of edges need to be equal to number of active electrons//2\n{} edges given\n{} active electrons\nfrozen core is {}".format(
-                    len(edges), self.n_electrons, self.parameters.frozen_core
-                )
+                f"number of edges need to be equal to number of active electrons//2\n{len(edges)} edges given\n{self.n_electrons} active electrons\nfrozen core is {self.parameters.frozen_core}"
             )
         # making sure that orbitals are uniquely assigned to edges
         for edge_qubits in edges:
@@ -2096,9 +2078,7 @@ class HybridBase(qc_base):
                         continue
                     elif q1 in edge2:
                         raise TequilaException(
-                            "make_spa_ansatz: faulty list of edges, orbitals are overlapping e.g. orbital {} is in edge {} and edge {}".format(
-                                q1, edge_qubits, edge2
-                            )
+                            f"make_spa_ansatz: faulty list of edges, orbitals are overlapping e.g. orbital {q1} is in edge {edge_qubits} and edge {edge2}"
                         )
 
         # auto assign if the circuit construction is optimized
@@ -2106,7 +2086,7 @@ class HybridBase(qc_base):
         if optimize is None:
             try:
                 have_hcb_to_me = self.hcb_to_me() is not None
-            except Exception:
+            except NotImplementedError:
                 have_hcb_to_me = False
             if have_hcb_to_me or not len(self.FER_SO):
                 optimize = True
@@ -2182,10 +2162,10 @@ class HybridBase(qc_base):
         self,
         include_reference: bool = True,
         name: str = "UpCCGSD",
-        label: str = None,
-        order: int = None,
+        label: str | None = None,
+        order: int | None = None,
         assume_real: bool = True,
-        hcb_optimization: bool = None,
+        hcb_optimization: bool | None = None,
         spin_adapt_singles: bool = True,
         neglect_z: bool = False,
         mix_sd: bool = False,
@@ -2240,7 +2220,7 @@ class HybridBase(qc_base):
                     order = int(name.split("-")[0])
                 else:
                     order = 1
-            except:
+            except ValueError:
                 order = 1
 
         indices = self.make_upccgsd_indices(key=name)
@@ -2254,17 +2234,12 @@ class HybridBase(qc_base):
             hcb_optimization = True
         if hcb_optimization and not have_hcb_trafo and "HCB" not in name:
             raise TequilaException(
-                "use_hcb={} but transformation={} has no 'hcb_to_me' function. Try transformation='ReorderedJordanWigner'".format(
-                    hcb_optimization, self.transformation
-                )
+                f"use_hcb={hcb_optimization} but transformation={self.transformation} has no 'hcb_to_me' function. Try transformation='ReorderedJordanWigner'"
             )
-        if "S" in name and "HCB" in name:
-            if "HCB" in name and "S" in name:
-                raise Exception(
-                    "name={}, Singles can't be realized without mapping back to the standard encoding leave S or HCB out of the name".format(
-                        name
-                    )
-                )
+        if ("S" in name and "HCB" in name) and ("HCB" in name and "S" in name):
+            raise ValueError(
+                f"name={name}, Singles can't be realized without mapping back to the standard encoding leave S or HCB out of the name"
+            )
         if hcb_optimization and mix_sd and (order == 1):
             raise TequilaException(
                 "Mixed SD can not be employed together with HCB Optimization with only one UCC layer"
@@ -2291,7 +2266,7 @@ class HybridBase(qc_base):
                 spin_adapt_singles=spin_adapt_singles,
                 mix_sd=mix_sd,
                 firts_double=firts_double,
-                *args,
+                args=args,
                 **kwargs,
             )
         else:
@@ -2303,7 +2278,7 @@ class HybridBase(qc_base):
                     indices=indices,
                     assume_real=assume_real,
                     label=(label, 0),
-                    *args,
+                    args=args,
                     **kwargs,
                 )
             U += self.transformation.hcb_to_me()
@@ -2314,7 +2289,7 @@ class HybridBase(qc_base):
                     label=(label, 0),
                     spin_adapt_singles=spin_adapt_singles,
                     neglect_z=neglect_z,
-                    *args,
+                    args=args,
                     **kwargs,
                 )
 
@@ -2361,7 +2336,7 @@ class HybridBase(qc_base):
         for idx in indices:
             assert len(idx) == 1
             idx = idx[0]
-            angle = (tuple([idx]), "D", label)
+            angle = ((idx,), "D", label)
             if include_singles and mix_sd and not firts_double:
                 U += self.make_upccgsd_singles(
                     indices=[(idx,)],
@@ -2500,13 +2475,13 @@ class HybridBase(qc_base):
                             angle=angle1,
                             target=targeta,
                             assume_real=assume_real,
-                            *kwargs,
+                            **kwargs,
                         )
                         U += gates.QubitExcitation(
                             angle=angle2,
                             target=targetb,
                             assume_real=assume_real,
-                            *kwargs,
+                            **kwargs,
                         )
                     else:
                         U += self.make_excitation_gate(
@@ -2556,9 +2531,7 @@ class HybridBase(qc_base):
             consistency = [True]
         if not all(consistency):
             raise TequilaException(
-                "make_hardcore_boson_excitation_gate: Inconsistencies in indices={} for encoding: {}".format(
-                    indices, self.transformation
-                )
+                f"make_hardcore_boson_excitation_gate: Inconsistencies in indices={indices} for encoding: {self.transformation}"
             )
         return gates.QubitExcitation(
             angle=angle,
@@ -2594,9 +2567,9 @@ class HybridBase(qc_base):
             method = method.replace("hybrid", "").strip()
             if method[0] == "-":
                 method = method[1:]
-            return self.compute_restricted_energy(method, *args, **kwargs)
+            return self.compute_restricted_energy(method, args=args, **kwargs)
         else:
-            return super().compute_energy(method, *args, **kwargs)
+            return super().compute_energy(method, args=args, **kwargs)
 
     def compute_restricted_energy(self, method: str, *args, **kwargs) -> float:
         """
@@ -2661,11 +2634,11 @@ class HybridBase(qc_base):
             backend="pyscf",
             transformation=self.transformation.name,
             n_electrons=self.n_electrons,
-        ).compute_energy(method=method, *args, **kwargs)
+        ).compute_energy(method=method, args=args, **kwargs)
 
     def get_restricted_integrals(
         self, *args, **kwargs
-    ) -> Tuple[float, numpy.ndarray, numpy.ndarray]:
+    ) -> tuple[float, numpy.ndarray, numpy.ndarray]:
         c, h, g = self.get_integrals()
         BOS_L = self.BOS_MO
         NBOS_L = self.FER_MO

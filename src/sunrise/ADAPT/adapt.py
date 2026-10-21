@@ -1,31 +1,32 @@
 # Generalized Adaptive Solvers
 # as described in Kottmann, Anand, Aspuru-Guzik: https://doi.org/10.1039/D0SC06627C
+from __future__ import annotations
 
-from tequila import (
-    TequilaWarning,
-    TequilaException,
-    QCircuit,
-    ExpectationValue,
-    paulis,
-)
-from tequila.apps.adapt import AdaptPoolBase
-import numpy
 import dataclasses
 import warnings
 from itertools import combinations
-from tequila.apps.adapt.adapt import AdaptParameters
-from sunrise.expval import Braket, Fidelity
+
+import numpy
 from openfermion.ops.operators.fermion_operator import FermionOperator
+from tequila import (
+    ExpectationValue,
+    QCircuit,
+    TequilaException,
+    TequilaWarning,
+    paulis,
+)
+from tequila.apps.adapt import AdaptPoolBase
+from tequila.apps.adapt.adapt import AdaptParameters
+
 from sunrise import (
+    FCircuit,
     grad,
     minimize,
     simulate,
-    FCircuit,
 )
-from sunrise.molecules.fermionic_base import FermionicBase
+from sunrise.expval import Braket, Fidelity
 from sunrise.molecules import MoleculeFromSunrise
-from typing import Union
-from openfermion.ops.operators.fermion_operator import FermionOperator
+from sunrise.molecules.fermionic_base import FermionicBase
 
 
 class ObjectiveFactoryBase:
@@ -84,14 +85,14 @@ class ObjectiveFactoryBase:
             )
         else:
             return ExpectationValue(
-                H=self.H, U=self.Upre + U + self.Upost, *args, **kwargs
+                H=self.H, U=self.Upre + U + self.Upost, args=args, **kwargs
             )
 
     def grad_objective(self, *args, **kwargs):
         return self(*args, **kwargs)
 
     def __str__(self):
-        return "{}".format(type(self).__name__)
+        return f"{type(self).__name__}"
 
 
 class Adapt:
@@ -104,7 +105,7 @@ class Adapt:
             U=U,
             variables=variables,
             molecule=self.molecule,
-            *args,
+            args=args,
             **{**self.parameters.compile_args, **kwargs},
         )
 
@@ -132,7 +133,7 @@ class Adapt:
                 self.molecule = getattr(operator_pool, "molecule", None)
         if objective_factory is None:
             self.objective_factory = ObjectiveFactoryBase(
-                H, molecule=self.molecule, *args, **kwargs
+                H, molecule=self.molecule, args=args, **kwargs
             )
         else:
             self.objective_factory = objective_factory
@@ -194,9 +195,7 @@ class Adapt:
         for k in initial_objective.extract_variables():
             if k not in variables:
                 warnings.warn(
-                    "variable {} of initial objective not given, setting to 0.0 and activate optimization".format(
-                        k
-                    ),
+                    f"variable {k} of initial objective not given, setting to 0.0 and activate optimization",
                     TequilaWarning,
                 )
                 variables[k] = 0.0
@@ -234,17 +233,13 @@ class Adapt:
             if grad_norm < self.parameters.gradient_convergence:
                 if not self.parameters.silent:
                     print(
-                        "pool gradient norm is {:+2.8f}, convergence criterion met".format(
-                            grad_norm
-                        )
+                        f"pool gradient norm is {grad_norm:+2.8f}, convergence criterion met"
                     )
                 break
             if numpy.abs(max_grad) < self.parameters.max_gradient_convergence:
                 if not self.parameters.silent:
                     print(
-                        "max pool gradient is {:+2.8f}, convergence criterion |max(grad)|<{} met".format(
-                            max_grad, self.parameters.max_gradient_convergence
-                        )
+                        f"max pool gradient is {max_grad:+2.8f}, convergence criterion |max(grad)|<{self.parameters.max_gradient_convergence} met"
                     )
                 break
 
@@ -265,19 +260,14 @@ class Adapt:
                 batch_size += len(degeneracies)
                 if not self.parameters.silent:
                     print(
-                        "detected degeneracies: increasing batch size temporarily from {} to {}".format(
-                            self.parameters.batch_size, batch_size
-                        )
+                        f"detected degeneracies: increasing batch size temporarily from {self.parameters.batch_size} to {batch_size}"
                     )
 
-            count = 0
-
             op_names = []
-            for k, v in gradients.items():
+            for count, k in enumerate(gradients):
                 Ux = self.operator_pool.make_unitary(k, label=current_label)
                 U += Ux
                 op_names.append(Ux.extract_variables())
-                count += 1
                 if count >= batch_size:
                     break
             variables = {
@@ -307,19 +297,15 @@ class Adapt:
 
             if not self.parameters.silent:
                 print("-------------------------------------")
-                print("Finished iteration {}".format(iter))
+                print(f"Finished iteration {iter}")
                 print("added ", op_names)
-                print("current energy : {:+2.8f}".format(energy))
-                print("difference     : {:+2.8f}".format(diff))
-                print("grad_norm      : {:+2.8f}".format(grad_norm))
-                print("max_grad       : {:+2.8f}".format(max_grad))
-                print("ops in circuis : {}".format(len(U.gates)))
-                print(
-                    "optimizer      : {}".format(
-                        self.parameters.optimizer_args["method"]
-                    )
-                )
-                print("opt-iterations : {}".format(niter))
+                print(f"current energy : {energy:+2.8f}")
+                print(f"difference     : {diff:+2.8f}")
+                print(f"grad_norm      : {grad_norm:+2.8f}")
+                print(f"max_grad       : {max_grad:+2.8f}")
+                print(f"ops in circuis : {len(U.gates)}")
+                print(f"optimizer      : {self.parameters.optimizer_args['method']}")
+                print(f"opt-iterations : {niter}")
 
             screening_cycles += 1
             mini_iter = len(result.history.extract_energies())
@@ -336,9 +322,7 @@ class Adapt:
             ):
                 if not self.parameters.silent:
                     print(
-                        "energy difference is {:+2.8f}, convergence criterion met".format(
-                            diff
-                        )
+                        "energy difference is {diff:+2.8f}, convergence criterion met"
                     )
                 break
 
@@ -349,7 +333,7 @@ class Adapt:
 
         @dataclasses.dataclass
         class AdaptReturn:
-            U: Union[QCircuit, FCircuit] = None
+            U: QCircuit | FCircuit = None
             objective_factory: ObjectiveFactoryBase = None
             variables: dict = None
             energy: float = None
@@ -546,7 +530,7 @@ class MolecularPool(AdaptPoolBase):
             )
             if len(idx) == 0:
                 continue
-            idx = tuple(list(set(idx)))  # avoid repetitions (like ((0,2),(0,2)))
+            idx = tuple(set(idx))  # avoid repetitions (like ((0,2),(0,2)))
             idx = tuple(
                 sorted(idx, key=lambda x: x[0])
             )  # sort pairs by first entry (a<c)
@@ -581,7 +565,7 @@ class PseudoSingletMolecularPool(MolecularPool):
                 if combined not in indices:
                     indices.append(combined)
             else:
-                indices.append(tuple([idx]))
+                indices.append((idx,))
 
         self.generators = list(set(indices))
 
@@ -602,7 +586,7 @@ class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
     def __init__(self, H, circuits: list, factors: list, *args, **kwargs):
         self.circuits = circuits
         self.factors = factors
-        super().__init__(H=H, *args, **kwargs)
+        super().__init__(H=H, args=args, **kwargs)
 
     def __call__(self, U, *args, **kwargs):
         circuit = self.Upre + U + self.Upost
@@ -626,7 +610,7 @@ class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
 
 def run_molecular_adapt(
     molecule,
-    operator_pool: str = None,
+    operator_pool: str | None = None,
     Upre=None,
     Upost=None,
     backend=None,
@@ -640,9 +624,10 @@ def run_molecular_adapt(
     # initialized by keyword
     # e.g. U(p)CC(G)(S)(D)
     ucc_signals = ["u", "cc", "s", "d", "g"]
-    if hasattr(operator_pool, "lower"):
-        if any([s in operator_pool.lower() for s in ucc_signals]):
-            operator_pool = MolecularPool(molecule=molecule, indices=operator_pool)
+    if hasattr(operator_pool, "lower") and any(
+        s in operator_pool.lower() for s in ucc_signals
+    ):
+        operator_pool = MolecularPool(molecule=molecule, indices=operator_pool)
 
     if Upre is None:
         Upre = molecule.prepare_reference()
@@ -658,7 +643,7 @@ def run_molecular_adapt(
         Upost=Upost,
         H=H,
         backend=backend,
-        *args,
+        args=args,
         **kwargs,
     )
 

@@ -1,16 +1,16 @@
-import tequila as tq
-import networkx as nx
-import time
+from __future__ import annotations
+
 import sys
 from copy import deepcopy
-from typing import Union
-from collections import defaultdict
+
+import networkx as nx
+import tequila as tq
 
 sys.setrecursionlimit(10000)
 
 
 def make_decomposed_clusters(
-    circuit: tq.QCircuit, grouping: Union[int, list, None] = None
+    circuit: tq.QCircuit, grouping: int | list | None = None
 ) -> list:
     """
     Args
@@ -58,8 +58,8 @@ def make_decomposed_clusters(
 
 def make_decomposed_circuits(
     U: tq.QCircuit,
-    grouping: Union[int, list, None] = None,
-    clusters: Union[list, None] = None,
+    grouping: int | list | None = None,
+    clusters: list | None = None,
 ) -> list:
     """
     Given a global circuit return a list of local sub-circuits based on qubit clusters.
@@ -69,7 +69,7 @@ def make_decomposed_circuits(
         clusters = make_decomposed_clusters(U, grouping)
     circuits = []
     for c in clusters:
-        UX = [gate for gate in U.gates if all([q in c for q in gate.qubits])]
+        UX = [gate for gate in U.gates if all(q in c for q in gate.qubits)]
         UX = tq.QCircuit(gates=UX)
         circuits.append(UX)
 
@@ -80,9 +80,9 @@ def decompose(
     H: tq.QubitHamiltonian,
     U: tq.QCircuit,
     nolist=True,
-    grouping: Union[int, list, None] = None,
+    grouping: int | list | None = None,
 ):
-    """
+    r"""
     In the case where U is a tensor product: U = U_0 * U_1 * U_2 ...
     Since H = c_0 + \sum_k (c_k P_k)
     where each global Pauli string is a tensor product of local Pauli strings:
@@ -124,14 +124,14 @@ def decompose(
     for c in clusters:
         for q in c:
             qubits_in_clusters.add(q)
-    for k, H in enumerate(HH):
-        paulis = H.paulistrings
+    for k, Ha in enumerate(HH):
+        paulis = Ha.paulistrings
         total_expval = 0.0
         if not len(paulis):
             continue
 
         for ps in paulis:
-            # constant part of H
+            # constant part of Ha
             if len(ps.qubits) == 0:
                 total_expval += float(ps.coeff.real)
                 continue

@@ -1,8 +1,12 @@
-from sunrise import fermionic_operations as fe
-from tequila import QTensor, Variable, Objective, TequilaException, simulate
-import numpy
+from __future__ import annotations
+
 import numbers
-from typing import Union
+
+import numpy
+from tequila import Objective, QTensor, TequilaException, Variable
+
+from sunrise import fermionic_operations as fe
+
 # Adaptation of get_gives_decompostion from tequila qc_base at version 1.9.9dev at August 2025
 
 OPTIMIZED_ORDERING = "Optimized"
@@ -29,7 +33,7 @@ def n_rotation(i: int, phi) -> fe.FCircuit:
 def get_givens_circuit(
     unitary: numpy.ndarray,
     tol: float = 1e-6,
-    ordering: Union[list, tuple, str] = OPTIMIZED_ORDERING,
+    ordering: list | tuple | str | None = OPTIMIZED_ORDERING,
     fix: bool = True,
     label=None,
 ) -> fe.FCircuit:
@@ -131,7 +135,7 @@ def givens_matrix(n, p, q, theta) -> QTensor:
 def get_givens_decomposition(
     unitary: numpy.ndarray,
     tol: float = 1e-6,
-    ordering: Union[list, tuple, str] = OPTIMIZED_ORDERING,
+    ordering: list | tuple | str | None = OPTIMIZED_ORDERING,
     return_diagonal: bool = False,
 ):
     """
@@ -211,8 +215,8 @@ def get_givens_decomposition(
 
 def reconstruct_matrix_from_givens(
     n: int,
-    theta_list: Union[list, tuple],
-    phi_list: Union[list, tuple],
+    theta_list: list | tuple | None,
+    phi_list: list | tuple | None,
     to_real_if_possible: bool = True,
     tol: float = 1e-12,
 ) -> numpy.ndarray:
@@ -257,18 +261,17 @@ def reconstruct_matrix_from_givens(
         reconstructed = reconstructed.dot(g)
 
     # Convert matrix to real if its imaginary part is negligible unless disabled via to_real_if_possible
-    if to_real_if_possible:
+    if to_real_if_possible and numpy.all(reconstructed.imag == 0):
         # Directly apply a sign flip if the rotation angle is π
-        if numpy.all(reconstructed.imag == 0):
-            # Convert to real by taking the real part
-            reconstructed = reconstructed.real
+        # Convert to real by taking the real part
+        reconstructed = reconstructed.real
 
     return reconstructed.T
 
 
 def reconstruct_matrix_from_circuit(
     U: fe.FCircuit,
-    norb: int = None,
+    norb: int | None = None,
     to_real_if_possible: bool = True,
     tol: float = 1e-12,
 ) -> QTensor:  # numpy.ndarray:
@@ -408,7 +411,7 @@ def depth_eff_order_mf(N: int) -> list:
     [ 1.  4.  9. 13. 15.  0.]
     """
     l = []
-    for c in range(0, N - 1):
+    for c in range(N - 1):
         for r in range(1, N):
             if r - c > 0:
                 l.append([r, c, 2 * c - r + N])

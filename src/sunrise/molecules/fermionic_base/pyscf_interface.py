@@ -1,12 +1,12 @@
-from tequila import TequilaException, QubitWaveFunction
-from sunrise.molecules.qubit_base import ParametersQC, NBodyTensor
+import numpy
 import pyscf
 from pyscf import fci
-from .fer_base import FermionicBase
+from tequila import QubitWaveFunction, TequilaException
+
+from sunrise.molecules.qubit_base import NBodyTensor, ParametersQC
 from sunrise.molecules.qubit_base.chemistry_tools import OrbitalData
 
-import numpy
-import typing
+from .fer_base import FermionicBase
 
 
 def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
@@ -45,14 +45,9 @@ class QuantumChemistryPySCF(FermionicBase):
             geometry = parameters.get_geometry()
             pyscf_geomstring = ""
             for atom in geometry:
-                pyscf_geomstring += "{} {} {} {};".format(
-                    atom[0], atom[1][0], atom[1][1], atom[1][2]
-                )
+                pyscf_geomstring += f"{atom[0]} {atom[1][0]} {atom[1][1]} {atom[1][2]};"
 
-            if "point_group" in kwargs:
-                point_group = kwargs["point_group"]
-            else:
-                point_group = None
+            point_group = kwargs.get("point_group", None)
 
             mol = pyscf.gto.Mole()
             mol.atom = pyscf_geomstring
@@ -116,7 +111,7 @@ class QuantumChemistryPySCF(FermionicBase):
             if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()
 
-        super().__init__(parameters=parameters, orbitals=orbitals, *args, **kwargs)
+        super().__init__(parameters=parameters, orbitals=orbitals, args=args, **kwargs)
 
     def compute_fci(self, get_wfn=False, ci0=None, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="chem")
@@ -175,7 +170,7 @@ class QuantumChemistryPySCF(FermionicBase):
         elif method == "fci":
             return self.compute_fci(**kwargs)
         else:
-            raise TequilaException("unknown method: {}".format(method))
+            raise ValueError(f"unknown method: {method}")
 
     def _get_hf(self, do_not_solve=True, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="mulliken")
@@ -248,7 +243,7 @@ class QuantumChemistryPySCF(FermionicBase):
                 )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)
-        except Exception:
+        except AttributeError:
             return base
         return base
 

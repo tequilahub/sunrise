@@ -1,10 +1,12 @@
-from tequila.circuit import gates
-from tequila import assign_variable
-from numpy import pi
+from __future__ import annotations
+
 import typing
-from numbers import Real
-from tequila import Variable, QCircuit, compile_circuit
 from copy import deepcopy
+from numbers import Real
+
+from numpy import pi
+from tequila import QCircuit, Variable, assign_variable, compile_circuit
+from tequila.circuit import gates
 
 
 class FermionicGateImpl(gates.QubitExcitationImpl):
@@ -32,7 +34,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         else:
             self.opt = False
         super().__init__(
-            generator=generator, target=generator.qubits, p0=p0, *args, **kwargs
+            generator=generator, target=generator.qubits, p0=p0, args=args, **kwargs
         )
         self._name = "FermionicExcitation"
         self.transformation = transformation
@@ -52,9 +54,9 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
     def fermionic_excitation(
         self,
-        angle: typing.Union[Real, Variable, typing.Hashable],
-        indices: typing.List,
-        control: typing.Union[int, typing.List] = None,
+        angle: Real | Variable | typing.Hashable,
+        indices: list,
+        control: int | list | None = None,
     ) -> QCircuit:
         """
         Excitation [(i,j),(k,l)],... compiled following https://doi.org/10.1103/PhysRevA.102.062612
@@ -131,7 +133,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             target = []
             for x in self.indices:
                 for y in x:
-                    target.append(y)
+                    target.append(y.copy)
             U = gates.QubitExcitation(
                 target=target, angle=self.parameter, control=self.control
             )
@@ -183,9 +185,9 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
     def cCRy(
         self,
         target: int,
-        dcontrol: typing.Union[list, int],
-        control: typing.Union[list, int],
-        angle: typing.Union[Real, Variable, typing.Hashable],
+        dcontrol: list | int,
+        control: list | int,
+        angle: Real | Variable | typing.Hashable,
         case: int = 1,
     ) -> QCircuit:
         """
@@ -260,7 +262,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
     def __str(self):
         if self.indices is not None:
-            return "FermionicExcitation({})".format(str(self.indices))
+            return f"FermionicExcitation({self.indices!s})"
         return "FermionicExcitation"
 
     def __repr__(self):
@@ -276,15 +278,13 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
         """
         return False
-        if not self.transformation.lower().strip("_") == "jordanwigner":
+        if self.transformation.lower().strip("_") != "jordanwigner":
             return False
-        if not len(self.indices) == 2:
+        if len(self.indices) != 2:
             return False
-        if not self.indices[0][0] // 2 == self.indices[1][0] // 2:
+        if self.indices[0][0] // 2 != self.indices[1][0] // 2:
             return False
-        if not self.indices[0][1] // 2 == self.indices[1][1] // 2:
-            return False
-        return True
+        return self.indices[0][1] // 2 == self.indices[1][1] // 2
 
     def select_to_list(self):
         """

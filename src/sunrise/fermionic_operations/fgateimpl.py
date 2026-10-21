@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 import numbers
 import typing
-from tequila.objective.objective import FixedVariable, Variable
-from .circuit import FCircuit
-from tequila import TequilaException
-from tequila import assign_variable
 from copy import deepcopy
-import numbers
 from math import pi
+
+from tequila import TequilaException, assign_variable
+from tequila.objective.objective import FixedVariable, Variable
+
 from sunrise.graphical.core.shape import Polygon
 
 # Spin orientation convention: up = ▲ (tip up), down = ▼ (tip down)
@@ -16,18 +17,19 @@ SPIN_SHAPES = {0: Polygon(3), 1: Polygon(-3)}
 class FGateImpl:
     def __init__(
         self,
-        indices: typing.Union[list, tuple],
-        variables: typing.Union[
-            typing.Hashable, numbers.Real, Variable, FixedVariable
-        ] = None,
+        indices: list | tuple | None,
+        variables: typing.Hashable
+        | numbers.Real
+        | Variable
+        | FixedVariable
+        | None = None,
         reordered: bool = False,
     ):
-        self.reordered: bool = reordered
-        self._indices: list = indices
+        self.reordered = reordered
+        self._indices = indices
         self.variables = variables
-        self._name: str = "GenericFermionic"
+        self._name = "GenericFermionic"
         self.verify()
-        return FCircuit.wrap_gate(gate=self)
 
     @property
     def name(self):
@@ -67,21 +69,19 @@ class FGateImpl:
         return self
 
     def __str__(self):
-        return (
-            f"{self.name}(indices = {self.indices} ,variables = {repr(self.variables)})"
-        )
+        return f"{self.name}(indices = {self.indices} ,variables = {self.variables!r})"
 
     def __repr__(self) -> str:
         return self.__str__()
 
-    def __eq__(self, other):
-        if self._name != other._name:
+    def __eq__(self, other) -> bool:
+        if self.name != other.name:
             return False
-        elif self._indices != other._indices:
+        if self.reordered != other.reordered:
             return False
-        elif self.extract_variables() != other.extract_variables():
+        if self.extract_variables() != other.extract_variables():
             return False
-        return True
+        return self.indices == other.indices
 
     def is_parameterized(self) -> bool:
         return not isinstance(self.variables, (FixedVariable, numbers.Number))
@@ -107,7 +107,7 @@ class FGateImpl:
     @variables.setter
     def variables(
         self,
-        variables: typing.Union[typing.Hashable, numbers.Real, Variable, FixedVariable],
+        variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None,
     ):
         self._variables: Variable = assign_variable(variable=variables)
 
@@ -141,7 +141,7 @@ class FGateImpl:
             for gate in self._indices:
                 for exct in gate:
                     q.extend(exct)
-            return sorted(list(set(q)))
+            return sorted(set(q))
         else:
             return 0
 
@@ -149,14 +149,18 @@ class FGateImpl:
     def n_qubits(self) -> int:
         return len(self.qubits)
 
-    def map_qubits(self, qubit_map: dict = {}):
+    def map_qubits(self, qubit_map: dict | None = None):
+        if qubit_map is None:
+            qubit_map = {}
         self._indices = [
             [(qubit_map[idx[0]], qubit_map[idx[1]]) for idx in gate]
             for gate in self._indices
         ]
         return self
 
-    def map_variables(self, var_map: dict = {}):
+    def map_variables(self, var_map: dict | None = None):
+        if var_map is None:
+            var_map = {}
         if self.is_parameterized() and hasattr(self.variables, "extract_variables"):
             self.variables = self.variables.map_variables(var_map)
         return self
@@ -175,17 +179,6 @@ class FGateImpl:
             return self.qubits[-1]
         else:
             return 0
-
-    def __eq__(self, other) -> bool:
-        if self.name != other.name:
-            return False
-        if self.reordered != other.reordered:
-            return False
-        if self.variables != other.variables:
-            return False
-        if self.indices != other.indices:
-            return False
-        return True
 
     def _render(self, state, style, show_spatial_orbitals=True):
         """Fallback rendering for generic/unhandled gates."""
@@ -207,7 +200,7 @@ class FGateImpl:
         except (TypeError, ValueError):
             try:
                 value = float(self.variables())
-            except Exception:
+            except ValueError:
                 value = None
 
         if value is None and style.parametrized_marking is not None:
@@ -224,10 +217,12 @@ class FGateImpl:
 class FermionicExcitationImpl(FGateImpl):
     def __init__(
         self,
-        indices: typing.Union[list, tuple],
-        variables: typing.Union[
-            typing.Hashable, numbers.Real, Variable, FixedVariable, None
-        ] = None,
+        indices: list | tuple | None,
+        variables: typing.Hashable
+        | numbers.Real
+        | Variable
+        | FixedVariable
+        | None = None,
         reordered: bool = False,
     ):
         super().__init__(indices, variables, reordered)
@@ -331,9 +326,11 @@ class URImpl(FGateImpl):
         self,
         i: int,
         j: int,
-        variables: typing.Union[
-            typing.Hashable, numbers.Real, Variable, FixedVariable, None
-        ] = None,
+        variables: typing.Hashable
+        | numbers.Real
+        | Variable
+        | FixedVariable
+        | None = None,
     ):
         super().__init__([[(2 * i, 2 * j)], [(2 * i + 1, 2 * j + 1)]], variables, False)
         self._name = "UR"
@@ -402,9 +399,11 @@ class UCImpl(FGateImpl):
         self,
         i,
         j,
-        variables: typing.Union[
-            typing.Hashable, numbers.Real, Variable, FixedVariable
-        ] = None,
+        variables: typing.Hashable
+        | numbers.Real
+        | Variable
+        | FixedVariable
+        | None = None,
     ):
         super().__init__([[(2 * i, 2 * j), (2 * i + 1, 2 * j + 1)]], variables, False)
         self._name = "UC"
@@ -447,16 +446,18 @@ class PhaseImpl(FGateImpl):
     def __init__(
         self,
         i,
-        variables: typing.Union[
-            typing.Hashable, numbers.Real, Variable, FixedVariable
-        ] = None,
+        variables: typing.Hashable
+        | numbers.Real
+        | Variable
+        | FixedVariable
+        | None = None,
         reordered: bool = False,
     ):
         super().__init__([[(i, i)]], variables, reordered)
         self._name = "Ph"
 
     def __str__(self):
-        return f"{self.name}(target = {(self.indices[0][0][0],)}, variable = {repr(self.variables)})"
+        return f"{self.name}(target = {(self.indices[0][0][0],)}, variable = {self.variables!r})"
 
     def _render(self, state, style, show_spatial_orbitals=True):
         norb = state.n_orbitals  # Moved to top
@@ -474,6 +475,6 @@ class PhaseImpl(FGateImpl):
             gcol = style.personalized["Phase"].gate_color
             tcol = style.personalized["Phase"].text_color
 
-        i, j = self._indices[0][0]
+        i, _j = self._indices[0][0]
         result = f" a{spatial_of(i)} P:fill={gcol}:shape={shape} \\textcolor{{{tcol.name}}}{{}} "
         return result

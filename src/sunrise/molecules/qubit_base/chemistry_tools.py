@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import os
 import typing
 import warnings
-from dataclasses import dataclass
 from copy import deepcopy
+from dataclasses import dataclass
 from numbers import Real
+
 import numpy
 from scipy.constants import physical_constants
-
 from tequila import (
     BitString,
     QCircuit,
@@ -22,9 +24,7 @@ try:
         get_active_space_integrals,
     )  # needs openfermion 1.3
 except ImportError as E:
-    raise TequilaException(
-        "{}\nplease update openfermion to version 1.3 or higher".format(str(E))
-    )
+    raise TequilaException(f"{E!s}\nplease update openfermion to version 1.3 or higher")
 
 
 @dataclass
@@ -67,7 +67,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
     def __init__(self, generator, p0, transformation, indices=None, *args, **kwargs):
         super().__init__(
-            generator=generator, target=generator.qubits, p0=p0, *args, **kwargs
+            generator=generator, target=generator.qubits, p0=p0, args=args, **kwargs
         )
         self._name = "FermionicExcitation"
         self.transformation = transformation
@@ -84,7 +84,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             target = []
             for x in self.indices:
                 for y in x:
-                    target.append(y)
+                    target.append(y.copy)
             return gates.QubitExcitation(
                 target=target, angle=self.parameter, control=self.control
             )
@@ -136,9 +136,9 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
     def cCRy(
         self,
         target: int,
-        dcontrol: typing.Union[list, int],
-        control: typing.Union[list, int],
-        angle: typing.Union[Real, Variable, typing.Hashable],
+        dcontrol: list | int,
+        control: list | int,
+        angle: Real | Variable | typing.Hashable,
         case: int = 1,
     ) -> QCircuit:
         """
@@ -213,9 +213,9 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
     def fermionic_excitation(
         self,
-        angle: typing.Union[Real, Variable, typing.Hashable],
-        indices: typing.List,
-        control: typing.Union[int, typing.List] = None,
+        angle: Real | Variable | typing.Hashable,
+        indices: list,
+        control: int | list | None = None,
         opt: bool = True,
     ) -> QCircuit:
         """
@@ -232,7 +232,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             lfrom.append(pair[0])
             lto.append(pair[1])
         Upair = QCircuit()
-        if isinstance(angle, str) or isinstance(angle, tuple):
+        if isinstance(angle, (str, tuple)):
             angle = Variable(angle)
         for i in range(len(lfrom) - 1):
             Upair += gates.CNOT(lfrom[i + 1], lfrom[i])
@@ -275,7 +275,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
     def __str(self):
         if self.indices is not None:
-            return "FermionicExcitation({})".format(str(self.indices))
+            return f"FermionicExcitation({self.indices!s})"
         return "FermionicExcitation"
 
     def __repr__(self):
@@ -291,15 +291,13 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
         """
         return False
-        if not self.transformation.lower().strip("_") == "jordanwigner":
+        if self.transformation.lower().strip("_") != "jordanwigner":
             return False
-        if not len(self.indices) == 2:
+        if len(self.indices) != 2:
             return False
-        if not self.indices[0][0] // 2 == self.indices[1][0] // 2:
+        if self.indices[0][0] // 2 != self.indices[1][0] // 2:
             return False
-        if not self.indices[0][1] // 2 == self.indices[1][1] // 2:
-            return False
-        return True
+        return self.indices[0][1] // 2 == self.indices[1][1] // 2
 
     def map_qubits(self, qubit_map: dict):
         mapped = deepcopy(self)
@@ -356,7 +354,7 @@ class ParametersQC:
     description: str = ""
     multiplicity: int = 1
     charge: int = 0
-    name: str = None
+    name: str | None = None
     frozen_core: bool = True
 
     def get_number_of_core_electrons(self):
@@ -378,7 +376,7 @@ class ParametersQC:
         return result
 
     @property
-    def total_n_electrons(self, *args, **kwargs):
+    def total_n_electrons(self):
         return self.get_nuc_charge() - self.charge
 
     def get_nuc_charge(self):
@@ -432,11 +430,9 @@ class ParametersQC:
             atom = "".join(atom)
             element = pt.elements.symbol(atom)
             return element.number
-        except Exception:
+        except ImportError:
             raise TequilaException(
-                "can not assign atomic number to element {}\npip install periodictable will fix it".format(
-                    atom
-                )
+                f"can not assign atomic number to element {atom}\npip install periodictable will fix it"
             )
 
     def get_atoms(self, ghost="of"):
@@ -471,22 +467,19 @@ class ParametersQC:
             if ".xyz" in self.geometry:
                 self.name = self.geometry.split(".xyz")[0]
                 if self.description is None:
-                    coord, description = self.read_xyz_from_file()
+                    _coord, description = self.read_xyz_from_file()
                     self.description = description
             else:
                 atoms = self.get_atoms()
                 atom_names = sorted(
-                    list(set(atoms)),
+                    set(atoms),
                     key=lambda x: self.get_atom_number(x),
                     reverse=True,
                 )
                 if self.name is None:
                     drop_ones = lambda x: "" if x == 1 else x
                     self.name = "".join(
-                        [
-                            "{}{}".format(x, drop_ones(atoms.count(x)))
-                            for x in atom_names
-                        ]
+                        [f"{x}{drop_ones(atoms.count(x))}" for x in atom_names]
                     )
             self.name = self.name.lower()
 
@@ -495,13 +488,12 @@ class ParametersQC:
 
         if ".xyz" in self.geometry and not os.path.isfile(self.geometry):
             raise TequilaException(
-                "could not find file for molecular coordinates {}".format(self.geometry)
+                f"could not find file for molecular coordinates {self.geometry}"
             )
 
     @property
     def filename(self):
-        """ """
-        return "{}_{}".format(self.name, self.basis_set)
+        return f"{self.name}_{self.basis_set}"
 
     @property
     def molecular_data_param(self) -> dict:
@@ -725,7 +717,7 @@ class ParametersQC:
                 ghost=ghost,
             )
         else:
-            raise Exception("Parameters.qc.geometry is None")
+            raise TequilaException("Parameters.qc.geometry is None")
 
     @staticmethod
     def read_xyz_from_file(filename):
@@ -938,9 +930,7 @@ class NBodyTensor:
                 return "of"
             else:
                 raise TequilaException(
-                    "Unknown two-body tensor scheme {}. Supported are dirac, mulliken, and openfermion".format(
-                        scheme
-                    )
+                    f"Unknown two-body tensor scheme {scheme}. Supported are dirac, mulliken, and openfermion"
                 )
 
         def is_phys(self):
@@ -969,7 +959,7 @@ class NBodyTensor:
             of = self.Ordering(scheme="openfermion")
 
         uniqueness = (chem, phys, of)
-        if not uniqueness.count(False) == 2 and trials < 100:
+        if uniqueness.count(False) != 2 and trials < 100:
             return self.identify_ordering(trials=trials * 2)
         if chem:
             return self.Ordering(scheme="chem")
@@ -978,7 +968,7 @@ class NBodyTensor:
         elif of:
             return self.Ordering(scheme="openfermion")
         else:
-            raise Exception("NBTensor ordering could not be identified")
+            raise TequilaException("NBTensor ordering could not be identified")
 
     def _verify_ordering_dirac(self, trials=100):
         if len(self.shape) != 4:
@@ -1067,10 +1057,10 @@ class NBodyTensor:
 
     def __init__(
         self,
-        elems: numpy.ndarray = None,
-        active_indices: list = None,
-        ordering: str = None,
-        size_full: int = None,
+        elems: numpy.ndarray | None = None,
+        active_indices: list | None = None,
+        ordering: str | None = None,
+        size_full: int | None = None,
         verify=False,
     ):
         """
@@ -1119,25 +1109,23 @@ class NBodyTensor:
                     auto_ordering = self.identify_ordering()
                     if auto_ordering is not ordering:
                         warnings.warn(
-                            "Auto identified ordering of NBTensor does not match given ordering: {} vs {}".format(
-                                auto_ordering, ordering
-                            )
+                            f"Auto identified ordering of NBTensor does not match given ordering: {auto_ordering} vs {ordering}"
                         )
-                except Exception as E:
-                    warnings.warn("could not verify odering {}".format(ordering))
+                except TequilaException:
+                    warnings.warn(f"could not verify odering {ordering}")
             self.ordering = self.Ordering(ordering)
         else:
             if ordering is not None:
-                raise Exception(
+                raise NotImplementedError(
                     "Ordering only implemented for tensors of order 4 / 2-body tensors."
                 )
             self.ordering = None
 
     @property
-    def shape(self, *args, **kwargs):
+    def shape(self):
         return self.elems.shape
 
-    def sub_lists(self, idx_lists: list = None) -> numpy.ndarray:
+    def sub_lists(self, idx_lists: list | None = None) -> numpy.ndarray:
         """
         Get subspace of tensor by a set of index lists
         according to hPQ.sub_lists(idx_lists=[p, q]) = [hPQ for P in p and Q in q]
@@ -1157,7 +1145,7 @@ class NBodyTensor:
         """
         # Check if index list has correct size
         if len(idx_lists) != self.order:
-            raise Exception(
+            raise ValueError(
                 "Need to pass an index list for each dimension!"
                 + " Length of idx_lists needs to match order of tensor."
             )
@@ -1210,11 +1198,11 @@ class NBodyTensor:
             self._indices_set = True
 
         if name is None:
-            raise Exception("No name specified.")
+            raise ValueError("No name specified.")
         if len(name) != self.order:
-            raise Exception("Name does not match order of the tensor.")
+            raise ValueError("Name does not match order of the tensor.")
         if self.active_indices is None:
-            raise Exception(
+            raise ValueError(
                 "Need to set an active space in order to call this function."
             )
 
@@ -1231,7 +1219,7 @@ class NBodyTensor:
                 else:
                     idx_lists.append(self._full_indices)
             else:
-                raise Exception("Need to specify a valid letter (a,p,f).")
+                raise TequilaException("Need to specify a valid letter (a,p,f).")
 
         out = self.sub_lists(idx_lists)
 
@@ -1312,11 +1300,7 @@ class OrbitalData:
             "{"
             + "{}".format(
                 "".join(
-                    [
-                        "{}:{}, ".format(k, v)
-                        for k, v in self.__dict__.items()
-                        if v is not None
-                    ]
+                    [f"{k}:{v}, " for k, v in self.__dict__.items() if v is not None]
                 )
             )
             .rstrip()
@@ -1332,15 +1316,15 @@ class IntegralManager:
     and are usually held by the QuantumChemistryBaseClass
     """
 
-    _overlap_integrals: numpy.ndarray = None
-    _one_body_integrals: numpy.ndarray = None
-    _two_body_integrals: NBodyTensor = None
-    _constant_term: float = None
+    _overlap_integrals: numpy.ndarray | None = None
+    _one_body_integrals: numpy.ndarray | None = None
+    _two_body_integrals: NBodyTensor | None = None
+    _constant_term: float | None = None
     _basis_name: str = "unknown"
     _orbital_type: str = "unknown"  # e.g. "HF", "PNO", "native"
-    _orbital_coefficients: numpy.ndarray = None
-    _active_space: ActiveSpaceData = None
-    _orbitals: typing.List[OrbitalData] = None
+    _orbital_coefficients: numpy.ndarray | None = None
+    _active_space: ActiveSpaceData | None = None
+    _orbitals: list[OrbitalData] | None = None
 
     def __init__(
         self,
@@ -1368,12 +1352,8 @@ class IntegralManager:
             two_body_integrals = two_body_integrals.reorder(to="chem")
         except Exception as E:
             raise TequilaException(
-                "{}\ntwo_body_integrals given in wrong format. Needs to be a sun.chemistry.NBodyTensor in chem ordering.\n{} with ordering={}".format(
-                    str(E),
-                    str(type(two_body_integrals)),
-                    str(two_body_integrals.ordering),
-                )
-            )
+                f"{E!s}\ntwo_body_integrals given in wrong format. Needs to be a sun.chemistry.NBodyTensor in chem ordering.\n{type(two_body_integrals)!s} with ordering={two_body_integrals.ordering!s}"
+            ) from E
 
         for i in range(4):
             assert (
@@ -1511,7 +1491,7 @@ class IntegralManager:
         """
         c = self.get_orthonormalized_orbital_coefficients()
         self.orbital_coefficients = c
-        self._orbital_type = "orthonormalized-{}-basis".format(self._basis_name)
+        self._orbital_type = f"orthonormalized-{self._basis_name}-basis"
 
     def is_unitary(self, U):
         if len(U.shape) != 2:
@@ -1519,9 +1499,7 @@ class IntegralManager:
         if U.shape[0] != U.shape[1]:
             return False
         test = (U.conj().T).dot(U) - numpy.eye(U.shape[0])
-        if not numpy.isclose(numpy.linalg.norm(test), 0.0):
-            return False
-        return True
+        return numpy.isclose(numpy.linalg.norm(test), 0.0)
 
     def transform_orbitals(self, U, name=None):
         """

@@ -1,9 +1,7 @@
-import openfermion
-from sympy.codegen.rewriting import powm1_opt
-from tequila import TequilaException, QCircuit, Objective
-from sunrise.molecules.qubit_base import Molecule
 import typing
-import numpy as np
+
+import openfermion
+
 from sunrise.fermionic_operations.gates import *
 
 
@@ -26,7 +24,7 @@ def make_fermionic_hamiltonian(
 
 
 def make_excitation_generator_op(
-    indices: typing.Iterable[typing.Tuple[int, int]], form: str = "fermionic"
+    indices: typing.Iterable[tuple[int, int]], form: str = "fermionic"
 ) -> openfermion.FermionOperator:
     r"""
     Notes
@@ -59,7 +57,7 @@ def make_excitation_generator_op(
                 "make_excitation_generator: unexpected input format of indices\n"
                 "use list of tuples as [(i_0, a_0),(i_1, a_1) ...]\n"
                 "or list as [i_0, a_0, i_1, a_1, ... ]\n"
-                "you gave: {}".format(indices)
+                f"you gave: {indices}"
             )
         converted = [
             (indices[2 * i], indices[2 * i + 1]) for i in range(len(indices) // 2)
@@ -129,9 +127,7 @@ def make_excitation_generator_op(
             op += openfermion.FermionOperator(Ni + Ma, -1.0)
         else:
             raise TequilaException(
-                "Unknown generator form {}, supported are G, P+, P-, G+, G- and P0".format(
-                    form
-                )
+                f"Unknown generator form {form}, supported are G, P+, P-, G+, G- and P0"
             )
 
     if number_op:

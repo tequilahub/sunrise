@@ -1,16 +1,19 @@
+from __future__ import annotations
+
+from numbers import Number
+from typing import Callable
+
 import spex_tequila as spex
+from numpy import array, ceil, complex128, ndarray, real
+from openfermion import FermionOperator
+from tequila import QubitHamiltonian, QubitWaveFunction, TequilaException, Variable
+from tequila.objective.objective import Objective, Variables
+from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
 
 from sunrise.fermionic_operations.circuit import FCircuit
-
-from tequila import TequilaException, QubitWaveFunction, Variable, QubitHamiltonian
-from tequila.objective.objective import Variables, Objective
-from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
-from numpy import ndarray, array, complex128, real, ceil
-from openfermion import FermionOperator
-from numbers import Number
-from typing import Union, List, Callable
-from ..fermionic_braket import FermBraketImpl
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
+from ..fermionic_braket import FermBraketImpl
 
 _ZERO_TOL = 1e-12
 
@@ -18,12 +21,12 @@ _ZERO_TOL = 1e-12
 class SpexExpval:
     def __init__(
         self,
-        braket: "FermBraketImpl",
+        braket: FermBraketImpl,
         *args,
         **kwargs,
     ):
         self.operator = None
-        self.hamiltonian: List[spex.FermionTerm] = []
+        self.hamiltonian: list[spex.FermionTerm] = []
         self._init_state_bra: dict = None
         self._init_state_ket: dict = None
         self._ket = None
@@ -75,11 +78,11 @@ class SpexExpval:
             self._name = "Transition Element"
         self.operator = self.build_operator(operator)
 
-    def _build_hamiltonian(self) -> List[spex.FermionTerm]:
+    def _build_hamiltonian(self) -> list[spex.FermionTerm]:
         # Integrals in chemists notation g[p,q,r,s]=(pq|rs); spatial orbital p maps to
         # spin orbitals p (alpha) and p+norb (beta) in up-then-down ordering.
         norb = self.norb
-        terms: List[spex.FermionTerm] = []
+        terms: list[spex.FermionTerm] = []
         if self.core_energy is not None and abs(self.core_energy) > _ZERO_TOL:
             terms.append(spex.FermionTerm([], [], complex(self.core_energy)))
         if self.one_body_integrals is not None:
@@ -114,7 +117,7 @@ class SpexExpval:
         return terms
 
     @property
-    def bra(self) -> "FCircuit":
+    def bra(self) -> FCircuit:
         return self._bra
 
     @bra.setter
@@ -127,7 +130,7 @@ class SpexExpval:
         self._bra = bra
 
     @property
-    def ket(self) -> "FCircuit":
+    def ket(self) -> FCircuit:
         return self._ket
 
     @ket.setter
@@ -140,7 +143,7 @@ class SpexExpval:
         self._ket = ket
 
     @property
-    def variables(self) -> List[Variable]:
+    def variables(self) -> list[Variable]:
         bra = self.bra.variables if self.bra is not None else []
         ket = self.ket.variables if self.ket is not None else []
         return bra + ket
@@ -171,11 +174,11 @@ class SpexExpval:
         return _qwvf_to_civect(wvf, 2 * self.norb)
 
     def build_operator(
-        self, operator: Union[str, FermionOperator, QubitHamiltonian] = None
-    ) -> Union[None, Callable, List[spex.FermionTerm]]:
+        self, operator: str | FermionOperator | QubitHamiltonian | None = None
+    ) -> None | Callable | list[spex.FermionTerm]:
         # Supported: "I"/"H", openfermion FermionOperator, tequila QubitHamiltonian (callable on state dict)
 
-        def from_string(operator: str) -> Union[Callable, List[spex.FermionTerm]]:
+        def from_string(operator: str) -> Callable | list[spex.FermionTerm]:
             if operator.upper() == "I":
                 return lambda x: x
             elif operator.upper() == "H":
@@ -191,7 +194,7 @@ class SpexExpval:
             operator = [spex.FermionTerm([], [], complex(operator))]
         elif isinstance(operator, FermionOperator):
             # openfermion's terms dict already merges identical terms
-            terms: List[spex.FermionTerm] = []
+            terms: list[spex.FermionTerm] = []
             for term, weight in operator.terms.items():
                 if abs(weight) < _ZERO_TOL:
                     continue
@@ -236,26 +239,24 @@ class SpexExpval:
         return operator
 
     def __call__(
-        self, variables: Union[list, dict, Variables] = {}, *args, **kwargs
+        self, variables: list | dict | Variables = None, *args, **kwargs
     ) -> float:
+        if variables is None:
+            variables = {}
         return self.simulate(variables=variables)
 
-    def simulate(self, variables: Union[list, dict, Variables] = None) -> float:
+    def simulate(self, variables: list | dict | Variables = None) -> float:
         variables = {} if variables is None else variables
         check_variables = {k: k in variables for k in self.extract_variables()}
         if not all(list(check_variables.values())):
             raise TequilaException(
                 "Objective did not receive all variables:\n"
                 "You gave\n"
-                " {}\n"
+                f" {variables}\n"
                 " but the objective depends on\n"
-                " {}\n"
+                f" {self.extract_variables()}\n"
                 " missing values for\n"
-                " {}".format(
-                    variables,
-                    self.extract_variables(),
-                    [k for k, v in check_variables.items() if not v],
-                )
+                f" {[k for k, v in check_variables.items() if not v]}"
             )
         if isinstance(variables, Variables):
             variables = variables.store
@@ -311,7 +312,7 @@ class SpexExpval:
             )
         return float(real(result))
 
-    def extract_variables(self) -> List[Variable]:
+    def extract_variables(self) -> list[Variable]:
         variables_bra = []
         variables_ket = []
         uniques_bra = []

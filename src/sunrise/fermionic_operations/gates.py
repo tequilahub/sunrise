@@ -1,17 +1,19 @@
-import typing
+from __future__ import annotations
+
 import numbers
+import typing
+
+from numpy import ndarray
 from tequila.objective.objective import FixedVariable, Variable
+
 from .circuit import FCircuit
 from .fgateimpl import *
 from .givens_rotations import get_givens_circuit
-from numpy import ndarray
 
 
 def FermionicExcitation(
-    indices: typing.Union[list, tuple],
-    variables: typing.Union[
-        typing.Hashable, numbers.Real, Variable, FixedVariable
-    ] = None,
+    indices: list | tuple | None,
+    variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
     reordered: bool = False,
 ) -> FCircuit:
     """
@@ -24,9 +26,7 @@ def FermionicExcitation(
 def UR(
     i: int,
     j: int,
-    variables: typing.Union[
-        typing.Hashable, numbers.Real, Variable, FixedVariable
-    ] = None,
+    variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
 ) -> FCircuit:
     """
     Orbital Rotation gate, defined by a paired single excitation gate from Spatial orbital i to j (UR=exct([(2*i,2*j)],\theta) + exct([(2*i+1,2*j+1)],\theta))
@@ -37,9 +37,7 @@ def UR(
 def UC(
     i: int,
     j: int,
-    variables: typing.Union[
-        typing.Hashable, numbers.Real, Variable, FixedVariable
-    ] = None,
+    variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
 ) -> FCircuit:
     """
     Orbital Correlator gate, defined by a paired double excitation gate from Spatial orbital i to j (UC=exct([(2*i,2*j),(2*i+1,2*j+1)],\theta))
@@ -48,10 +46,8 @@ def UC(
 
 
 def UX(
-    indices: typing.Union[list, tuple],
-    variables: typing.Union[
-        typing.Hashable, numbers.Real, Variable, FixedVariable
-    ] = None,
+    indices: list | tuple | None,
+    variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
     reordered: bool = False,
 ) -> FCircuit:
     """
@@ -63,9 +59,7 @@ def UX(
 
 def Phase(
     tarjet: int,
-    variables: typing.Union[
-        typing.Hashable, numbers.Real, Variable, FixedVariable
-    ] = None,
+    variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
     reordered: bool = False,
 ) -> FCircuit:
     """
@@ -77,7 +71,7 @@ def Phase(
 def Givens(
     unitary: ndarray,
     tol: float = 1e-12,
-    ordering: typing.Union[list, tuple, str] = "OPTIMIZED_ORDERING",
+    ordering: list | tuple | str | None = "OPTIMIZED_ORDERING",
 ) -> FCircuit:
     """
     Givens rotation generated from the given unitary, decomposed into UR + Phase gates.

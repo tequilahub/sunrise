@@ -1,18 +1,22 @@
+from __future__ import annotations
+
 import typing
-import pyscf
-from pyscf.gto import Mole
-from numpy import ndarray
 from typing import Callable
-from typing import Union
+
+import pyscf
+from numpy import ndarray
+from pyscf.gto import Mole
 from tequila import TequilaException
-from sunrise.molecules import qubit_base, hybrid_base, fermionic_base
+
+from sunrise.molecules import fermionic_base, hybrid_base, qubit_base
 from sunrise.molecules.qubit_base import Molecule as QubitMolecule
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.molecules.qubit_base.chemistry_tools import (
-    ParametersQC,
     NBodyTensor,
     OrbitalData,
+    ParametersQC,
 )
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
 from .fermionic_base import FerMolecule
 from .hybrid_base import HyMolecule
 
@@ -27,13 +31,13 @@ NATURE_BACKENDS = {
 
 
 def Molecule(
-    geometry: str = None,
-    basis_set: str = None,
+    geometry: str | None = None,
+    basis_set: str | None = None,
     nature: str = "qubit",
-    orbital_type: str = None,
-    backend: str = None,
+    orbital_type: str | None = None,
+    backend: str | None = None,
     guess_wfn=None,
-    name: str = None,
+    name: str | None = None,
     *args,
     **kwargs,
 ) -> QuantumChemistryBase:
@@ -72,7 +76,7 @@ def Molecule(
             backend=backend,
             guess_wfn=guess_wfn,
             name=name,
-            *args,
+            args=args,
             **kwargs,
         )
     elif nature.lower() == "hybrid" or nature.lower() == "h":
@@ -89,7 +93,7 @@ def Molecule(
             backend=backend,
             guess_wfn=guess_wfn,
             name=name,
-            *args,
+            args=args,
             **kwargs,
         )
     elif nature.lower() == "fermionic" or nature.lower() == "f":
@@ -100,7 +104,7 @@ def Molecule(
             backend=backend,
             guess_wfn=guess_wfn,
             name=name,
-            *args,
+            args=args,
             **kwargs,
         )
     else:
@@ -153,15 +157,15 @@ def MoleculeFromSunrise(
         one_body_integrals=h,
         two_body_integrals=g,
         nuclear_repulsion=c,
-        *args,
+        args=args,
         **kwargs,
     )
 
 
 def MoleculeFromOpenFermion(
     molecule,
-    transformation: typing.Union[str, typing.Callable] = None,
-    backend: str = None,
+    transformation: str | typing.Callable | None = None,
+    backend: str | None = None,
     *args,
     nature: str = "qubit",
     **kwargs,
@@ -204,7 +208,7 @@ def MoleculeFromOpenFermion(
         if "frozen_orbitals" not in kwargs:
             kwargs["frozen_orbitals"] = []
     result = NATURE_BACKENDS[nature.lower()][backend].from_openfermion(
-        molecule=molecule, transformation=transformation, *args, **kwargs
+        molecule=molecule, transformation=transformation, args=args, **kwargs
     )
     if use_integrals:
         result.parameters.frozen_core = False
@@ -213,10 +217,10 @@ def MoleculeFromOpenFermion(
 
 def MoleculeFromPyscf(
     molecule: Mole,
-    mo_coeff: Union[ndarray, None] = None,
-    transformation: Union[str, Callable, None] = None,
-    active_orbitals: list = None,
-    frozen_orbitals: list = None,
+    mo_coeff: ndarray | None = None,
+    transformation: str | Callable | None = None,
+    active_orbitals: list | None = None,
+    frozen_orbitals: list | None = None,
     *args,
     nature: str = "qubit",
     **kwargs,
@@ -304,7 +308,7 @@ def MoleculeFromPyscf(
         frozen_orbitals=frozen_orbitals,
         point_group=molecule.symmetry_subgroup,
         units=units,
-        *args,
+        args=args,
         **kwargs,
     )
     tqmol.integral_manager.orbital_coefficients = mo_coeff
@@ -318,14 +322,9 @@ def MoleculeToPyscf(molecule: QuantumChemistryBase, **kwargs) -> pyscf.gto.Mole:
     geometry = molecule.parameters.get_geometry()
     pyscf_geomstring = ""
     for atom in geometry:
-        pyscf_geomstring += "{} {} {} {};".format(
-            atom[0], atom[1][0], atom[1][1], atom[1][2]
-        )
+        pyscf_geomstring += f"{atom[0]} {atom[1][0]} {atom[1][1]} {atom[1][2]};"
 
-    if "point_group" in kwargs:
-        point_group = kwargs["point_group"]
-    else:
-        point_group = None
+    point_group = kwargs.get("point_group", None)
 
     mol = pyscf.gto.M(
         atom=pyscf_geomstring,

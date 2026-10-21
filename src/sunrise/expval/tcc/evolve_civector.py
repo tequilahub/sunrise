@@ -1,13 +1,13 @@
+from __future__ import annotations
+
+import tensorcircuit as tc
 from tencirchem.static.evolve_civector import *
 from tencirchem.static.evolve_civector import (
     _get_gradients_civector,
     _get_gradients_civector_nocache,
 )
-from tequila import simulate, grad, QTensor
-from tequila.objective.objective import Objective, Variable, FixedVariable
-import tensorcircuit as tc
-from typing import Union
-from numpy import zeros
+from tequila import grad, simulate
+from tequila.objective.objective import FixedVariable, Objective, Variable
 
 
 def get_expval_and_grad_civector(
@@ -21,7 +21,7 @@ def get_expval_and_grad_civector(
     mode: str = "fermion",
     init_state=None,
     params_bra=None,
-    ex_ops_bra: Union[Tuple, None] = None,
+    ex_ops_bra: Tuple | None = None,
     init_state_bra=None,
 ):
     # Fist check bra
@@ -265,7 +265,7 @@ def get_energy_and_grad_civector_nocache(
     return energy, 2 * gradients
 
 
-def map_variables(x: Union[Variable, Objective], dvariables: dict):
+def map_variables(x: Variable | Objective | None, dvariables: dict):
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):

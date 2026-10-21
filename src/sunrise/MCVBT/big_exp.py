@@ -1,17 +1,17 @@
-from sunrise.molecules.qubit_base import QuantumChemistryBase
-from sunrise.expval import Braket, Overlap
-from tequila import BraKet as tqBraket
-from tequila import Overlap as tqOverlap
-from tequila import TequilaException
-from typing import Union
-from tequila import QCircuit
-from sunrise import FCircuit
-from tequila import TequilaException, Objective
+from __future__ import annotations
+
 from numpy import sign
+from tequila import BraKet as tqBraket
+from tequila import Objective, QCircuit, TequilaException
+from tequila import Overlap as tqOverlap
+
+from sunrise import FCircuit
+from sunrise.expval import Braket, Overlap
+from sunrise.molecules.qubit_base import QuantumChemistryBase
 
 
 def BigExpVal(
-    circuits: list[Union[QCircuit, FCircuit]],
+    circuits: list[QCircuit | FCircuit],
     coefficcents: list[float],
     mol: QuantumChemistryBase,
     **kwargs,
@@ -19,8 +19,8 @@ def BigExpVal(
     n = len(circuits)
     SS = 0.0
     EE = 0.0
-    ferm = all([isinstance(circuits[i], FCircuit) for i in range(n)])
-    qub = all([isinstance(circuits[i], QCircuit) for i in range(n)])
+    ferm = all(isinstance(circuits[i], FCircuit) for i in range(n))
+    qub = all(isinstance(circuits[i], QCircuit) for i in range(n))
     if not ferm and not qub:
         raise TequilaException(
             "Mixture of Fermionic and Qubit Circuits provided, can't handle it."

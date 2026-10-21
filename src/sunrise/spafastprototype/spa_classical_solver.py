@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import numpy as np
-from ..molecules.qubit_base.qc_base import QuantumChemistryBase
 from tequila import Variable
 from tequila.objective.objective import Variables
 
+from ..molecules.qubit_base.qc_base import QuantumChemistryBase
 
 """SPA read-out and energy in the hard-core-boson model, both O(N^2).
 
@@ -120,7 +122,7 @@ def split_graph(graph):
     lone = [e[0] for e in graph if len(e) == 1]
     if len(edges) + len(lone) != len(graph):
         raise ValueError(
-            "graph entries must have length 1 (lone pair) or 2 (edge): {}".format(graph)
+            f"graph entries must have length 1 (lone pair) or 2 (edge): {graph}"
         )
     return edges, lone
 
@@ -270,7 +272,10 @@ def spa_energy_for_graph(
 
 
 def spa_rdms(
-    edges: list[tuple[int]], variables: Variables, n_orbitals: int = None, label=None
+    edges: list[tuple[int]],
+    variables: Variables,
+    n_orbitals: int | None = None,
+    label=None,
 ):
     """
     Classical evaluation of the spin-free 1- and 2-RDM (dirac ordering) of the HCB-SPA wavefunction.

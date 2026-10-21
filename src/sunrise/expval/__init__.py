@@ -1,11 +1,13 @@
-from typing import Union, List, Optional
+from __future__ import annotations
+
 from openfermion.ops.operators.fermion_operator import FermionOperator
-from tequila import TequilaException, Objective
+from tequila import Objective, TequilaException
 from tequila.objective.objective import identity
-from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
 from sunrise.fermionic_operations.circuit import FCircuit
+from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
+
 from .fermionic_braket import FermBraketImpl
-from tequila import QTensor
 
 # in order of preference when no backend is chosen: spex is sunrise's own simulator
 SUPPORTED_FERMIONIC_BACKENDS = ["spex", "tcc", "fqe", "tequila"]
@@ -38,7 +40,7 @@ INSTALLED_FERMIONIC_BACKENDS["tequila"] = TequilaBraket
 
 def show_available_modules():
     print("Available Fermionic Modules:")
-    for k in INSTALLED_FERMIONIC_BACKENDS.keys():
+    for k in INSTALLED_FERMIONIC_BACKENDS.items():
         print(k)
 
 
@@ -47,7 +49,7 @@ def show_supported_modules():
 
 
 def pick_backend(
-    backend: str = None, samples: int = None, noise=None, device=None
+    backend: str | None = None, samples: int | None = None, noise=None, device=None
 ) -> str:
     """
     choose, or verify, a fermionic backend for the user.
@@ -109,7 +111,7 @@ def pick_backend(
 def Fidelity(
     ket: FCircuit,
     bra: FCircuit,
-    mol: Optional[QuantumChemistryBase] = None,
+    mol: QuantumChemistryBase | None = None,
     *args,
     **kwargs,
 ) -> Objective:
@@ -137,9 +139,9 @@ def Fidelity(
     """
     return Objective(
         args=[
-            Braket(ket=ket, bra=bra, molecule=mol, operator="I", *args, **kwargs).args[
-                0
-            ]
+            Braket(
+                ket=ket, bra=bra, molecule=mol, operator="I", args=args, **kwargs
+            ).args[0]
         ],
         transformation=lambda x: abs(x) ** 2,
     )
@@ -148,7 +150,7 @@ def Fidelity(
 def Overlap(
     ket: FCircuit,
     bra: FCircuit,
-    mol: Optional[QuantumChemistryBase] = None,
+    mol: QuantumChemistryBase | None = None,
     *args,
     **kwargs,
 ) -> Objective:
@@ -167,14 +169,14 @@ def Overlap(
     A tq.Objective that evaluated to the overlap between the two states
 
     """
-    return Braket(ket=ket, bra=bra, operator=None, mol=mol, *args, **kwargs)
+    return Braket(ket=ket, bra=bra, operator=None, mol=mol, args=args, **kwargs)
 
 
 def Braket(
     ket: FCircuit,
-    bra: Optional[FCircuit] = None,
-    operator: Optional[Union[str, List[FermionOperator], FermionOperator]] = None,
-    mol: Optional[QuantumChemistryBase] = None,
+    bra: FCircuit | None = None,
+    operator: str | list[FermionOperator] | FermionOperator | None = None,
+    mol: QuantumChemistryBase | None = None,
     *args,
     **kwargs,
 ) -> Objective:
@@ -214,7 +216,7 @@ def Braket(
         bra = None
     if isinstance(operator, list):
         return [
-            Braket(ket=ket, bra=bra, operator=op, mol=mol, *args, **kwargs)
+            Braket(ket=ket, bra=bra, operator=op, mol=mol, args=args, **kwargs)
             for op in operator
         ]
         # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
@@ -223,7 +225,7 @@ def Braket(
     return Objective(
         args=[
             FermBraketImpl(
-                ket=ket, bra=bra, operator=operator, molecule=mol, *args, **kwargs
+                ket=ket, bra=bra, operator=operator, molecule=mol, args=args, **kwargs
             )
         ],
         transformation=identity,
@@ -232,8 +234,8 @@ def Braket(
 
 def ExpectationValue(
     U: FCircuit,
-    H: Union[str, List[FermionOperator], FermionOperator] = "H",
-    mol: Optional[QuantumChemistryBase] = None,
+    H: str | list[FermionOperator] | FermionOperator | None = "H",
+    mol: QuantumChemistryBase | None = None,
     *args,
     **kwargs,
 ) -> Objective:
@@ -251,14 +253,14 @@ def ExpectationValue(
     Tequila objectives to be simulated or compiled.
 
     """
-    return Braket(ket=U, operator=H, mol=mol, *args, **kwargs)
+    return Braket(ket=U, operator=H, mol=mol, args=args, **kwargs)
 
 
 def RealBraKet(
     ket: FCircuit,
-    bra: Optional[FCircuit] = None,
-    operator: Union[str, List[FermionOperator], FermionOperator] = None,
-    mol: Optional[QuantumChemistryBase] = None,
+    bra: FCircuit | None = None,
+    operator: str | list[FermionOperator] | FermionOperator | None = None,
+    mol: QuantumChemistryBase | None = None,
     *args,
     **kwargs,
 ):
@@ -276,7 +278,7 @@ def RealBraKet(
     Tequila objectives to be simulated or compiled.
 
     """
-    return Braket(bra=bra, ket=ket, operator=operator, mol=mol, *args, **kwargs)
+    return Braket(bra=bra, ket=ket, operator=operator, mol=mol, args=args, **kwargs)
 
 
 def ImagBraKet(*args, **kwargs):

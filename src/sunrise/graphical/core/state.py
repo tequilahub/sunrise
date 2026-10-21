@@ -1,7 +1,6 @@
-from optparse import Option
-from typing import List, Union, Optional, Dict
+from __future__ import annotations
 
-from .color import ColorRange, Colors, Color
+from .color import Color, ColorRange, Colors
 
 
 class CircuitStyle:
@@ -18,12 +17,22 @@ class CircuitStyle:
     def __init__(
         self,
         group_together: bool = False,
-        parametrized_marking: Optional[Colors] = Colors(Color("black"), Color("unia")),
-        color_range: Optional[ColorRange] = ColorRange(Color("blue"), Color("red")),
-        primary: Colors = Colors(Color("white"), Color("tq")),
-        secondary: Colors = Colors(Color("white"), Color("fai")),
-        personalized: Dict["str", Colors] = {},
+        parametrized_marking: Colors | None = None,
+        color_range: ColorRange | None = None,
+        primary: Colors | None = None,
+        secondary: Colors | None = None,
+        personalized: dict[str, Colors] | None = None,
     ):
+        if parametrized_marking is None:
+            parametrized_marking = Colors(Color("black"), Color("unia"))
+        if color_range is None:
+            color_range = ColorRange(Color("blue"), Color("red"))
+        if primary is None:
+            primary = Colors(Color("white"), Color("tq"))
+        if secondary is None:
+            secondary = Colors(Color("white"), Color("fai"))
+        if personalized is None:
+            personalized = {}
         self.group_together = group_together
         self.parametrized_marking = parametrized_marking
         self.color_range = color_range
@@ -44,7 +53,7 @@ class CircuitState:
         self.wires = list(range(n_orbitals))
 
     @staticmethod
-    def names(wires: Union[List[int], int]) -> str:
+    def names(wires: list[int] | int | None) -> str:
         """Generates the name of a single or multiple wires by their indices."""
         if wires is int:
             wires = [wires]

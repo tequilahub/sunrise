@@ -1,17 +1,21 @@
+from __future__ import annotations
+
+from warnings import warn
+
+import numpy as np
 from tequila import (
-    Variable,
+    BitNumbering,
+    BitStringLSB,
     Objective,
-    simulate,
     QubitWaveFunction,
     TequilaWarning,
-    BitNumbering,
+    Variable,
+    simulate,
 )
 from tequila.objective.objective import Variables
-from tequila import BitStringLSB
+
 from sunrise.fermionic_operations import FCircuit
 from sunrise.molecules.qubit_base import Molecule
-import numpy as np
-from warnings import warn
 
 try:
     from fqe.util import sort_configuration_keys
@@ -20,7 +24,7 @@ except ImportError:
 
 
 def fqe_circuit_simulatorU(
-    U: FCircuit, variables: Variables, n_orb: int = None, **backend_kwargs
+    U: FCircuit, variables: Variables, n_orb: int | None = None, **backend_kwargs
 ) -> QubitWaveFunction:
     from .. import Braket
     from ..minimize import compile

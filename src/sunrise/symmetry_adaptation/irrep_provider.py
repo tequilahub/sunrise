@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
 import numpy
 
 if TYPE_CHECKING:
@@ -116,7 +118,7 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
             chars = numpy.asarray(
                 pg.character_table.dict[irrep], dtype=numpy.complex128
             )
-            character_vector = character_vector * numpy.power(chars, int(round(occ)))
+            character_vector = character_vector * numpy.power(chars, round(occ))
         irrep = pg.character_table.vec_to_str(character_vector)
         return irrep if irrep is not None else None
 
@@ -145,7 +147,7 @@ INSTALLED_IRREP_PROVIDERS = {
 
 def show_available_modules():
     print("Available Irrep Providers")
-    for k in INSTALLED_IRREP_PROVIDERS.keys():
+    for k in INSTALLED_IRREP_PROVIDERS:
         print(k)
 
 
@@ -161,4 +163,4 @@ def IrrepProvider(
     ADD SOMETHING
     """
     # any kwargs and circuit form should be managed inside each class
-    return INSTALLED_IRREP_PROVIDERS[provider.lower()](mol=mol, *args, **kwargs)
+    return INSTALLED_IRREP_PROVIDERS[provider.lower()](mol=mol, args=args, **kwargs)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from numbers import Number
 
 
@@ -37,7 +39,11 @@ class Color:
 class ColorRange:
     """This class holds two colors and can interpolate between them when given an angle."""
 
-    def __init__(self, start: Color = Color("blue"), end: Color = Color("red")):
+    def __init__(self, start: Color | None = None, end: Color | None = None):
+        if start is None:
+            start = Color("blue")
+        if end is None:
+            end = Color("red")
         self.start = start
         self.end = end
 

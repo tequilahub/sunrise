@@ -1,9 +1,11 @@
-from typing import TypeVar, Generic, Callable
-from dataclasses import dataclass
-from numpy.typing import NDArray
-import numpy
-from pandas import DataFrame
+from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Callable, Generic, TypeVar
+
+import numpy
+from numpy.typing import NDArray
+from pandas import DataFrame
 
 # =====================================================================
 # Geometric primitives for the higher-order axes (D4h, D6h)
@@ -127,7 +129,7 @@ class PointGroup:
         return len(self.character_table.operation_symbols)
 
     @classmethod
-    def from_pyscf(cls, point_group_name: str) -> "PointGroup":
+    def from_pyscf(cls, point_group_name: str) -> PointGroup:
         """Construct a PointGroup from with PySCF as source of truth."""
 
         from pyscf.symm import param
@@ -447,9 +449,7 @@ class PointGroupRepresentation(Generic[T, S]):
     @classmethod
     def get_geometric_representation(
         cls, pg: PointGroup
-    ) -> (
-        "PointGroupRepresentation[NDArray[numpy.complex128], NDArray[numpy.complex128]]"
-    ):
+    ) -> PointGroupRepresentation[NDArray[numpy.complex128], NDArray[numpy.complex128]]:
         """Returns the geometric representation of a point group, i.e. where the symmetry operations are represented as 3x3 matrices and the states are 3D vectors."""
 
         operation_dict: dict[str, NDArray[numpy.float64]] = {

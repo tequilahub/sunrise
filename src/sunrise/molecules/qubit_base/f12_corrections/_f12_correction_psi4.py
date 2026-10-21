@@ -1,13 +1,13 @@
-import tequila as tq
-from tequila import TequilaException, TequilaWarning
+from __future__ import annotations
+
+from itertools import product
+
+import numpy
+import psi4
+from tequila import TequilaException
 
 from ..chemistry_tools import NBodyTensor
 from ._f12_correction_base import ExplicitCorrelationCorrection
-
-import numpy
-from itertools import product
-
-import psi4
 
 
 # since this needs psi4, put in external file! maybe own folder for corrections
@@ -19,12 +19,12 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
     def __init__(
         self,
         mol=None,
-        rdm1: numpy.ndarray = None,
-        rdm2: numpy.ndarray = None,
+        rdm1: numpy.ndarray | None = None,
+        rdm2: numpy.ndarray | None = None,
         gamma: float = 1.4,
-        n_ri: int = None,
+        n_ri: int | None = None,
         cabs_type: str = "active",
-        cabs_options: dict = None,
+        cabs_options: dict | None = None,
         **kwargs,
     ):
         """
@@ -62,9 +62,8 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         # n_obs and active are set in setup_tensor-function for cabs+
 
         # If cabs_type == "cabs+", need C1-symmetry
-        if self.cabs_type == "cabs+":
-            if not self.mol._psi4_point_group.lower() == "c1":
-                raise TequilaException("CABS+ approach currently requires C1 symmetry!")
+        if self.cabs_type == "cabs+" and not self.mol._psi4_point_group.lower() == "c1":
+            raise TequilaException("CABS+ approach currently requires C1 symmetry!")
 
         if (self.rdm1 is None) or (self.rdm2 is None):
             if "rdm__psi4_method" in kwargs:
@@ -359,12 +358,12 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
             print("Set up universal f12-correction using the CABS+ approach.")
             try:
                 h, g, r = self.setup_tensors_psi4_cabsplus()
-            except Exception:
+            except Exception as e:
                 raise TequilaException(
                     "Something went wrong. Probably the psi4 version you have installed\
                                         does not support the CABS-functionality.\
                                         See preamble to setup_tensors_psi4_cabsplus."
-                )
+                ) from e
         else:
             raise TequilaException("No cabs_method to specify integrals provided.")
         fock = super().build_fock_operator(h=h, g=g)
