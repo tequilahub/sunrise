@@ -9,19 +9,20 @@ import os
 
 path = "PATH/pyscf_opentrustregion"
 os.environ["PYSCF_EXT_PATH"] = path
+from time import time
+
 import numpy as np
 import sunrise as sun
-from scipy.optimize import linear_sum_assignment
-from pyscf import gto, scf, mcscf
+from pyscf import gto, mcscf, scf
 from pyscf.data import elements
 from pyscf.opentrustregion import (
-    PipekMezeyOTR,
     BoysOTR,
     EdmistonRuedenbergOTR,
-    mf_to_otr,
+    PipekMezeyOTR,
     casscf_to_otr,
+    mf_to_otr,
 )
-from time import time
+from scipy.optimize import linear_sum_assignment
 
 
 def spa_edges(mol, mo_coeff):

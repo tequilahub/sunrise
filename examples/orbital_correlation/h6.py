@@ -1,6 +1,6 @@
-import tequila as tq
-import sunrise as sun
 import numpy as np
+import sunrise as sun
+import tequila as tq
 from sunrise.orbital_correlation.density_matrix_utils import *
 from sunrise.orbital_correlation.quantum_info_utils import *
 

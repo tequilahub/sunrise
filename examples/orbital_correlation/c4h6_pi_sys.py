@@ -1,9 +1,8 @@
+import numpy as np
 import sunrise as sun
 import tequila as tq
-import numpy as np
 from sunrise.orbital_correlation.density_matrix_utils import *
 from sunrise.orbital_correlation.quantum_info_utils import *
-from sunrise.fermionic_operations.givens_rotations import get_givens_circuit
 
 geometry = """
 C	-0.0000030	0.7547250	0.5821770

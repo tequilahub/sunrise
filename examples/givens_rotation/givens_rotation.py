@@ -1,7 +1,8 @@
+from copy import deepcopy
+
 import sunrise as sn
 import tequila as tq
 from numpy import pi
-from copy import deepcopy
 
 geometry = "H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2.\n H 0. 0. 3."
 mol = sn.Molecule(

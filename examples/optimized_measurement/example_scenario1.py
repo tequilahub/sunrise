@@ -1,8 +1,8 @@
-import tequila as tq
-import sunrise as sun
 import numpy as np
 import openfermion as of
 import scipy
+import sunrise as sun
+import tequila as tq
 
 # Create the molecule
 mol = sun.chemistry.Molecule(

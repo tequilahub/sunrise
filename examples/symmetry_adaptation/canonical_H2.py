@@ -1,8 +1,6 @@
 # Scenario: Spin Symmetrization for H2 in the canonical basis
 
-import tequila as tq
 import sunrise as sun
-
 from sunrise.symmetry_adaptation import (
     FockSpaceState,
     IrrepProvider,

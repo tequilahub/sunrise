@@ -1,17 +1,17 @@
-import pytest
-import sunrise.molecules.qubit_base as qc
-import numpy
-import os
 import glob
+import os
 
-import tequila as tq
+import numpy
+import pytest
 import sunrise as sun
+import sunrise.molecules.qubit_base as qc
 import sunrise.molecules.qubit_base.chemistry_tools
+import sunrise.molecules.qubit_base.qc_base as qcb
+import tequila as tq
 import tequila.simulators.simulator_api
+import tequila.tools.random_generators as rg
 from tequila.objective import ExpectationValue
 from tequila.simulators.simulator_api import simulate
-import sunrise.molecules.qubit_base.qc_base as qcb
-import tequila.tools.random_generators as rg
 
 # Get QC backends for parametrized testing
 import select_backends
@@ -183,7 +183,7 @@ def test_dependencies():
     reason="no quantum chemistry backends installed",
 )
 def test_interface():
-    molecule = sun.Molecule(
+    sun.Molecule(
         basis_set="sto-3g",
         geometry="data/h2.xyz",
         units="angstrom",
@@ -197,7 +197,7 @@ def test_h2_hamiltonian_psi4():
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
-def test_h2_hamiltonian_psi4():
+def test_h2_hamiltonian_pyscf():
     do_test_h2_hamiltonian(qc_interface=qc.QuantumChemistryPySCF)
 
 

@@ -2,7 +2,6 @@ import os
 
 import numpy
 import pytest
-
 import sunrise as sun
 
 HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS

@@ -17,4 +17,4 @@ final_circuit = result.U
 print(f"{final_circuit.depth = }")
 print(f"{result.energy = }")
 print("Steps", len(result.histories))
-print("Final circuit:\n ",final_circuit)
+print("Final circuit:\n ", final_circuit)

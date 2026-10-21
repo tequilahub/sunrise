@@ -1,8 +1,7 @@
 import pytest
+import sunrise as sn
 import tequila as tq
 from numpy import isclose
-
-import sunrise as sn
 
 
 @pytest.mark.parametrize(
@@ -15,7 +14,9 @@ import sunrise as sn
 @pytest.mark.parametrize("nature", ["qubit", "hybrid"])
 def test_fast_spa_opt(geom, nature):
     tqmol = sn.Molecule(geometry=geom, basis_set="sto-3g", units="a", backend="pyscf")
-    snmol = sn.Molecule(geometry=geom, basis_set="sto-3g", units="a", nature=nature, backend="pyscf")
+    snmol = sn.Molecule(
+        geometry=geom, basis_set="sto-3g", units="a", nature=nature, backend="pyscf"
+    )
 
     tqmol, tqedges = sn.CLPO.generate_CLPO_molecule_edges(mol=tqmol)
     snmol, snedges = sn.CLPO.generate_CLPO_molecule_edges(mol=snmol)
@@ -46,7 +47,9 @@ def test_fast_spa_opt(geom, nature):
 @pytest.mark.parametrize("nature", ["qubit", "hybrid"])
 def test_fast_spa_opt_orb(geom, nature):
     tqmol = sn.Molecule(geometry=geom, basis_set="sto-3g", units="a", backend="pyscf")
-    snmol = sn.Molecule(geometry=geom, basis_set="sto-3g", units="a", nature=nature, backend="pyscf")
+    snmol = sn.Molecule(
+        geometry=geom, basis_set="sto-3g", units="a", nature=nature, backend="pyscf"
+    )
 
     tqmol, tqedges = sn.CLPO.generate_CLPO_molecule_edges(mol=tqmol)
     snmol, snedges = sn.CLPO.generate_CLPO_molecule_edges(mol=snmol)

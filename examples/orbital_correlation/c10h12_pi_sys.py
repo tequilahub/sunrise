@@ -1,9 +1,9 @@
-import sunrise as sun
-import tequila as tq
 import numpy as np
+import sunrise as sun
+from sunrise.fermionic_operations.givens_rotations import get_givens_circuit
 from sunrise.orbital_correlation.density_matrix_utils import *
 from sunrise.orbital_correlation.quantum_info_utils import *
-from sunrise.fermionic_operations.givens_rotations import get_givens_circuit
+
 # import sys
 # sys.path.insert(1,'spafastprototype')
 # from decompose import decompose

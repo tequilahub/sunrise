@@ -4,20 +4,19 @@ with the angles read out from the hardcore-boson Hamiltonian (no VQE for the fin
 """
 
 import numpy as np
-
 import sunrise as sn
 from sunrise.graph_selection import (
-    generate_min_global_distance_edges,
-    nearest_insertion,
+    ant_colony_opt,
+    blossom_scaled,
     brute_force,
-    two_opt,
-    simulated_annealing,
+    generate_min_global_distance_edges,
     genetic_algorithm,
     minimum_weight_perfect_performance,
-    blossom_scaled,
-    ant_colony_opt,
+    nearest_insertion,
     run_spa_optimization,
+    simulated_annealing,
     total_distance,
+    two_opt,
 )
 
 coordinates = np.array(

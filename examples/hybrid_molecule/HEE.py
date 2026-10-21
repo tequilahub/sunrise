@@ -1,10 +1,9 @@
-import sunrise as sn
-from sunrise.molecules.qubit_base.chemistry_tools import NBodyTensor
-import numpy as np
 import subprocess
 
+import numpy as np
+import sunrise as sn
+
 try:
-    from pyblock2._pyscf.ao2mo import integrals as itg
     from pyblock2.driver.core import DMRGDriver, SymmetryTypes
 except ImportError:
     pass
@@ -55,7 +54,7 @@ mpo = driver.get_qc_mpo(h1e=h1, g2e=h2.elems, ecore=c, iprint=verbose)
 ket = driver.get_random_mps(tag="GS", bond_dim=250, nroots=1)
 
 energy = driver.dmrg(mpo, ket, n_sweeps=n_sweeps, bond_dims=[bd_pre], iprint=verbose)
-print("First DMRG energy = %20.15f" % energy)
+print(f"First DMRG energy = {energy:20.15f}")
 
 #### Orbital reordering
 idx = driver.orbital_reordering(h1, h2.elems)
@@ -70,7 +69,7 @@ ket = driver.get_random_mps(tag="GS", bond_dim=250, nroots=1)
 energy = driver.dmrg(
     mpo, ket, n_sweeps=n_sweeps, bond_dims=[bd_reordered], iprint=verbose
 )
-print("Main DMRG energy = %20.15f" % energy)
+print(f"Main DMRG energy = {energy:20.15f}")
 
 #### PDM extraction
 pdm1 = driver.get_1pdm(ket)
@@ -109,5 +108,5 @@ dmrg_energy = (
 print("dmrg_energy ", dmrg_energy)
 # iteration_energies.append(dmrg_energy.__str__())
 ################### DMRG finished ####################
-subprocess.call(f"rm -rf tmp/", shell=True)
-subprocess.call(f"rm -rf restart/", shell=True)
+subprocess.call("rm -rf tmp/", shell=True)
+subprocess.call("rm -rf restart/", shell=True)

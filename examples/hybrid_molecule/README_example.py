@@ -1,5 +1,6 @@
-import tequila as tq
 import sunrise as sun
+import tequila as tq
+
 ### INITIALIZE YOUR MOLECULE
 
 molecule = sun.Molecule(

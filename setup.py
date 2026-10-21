@@ -1,6 +1,6 @@
 import os
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 
 def read_requirements():
@@ -14,19 +14,19 @@ def read_requirements():
 VERSIONFILE = "src/sunrise/version.py"
 info = {"__version__": None, "__author__": None}
 with open(VERSIONFILE, "r") as f:
-    for l in f.readlines():
+    for l in f:
         tmp = l.split("=")
         if tmp[0].strip().lower() in info:
             info[tmp[0].strip().lower()] = tmp[1].strip().strip('"').strip("'")
 
 for k, v in info.items():
     if v is None:
-        raise Exception("could not find {} string in {}".format(k, VERSIONFILE))
+        raise Exception(f"could not find {k} string in {VERSIONFILE}")  # noqa: TRY002
 
 try:
     with open("README.md", "r") as f:
         long_description = f.read()
-except Exception:
+except Exception:  # noqa: BLE001
     long_description = ""
 
 setup(

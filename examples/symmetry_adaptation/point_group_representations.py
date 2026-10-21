@@ -1,13 +1,11 @@
 # Scenario: Building different Point Group Representations for H2 in the canonical basis
 
-import tequila as tq
-import sunrise as sun
 import numpy as np
-
+import sunrise as sun
+import tequila as tq
 from sunrise.symmetry_adaptation import (
     FockSpaceState,
     IrrepProvider,
-    SpinSymmetrizationProcedure,
 )
 
 # Create the molecule, its point group (D2h) is detected from the geometry

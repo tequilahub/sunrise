@@ -1,6 +1,5 @@
 import numpy as np
 import tequila as tq
-
 from sunrise import OrbitalRotation as OR
 
 

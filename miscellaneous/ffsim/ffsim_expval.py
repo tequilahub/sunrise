@@ -14,6 +14,8 @@ from numpy import (
 from pyscf.gto import Mole
 from pyscf.scf import RHF
 from scipy.sparse.linalg import LinearOperator
+from sunrise.expval import FermBraketImpl
+from sunrise.molecules.qubit_base import qc_base
 from tequila import (
     Objective,
     QubitHamiltonian,
@@ -24,9 +26,6 @@ from tequila import (
 )
 from tequila.objective.objective import Variables
 from tequila.utils.bitstrings import BitNumbering
-
-from sunrise.expval import FermBraketImpl
-from sunrise.molecules.qubit_base import qc_base
 
 from ..fermionic_operations.circuit import FCircuit
 

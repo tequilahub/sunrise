@@ -1,8 +1,9 @@
-import sunrise as sn
-from numpy import eye, pi
-import tequila as tq
-import networkx as nx
 from copy import deepcopy
+
+import networkx as nx
+import sunrise as sn
+import tequila as tq
+from numpy import eye, pi
 
 # Step 1: Molecule intialization
 n_atoms = 8
@@ -73,7 +74,7 @@ Uspaplus = U + UR + UR1 + UC + UR1.dagger() + UR.dagger()
 # If you want to check the circuit separability:
 print("Circuit Decompostion: ", list(nx.connected_components(Uspaplus.to_networkx())))
 E = sn.SPAFP.decompose(
-    H=mol.make_hamiltonian(), U=Uspaplus, grouping=[[*range(0, 8)], [*range(8, 16)]]
+    H=mol.make_hamiltonian(), U=Uspaplus, grouping=[[*range(8)], [*range(8, 16)]]
 )
 res = sn.minimize(
     E, silent=True, gradient="2-point", method_options={"finite_diff_rel_step": 1.0e-5}

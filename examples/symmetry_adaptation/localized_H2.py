@@ -1,14 +1,11 @@
 # Scenario: SALC + Spin Symmetrization for H2 in the localized basis
 
-from pandas import DataFrame
-import tequila as tq
 import sunrise as sun
-
 from sunrise.symmetry_adaptation import (
     FockSpaceState,
     IrrepProvider,
-    SymmetryAdaptedLinearCombintationSymmetrization,
     SpinSymmetrizationProcedure,
+    SymmetryAdaptedLinearCombintationSymmetrization,
 )
 
 # Create the molecule, its point group (D2h) is detected from the geometry

@@ -1,7 +1,7 @@
-import tequila as tq
-import sunrise as sun
-import numpy as np
 from math import pi
+
+import sunrise as sun
+import tequila as tq
 
 # --- 1. Basic Circuit Setup & Reference State ---
 geom = "H 0 0 0\nH 0 0 1\nH 0 0 2\nH 0 0 3"

@@ -1,4 +1,5 @@
 import sunrise as sun
+
 from hybridization import Graph
 
 geometry = "O 0.000000 0.000000 0.000000\n H 0.757000 0.586000 0.000000\nH -0.757000 0.586000 0.000000"

@@ -7,7 +7,6 @@ The purely qubit-based ADAPT tests stay in tequila.
 import numpy
 import openfermion
 import pytest
-
 import sunrise as sun
 
 
