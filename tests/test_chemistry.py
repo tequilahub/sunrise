@@ -1284,3 +1284,41 @@ def test_ghost_atom():
     fci1 = mol.compute_energy("fci")
     mol.make_molecule().get_molecular_hamiltonian()  # ensure that openfermion doesn't break with the ghost atom
     assert fci0 > fci1
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_clpo_pyscf_ao_order():
+    # cc-pVDZ has d shells, whose MOLDEN order (used by janpa) differs from the pyscf one
+    from pyscf import scf
+
+    from sunrise.CLPO.orbital_transformation import _run_janpa_pipeline
+
+    mol = sun.Molecule(
+        geometry="O 0.0 0.0 0.0\nH 0.757 0.586 0.0\nH -0.757 0.586 0.0",
+        basis_set="cc-pvdz",
+        backend="pyscf",
+    )
+    pfmol = sun.MoleculeToPyscf(mol)
+    mf = scf.RHF(pfmol).run()
+    aho, clpo, _, _ = _run_janpa_pipeline(pfmol, mf.mo_coeff, mf.mo_occ, mf.mo_energy)
+    s = pfmol.intor("int1e_ovlp")
+    assert numpy.allclose(aho.T @ s @ aho, numpy.eye(pfmol.nao), atol=1.0e-8)
+    assert numpy.allclose(clpo.T @ s @ clpo, numpy.eye(pfmol.nao), atol=1.0e-8)
+
+
+@pytest.mark.skipif(
+    condition=not HAS_PSI4 or not HAS_PYSCF, reason="you don't have psi4 and pyscf"
+)
+def test_clpo_psi4():
+    # psi4 orders and orients its AOs differently than pyscf, the CLPOs must be the same orbitals anyway
+    geometry = "O 0.0 0.0 0.0\nH 0.757 0.586 0.0\nH -0.757 0.586 0.0"
+    h = []
+    for backend in ["pyscf", "psi4"]:
+        mol = sun.Molecule(geometry=geometry, basis_set="cc-pvdz", backend=backend)
+        mol, edges = mol.use_CLPO_orbitals_and_edges()
+        c = mol.integral_manager.orbital_coefficients
+        h.append(numpy.abs(c.T @ mol.integral_manager.one_body_integrals @ c))
+        if backend == "pyscf":
+            pyscf_edges = edges
+    assert edges == pyscf_edges
+    assert numpy.allclose(h[0], h[1], atol=1.0e-6)

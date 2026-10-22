@@ -16,7 +16,9 @@ from janpa.npa.npa import run_npa
 from pyscf import mp, scf
 from pyscf.tools import molden as pyscf_molden
 
-from sunrise import MoleculeToPyscf
+from sunrise import MoleculeFromPyscf, MoleculeToPyscf
+from sunrise.molecules.fermionic_base import FermionicBase
+from sunrise.molecules.hybrid_base import HybridBase
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.molecules.utils_orbital_transformation import orthogonalize, transform
 
@@ -113,6 +115,10 @@ def _run_janpa_pipeline(
             # Tequila expects (n_ao, n_orb) where COLUMNS are orbitals.
             # We transpose here so callers can assign directly to integral_manager.
             aho_to_ao = clpo_res.clpo.nao_to_hybrids.T @ npa_res.nao_to_ao
+            # janpa keeps the MOLDEN AO order of the file, which differs from the pyscf one for d, f and g shells:
+            # MOLDEN position k holds the pyscf AO ao_order[k]
+            ao_order = pyscf_molden.order_ao_index(pfmol)
+            aho_to_ao = aho_to_ao[:, np.argsort(ao_order)]
             clpo_to_ao = clpo_res.clpo.lo_to_hybrids @ aho_to_ao
 
             # Transpose: (n_orb, n_ao) -> (n_ao, n_orb) to match Tequila/PySCF convention
@@ -177,6 +183,23 @@ def generate_CLPO_molecule_edges(
             mf = __custom_mf_conteiner(
                 mf.mo_coeff, fr + np.diag(rdm1).tolist(), mf.mo_energy
             )
+    # the CLPOs come in the AOs of pfmol. Other backends (e.g. psi4) order and orient their AOs differently, then the
+    # molecule is built again on the pyscf AOs, keeping its active space
+    s = mol.integral_manager.overlap_integrals
+    if s.shape != (pfmol.nao, pfmol.nao) or not np.allclose(
+        s, pfmol.intor("int1e_ovlp")
+    ):
+        mol = MoleculeFromPyscf(
+            pfmol,
+            mo_coeff=mf.mo_coeff,
+            transformation=mol.transformation,
+            active_orbitals=[o.idx_total for o in mol.integral_manager.active_orbitals],
+            nature="fermionic"
+            if isinstance(mol, FermionicBase)
+            else "hybrid"
+            if isinstance(mol, HybridBase)
+            else "qubit",
+        )
     # edges are bonds imposed on the CLPOs between 0-based atoms, e.g. [(1, 2), (1, 2)] for a double bond between atoms 1
     # and 2; the bonds between the other atom pairs are found automatically. Atoms do not depend on the active space,
     # so they are passed as given. Cast to native int to avoid np.int64 string representation issues
@@ -284,6 +307,23 @@ def generate_HAO_molecule(
                 mo_occ=fr + np.diag(rdm1).tolist(),
                 mo_energy=mf.mo_energy,
             )
+    # the HAOs come in the AOs of pfmol. Other backends (e.g. psi4) order and orient their AOs differently, then the
+    # molecule is built again on the pyscf AOs, keeping its active space
+    s = mol.integral_manager.overlap_integrals
+    if s.shape != (pfmol.nao, pfmol.nao) or not np.allclose(
+        s, pfmol.intor("int1e_ovlp")
+    ):
+        mol = MoleculeFromPyscf(
+            pfmol,
+            mo_coeff=mf.mo_coeff,
+            transformation=mol.transformation,
+            active_orbitals=[o.idx_total for o in mol.integral_manager.active_orbitals],
+            nature="fermionic"
+            if isinstance(mol, FermionicBase)
+            else "hybrid"
+            if isinstance(mol, HybridBase)
+            else "qubit",
+        )
 
     # aho_to_ao_full is now (n_ao, n_hyb) after the transpose fix in _run_janpa_pipeline
     # aviso indexes the CLPOs, not the HAOs returned here, so it is warned and returned in full CLPO indices
