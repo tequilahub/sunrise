@@ -6,6 +6,7 @@ from typing import Callable
 import spex_tequila as spex
 from numpy import array, ceil, complex128, ndarray, real
 from openfermion import FermionOperator
+from openfermion import normal_ordered
 from tequila import QubitHamiltonian, QubitWaveFunction, TequilaException, Variable
 from tequila.objective.objective import Objective, Variables
 from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
@@ -194,6 +195,7 @@ class SpexExpval:
             operator = [spex.FermionTerm([], [], complex(operator))]
         elif isinstance(operator, FermionOperator):
             # openfermion's terms dict already merges identical terms
+            operator = normal_ordered(operator)
             terms: list[spex.FermionTerm] = []
             for term, weight in operator.terms.items():
                 if abs(weight) < _ZERO_TOL:
