@@ -23,24 +23,23 @@ from tequila.simulators.simulator_api import simulate
 from tequila.utils import to_float
 
 from sunrise.symmetry_adaptation.point_group import PointGroup, PointGroupRepresentation
-from sunrise.symmetry_adaptation.transformation_helpers import (
+from sunrise.utils.transformation_helpers import (
     FermionicSWAP,
     GeometricTransformationHelper,
 )
 
-from .encodings import known_encodings
-
-import typing
-import numpy
-import numbers
-from itertools import product
-import tequila.grouping.fermionic_functions as ff
-import tequila
-import pyscf
-from scipy.optimize import linear_sum_assignment
-from sunrise.symmetry_adaptation.point_group import PointGroup, PointGroupRepresentation
-from sunrise.utils.transformation_helpers import GeometricTransformationHelper, FermionicSWAP
-
+from .chemistry_tools import (
+    ActiveSpaceData,
+    Amplitudes,
+    ClosedShellAmplitudes,
+    FermionicGateImpl,
+    IntegralManager,
+    NBodyTensor,
+    ParametersQC,
+    prepare_product_state,
+    to_json_data,
+)
+from .encodings import EncodingBase, known_encodings
 
 try:
     # if you are experiencing import errors you need to update openfermion
@@ -997,7 +996,11 @@ class QuantumChemistryBase:
         New molecule in the native (orthonormalized) basis given
         e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
         """
-        from sunrise.utils.orbital_transformation import get_active, get_core, orthogonalize_active_space
+        from sunrise.utils.orbital_transformation import (
+            get_active,
+            get_core,
+            orthogonalize_active_space,
+        )
 
         c = self.integral_manager.orbital_coefficients.copy()
         s = self.integral_manager.overlap_integrals.copy()

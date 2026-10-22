@@ -499,7 +499,12 @@ class FermionicBase(QuantumChemistryBase):
         New molecule in the native (orthonormalized) basis given
         e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
         """
-        from sunrise.utils.orbital_transformation import get_active, get_core, orthogonalize_active_space
+        from sunrise.utils.orbital_transformation import (
+            get_active,
+            get_core,
+            orthogonalize_active_space,
+        )
+
         c = self.integral_manager.orbital_coefficients.copy()
         s = self.integral_manager.overlap_integrals.copy()
         d = self.integral_manager.get_orthonormalized_orbital_coefficients().copy()
