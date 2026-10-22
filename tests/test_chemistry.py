@@ -721,7 +721,6 @@ def test_fermionic_backends(backend, basis_set, tmp_path, monkeypatch):
     assert numpy.isclose(result.energy, qmol.compute_energy("fci"), atol=1.0e-5)
 
 
-# madness does not use a basis set, psi4 is not available for hybrid molecules
 @pytest.mark.parametrize(
     "backend, basis_set",
     [
@@ -730,6 +729,11 @@ def test_fermionic_backends(backend, basis_set, tmp_path, monkeypatch):
             "sto-3g",
             marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found"),
         ),
+        pytest.param(
+                    "psi4",
+                    "sto-3g",
+                    marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found"),
+                ),
         pytest.param(
             "madness",
             None,
