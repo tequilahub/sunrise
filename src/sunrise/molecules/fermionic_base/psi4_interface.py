@@ -17,6 +17,7 @@ from sunrise.molecules.qubit_base.chemistry_tools import (
     ClosedShellAmplitudes,
     OrbitalData,
 )
+from sunrise.molecules.qubit_base.psi4_interface import Psi4Results
 
 from .fer_base import FermionicBase
 
@@ -27,21 +28,6 @@ class TequilaPsi4Exception(TequilaException):
 
 class OpenVQEEPySCFException(TequilaException):
     pass
-
-
-@dataclass
-class Psi4Results:
-    variables: dict | None = (
-        None  # psi4 variables dictionary, storing all computed values
-    )
-    filename: str | None = None  # psi4 output file
-    wfn: (
-        psi4.core.Wavefunction
-        | psi4.core.CCWavefunction
-        | psi4.core.CIWavefunction
-        | None
-    ) = None  # psi4 wavefunction
-    mol: psi4.core.Molecule = None
 
 
 class QuantumChemistryPsi4(FermionicBase):

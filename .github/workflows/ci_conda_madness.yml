@@ -49,5 +49,6 @@ jobs:
         cd tests
         python test_chemistry_madness.py
         pytest test_chemistry_madness.py
+        pytest test_chemistry.py -k madness
         cd ../
 
