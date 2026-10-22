@@ -8,10 +8,17 @@ from tequila import TequilaWarning
 from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC
 
 from .hybridbase import HybridBase
-from .madness_interface import HybridMadness
+from .madness_interface import QuantumChemistryMadness
 
 SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf", "psi4", "madness"]
-INSTALLED_QCHEMISTRY_BACKENDS = {"base": HybridBase, "madness": HybridMadness}
+INSTALLED_QCHEMISTRY_BACKENDS = {"base": HybridBase, "madness": QuantumChemistryMadness}
+
+try:
+    from .psi4_interface import QuantumChemistryPsi4
+
+    INSTALLED_QCHEMISTRY_BACKENDS["psi4"] = QuantumChemistryPsi4
+except ImportError:
+    pass
 
 try:
     from .pyscf_interface import PyscfHybridBase
