@@ -1352,6 +1352,31 @@ def test_save_load_transformed_orbitals(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_save_load_function_transformation(tmp_path, monkeypatch):
+    # a function can not be saved, it is given again when the molecule is loaded
+    import openfermion
+
+    def transformation(op):
+        return tq.QubitHamiltonian.from_openfermion(openfermion.jordan_wigner(op))
+
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5"
+    mol = sun.Molecule(
+        geometry=geometry,
+        basis_set="sto-3g",
+        backend="pyscf",
+        transformation=transformation,
+    )
+    with pytest.warns(Warning, match="can not be saved"):
+        mol.save(str(tmp_path / "molecule.h5"))
+    loaded = sun.load_molecule(
+        str(tmp_path / "molecule.h5"), transformation=transformation
+    )
+
+    assert loaded.transformation is transformation
+    assert loaded.make_hamiltonian() == mol.make_hamiltonian()
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
 def test_save_load_xyz_geometry(tmp_path, monkeypatch):
     # the coordinates are stored, not the name of the xyz file
     monkeypatch.chdir(tmp_path)

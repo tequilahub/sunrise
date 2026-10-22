@@ -165,7 +165,9 @@ def MoleculeFromSunrise(
     )
 
 
-def load_molecule(filename: str) -> QuantumChemistryBase:
+def load_molecule(
+    filename: str, transformation: str | typing.Callable | None = None
+) -> QuantumChemistryBase:
     """
     Load a sunrise molecule saved with mol.save(filename), in the nature it was saved with
     It is rebuilt from the stored integrals and orbitals, nothing is recomputed
@@ -173,6 +175,9 @@ def load_molecule(filename: str) -> QuantumChemistryBase:
     ----------
     filename
         The HDF5 file written by mol.save
+    transformation
+        The Fermion to Qubit Transformation, if not given the saved one is used
+        A transformation that is a function can not be saved and has to be given here again
     Returns
     -------
         The sunrise molecule
@@ -195,16 +200,18 @@ def load_molecule(filename: str) -> QuantumChemistryBase:
     backends = NATURE_BACKENDS[data["nature"]]
     backend = data["backend"]
     if backend not in ("base", "pyscf") or backend not in backends:
-        # psi4 and madness would compute the integrals again
-        fallback = "pyscf" if "pyscf" in backends else "base"
+        # the classical methods of psi4 and madness use their own data (psi4 wavefunction, madness files),
+        # not the integrals, so like in transform_orbitals the molecule can not be an instance of them
         warnings.warn(
-            f"molecule was saved with the {backend} backend, it is loaded with the {fallback} backend",
+            f"molecule was saved with the {backend} backend, it is loaded with the base backend",
             TequilaWarning,
         )
-        backend = fallback
+        backend = "base"
 
     kwargs = {**integrals, **data["settings"]}
-    if data["transformation"] is not None:
+    if transformation is not None:
+        kwargs["transformation"] = transformation
+    elif data["transformation"] is not None:
         kwargs["transformation"] = data["transformation"]["name"]
         kwargs.update(
             {

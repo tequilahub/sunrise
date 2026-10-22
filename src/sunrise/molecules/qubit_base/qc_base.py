@@ -240,7 +240,8 @@ class QuantumChemistryBase:
             }
         elif self.transformation is not None:
             warnings.warn(
-                f"transformation {self.transformation} can not be saved, the loaded molecule has the default one",
+                f"transformation {self.transformation} can not be saved, give it again with "
+                "sun.load_molecule(filename, transformation=...), otherwise the default one is used",
                 TequilaWarning,
             )
 
