@@ -17,6 +17,7 @@ from sunrise.molecules.qubit_base.chemistry_tools import (
     NBodyTensor,
     OrbitalData,
     ParametersQC,
+    from_json_data,
 )
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
@@ -193,15 +194,22 @@ def load_molecule(
                 "orbital_coefficients",
             )
         }
+        backend_data = (
+            from_json_data(json.loads(f["backend_data"][()]))
+            if "backend_data" in f
+            else None
+        )
     integrals["two_body_integrals"] = NBodyTensor(
         elems=integrals["two_body_integrals"], ordering="chem"
     )
 
     backends = NATURE_BACKENDS[data["nature"]]
     backend = data["backend"]
-    if backend not in ("base", "pyscf") or backend not in backends:
-        # the classical methods of psi4 and madness use their own data (psi4 wavefunction, madness files),
-        # not the integrals, so like in transform_orbitals the molecule can not be an instance of them
+    if backend not in backends or (
+        backend not in ("base", "pyscf") and backend_data is None
+    ):
+        # the classical methods of psi4 and madness use their own data (psi4 wavefunction, madness pnoinfo),
+        # not the integrals, so without it (e.g. files saved before) like in transform_orbitals the molecule can not be an instance of them
         warnings.warn(
             f"molecule was saved with the {backend} backend, it is loaded with the base backend",
             TequilaWarning,
@@ -209,6 +217,9 @@ def load_molecule(
         backend = "base"
 
     kwargs = {**integrals, **data["settings"]}
+    if backend != "base" and backend_data is not None:
+        # e.g. the psi4 reference wavefunction or the madness pnoinfo, so the backend is rebuilt without recomputing it
+        kwargs.update(backend_data)
     if transformation is not None:
         kwargs["transformation"] = transformation
     elif data["transformation"] is not None:

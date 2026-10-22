@@ -37,6 +37,7 @@ from .chemistry_tools import (
     NBodyTensor,
     ParametersQC,
     prepare_product_state,
+    to_json_data,
 )
 from .encodings import EncodingBase, known_encodings
 
@@ -183,7 +184,8 @@ class QuantumChemistryBase:
         """
         Save the molecule in an HDF5 file without pickle, so it can be opened from any sunrise installation
         with sun.load_molecule. Like the pyscf chkfile only plain data is stored: the parameters, the integrals
-        in the basis, the orbitals, the active space, the transformation and the settings of the molecule nature
+        in the basis, the orbitals, the active space, the transformation, the settings of the molecule nature
+        and the data of the backend (e.g. the psi4 reference wavefunction, see _backend_data)
 
         Parameters
         ----------
@@ -279,15 +281,31 @@ class QuantumChemistryBase:
             if hasattr(self, "pyscf_molecule")
             else None,
         }
+        backend_data = self._backend_data()
         with h5py.File(filename, "w") as f:
             # numpy scalars and arrays (e.g. orbital energies) as python types
             f["molecule"] = json.dumps(data, default=lambda x: x.tolist())
+            if backend_data is not None:
+                f["backend_data"] = json.dumps(to_json_data(backend_data))
             f["one_body_integrals"] = manager.one_body_integrals
             f["two_body_integrals"] = manager.two_body_integrals.reorder(
                 to="chem"
             ).elems
             f["overlap_integrals"] = manager.overlap_integrals
             f["orbital_coefficients"] = manager.orbital_coefficients
+
+    def _backend_data(self) -> dict | None:
+        """
+        Data of the quantum chemistry backend that mol.save stores, so sun.load_molecule can rebuild the molecule
+        in its backend instead of the base one. It is given back as keyword arguments on init
+        Nested dictionaries, lists, tuples and numpy arrays are allowed (see to_json_data)
+
+        Returns
+        -------
+            None if the backend has no data of its own, then the molecule is loaded with the base backend
+            (unless the backend is rebuilt from the integrals alone, like pyscf)
+        """
+        return None
 
     def supports_ucc(self):
         """

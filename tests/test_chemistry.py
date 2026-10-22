@@ -1294,7 +1294,39 @@ def save_and_load(mol, tmp_path, monkeypatch):
     return sun.load_molecule(str(tmp_path / "molecule.h5"))
 
 
-@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def skip_if_not_installed(backend, nature="qubit"):
+    if backend not in sun.molecules.NATURE_BACKENDS[nature]:
+        pytest.skip(f"{backend} is not installed for the {nature} nature")
+
+
+def save_and_load_psi4(mol, tmp_path, monkeypatch):
+    # the psi4 wavefunction is loaded from the file, nothing is recomputed
+    def fail(*args, **kwargs):
+        pytest.fail("psi4 computed on load")
+
+    with monkeypatch.context() as m:
+        m.setattr(type(mol), "_run_psi4", fail)
+        return save_and_load(mol, tmp_path, monkeypatch)
+
+
+def assert_same_psi4(loaded, mol):
+    import psi4
+
+    assert isinstance(loaded.ref_wfn, psi4.core.Wavefunction)
+    for k in ("Ca", "Da", "Fa", "H", "S"):
+        assert numpy.allclose(
+            getattr(loaded.ref_wfn, k)().to_array(dense=True),
+            getattr(mol.ref_wfn, k)().to_array(dense=True),
+        )
+    assert loaded.ref_wfn.variables().keys() == mol.ref_wfn.variables().keys()
+    assert loaded._psi4_point_group == mol._psi4_point_group
+    assert loaded.irreps == mol.irreps
+    assert numpy.isclose(loaded.energies["hf"], mol.energies["hf"])
+    # the classical methods of psi4 run on the loaded wavefunction
+    assert numpy.isclose(loaded.compute_energy("fci"), mol.compute_energy("fci"))
+
+
+@pytest.mark.parametrize("backend", ["pyscf", "psi4"])
 @pytest.mark.parametrize(
     "nature, kwargs",
     [
@@ -1303,12 +1335,16 @@ def save_and_load(mol, tmp_path, monkeypatch):
         ("fermionic", {}),
     ],
 )
-def test_save_load(tmp_path, monkeypatch, nature, kwargs):
+def test_save_load(tmp_path, monkeypatch, backend, nature, kwargs):
+    skip_if_not_installed(backend, nature)
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
     mol = sun.Molecule(
-        geometry=geometry, basis_set="sto-3g", backend="pyscf", nature=nature, **kwargs
+        geometry=geometry, basis_set="sto-3g", backend=backend, nature=nature, **kwargs
     )
-    loaded = save_and_load(mol, tmp_path, monkeypatch)
+    if backend == "psi4":
+        loaded = save_and_load_psi4(mol, tmp_path, monkeypatch)
+    else:
+        loaded = save_and_load(mol, tmp_path, monkeypatch)
 
     assert type(loaded) is type(mol)
     assert loaded.parameters == mol.parameters
@@ -1316,25 +1352,44 @@ def test_save_load(tmp_path, monkeypatch, nature, kwargs):
     if nature == "hybrid":
         assert loaded.select == mol.select
         assert loaded.two_qubit == mol.two_qubit
+    if backend == "psi4":
+        assert_same_psi4(loaded, mol)
+        # psi4 amplitudes from the loaded wavefunction (it is no psi4.core.RHF)
+        amplitudes = loaded.compute_amplitudes("ccsd")
+        assert isinstance(amplitudes, qc.chemistry_tools.ClosedShellAmplitudes)
+        assert numpy.allclose(
+            amplitudes.tIjAb, mol.compute_amplitudes("ccsd").tIjAb, atol=1.0e-6
+        )
 
 
-@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
-def test_save_load_transformed_orbitals(tmp_path, monkeypatch):
+@pytest.mark.parametrize("backend", ["pyscf", "psi4"])
+def test_save_load_transformed_orbitals(tmp_path, monkeypatch, backend):
     # the orbitals, active space and point group of the molecule are kept, not the ones the backend computes
+    skip_if_not_installed(backend)
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
     mol = sun.Molecule(
         geometry=geometry,
         basis_set="6-31g",
-        backend="pyscf",
+        backend=backend,
         active_orbitals=[0, 1, 2, 3, 5],
     )
-    U = numpy.linalg.qr(
-        numpy.random.default_rng(1).normal(size=(mol.n_orbitals, mol.n_orbitals))
-    )[0]
-    mol = mol.transform_orbitals(U, name="random")
+    if backend == "psi4":
+        # transform_orbitals returns a base molecule, transform them in place to keep the psi4 one
+        n = len(mol.integral_manager.orbitals)
+        U = numpy.linalg.qr(numpy.random.default_rng(1).normal(size=(n, n)))[0]
+        mol.integral_manager.transform_orbitals(U, name="random")
+    else:
+        U = numpy.linalg.qr(
+            numpy.random.default_rng(1).normal(size=(mol.n_orbitals, mol.n_orbitals))
+        )[0]
+        mol = mol.transform_orbitals(U, name="random")
     mol.point_group = "c2v"
-    loaded = save_and_load(mol, tmp_path, monkeypatch)
+    if backend == "psi4":
+        loaded = save_and_load_psi4(mol, tmp_path, monkeypatch)
+    else:
+        loaded = save_and_load(mol, tmp_path, monkeypatch)
 
+    assert type(loaded) is type(mol)
     assert numpy.allclose(
         loaded.integral_manager.orbital_coefficients,
         mol.integral_manager.orbital_coefficients,
@@ -1349,6 +1404,11 @@ def test_save_load_transformed_orbitals(tmp_path, monkeypatch):
     assert loaded.integral_manager._orbital_type == "random"
     assert loaded.point_group.schoenflies_label == "C2v"
     assert loaded.make_hamiltonian() == mol.make_hamiltonian()
+    if backend == "psi4":
+        # the psi4 active space (frozen orbitals per irrep) is rebuilt as well
+        assert loaded.active_space.frozen_docc == mol.active_space.frozen_docc
+        assert loaded.active_space.frozen_uocc == mol.active_space.frozen_uocc
+        assert_same_psi4(loaded, mol)
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
