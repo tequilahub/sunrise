@@ -5,9 +5,11 @@ The purely qubit-based ADAPT tests stay in tequila.
 """
 
 import numpy
-import sunrise as sun
-import pytest
 import openfermion
+import pytest
+
+import sunrise as sun
+
 
 def make_test_molecule(nature):
     one = numpy.array([[-1.94102524, -0.31651552], [-0.31651552, -0.0887454]])
@@ -25,8 +27,13 @@ def make_test_molecule(nature):
     )
 
     return sun.Molecule(
-        geometry="He 0.0 0.0 0.0", backend="base", one_body_integrals=one, two_body_integrals=two, nature=nature
+        geometry="He 0.0 0.0 0.0",
+        backend="base",
+        one_body_integrals=one,
+        two_body_integrals=two,
+        nature=nature,
     )
+
 
 @pytest.mark.parametrize("nature", ["qubit", "hybrid", "fermionic"])
 def test_molecular_example(nature):
@@ -40,11 +47,15 @@ def test_molecular_example(nature):
     if nature == "fermionic":
         H = "H"
     solver = sun.ADAPT.Adapt(
-        H=H, Upre=mol.prepare_reference(), Upost=Upost, operator_pool=operator_pool,
+        H=H,
+        Upre=mol.prepare_reference(),
+        Upost=Upost,
+        operator_pool=operator_pool,
     )
     result = solver(operator_pool=operator_pool, label=0)
-    energy = mol.compute_energy('fci')
+    energy = mol.compute_energy("fci")
     assert numpy.isclose(result.energy, energy, atol=1.0e-4)
+
 
 @pytest.mark.parametrize("nature", ["qubit", "hybrid", "fermionic"])
 def test_molecular_excited_example(nature):
@@ -53,9 +64,11 @@ def test_molecular_excited_example(nature):
         mol.update_select("FF")
     H = mol.make_hamiltonian()
     if nature == "fermionic":
-        sparse_mat = openfermion.get_sparse_operator(H, n_qubits=2*mol.n_orbitals).toarray()
+        sparse_mat = openfermion.get_sparse_operator(
+            H, n_qubits=2 * mol.n_orbitals
+        ).toarray()
         eigenvalues, eigenvectors = numpy.linalg.eigh(sparse_mat)
-        n_qubits = 2*mol.n_orbitals
+        n_qubits = 2 * mol.n_orbitals
         H = "H"
     else:
         eigenvalues, eigenvectors = numpy.linalg.eigh(H.to_matrix())
@@ -63,22 +76,32 @@ def test_molecular_excited_example(nature):
     reference_basis_state = 2 ** (n_qubits - 1) + 2 ** (n_qubits - 2)
     energies = []
     for i in range(len(eigenvalues)):
-        if not numpy.isclose(eigenvectors[:, i][reference_basis_state], 0.0, atol=1.0e-4):
+        if not numpy.isclose(
+            eigenvectors[:, i][reference_basis_state], 0.0, atol=1.0e-4
+        ):
             energies.append(eigenvalues[i])
 
-    operator_pool = sun.ADAPT.MolecularPool(molecule=mol, indices="UpCCSD") 
+    operator_pool = sun.ADAPT.MolecularPool(molecule=mol, indices="UpCCSD")
 
     circuits = []
     variables = {}
     for state in range(3):
         Upre = mol.prepare_reference()
         objective_factory = sun.ADAPT.ObjectiveFactorySequentialExcitedState(
-            Upre=Upre, H=H, circuits=circuits, factors=[100.0] * len(circuits), molecule=mol,
+            Upre=Upre,
+            H=H,
+            circuits=circuits,
+            factors=[100.0] * len(circuits),
+            molecule=mol,
         )
         solver = sun.ADAPT.Adapt(
-            objective_factory=objective_factory, Upre=Upre, operator_pool=operator_pool,
+            objective_factory=objective_factory,
+            Upre=Upre,
+            operator_pool=operator_pool,
         )
-        result = solver(operator_pool=operator_pool, label=state, static_variables=variables)
+        result = solver(
+            operator_pool=operator_pool, label=state, static_variables=variables
+        )
         circuits.append(result.U)
         variables = {**variables, **result.variables}
         assert numpy.isclose(result.energy, energies[state], atol=1.0e-4)

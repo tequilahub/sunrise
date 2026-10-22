@@ -1,7 +1,8 @@
-import numpy as np
-import random
 import math
+import random
+
 import networkx as nx
+import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
 
@@ -87,12 +88,9 @@ def generate_local_optimal_edges_from_vertices(vertices: np.ndarray, start=0):
         for b, vertex_b in enumerate(our_vertices):
             if np.array_equal(vertex_a, vertex_b) or tuple(vertex_b.tolist()) in done:
                 continue
-            if nearest_vertex is None:
-                nearest_vertex_index = b
-                nearest_vertex = vertex_b
-            elif np.linalg.norm(vertex_a - nearest_vertex) > np.linalg.norm(
-                vertex_a - vertex_b
-            ):
+            if nearest_vertex is None or np.linalg.norm(
+                vertex_a - nearest_vertex
+            ) > np.linalg.norm(vertex_a - vertex_b):
                 nearest_vertex_index = b
                 nearest_vertex = vertex_b
 
@@ -151,7 +149,6 @@ def generate_all_possible_edges(atoms: list[int]):
         next_partial_edge = []
 
         for current_edge_pair, remaining in partial_edges:
-
             if len(remaining) == 0:
                 edges.append(current_edge_pair)
                 continue
@@ -383,7 +380,6 @@ def simulated_annealing(
     i = 0
     no_improv = 0
     while start > end and i < max_iter:
-
         i += 1
         new_edges = random_neighbour(current_edges)
         new_distance = total_distance(new_edges, coordinates=coordinates)

@@ -1,18 +1,21 @@
+from __future__ import annotations
+
 import inspect
-from typing import Any, Sequence, TypedDict
+from collections.abc import Sequence
+from typing import Any, TypedDict
 
 import numpy as np
 from numpy import eye
 from numpy.typing import NDArray
 
 from ..molecules.qubit_base import QuantumChemistryBase
+from ..spafastprototype import run_spa, spa_solve_graph
 from .shared import generate_min_global_distance_edges
-from ..spafastprototype import spa_solve_graph, run_spa
 
 
 class CustomData(TypedDict):
     name: str
-    data: "list | str | float | int | np.number"
+    data: list | str | float | int | np.number
 
 
 class OptimizationResult(TypedDict):
@@ -78,7 +81,6 @@ def run_spa_optimization(
     graph = [tuple(edge) for edge in edges]
     variables, energy = spa_solve_graph(mol, graph)
     U_x = mol.make_ansatz(name="SPA", edges=edges)
-
 
     return OptimizationResult(
         energy=energy,
