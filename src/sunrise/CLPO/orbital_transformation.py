@@ -20,7 +20,7 @@ from sunrise import MoleculeFromPyscf, MoleculeToPyscf
 from sunrise.molecules.fermionic_base import FermionicBase
 from sunrise.molecules.hybrid_base import HybridBase
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.molecules.utils_orbital_transformation import orthogonalize, transform
+from sunrise.utils.orbital_transformation import orthogonalize, transform
 
 
 @dataclass

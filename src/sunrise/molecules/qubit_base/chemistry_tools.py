@@ -318,6 +318,45 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         return mapped
 
 
+def to_json_data(data):
+    """
+    Turn nested dictionaries, lists, tuples and numpy arrays into plain JSON types, so they can be saved without pickle
+    Tuples and arrays (with their dtype and shape) are tagged to get them back with from_json_data
+    """
+    if isinstance(data, dict):
+        return {k: to_json_data(v) for k, v in data.items()}
+    if isinstance(data, tuple):
+        return {"__tuple__": [to_json_data(v) for v in data]}
+    if isinstance(data, list):
+        return [to_json_data(v) for v in data]
+    if isinstance(data, numpy.ndarray):
+        return {
+            "__ndarray__": data.tolist(),
+            "dtype": data.dtype.str,
+            "shape": list(data.shape),
+        }
+    if isinstance(data, numpy.generic):
+        return data.item()
+    return data
+
+
+def from_json_data(data):
+    """
+    Inverse of to_json_data
+    """
+    if isinstance(data, dict):
+        if "__tuple__" in data:
+            return tuple(from_json_data(v) for v in data["__tuple__"])
+        if "__ndarray__" in data:
+            return numpy.array(data["__ndarray__"], dtype=data["dtype"]).reshape(
+                data["shape"]
+            )
+        return {k: from_json_data(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [from_json_data(v) for v in data]
+    return data
+
+
 def prepare_product_state(state: BitString) -> QCircuit:
     """Small convenience function
 

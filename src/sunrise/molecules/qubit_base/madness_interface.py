@@ -128,10 +128,19 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         # if no n_pno is given, look for MRA data (default)
         name = parameters.name
 
+        # the data of a madness calculation can be given directly (e.g. by sun.load_molecule):
+        # one_body_integrals, two_body_integrals, nuclear_repulsion, pairinfo and occinfo, then no files are read
+        given = "one_body_integrals" in kwargs and "pairinfo" in kwargs
+        if given:
+            h = kwargs.pop("one_body_integrals")
+            g = kwargs.pop("two_body_integrals")
+            if isinstance(g, NBodyTensor):
+                g = g.reorder(to="chem").elems
+            n_pno = None
         # try to read in data in the following cases
         # - no executable found
         # - executable found but read in explicitly demanded through n_pno="read"
-        if (n_pno is None and executable is None) or (
+        elif (n_pno is None and executable is None) or (
             hasattr(n_pno, "lower") and n_pno.lower() == "read"
         ):
             h, g = self.read_tensors(name=name, datadir=datadir)
@@ -183,35 +192,37 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     + solution
                 )
         # get additional information from madness file
-        nuclear_repulsion = 0.0
-        pairinfo = None
-        occinfo = None
+        nuclear_repulsion = kwargs.pop("nuclear_repulsion", 0.0)
+        pairinfo = kwargs.pop("pairinfo", None)
+        occinfo = kwargs.pop("occinfo", None)
         path = parameters.name
         if datadir is not None:
             path = f"{datadir}/{path}"
-        for name in [
-            path + "_pnoinfo.txt",
-            parameters.name + "_pnoinfo.txt",
-            "pnoinfo.txt",
-        ]:
-            try:
-                with open(name, "r") as f:
-                    for line in f:
-                        if "nuclear_repulsion" in line:
-                            nuclear_repulsion = float(line.split("=")[1])
-                        elif "pairinfo" in line:
-                            pairinfo = line.split("=")[1].split(",")
-                            pairinfo = [
-                                tuple([int(i) for i in x.split(".")]) for x in pairinfo
-                            ]
-                        elif "occinfo" in line:
-                            occinfo = line.split("=")[1].split(",")
-                            occinfo = [float(x) for x in occinfo]
+        if not given:
+            for name in [
+                path + "_pnoinfo.txt",
+                parameters.name + "_pnoinfo.txt",
+                "pnoinfo.txt",
+            ]:
+                try:
+                    with open(name, "r") as f:
+                        for line in f:
+                            if "nuclear_repulsion" in line:
+                                nuclear_repulsion = float(line.split("=")[1])
+                            elif "pairinfo" in line:
+                                pairinfo = line.split("=")[1].split(",")
+                                pairinfo = [
+                                    tuple([int(i) for i in x.split(".")])
+                                    for x in pairinfo
+                                ]
+                            elif "occinfo" in line:
+                                occinfo = line.split("=")[1].split(",")
+                                occinfo = [float(x) for x in occinfo]
 
-                if pairinfo is not None:
-                    break
-            except Exception:  # noqa: BLE001, S112
-                continue
+                    if pairinfo is not None:
+                        break
+                except Exception:  # noqa: BLE001, S112
+                    continue
 
         if pairinfo is None:
             raise TequilaMadnessException(
@@ -261,6 +272,10 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         # convert to indices only
         # active space data will be set in baseclass constructor
         reference_orbitals = [x.idx_total for x in reference_orbitals]
+        if kwargs.get("reference_orbitals") is not None:
+            # given (e.g. by sun.load_molecule) instead of the doubly occupied orbitals
+            reference_orbitals = kwargs.pop("reference_orbitals")
+        kwargs.pop("reference_orbitals", None)
         super().__init__(
             *args,
             parameters=parameters,
@@ -284,9 +299,24 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     TequilaWarning,
                 )
 
-        # delete *.bin files and pnoinfo.txt form madness calculation
-        if not keep_mad_files:
+        # delete *.bin files and pnoinfo.txt form madness calculation (none if the data was given)
+        if not keep_mad_files and not given:
             self.cleanup(warn=False, delete_all_files=False)
+
+    def _backend_data(self):
+        # the pnoinfo of the madness calculation (the integrals and the nuclear repulsion are stored by mol.save)
+        orbitals = self.integral_manager.orbitals
+        if any(o.pair is None or o.occ is None for o in orbitals):
+            warnings.warn(
+                "the orbitals lost their PNO pair structure (e.g. they were transformed), "
+                "the molecule is loaded with the base backend",
+                TequilaWarning,
+            )
+            return None
+        return {
+            "pairinfo": [o.pair for o in orbitals],
+            "occinfo": [o.occ for o in orbitals],
+        }
 
     def cleanup(self, warn=False, delete_all_files=False):
         filenames = ["pnoinfo.txt", "molecule_htensor.bin", "molecule.gtensor.bin"]

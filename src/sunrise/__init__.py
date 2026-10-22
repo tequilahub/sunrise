@@ -12,6 +12,7 @@ from sunrise.molecules import (
     MoleculeFromSunrise,
     MoleculeFromPyscf,
     MoleculeToPyscf,
+    load_molecule,
 )
 from sunrise.molecules.qubit_base import QuantumChemistryBase, ParametersQC, NBodyTensor
 from sunrise.plot_mo import plot_MO
@@ -19,8 +20,7 @@ from sunrise.graphical.qpic_visualization import qpic_to_pdf, qpic_to_png
 from sunrise.graphical import draw
 from sunrise import measurement
 from sunrise.fermionic_operations.orb_rotation_qubit import OrbitalRotation
-from sunrise.utils.giuseppe import giuseppe
-from sunrise.utils.bar import giuseppe_bar
+from sunrise.utils.giuseppe import giuseppe, giuseppe_bar
 from sunrise.expval import (
     Braket,
     show_available_modules,
@@ -81,6 +81,7 @@ __all__ = [
     "grad",
     "graph_selection",
     "graphical",
+    "load_molecule",
     "mcvbt",
     "measurement",
     "minimize",
