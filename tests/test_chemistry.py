@@ -4,19 +4,18 @@ import os
 import numpy
 import openfermion
 import pytest
-
-# Get QC backends for parametrized testing
-import select_backends
+import sunrise as sun
+import sunrise.molecules.qubit_base as qc
+import sunrise.molecules.qubit_base.chemistry_tools
+import sunrise.molecules.qubit_base.qc_base as qcb
 import tequila as tq
 import tequila.simulators.simulator_api
 import tequila.tools.random_generators as rg
 from tequila.objective import ExpectationValue
 from tequila.simulators.simulator_api import simulate
 
-import sunrise as sun
-import sunrise.molecules.qubit_base as qc
-import sunrise.molecules.qubit_base.chemistry_tools
-import sunrise.molecules.qubit_base.qc_base as qcb
+# Get QC backends for parametrized testing
+import select_backends
 
 HAS_PYSCF = "pyscf" in qc.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in qc.INSTALLED_QCHEMISTRY_BACKENDS
@@ -730,10 +729,10 @@ def test_fermionic_backends(backend, basis_set, tmp_path, monkeypatch):
             marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found"),
         ),
         pytest.param(
-                    "psi4",
-                    "sto-3g",
-                    marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found"),
-                ),
+            "psi4",
+            "sto-3g",
+            marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found"),
+        ),
         pytest.param(
             "madness",
             None,
