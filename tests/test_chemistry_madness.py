@@ -230,23 +230,50 @@ def test_madness_upccgsd(trafo):
 def test_madness_save_load(tmp_path, monkeypatch):
     # the PNO pair structure is saved with the molecule, it is loaded without madness files
     monkeypatch.chdir(tmp_path)
-    mol = sun.Molecule(
-        geometry="Be 0.0 0.0 0.0", n_pno=3, transformation="ReorderedJordanWigner"
+    geometry = "Be 0.0 0.0 0.0"
+    molecules = {
+        "qubit": sun.Molecule(
+            geometry=geometry,
+            n_pno=3,
+            transformation="ReorderedJordanWigner",
+            point_group="c2v",
+        )
+    }
+    # the other natures read the files of the madness calculation
+    molecules["fermionic"] = sun.Molecule(
+        geometry=geometry, n_pno="read", point_group="c2v", nature="fermionic"
     )
-    mol.save("be.h5")
+    molecules["hybrid"] = sun.Molecule(
+        geometry=geometry,
+        n_pno="read",
+        point_group="c2v",
+        select="FBBF",
+        nature="hybrid",
+    )
+    for nature, mol in molecules.items():
+        mol.save(str(tmp_path / f"be_{nature}.h5"))
     (tmp_path / "other").mkdir()
     monkeypatch.chdir(tmp_path / "other")
-    loaded = sun.load_molecule("../be.h5")
 
-    assert type(loaded) is type(mol)
-    assert [(o.pair, o.occ, o.idx) for o in loaded.integral_manager.orbitals] == [
-        (o.pair, o.occ, o.idx) for o in mol.integral_manager.orbitals
-    ]
-    assert loaded.make_hamiltonian() == mol.make_hamiltonian()
-    # the madness methods use the pair structure
-    assert loaded.make_spa_ansatz() == mol.make_spa_ansatz()
-    assert loaded.make_upccgsd_ansatz("UpCCGSD") == mol.make_upccgsd_ansatz("UpCCGSD")
-    assert loaded.local_qubit_map() == mol.local_qubit_map()
+    for nature, mol in molecules.items():
+        loaded = sun.load_molecule(str(tmp_path / f"be_{nature}.h5"))
+        assert type(loaded) is type(mol)
+        assert [(o.pair, o.occ, o.idx) for o in loaded.integral_manager.orbitals] == [
+            (o.pair, o.occ, o.idx) for o in mol.integral_manager.orbitals
+        ]
+        assert loaded.point_group.schoenflies_label == "C2v"
+        assert loaded.make_hamiltonian() == mol.make_hamiltonian()
+        # the madness methods use the pair structure
+        if nature == "qubit":
+            assert loaded.make_spa_ansatz() == mol.make_spa_ansatz()
+            assert loaded.make_upccgsd_ansatz("UpCCGSD") == mol.make_upccgsd_ansatz(
+                "UpCCGSD"
+            )
+            assert loaded.local_qubit_map() == mol.local_qubit_map()
+        else:
+            assert loaded.get_spa_edges() == mol.get_spa_edges()
+        if nature == "hybrid":
+            assert loaded.select == mol.select
 
 
 @pytest.mark.skipif(not has_pyscf, reason="PySCF not installed")

@@ -21,6 +21,8 @@ class QuantumChemistryMadness(HybridBase):
     plot2cube = QubitQuantumChemistryMadness.plot2cube
     get_pair_orbitals = QubitQuantumChemistryMadness.get_pair_orbitals
     get_virtual_orbitals = QubitQuantumChemistryMadness.get_virtual_orbitals
+    # mol.save stores the PNO pair structure, sun.load_molecule gives it back to the qubit madness interface
+    _backend_data = QubitQuantumChemistryMadness._backend_data
 
     def __init__(
         self,
@@ -56,6 +58,7 @@ class QuantumChemistryMadness(HybridBase):
             ],
             reference_orbitals=molecule.integral_manager.active_space.reference_orbitals,
             orbital_type=molecule.integral_manager._orbital_type,
+            point_group=kwargs.get("point_group"),
             **hybrid_kwargs,
         )
 

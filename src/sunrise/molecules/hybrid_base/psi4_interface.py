@@ -200,6 +200,9 @@ class QuantumChemistryPsi4(HybridBase):
             and the corresponding active orbitals are removed
         args
         kwargs
+            ref_wfn: psi4 HF wavefunction of the molecule (in kwargs), then it is not recomputed
+                can also be a dictionary in the layout of wfn.to_file() (as stored by mol.save) or the file it wrote
+                the integrals are computed from it, unless they are given as well (as by sun.load_molecule)
         """
         psi4.core.clean()
         psi4.core.clean_options()
@@ -208,6 +211,12 @@ class QuantumChemistryPsi4(HybridBase):
         psi4.core.clean()
         psi4.core.clean_options()
         psi4.core.clean_variables()
+
+        ref_wfn = kwargs.pop("ref_wfn", None)
+        if ref_wfn is not None and not isinstance(ref_wfn, psi4.core.Wavefunction):
+            # psi4 prints the basis set it builds, to the output of the HF computation instead of stdout
+            psi4.core.set_output_file(f"{parameters.filename}_hf.out", True)
+            ref_wfn = psi4.core.Wavefunction.from_file(ref_wfn)
 
         self.psi4_mol = psi4.geometry(parameters.get_geometry_string())
         psi4.activate(self.psi4_mol)
@@ -224,9 +233,17 @@ class QuantumChemistryPsi4(HybridBase):
             "d2h",
         ):
             self._psi4_point_group = kwargs["point_group"]
+        if ref_wfn is not None:
+            # the one the wavefunction was computed in
+            self._psi4_point_group = ref_wfn.molecule().point_group().symbol()
 
         self.energies = {}  # history to avoid recomputation
         self.logs = {}  # store full psi4 output
+        if ref_wfn is not None:
+            self.energies["hf"] = ref_wfn.energy()
+            self.logs["hf"] = Psi4Results(
+                variables=ref_wfn.variables(), wfn=ref_wfn, mol=ref_wfn.molecule()
+            )
 
         # psi4 active space will be formed later
         super().__init__(
@@ -235,6 +252,7 @@ class QuantumChemistryPsi4(HybridBase):
             active_orbitals=None,
             reference_orbitals=reference_orbitals,
             frozen_orbitals=[],
+            ref_wfn=ref_wfn,
             **kwargs,
         )
 
@@ -298,12 +316,13 @@ class QuantumChemistryPsi4(HybridBase):
         self.integral_manager.active_space = self._make_psi4_active_space_data(
             active_orbitals=active_orbitals, reference=reference_orbitals
         )
-        # need to recompute
-        # (psi4 won't take over active space information otherwise)
-        if kwargs.get("point_group") is not None:
-            # the molecule took the point group, psi4 computes in its Abelian one
-            kwargs["point_group"] = self._psi4_point_group
-        self.compute_energy(*args, method="hf", recompute=True, **kwargs)
+        if ref_wfn is None:
+            # need to recompute
+            # (psi4 won't take over active space information otherwise)
+            if kwargs.get("point_group") is not None:
+                # the molecule took the point group, psi4 computes in its Abelian one
+                kwargs["point_group"] = self._psi4_point_group
+            self.compute_energy(*args, method="hf", recompute=True, **kwargs)
         self.ref_wfn = self.logs["hf"].wfn
 
         self.kwargs = kwargs
@@ -319,6 +338,18 @@ class QuantumChemistryPsi4(HybridBase):
         memo[id(self)] = result
         result.__dict__.update(copy.deepcopy(self.__dict__, memo))
         return result
+
+    def _backend_data(self):
+        # the reference wavefunction in the psi4 serialization (plain types and numpy arrays), given back as ref_wfn on load
+        try:
+            return {"ref_wfn": self.ref_wfn.to_file()}
+        except psi4.ValidationError as e:
+            # e.g. psi4 can not serialize custom basis sets
+            warnings.warn(
+                f"the psi4 wavefunction can not be saved ({e}), the molecule is loaded with the base backend",
+                TequilaWarning,
+            )
+            return None
 
     @property
     def nirrep(self):
@@ -371,9 +402,9 @@ class QuantumChemistryPsi4(HybridBase):
 
     def initialize_integral_manager(self, *args, **kwargs):
         # get HF wavefunction and orbital coefficients
-        if "ref_wfn" in kwargs:
-            ref_wfn = kwargs["ref_wfn"]
-            hf_energy = 0.0
+        ref_wfn = kwargs.pop("ref_wfn", None)
+        if ref_wfn is not None:
+            hf_energy = ref_wfn.energy()
         else:
             hf_energy = self.compute_energy(
                 method="hf",
@@ -383,30 +414,33 @@ class QuantumChemistryPsi4(HybridBase):
             )
             ref_wfn = self.logs["hf"].wfn
 
-        if ref_wfn.nirrep() != 1:
-            wfn = ref_wfn.c1_deep_copy(ref_wfn.basisset())
-        else:
-            wfn = ref_wfn
-        Ca = numpy.asarray(wfn.Ca())
+        if "one_body_integrals" not in kwargs:
+            # the integrals in the atomic basis and the orbitals of the wavefunction, unless they are given
+            # (e.g. stored by mol.save, the orbitals can differ from the HF ones)
+            if ref_wfn.nirrep() != 1:
+                wfn = ref_wfn.c1_deep_copy(ref_wfn.basisset())
+            else:
+                wfn = ref_wfn
+            Ca = numpy.asarray(wfn.Ca())
 
-        basisset = ref_wfn.basisset()
-        mints = psi4.core.MintsHelper(basisset)
+            basisset = ref_wfn.basisset()
+            mints = psi4.core.MintsHelper(basisset)
 
-        # get integrals in atomic basis
-        S = numpy.asarray(mints.ao_overlap())
-        h = numpy.asarray(wfn.H())
-        g = numpy.asarray(mints.ao_eri())
-        c = float(wfn.variables()["NUCLEAR REPULSION ENERGY"])
+            # get integrals in atomic basis
+            S = numpy.asarray(mints.ao_overlap())
+            h = numpy.asarray(wfn.H())
+            g = numpy.asarray(mints.ao_eri())
+            c = float(wfn.variables()["NUCLEAR REPULSION ENERGY"])
 
-        g = NBodyTensor(elems=numpy.asarray(g), ordering="chem")
+            g = NBodyTensor(elems=numpy.asarray(g), ordering="chem")
 
-        kwargs["overlap_integrals"] = S
-        kwargs["two_body_integrals"] = g
-        kwargs["one_body_integrals"] = h
-        kwargs["constant_term"] = c
-        kwargs["orbital_coefficients"] = Ca
+            kwargs["overlap_integrals"] = S
+            kwargs["two_body_integrals"] = g
+            kwargs["one_body_integrals"] = h
+            kwargs["constant_term"] = c
+            kwargs["orbital_coefficients"] = Ca
+            kwargs["basis_name"] = self.parameters.basis_set
         kwargs["basis_type"] = "GBS"
-        kwargs["basis_name"] = self.parameters.basis_set
 
         irreps = [
             self.psi4_mol.point_group().char_table().gamma(i).symbol().upper()
@@ -427,7 +461,10 @@ class QuantumChemistryPsi4(HybridBase):
         orbitals = kwargs.get("orbitals", None)
 
         if orbitals is None:
-            orbitals = [OrbitalData(idx_total=i) for i in range(h.shape[0])]
+            orbitals = [
+                OrbitalData(idx_total=i)
+                for i in range(kwargs["one_body_integrals"].shape[0])
+            ]
 
         for x in orbitals:
             x.irrep = oenergies[x.idx_total][0]
@@ -438,7 +475,7 @@ class QuantumChemistryPsi4(HybridBase):
 
         # set some psi4 specific features
         self.ref_energy = hf_energy
-        self.ref_wfn = self.logs["hf"].wfn
+        self.ref_wfn = ref_wfn
         self.irreps = irreps
 
         return super().initialize_integral_manager(*args, **kwargs)
@@ -620,7 +657,9 @@ class QuantumChemistryPsi4(HybridBase):
                 **kwargs,
             )
             all_amplitudes = wfn.get_amplitudes()
-            closed_shell = isinstance(wfn.reference_wavefunction(), psi4.core.RHF)
+            # not isinstance(..., psi4.core.RHF): a reference wavefunction loaded from a file is a psi4.core.Wavefunction
+            reference = wfn.reference_wavefunction()
+            closed_shell = reference.same_a_b_orbs() and reference.same_a_b_dens()
             if closed_shell:
                 return self._extract_active_space(
                     ClosedShellAmplitudes(
