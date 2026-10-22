@@ -7,7 +7,7 @@ from pyscf import gto, scf
 from pyscf.tools import cubegen
 
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.utils.bar import giuseppe_bar
+from sunrise.utils.giuseppe import giuseppe_bar
 
 
 def plot_MO(
