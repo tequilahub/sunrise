@@ -1,7 +1,8 @@
 import numpy
 import pytest
-import sunrise as sn
 import tequila as tq
+
+import sunrise as sn
 
 
 @pytest.mark.parametrize(

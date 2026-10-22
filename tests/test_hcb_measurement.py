@@ -2,8 +2,9 @@ import numpy as np
 import openfermion as of
 import pytest
 import scipy
-import sunrise as sun
 import tequila as tq
+
+import sunrise as sun
 
 HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS

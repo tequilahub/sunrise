@@ -2,8 +2,9 @@ import os
 
 import numpy
 import pytest
-import sunrise as sun
 import tequila as tq
+
+import sunrise as sun
 from sunrise.molecules.qubit_base import INSTALLED_QCHEMISTRY_BACKENDS
 
 has_pyscf = "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS

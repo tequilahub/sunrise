@@ -4,18 +4,19 @@ import os
 import numpy
 import openfermion
 import pytest
-import sunrise as sun
-import sunrise.molecules.qubit_base as qc
-import sunrise.molecules.qubit_base.chemistry_tools
-import sunrise.molecules.qubit_base.qc_base as qcb
+
+# Get QC backends for parametrized testing
+import select_backends
 import tequila as tq
 import tequila.simulators.simulator_api
 import tequila.tools.random_generators as rg
 from tequila.objective import ExpectationValue
 from tequila.simulators.simulator_api import simulate
 
-# Get QC backends for parametrized testing
-import select_backends
+import sunrise as sun
+import sunrise.molecules.qubit_base as qc
+import sunrise.molecules.qubit_base.chemistry_tools
+import sunrise.molecules.qubit_base.qc_base as qcb
 
 HAS_PYSCF = "pyscf" in qc.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in qc.INSTALLED_QCHEMISTRY_BACKENDS
