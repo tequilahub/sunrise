@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 import typing
+
 from sunrise.molecules.qubit_base import ParametersQC
-from sunrise.molecules.qubit_base.madness_interface import QuantumChemistryMadness as QubitQuantumChemistryMadness
-from .HybridBase import HybridBase
+from sunrise.molecules.qubit_base.madness_interface import (
+    QuantumChemistryMadness as QubitQuantumChemistryMadness,
+)
+
+from .hybridbase import HybridBase
 
 
 class QuantumChemistryMadness(HybridBase):
@@ -16,11 +22,23 @@ class QuantumChemistryMadness(HybridBase):
     get_pair_orbitals = QubitQuantumChemistryMadness.get_pair_orbitals
     get_virtual_orbitals = QubitQuantumChemistryMadness.get_virtual_orbitals
 
-    def __init__(self, parameters: ParametersQC, select: typing.Union[str, dict] = {},
-                 transformation: typing.Union[str, typing.Callable] = None, *args, **kwargs):
+    def __init__(
+        self,
+        parameters: ParametersQC,
+        select: str | dict | None = None,
+        transformation: str | typing.Callable | None = None,
+        *args,
+        **kwargs,
+    ):
         # hybrid options are not passed to the qubit molecule
-        hybrid_kwargs = {k: kwargs.pop(k) for k in ["condense", "two_qubit", "integral_tresh"] if k in kwargs}
-        molecule = QubitQuantumChemistryMadness(parameters=parameters, *args, **kwargs)
+        hybrid_kwargs = {
+            k: kwargs.pop(k)
+            for k in ["condense", "two_qubit", "integral_tresh"]
+            if k in kwargs
+        }
+        if select is None:
+            select = {}
+        molecule = QubitQuantumChemistryMadness(*args, parameters=parameters, **kwargs)
         self.executable = molecule.executable
         self.datadir = molecule.datadir
         super().__init__(
@@ -33,7 +51,9 @@ class QuantumChemistryMadness(HybridBase):
             overlap_integrals=molecule.integral_manager.overlap_integrals,
             orbital_coefficients=molecule.integral_manager.orbital_coefficients,
             orbitals=molecule.integral_manager.orbitals,  # keeps the pair information of the PNOs
-            active_orbitals=[o.idx_total for o in molecule.integral_manager.active_orbitals],
+            active_orbitals=[
+                o.idx_total for o in molecule.integral_manager.active_orbitals
+            ],
             reference_orbitals=molecule.integral_manager.active_space.reference_orbitals,
             orbital_type=molecule.integral_manager._orbital_type,
             **hybrid_kwargs,
@@ -44,6 +64,8 @@ class QuantumChemistryMadness(HybridBase):
         SPA edges from the PNO structure: each occupied orbital together with its PNOs
         """
         return [
-            tuple([i.idx] + [a.idx for a in self.get_pair_orbitals(i=i, j=i, exclude=i)])
+            tuple(
+                [i.idx] + [a.idx for a in self.get_pair_orbitals(i=i, j=i, exclude=i)]
+            )
             for i in self.reference_orbitals
         ]

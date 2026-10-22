@@ -1,16 +1,9 @@
 import glob
 import os
 
-import tequila as tq
+import numpy
 import openfermion
-import sunrise as sun
-import sunrise.molecules.qubit_base.chemistry_tools
-import tequila.simulators.simulator_api
-from tequila.objective import ExpectationValue
-from sunrise.molecules.qubit_base.encodings import known_encodings
-from tequila.simulators.simulator_api import simulate
-import sunrise.molecules.qubit_base.qc_base as qcb
-import tequila.tools.random_generators as rg
+import pytest
 
 # Get QC backends for parametrized testing
 import select_backends
@@ -27,7 +20,10 @@ import sunrise.molecules.qubit_base.qc_base as qcb
 
 HAS_PYSCF = "pyscf" in qc.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in qc.INSTALLED_QCHEMISTRY_BACKENDS
-HAS_MADNESS = "madness" in qc.INSTALLED_QCHEMISTRY_BACKENDS and qc.QuantumChemistryMadness.find_executable() is not None
+HAS_MADNESS = (
+    "madness" in qc.INSTALLED_QCHEMISTRY_BACKENDS
+    and qc.QuantumChemistryMadness.find_executable() is not None
+)
 
 backends = select_backends.get()
 standard_trafos = ["JordanWigner", "ReorderedJordanWigner", "BravyiKitaev"]
@@ -668,27 +664,60 @@ def test_pyscf_methods(method, geometry, basis_set):
 @pytest.mark.parametrize(
     "backend, basis_set",
     [
-        pytest.param("pyscf", "sto-3g", marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")),
-        pytest.param("psi4", "sto-3g", marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found")),
-        pytest.param("madness", None, marks=pytest.mark.skipif(condition=not HAS_MADNESS, reason="madness not found")),
+        pytest.param(
+            "pyscf",
+            "sto-3g",
+            marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found"),
+        ),
+        pytest.param(
+            "psi4",
+            "sto-3g",
+            marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found"),
+        ),
+        pytest.param(
+            "madness",
+            None,
+            marks=pytest.mark.skipif(
+                condition=not HAS_MADNESS, reason="madness not found"
+            ),
+        ),
     ],
 )
 def test_fermionic_backends(backend, basis_set, tmp_path, monkeypatch):
     # madness writes its files into the working directory
     monkeypatch.chdir(tmp_path)
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 0.75"
-    qmol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend, transformation="ReorderedJordanWigner")
-    mol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend, nature="fermionic")
+    qmol = sun.Molecule(
+        geometry=geometry,
+        basis_set=basis_set,
+        units="angstrom",
+        backend=backend,
+        transformation="ReorderedJordanWigner",
+    )
+    mol = sun.Molecule(
+        geometry=geometry,
+        basis_set=basis_set,
+        units="angstrom",
+        backend=backend,
+        nature="fermionic",
+    )
     assert mol.n_orbitals == qmol.n_orbitals
     assert numpy.isclose(mol.compute_energy("fci"), qmol.compute_energy("fci"))
 
     # the fermionic hamiltonian has the spectrum of the qubit hamiltonian
-    H = openfermion.get_sparse_operator(mol.make_hamiltonian(), n_qubits=2 * mol.n_orbitals).toarray()
-    assert numpy.allclose(numpy.linalg.eigvalsh(H), numpy.linalg.eigvalsh(qmol.make_hamiltonian().to_matrix()))
+    H = openfermion.get_sparse_operator(
+        mol.make_hamiltonian(), n_qubits=2 * mol.n_orbitals
+    ).toarray()
+    assert numpy.allclose(
+        numpy.linalg.eigvalsh(H),
+        numpy.linalg.eigvalsh(qmol.make_hamiltonian().to_matrix()),
+    )
 
     # H2 has two orbitals with every backend, so SPA is exact
     U = mol.make_spa_ansatz(edges=[(0, 1)]).to_qcircuit(molecule=qmol)
-    result = tq.minimize(tq.ExpectationValue(H=qmol.make_hamiltonian(), U=U), silent=True)
+    result = tq.minimize(
+        tq.ExpectationValue(H=qmol.make_hamiltonian(), U=U), silent=True
+    )
     assert numpy.isclose(result.energy, qmol.compute_energy("fci"), atol=1.0e-5)
 
 
@@ -696,21 +725,42 @@ def test_fermionic_backends(backend, basis_set, tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "backend, basis_set",
     [
-        pytest.param("pyscf", "sto-3g", marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")),
-        pytest.param("madness", None, marks=pytest.mark.skipif(condition=not HAS_MADNESS, reason="madness not found")),
+        pytest.param(
+            "pyscf",
+            "sto-3g",
+            marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found"),
+        ),
+        pytest.param(
+            "madness",
+            None,
+            marks=pytest.mark.skipif(
+                condition=not HAS_MADNESS, reason="madness not found"
+            ),
+        ),
     ],
 )
 def test_hybrid_backends(backend, basis_set, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 0.75"
-    qmol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend)
-    mol = sun.Molecule(geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend, select="BF", nature="hybrid")
+    qmol = sun.Molecule(
+        geometry=geometry, basis_set=basis_set, units="angstrom", backend=backend
+    )
+    mol = sun.Molecule(
+        geometry=geometry,
+        basis_set=basis_set,
+        units="angstrom",
+        backend=backend,
+        select="BF",
+        nature="hybrid",
+    )
     assert mol.n_orbitals == qmol.n_orbitals
     assert numpy.isclose(mol.compute_energy("fci"), qmol.compute_energy("fci"))
 
     # H2 has two orbitals with every backend, so SPA is exact
     U = mol.make_ansatz("SPA", edges=[(0, 1)])
-    result = tq.minimize(tq.ExpectationValue(H=mol.make_hamiltonian(), U=U), silent=True)
+    result = tq.minimize(
+        tq.ExpectationValue(H=mol.make_hamiltonian(), U=U), silent=True
+    )
     assert numpy.isclose(result.energy, qmol.compute_energy("fci"), atol=1.0e-5)
 
 
@@ -719,9 +769,18 @@ def test_madness_pno(tmp_path, monkeypatch):
     # madness writes its files into the working directory
     monkeypatch.chdir(tmp_path)
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 0.75"
-    qmol = sun.Molecule(geometry=geometry, units="angstrom", n_pno=2, transformation="ReorderedJordanWigner")
-    fmol = sun.Molecule(geometry=geometry, units="angstrom", n_pno="read", nature="fermionic")
-    hmol = sun.Molecule(geometry=geometry, units="angstrom", n_pno="read", select="BFB", nature="hybrid")
+    qmol = sun.Molecule(
+        geometry=geometry,
+        units="angstrom",
+        n_pno=2,
+        transformation="ReorderedJordanWigner",
+    )
+    fmol = sun.Molecule(
+        geometry=geometry, units="angstrom", n_pno="read", nature="fermionic"
+    )
+    hmol = sun.Molecule(
+        geometry=geometry, units="angstrom", n_pno="read", select="BFB", nature="hybrid"
+    )
     spa = qmol.compute_energy("SPA", silent=True)
 
     # one occupied orbital with its two PNOs
@@ -733,7 +792,9 @@ def test_madness_pno(tmp_path, monkeypatch):
     assert numpy.isclose(result.energy, spa, atol=1.0e-5)
 
     U = hmol.make_ansatz("SPA", edges=hmol.get_spa_edges())
-    result = tq.minimize(tq.ExpectationValue(H=hmol.make_hamiltonian(), U=U), silent=True)
+    result = tq.minimize(
+        tq.ExpectationValue(H=hmol.make_hamiltonian(), U=U), silent=True
+    )
     assert numpy.isclose(result.energy, spa, atol=1.0e-5)
 
 

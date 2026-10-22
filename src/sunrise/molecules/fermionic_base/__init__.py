@@ -5,10 +5,15 @@ import warnings
 from tequila import TequilaWarning
 
 from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC
+
+from .fer_base import FermionicBase
 from .madness_interface import QuantumChemistryMadness
 
 SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf", "psi4", "madness"]
-INSTALLED_QCHEMISTRY_BACKENDS = {"base": FermionicBase, "madness": QuantumChemistryMadness}
+INSTALLED_QCHEMISTRY_BACKENDS = {
+    "base": FermionicBase,
+    "madness": QuantumChemistryMadness,
+}
 
 try:
     from .psi4_interface import QuantumChemistryPsi4
