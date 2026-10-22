@@ -1,31 +1,33 @@
 # Generalized Adaptive Solvers
 # as described in Kottmann, Anand, Aspuru-Guzik: https://doi.org/10.1039/D0SC06627C
+from __future__ import annotations
 
-from tequila import (
-    TequilaWarning,
-    TequilaException,
-    QCircuit,
-    ExpectationValue,
-    paulis,
-)
-from tequila.apps.adapt import AdaptPoolBase
-import numpy
 import dataclasses
 import warnings
 from itertools import combinations
-from tequila.apps.adapt.adapt import AdaptParameters
-from sunrise.expval import Braket, Fidelity
+
+import numpy
 from openfermion.ops.operators.fermion_operator import FermionOperator
+from tequila import (
+    ExpectationValue,
+    QCircuit,
+    TequilaException,
+    TequilaWarning,
+    paulis,
+)
+from tequila.apps.adapt import AdaptPoolBase
+from tequila.apps.adapt.adapt import AdaptParameters
+
 from sunrise import (
+    FCircuit,
     grad,
     minimize,
     simulate,
-    FCircuit,
 )
-from sunrise.molecules.fermionic_base import FermionicBase
+from sunrise.expval import Braket, Fidelity
 from sunrise.molecules import MoleculeFromSunrise
-from typing import Union
-from openfermion.ops.operators.fermion_operator import FermionOperator
+from sunrise.molecules.fermionic_base import FermionicBase
+
 
 class ObjectiveFactoryBase:
     """
@@ -38,16 +40,28 @@ class ObjectiveFactoryBase:
 
     def __init__(self, H=None, Upre=None, Upost=None, molecule=None, *args, **kwargs):
         if Upre is not None and Upost is not None:
-            assert type(Upre) == type(Upost), TypeError(f"Circuits of type {type(Upre)} can't be mixed with {type(Upost)}")
-        if molecule is not None and isinstance(molecule, FermionicBase) and (isinstance(Upre, QCircuit) or isinstance(Upost, QCircuit)):
-            molecule = MoleculeFromSunrise(mol=molecule, transformation='reordered-jordan-wigner')
+            assert type(Upre) == type(Upost), TypeError(
+                f"Circuits of type {type(Upre)} can't be mixed with {type(Upost)}"
+            )
+        if (
+            molecule is not None
+            and isinstance(molecule, FermionicBase)
+            and (isinstance(Upre, QCircuit) or isinstance(Upost, QCircuit))
+        ):
+            molecule = MoleculeFromSunrise(
+                mol=molecule, transformation="reordered-jordan-wigner"
+            )
             if H == "H":
                 H = molecule.make_hamiltonian()
             elif H == "HCB":
                 H = molecule.make_hardcore_boson_hamiltonian()
             elif isinstance(H, FermionOperator):
                 H = molecule.transformation(H)
-        self.ferm = isinstance(molecule, FermionicBase) or isinstance(Upre, FCircuit) or isinstance(Upost, FCircuit)
+        self.ferm = (
+            isinstance(molecule, FermionicBase)
+            or isinstance(Upre, FCircuit)
+            or isinstance(Upost, FCircuit)
+        )
         if Upre is None:
             Upre = FCircuit() if self.ferm else QCircuit()
         if Upost is None:
@@ -63,16 +77,22 @@ class ObjectiveFactoryBase:
 
     def __call__(self, U, screening=False, *args, **kwargs):
         if self.ferm:
-            assert isinstance(U, FCircuit), f'FCircuit expected due to the solver initialization but {type(U)} received.'
-            return Braket(ket=self.Upre + U + self.Upost, operator=self.H, mol=self.molecule)
+            assert isinstance(U, FCircuit), (
+                f"FCircuit expected due to the solver initialization but {type(U)} received."
+            )
+            return Braket(
+                ket=self.Upre + U + self.Upost, operator=self.H, mol=self.molecule
+            )
         else:
-            return ExpectationValue(H=self.H, U=self.Upre + U + self.Upost, *args, **kwargs)
+            return ExpectationValue(
+                *args, H=self.H, U=self.Upre + U + self.Upost, **kwargs
+            )
 
     def grad_objective(self, *args, **kwargs):
         return self(*args, **kwargs)
 
     def __str__(self):
-        return "{}".format(type(self).__name__)
+        return f"{type(self).__name__}"
 
 
 class Adapt:
@@ -81,9 +101,24 @@ class Adapt:
     parameters: AdaptParameters = AdaptParameters()
 
     def make_objective(self, U, variables=None, *args, **kwargs):
-        return self.objective_factory(U=U, variables=variables, molecule=self.molecule, *args, **{**self.parameters.compile_args, **kwargs})
+        return self.objective_factory(
+            *args,
+            U=U,
+            variables=variables,
+            molecule=self.molecule,
+            **{**self.parameters.compile_args, **kwargs},
+        )
 
-    def __init__(self, operator_pool, H=None, objective_factory=None, backend=None, molecule=None, *args, **kwargs):
+    def __init__(
+        self,
+        operator_pool,
+        H=None,
+        objective_factory=None,
+        backend=None,
+        molecule=None,
+        *args,
+        **kwargs,
+    ):
         """
         For the Default Adaptive Solver kwargs can contain Upre and Upost as described in:
         See out online tutorial for more information: https://github.com/tequilahub/tequila-tutorials
@@ -92,12 +127,14 @@ class Adapt:
         self.backend = backend
         self.molecule = molecule
         if molecule is None:
-            if objective_factory is not None and hasattr(objective_factory,'molecule'):
-                self.molecule  = getattr(objective_factory,'molecule', None)
-            elif operator_pool is not None and hasattr(operator_pool,'molecule'):
-                self.molecule = getattr(operator_pool,'molecule', None)
+            if objective_factory is not None and hasattr(objective_factory, "molecule"):
+                self.molecule = getattr(objective_factory, "molecule", None)
+            elif operator_pool is not None and hasattr(operator_pool, "molecule"):
+                self.molecule = getattr(operator_pool, "molecule", None)
         if objective_factory is None:
-            self.objective_factory = ObjectiveFactoryBase(H, molecule=self.molecule, *args, **kwargs)
+            self.objective_factory = ObjectiveFactoryBase(
+                H, *args, molecule=self.molecule, **kwargs
+            )
         else:
             self.objective_factory = objective_factory
         filtered = {k: v for k, v in kwargs.items() if k in self.parameters.__dict__}
@@ -115,7 +152,15 @@ class Adapt:
             return False
         return len(Upre.gates) > 0 or getattr(Upre, "initial_state", None) is not None
 
-    def __call__(self, static_variables=None, mp_pool=None, label=None, variables=None, *args, **kwargs):
+    def __call__(
+        self,
+        static_variables=None,
+        mp_pool=None,
+        label=None,
+        variables=None,
+        *args,
+        **kwargs,
+    ):
         if not self.parameters.silent:
             print("Starting Adaptive Solver")
             print(self)
@@ -134,13 +179,13 @@ class Adapt:
         else:
             variables = {**variables, **static_variables}
 
-        U = FCircuit() # NOTE if U QCircuit this inizialization will be overriden
+        U = FCircuit()  # NOTE if U QCircuit this inizialization will be overriden
         if "U" in kwargs:
             U = kwargs["U"]
-            kwargs.pop('U')
-        elif 'initial_state' in kwargs:
-            U.initial_state = kwargs['initial_state']
-            kwargs.pop('initial_state')
+            kwargs.pop("U")
+        elif "initial_state" in kwargs:
+            U.initial_state = kwargs["initial_state"]
+            kwargs.pop("initial_state")
         elif self._has_upre():
             # Upre already prepares the reference, starting from it again would apply it twice
             U = type(self.objective_factory.Upre)()
@@ -150,7 +195,7 @@ class Adapt:
         for k in initial_objective.extract_variables():
             if k not in variables:
                 warnings.warn(
-                    "variable {} of initial objective not given, setting to 0.0 and activate optimization".format(k),
+                    f"variable {k} of initial objective not given, setting to 0.0 and activate optimization",
                     TequilaWarning,
                 )
                 variables[k] = 0.0
@@ -161,8 +206,17 @@ class Adapt:
                 if not self.parameters.silent:
                     print("initial optimization")
                 margs = {"initial_values": variables}
-                margs = {**margs, **self.parameters.compile_args, **self.parameters.optimizer_args}
-                result = minimize(objective=initial_objective, variables=active_variables, backend=self.backend, **margs)
+                margs = {
+                    **margs,
+                    **self.parameters.compile_args,
+                    **self.parameters.optimizer_args,
+                }
+                result = minimize(
+                    objective=initial_objective,
+                    variables=active_variables,
+                    backend=self.backend,
+                    **margs,
+                )
 
                 variables = result.variables
         energy = simulate(initial_objective, variables=variables, backend=self.backend)
@@ -178,14 +232,14 @@ class Adapt:
 
             if grad_norm < self.parameters.gradient_convergence:
                 if not self.parameters.silent:
-                    print("pool gradient norm is {:+2.8f}, convergence criterion met".format(grad_norm))
+                    print(
+                        f"pool gradient norm is {grad_norm:+2.8f}, convergence criterion met"
+                    )
                 break
             if numpy.abs(max_grad) < self.parameters.max_gradient_convergence:
                 if not self.parameters.silent:
                     print(
-                        "max pool gradient is {:+2.8f}, convergence criterion |max(grad)|<{} met".format(
-                            max_grad, self.parameters.max_gradient_convergence
-                        )
+                        f"max pool gradient is {max_grad:+2.8f}, convergence criterion |max(grad)|<{self.parameters.max_gradient_convergence} met"
                     )
                 break
 
@@ -195,63 +249,81 @@ class Adapt:
             degeneracies = [
                 k
                 for k in range(batch_size, len(grad_values))
-                if numpy.isclose(grad_values[batch_size - 1], grad_values[k], rtol=self.parameters.degeneracy_threshold)
+                if numpy.isclose(
+                    grad_values[batch_size - 1],
+                    grad_values[k],
+                    rtol=self.parameters.degeneracy_threshold,
+                )
             ]
 
             if len(degeneracies) > 0:
                 batch_size += len(degeneracies)
                 if not self.parameters.silent:
                     print(
-                        "detected degeneracies: increasing batch size temporarily from {} to {}".format(
-                            self.parameters.batch_size, batch_size
-                        )
+                        f"detected degeneracies: increasing batch size temporarily from {self.parameters.batch_size} to {batch_size}"
                     )
 
-            count = 0
-
             op_names = []
-            for k, v in gradients.items():
+            for count, k in enumerate(gradients, start=1):
                 Ux = self.operator_pool.make_unitary(k, label=current_label)
                 U += Ux
                 op_names.append(Ux.extract_variables())
-                count += 1
                 if count >= batch_size:
                     break
-            variables = {**variables, **{k: 0.0 for k in U.extract_variables() if k not in variables}}
+            variables = {
+                **variables,
+                **{k: 0.0 for k in U.extract_variables() if k not in variables},
+            }
             active_variables = [k for k in variables if k not in static_variables]
 
             objective = self.make_objective(U, variables=variables)
             margs = {"initial_values": variables}
-            margs = {**margs, **self.parameters.compile_args, **self.parameters.optimizer_args}
-            result = minimize(objective=objective, variables=active_variables, backend=self.backend, **margs)
+            margs = {
+                **margs,
+                **self.parameters.compile_args,
+                **self.parameters.optimizer_args,
+            }
+            result = minimize(
+                objective=objective,
+                variables=active_variables,
+                backend=self.backend,
+                **margs,
+            )
 
             niter = len(result.history.energies)
             diff = energy - result.energy
             energy = result.energy
             variables = result.variables
-            
+
             if not self.parameters.silent:
                 print("-------------------------------------")
-                print("Finished iteration {}".format(iter))
+                print(f"Finished iteration {iter}")
                 print("added ", op_names)
-                print("current energy : {:+2.8f}".format(energy))
-                print("difference     : {:+2.8f}".format(diff))
-                print("grad_norm      : {:+2.8f}".format(grad_norm))
-                print("max_grad       : {:+2.8f}".format(max_grad))
-                print("ops in circuis : {}".format(len(U.gates)))
-                print("optimizer      : {}".format(self.parameters.optimizer_args["method"]))
-                print("opt-iterations : {}".format(niter))
+                print(f"current energy : {energy:+2.8f}")
+                print(f"difference     : {diff:+2.8f}")
+                print(f"grad_norm      : {grad_norm:+2.8f}")
+                print(f"max_grad       : {max_grad:+2.8f}")
+                print(f"ops in circuis : {len(U.gates)}")
+                print(f"optimizer      : {self.parameters.optimizer_args['method']}")
+                print(f"opt-iterations : {niter}")
 
             screening_cycles += 1
             mini_iter = len(result.history.extract_energies())
-            gradient_expval = sum([v.count_expectationvalues() for k, v in grad(objective).items()])
-            # objective_expval_evaluations += mini_iter * objective.count_expectationvalues() 
+            gradient_expval = sum(
+                [v.count_expectationvalues() for k, v in grad(objective).items()]
+            )
+            # objective_expval_evaluations += mini_iter * objective.count_expectationvalues()
             gradient_expval_evaluations += mini_iter * gradient_expval
             histories.append(result.history)
 
-            if self.parameters.energy_convergence is not None and numpy.abs(diff) < self.parameters.energy_convergence:
+            if (
+                self.parameters.energy_convergence is not None
+                and numpy.abs(diff) < self.parameters.energy_convergence
+            ):
                 if not self.parameters.silent:
-                    print("energy difference is {:+2.8f}, convergence criterion met".format(diff))
+                    print(
+                        f"energy difference is {diff:+2.8f}, convergence criterion met"
+                    )
                 break
 
             if iter == self.parameters.maxiter - 1:
@@ -261,7 +333,7 @@ class Adapt:
 
         @dataclasses.dataclass
         class AdaptReturn:
-            U: Union[QCircuit, FCircuit] = None
+            U: QCircuit | FCircuit = None
             objective_factory: ObjectiveFactoryBase = None
             variables: dict = None
             energy: float = None
@@ -310,14 +382,24 @@ class Adapt:
             variables[k] = 0.0
             dEs.append(grad(objective, k))
         gradients = [
-            numpy.abs(simulate(objective=dE, variables=variables, **self.parameters.compile_args, backend=self.backend)) for dE in dEs
+            numpy.abs(
+                simulate(
+                    objective=dE,
+                    variables=variables,
+                    **self.parameters.compile_args,
+                    backend=self.backend,
+                )
+            )
+            for dE in dEs
         ]
         return arg["k"], sum(gradients)
 
     def __str__(self):
         result = str(self.parameters)
         result += str("{:30} : {}\n".format("operator pool: ", self.operator_pool))
-        result += str("{:30} : {}\n".format("objective factory : ", self.objective_factory))
+        result += str(
+            "{:30} : {}\n".format("objective factory : ", self.objective_factory)
+        )
         return result
 
 
@@ -351,7 +433,9 @@ class MolecularPool(AdaptPoolBase):
 
             indices = []
             if doubles:
-                indices += self.make_indices_doubles(generalized=generalized, paired=paired)
+                indices += self.make_indices_doubles(
+                    generalized=generalized, paired=paired
+                )
             if singles:
                 indices += self.make_indices_singles(generalized=generalized)
 
@@ -363,28 +447,34 @@ class MolecularPool(AdaptPoolBase):
         for p in range(self.molecule.n_electrons // 2):
             for q in range(self.molecule.n_electrons // 2, self.molecule.n_orbitals):
                 if self.is_hybrid:
-                    if (self.molecule.select[p] == "F" and self.molecule.select[q] == "F"):
+                    if (
+                        self.molecule.select[p] == "F"
+                        and self.molecule.select[q] == "F"
+                    ):
                         indices.append([(2 * p, 2 * q)])
                         indices.append([(2 * p + 1, 2 * q + 1)])
                 else:
-                    indices.append([(2*p, 2*q)])
-                    indices.append([(2*p+1, 2*q+1)])
+                    indices.append([(2 * p, 2 * q)])
+                    indices.append([(2 * p + 1, 2 * q + 1)])
         if not generalized:
             return indices
 
         for p in range(self.molecule.n_orbitals):
             for q in range(p + 1, self.molecule.n_orbitals):
                 if self.is_hybrid:
-                    if (self.molecule.select[p] == "F" and self.molecule.select[q] == "F"):
+                    if (
+                        self.molecule.select[p] == "F"
+                        and self.molecule.select[q] == "F"
+                    ):
                         if [(2 * p, 2 * q)] in indices:
                             continue
                         indices.append([(2 * p, 2 * q)])
                         indices.append([(2 * p + 1, 2 * q + 1)])
                 else:
-                    if [(2*p, 2*q)] in indices:
+                    if [(2 * p, 2 * q)] in indices:
                         continue
-                    indices.append([(2*p, 2*q)])
-                    indices.append([(2*p+1, 2*q+1)])
+                    indices.append([(2 * p, 2 * q)])
+                    indices.append([(2 * p + 1, 2 * q + 1)])
         return self.sort_and_filter_unique_indices(indices)
 
     def make_indices_doubles(self, generalized=False, paired=True):
@@ -413,7 +503,11 @@ class MolecularPool(AdaptPoolBase):
         unwrapped = [x[0] for x in singles]
         # now make all combinations of singles
         if self.is_hybrid:
-            indices = [x for x in combinations(unwrapped, 2) if self.molecule.verify_excitation(x)]
+            indices = [
+                x
+                for x in combinations(unwrapped, 2)
+                if self.molecule.verify_excitation(x)
+            ]
         else:
             indices = [x for x in combinations(unwrapped, 2)]
         return self.sort_and_filter_unique_indices(indices)
@@ -422,36 +516,48 @@ class MolecularPool(AdaptPoolBase):
         # sort as: [[(a,b),(c,d),(e,f)...],...]with a<c, a<b, c<d
         sorted_indices = []
         for idx in indices:
-            idx = tuple([tuple(sorted(pair)) for pair in idx])  # sort internal pairs (a<b, c<d, etc)
+            idx = tuple(
+                [tuple(sorted(pair)) for pair in idx]
+            )  # sort internal pairs (a<b, c<d, etc)
             # avoid having orbitals show up multiple times in excitatin strings
             idx = tuple(
-                [pair for pair in idx if sum([1 for pair2 in idx if pair[0] in pair2 or pair[1] in pair2]) == 1]
+                [
+                    pair
+                    for pair in idx
+                    if sum([1 for pair2 in idx if pair[0] in pair2 or pair[1] in pair2])
+                    == 1
+                ]
             )
             if len(idx) == 0:
                 continue
-            idx = tuple(list(set(idx)))  # avoid repetitions (like ((0,2),(0,2)))
-            idx = tuple(sorted(idx, key=lambda x: x[0]))  # sort pairs by first entry (a<c)
+            idx = tuple(set(idx))  # avoid repetitions (like ((0,2),(0,2)))
+            idx = tuple(
+                sorted(idx, key=lambda x: x[0])
+            )  # sort pairs by first entry (a<c)
             sorted_indices.append(idx)
         return list(set(sorted_indices))
 
     def make_unitary(self, k, label):
         return self.molecule.make_excitation_gate(
-            indices=self.generators[k], angle=(self.generators[k], label),
+            indices=self.generators[k],
+            angle=(self.generators[k], label),
         )
-    
+
     def initialize_circuit(self):
         return self.molecule.prepare_reference()
 
 
 class PseudoSingletMolecularPool(MolecularPool):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         indices = []
         for idx in self.generators:
             if len(idx) == 1:
-                if self.is_hybrid and not (self.molecule.select[idx[0][0] // 2] == "F" and self.molecule.select[idx[0][1] // 2] == "F"):
-                        continue
+                if self.is_hybrid and not (
+                    self.molecule.select[idx[0][0] // 2] == "F"
+                    and self.molecule.select[idx[0][1] // 2] == "F"
+                ):
+                    continue
                 combined = (
                     ((idx[0][0] // 2 * 2, idx[0][1] // 2 * 2)),
                     ((idx[0][0] // 2 * 2 + 1, idx[0][1] // 2 * 2 + 1)),
@@ -459,7 +565,7 @@ class PseudoSingletMolecularPool(MolecularPool):
                 if combined not in indices:
                     indices.append(combined)
             else:
-                indices.append(tuple([idx]))
+                indices.append((idx,))
 
         self.generators = list(set(indices))
 
@@ -470,7 +576,9 @@ class PseudoSingletMolecularPool(MolecularPool):
             U = QCircuit()
         for idx in self.generators[k]:
             combined_variable = self.generators[k][0]
-            U += self.molecule.make_excitation_gate(indices=idx, angle=(combined_variable, label))
+            U += self.molecule.make_excitation_gate(
+                indices=idx, angle=(combined_variable, label)
+            )
         return U
 
 
@@ -478,29 +586,37 @@ class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
     def __init__(self, H, circuits: list, factors: list, *args, **kwargs):
         self.circuits = circuits
         self.factors = factors
-        super().__init__(H=H, *args, **kwargs)
+        super().__init__(*args, H=H, **kwargs)
 
     def __call__(self, U, *args, **kwargs):
         circuit = self.Upre + U + self.Upost
-        ferm = isinstance(circuit, FCircuit) 
+        ferm = isinstance(circuit, FCircuit)
         if ferm:
             objective = Braket(ket=circuit, operator=self.H, mol=self.molecule)
         else:
             objective = ExpectationValue(H=self.H, U=circuit)
         Qp = paulis.Qp(U.qubits)
-        # get all overlaps  
+        # get all overlaps
         for i, Ux in enumerate(self.circuits):
             # previous states share Upre/Upost, the stored circuits only hold the adaptive part
             Ux = self.Upre + Ux + self.Upost
             if ferm:
-                S2 =  Fidelity(ket=circuit, bra=Ux, mol=self.molecule)
+                S2 = Fidelity(ket=circuit, bra=Ux, mol=self.molecule)
             else:
                 S2 = ExpectationValue(H=Qp, U=circuit + Ux.dagger())
             objective += numpy.abs(self.factors[i]) * S2
         return objective
 
 
-def run_molecular_adapt(molecule, operator_pool: str = None, Upre=None, Upost=None,backend=None, *args, **kwargs):
+def run_molecular_adapt(
+    molecule,
+    operator_pool: str | None = None,
+    Upre=None,
+    Upost=None,
+    backend=None,
+    *args,
+    **kwargs,
+):
     if operator_pool is None:
         operator_pool = "UCCGSD"
 
@@ -508,9 +624,10 @@ def run_molecular_adapt(molecule, operator_pool: str = None, Upre=None, Upost=No
     # initialized by keyword
     # e.g. U(p)CC(G)(S)(D)
     ucc_signals = ["u", "cc", "s", "d", "g"]
-    if hasattr(operator_pool, "lower"):
-        if any([s in operator_pool.lower() for s in ucc_signals]):
-            operator_pool = MolecularPool(molecule=molecule, indices=operator_pool)
+    if hasattr(operator_pool, "lower") and any(
+        s in operator_pool.lower() for s in ucc_signals
+    ):
+        operator_pool = MolecularPool(molecule=molecule, indices=operator_pool)
 
     if Upre is None:
         Upre = molecule.prepare_reference()
@@ -520,7 +637,15 @@ def run_molecular_adapt(molecule, operator_pool: str = None, Upre=None, Upost=No
     else:
         H = molecule.make_hamiltonian()
 
-    solver = Adapt(operator_pool=operator_pool, Upre=Upre, Upost=Upost, H=H, backend=backend, *args, **kwargs)
+    solver = Adapt(
+        *args,
+        operator_pool=operator_pool,
+        Upre=Upre,
+        Upost=Upost,
+        H=H,
+        backend=backend,
+        **kwargs,
+    )
 
     result = solver()
 

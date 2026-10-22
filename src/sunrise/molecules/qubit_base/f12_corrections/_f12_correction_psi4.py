@@ -1,13 +1,13 @@
-import tequila as tq
-from tequila import TequilaException, TequilaWarning
+from __future__ import annotations
+
+from itertools import product
+
+import numpy
+import psi4
+from tequila import TequilaException
 
 from ..chemistry_tools import NBodyTensor
 from ._f12_correction_base import ExplicitCorrelationCorrection
-
-import numpy
-from itertools import product
-
-import psi4
 
 
 # since this needs psi4, put in external file! maybe own folder for corrections
@@ -19,12 +19,12 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
     def __init__(
         self,
         mol=None,
-        rdm1: numpy.ndarray = None,
-        rdm2: numpy.ndarray = None,
+        rdm1: numpy.ndarray | None = None,
+        rdm2: numpy.ndarray | None = None,
         gamma: float = 1.4,
-        n_ri: int = None,
+        n_ri: int | None = None,
         cabs_type: str = "active",
-        cabs_options: dict = None,
+        cabs_options: dict | None = None,
         **kwargs,
     ):
         """
@@ -53,29 +53,33 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
             psi4, compare to psi4_interface.compute_rdms
             one of the above needs to be passed if rdm1,rdm2 not yet computed
         """
-        super().__init__(mol=mol, rdm1=rdm1, rdm2=rdm2, n_ri=n_ri, gamma=gamma, **kwargs)
+        super().__init__(
+            mol=mol, rdm1=rdm1, rdm2=rdm2, n_ri=n_ri, gamma=gamma, **kwargs
+        )
 
         self.cabs_type = cabs_type.lower()
         self.cabs_options = cabs_options
         # n_obs and active are set in setup_tensor-function for cabs+
 
         # If cabs_type == "cabs+", need C1-symmetry
-        if self.cabs_type == "cabs+":
-            if not self.mol._psi4_point_group.lower() == "c1":
-                raise TequilaException("CABS+ approach currently requires C1 symmetry!")
+        if self.cabs_type == "cabs+" and not self.mol._psi4_point_group.lower() == "c1":
+            raise TequilaException("CABS+ approach currently requires C1 symmetry!")
 
         if (self.rdm1 is None) or (self.rdm2 is None):
             if "rdm__psi4_method" in kwargs:
                 if "rdm__psi4_options" in kwargs:
                     self.mol.compute_rdms(
-                        psi4_method=kwargs["rdm__psi4_method"], psi4_options=kwargs["rdm__psi4_options"]
+                        psi4_method=kwargs["rdm__psi4_method"],
+                        psi4_options=kwargs["rdm__psi4_options"],
                     )
                 else:
                     self.mol.compute_rdms(psi4_method=kwargs["rdm__psi4_method"])
                 self.rdm1, self.rdm2 = self.mol.rdm1, self.mol.rdm2
             # This exception would already have been caught in base class
             else:
-                raise TequilaException("Need to either specify rdm's or provide a way how to compute them.")
+                raise TequilaException(
+                    "Need to either specify rdm's or provide a way how to compute them."
+                )
 
     # "Active-space" approach, requires psi4
     def setup_tensors_active(self):
@@ -110,7 +114,12 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         mints = psi4.core.MintsHelper(wfn.basisset())
         correlationFactor = psi4.core.FittedSlaterCorrelationFactor(self.gamma)
         r_elems = numpy.asarray(mints.mo_f12(correlationFactor, C_RI, C_RI, C_RI, C_RI))
-        r = NBodyTensor(elems=r_elems, ordering="chem", active_indices=self.active, size_full=self.n_ri)
+        r = NBodyTensor(
+            elems=r_elems,
+            ordering="chem",
+            active_indices=self.active,
+            size_full=self.n_ri,
+        )
         r.reorder(to="phys")
         r.elems /= self.gamma  # ensure that f_12 = -1/gamma * exp(-gamma*r)
 
@@ -127,7 +136,11 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         )
         g.reorder(to="phys")
 
-        h = NBodyTensor(elems=self.mol.molecule.one_body_integrals, active_indices=self.active, size_full=self.n_ri)
+        h = NBodyTensor(
+            elems=self.mol.molecule.one_body_integrals,
+            active_indices=self.active,
+            size_full=self.n_ri,
+        )
 
         return h, g, r
 
@@ -184,27 +197,39 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         ri_basis_dict["blend"] = "RI-BASIS"
         ri_basis = psi4.core.BasisSet.construct_from_pydict(ri_mol, ri_basis_dict, 0)
         # Get RI-space by orthogonalizing ri_basis (function not in public psi4-github)
-        ri_space = psi4.core.OrbitalSpace.cheap_ri_space(ri_basis, lindep_tol=lindep_tol)
+        ri_space = psi4.core.OrbitalSpace.cheap_ri_space(
+            ri_basis, lindep_tol=lindep_tol
+        )
         # Re-overwrite ri_basis, to play safe
         ri_basis = ri_space.basisset()
 
         # Build CABS via CABS = (1-P_OBS)RI (orthogonal complement of OBS in RI/CBS)
-        cabs_space = psi4.core.OrbitalSpace.build_cabs_space(obs_space, ri_space, linear_tol=lindep_tol)
+        cabs_space = psi4.core.OrbitalSpace.build_cabs_space(
+            obs_space, ri_space, linear_tol=lindep_tol
+        )
 
         # Get coefficient matrices
         if ref_wfn.nirrep() != 1:
-            raise TequilaException("CABS+ approach works only with C1 symmetry currently!")
+            raise TequilaException(
+                "CABS+ approach works only with C1 symmetry currently!"
+            )
         else:
             wfn = ref_wfn
         C_OBS = wfn.Ca()
         # Project C_OBS onto ri_basis (noccpi = number of relevant eigenvectors in old_basis here, not occ orbitals)
-        C_OBS = ref_wfn.basis_projection(C_OBS, psi4.core.Dimension([C_OBS.shape[0]]), obs_basis, ri_basis)
+        C_OBS = ref_wfn.basis_projection(
+            C_OBS, psi4.core.Dimension([C_OBS.shape[0]]), obs_basis, ri_basis
+        )
 
         # psi4_cabsplus needs customary treatment of active, a specification from outside is not necessary
         # active corresponds to size of "OBS"-summands in correction ~ dim(rdm1)
         if self.active is None:
-            if self.rdm1.shape[0] < C_OBS.shape[1]:  # this case distinction is semantically pointless, but there to
-                self.active = list(range(self.rdm1.shape[0]))  # emphasize the meaning of active here
+            if (
+                self.rdm1.shape[0] < C_OBS.shape[1]
+            ):  # this case distinction is semantically pointless, but there to
+                self.active = list(
+                    range(self.rdm1.shape[0])
+                )  # emphasize the meaning of active here
             else:
                 self.active = list(range(C_OBS.shape[1]))
         # n_obs != len(active) here (active space is a "real" active space)
@@ -276,11 +301,21 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
                             g_elems[p, q, rr, s] = tmp_g_ints[t, u, v, w]
                             r_elems[p, q, rr, s] = tmp_r_ints[t, u, v, w]
 
-        r = NBodyTensor(elems=r_elems, ordering="chem", active_indices=self.active, size_full=self.n_ri)
+        r = NBodyTensor(
+            elems=r_elems,
+            ordering="chem",
+            active_indices=self.active,
+            size_full=self.n_ri,
+        )
         r.reorder(to="phys")
         r.elems /= self.gamma  # ensure that f_12 = -1/gamma * exp(-gamma*r)
 
-        g = NBodyTensor(elems=g_elems, ordering="chem", active_indices=self.active, size_full=self.n_ri)
+        g = NBodyTensor(
+            elems=g_elems,
+            ordering="chem",
+            active_indices=self.active,
+            size_full=self.n_ri,
+        )
         g.reorder(to="phys")
 
         # h_tensor, h = T + V, same procedure as before
@@ -292,7 +327,9 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
             C1, C2 = o1[1], o2[1]
             # h = ao_kinetic + ao_potential, mints in RI-basisset (indexing Kl)
             tmp_h = t_Kl + v_Kl
-            tmp_h = numpy.einsum("ji, kl, jk -> il", C1, C2, tmp_h, optimize="greedy")  # ~ C1^T tmp_h C2
+            tmp_h = numpy.einsum(
+                "ji, kl, jk -> il", C1, C2, tmp_h, optimize="greedy"
+            )  # ~ C1^T tmp_h C2
             for p in get_irange(i1):
                 t = ind(i1, p)
                 for q in get_irange(i2):
@@ -313,18 +350,20 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         """
         # Prepare tensors
         if self.cabs_type.lower() == "active":
-            print("Set up universal f12-correction using a HF-RI-basis, with an active space as OBS.")
+            print(
+                "Set up universal f12-correction using a HF-RI-basis, with an active space as OBS."
+            )
             h, g, r = self.setup_tensors_active()
         elif self.cabs_type.lower() == "cabs+":
             print("Set up universal f12-correction using the CABS+ approach.")
             try:
                 h, g, r = self.setup_tensors_psi4_cabsplus()
-            except Exception:
+            except Exception as e:
                 raise TequilaException(
                     "Something went wrong. Probably the psi4 version you have installed\
                                         does not support the CABS-functionality.\
                                         See preamble to setup_tensors_psi4_cabsplus."
-                )
+                ) from e
         else:
             raise TequilaException("No cabs_method to specify integrals provided.")
         fock = super().build_fock_operator(h=h, g=g)

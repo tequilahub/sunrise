@@ -1,99 +1,131 @@
-''' HOW TO USE IT
+"""HOW TO USE IT
 1. Install opentrustregion : https://github.com/eriksen-lab/opentrustregion
 2. Dowloand their pyscf interface : https://github.com/eriksen-lab/pyscf_opentrustregion/tree/main
-3. (At least for me, not sure if bcs too updated pyscf version) Go to this folder/pyscf/opentrustregion/
-and comment out:
-3.1: path/pyscf_opentrustregion/pyscf/opentrustregion/__init__.py, line 14 (FourthMomentOTR,)
-3.2: path/pyscf_opentrustregion/pyscf/opentrustregion/opentrustregion_interface.py, line 169-170: class FourthMomentOTR(...): pass
-4. Modify the path variable bellow to the downloaded folder
-5. Ready
-'''
+3. Modify the path variable bellow to the downloaded folder
+4. Ready
+"""
+
 import os
-path = 'PATH/pyscf_opentrustregion'
-os.environ['PYSCF_EXT_PATH']=path
-import sunrise as sun
-import tequila as tq
-from sunrise.molecules.hybrid_base import HybridBase
-from pyscf import gto, scf
-from pyscf.opentrustregion import (
-    PipekMezeyOTR,
-    BoysOTR,
-    EdmistonRuedenbergOTR,
-)
+
+path = "PATH/pyscf_opentrustregion"
+os.environ["PYSCF_EXT_PATH"] = path
 from time import time
 
-def Pipek_Mezey(mol):
+import numpy as np
+from pyscf import gto, mcscf, scf
+from pyscf.data import elements
+from pyscf.opentrustregion import (
+    BoysOTR,
+    EdmistonRuedenbergOTR,
+    PipekMezeyOTR,
+    casscf_to_otr,
+    mf_to_otr,
+)
+from scipy.optimize import linear_sum_assignment
+
+import sunrise as sun
+
+
+def spa_edges(mol, mo_coeff):
+    """
+    SPA edges for arbitrary orbitals (get_spa_edges() returns them in the CLPO basis).
+    Each active occupied orbital is paired with the virtual orbital whose Mulliken
+    atomic populations are most similar, leftover occupied orbitals are single edges.
+    Indices are in the active space (core orbitals are frozen by sunrise).
+    """
+    ncore, nocc = elements.chemcore(mol), mol.nelectron // 2
+    S = mol.intor("int1e_ovlp")
+    atoms = [slice(a[2], a[3]) for a in mol.aoslice_by_atom()]
+    pops = np.array([[(c * (S @ c))[at].sum() for at in atoms] for c in mo_coeff.T])
+    occ, vir = range(ncore, nocc), range(nocc, mo_coeff.shape[1])
+    cost = [[np.abs(pops[i] - pops[a]).sum() for a in vir] for i in occ]
+    rows, cols = linear_sum_assignment(cost)
+    pairs = {occ[r]: vir[c] for r, c in zip(rows, cols)}
+    return [(i - ncore, pairs[i] - ncore) if i in pairs else (i - ncore,) for i in occ]
+
+
+def localize(mol, localizer):
     # perform HF calculation
     hf = scf.RHF(mol).run()
-    # orbitals
-    orbs = [hf.mo_coeff[:, : ], hf.mo_coeff[:, :]]
-    ### Pipek-Mezey localization
-    # loop over occupied and virtual subspaces
-    for mo_coeff in orbs:
-        loc = PipekMezeyOTR(mol, mo_coeff)
+    mo_coeff = hf.mo_coeff.copy()
+    ncore, nocc = elements.chemcore(mol), mol.nelectron // 2
+    # loop over occupied (core excluded) and virtual subspaces
+    for space in (slice(ncore, nocc), slice(nocc, None)):
+        loc = localizer(mol, mo_coeff[:, space])
         loc.line_search = True
-        loc.kernel()
-    # transform to tequila
-    tqmol = sun.MoleculeFromPyscf(loc.mol,mo_coeff=loc.mo_coeff)
-    # sun.plot_MO(tqmol,filename='Pipek_Mezey')
-    smol = HybridBase.from_tequila(tqmol)
-    edges = smol.get_spa_edges()
-    U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = sun.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
+        mo_coeff[:, space] = loc.kernel()
+    return mo_coeff
+
+
+def Pipek_Mezey(mol):
+    ### Pipek-Mezey localization
+    mo_coeff = localize(mol, PipekMezeyOTR)
+    edges = spa_edges(mol, mo_coeff)
+    # transform to sunrise
+    mol = sun.MoleculeFromPyscf(mol, mo_coeff=mo_coeff, nature="h")
+    # sun.plot_MO(mol,filename='Pipek_Mezey')
+    U = mol.make_ansatz("HCB-SPA", edges=edges)
+    opt = sun.optimize_orbitals(molecule=mol, circuit=U, use_hcb=True, silent=True)
     # sun.plot_MO(opt.molecule,filename='Pipek_Mezey_SPA')
     return opt.energy
 
+
 def Foster_Boys(mol):
-    # perform HF calculation
-    hf = scf.RHF(mol).run()
-    # orbitals
-    orbs = [hf.mo_coeff[:, : ], hf.mo_coeff[:, :]]
     ### Foster-Boys localization
-    # loop over occupied and virtual subspaces
-    for mo_coeff in orbs:
-        loc = BoysOTR(mol, mo_coeff)
-        loc.line_search = True
-        loc.kernel()
-    # transform to tequila
-    tqmol = sun.MoleculeFromPyscf(loc.mol,mo_coeff=loc.mo_coeff)
-    sun.plot_MO(tqmol,filename='Foster_Boys')
-    smol = HybridBase.from_tequila(tqmol)
-    edges = smol.get_spa_edges()
-    U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = sun.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
+    mo_coeff = localize(mol, BoysOTR)
+    edges = spa_edges(mol, mo_coeff)
+    # transform to sunrise
+    mol = sun.MoleculeFromPyscf(mol, mo_coeff=mo_coeff, nature="q")
+    # sun.plot_MO(mol, filename="Foster_Boys")
+    U = mol.make_ansatz("HCB-SPA", edges=edges)
+    opt = sun.optimize_orbitals(molecule=mol, circuit=U, use_hcb=True, silent=True)
     # sun.plot_MO(opt.molecule,filename='Foster_Boys_SPA')
     return opt.energy
 
+
 def Edmiston_Ruedenberg(mol):
-    # perform HF calculation
-    hf = scf.RHF(mol).run()
-    # orbitals
-    orbs = [hf.mo_coeff[:, : ], hf.mo_coeff[:, :]]
-    ### Edmiston-Ruedenberg
-    # loop over occupied and virtual subspaces
-    for mo_coeff in orbs:
-        loc = EdmistonRuedenbergOTR(mol, mo_coeff)
-        loc.line_search = True
-        loc.kernel()
-    # transform to tequila
-    tqmol = sun.MoleculeFromPyscf(loc.mol,mo_coeff=loc.mo_coeff)
-    sun.plot_MO(tqmol,filename='Edmiston_Ruedenberg')
-    smol = HybridBase.from_tequila(tqmol)
-    edges = smol.get_spa_edges()
-    U = tqmol.make_ansatz("HCB-SPA",edges=edges)
-    opt = sun.optimize_orbitals(molecule=tqmol,circuit=U,use_hcb=True,silent=True)
+    ### Edmiston-Ruedenberg localization
+    mo_coeff = localize(mol, EdmistonRuedenbergOTR)
+    edges = spa_edges(mol, mo_coeff)
+    # transform to sunrise
+    mol = sun.MoleculeFromPyscf(mol, mo_coeff=mo_coeff, nature="q")
+    sun.plot_MO(mol, filename="Edmiston_Ruedenberg")
+    U = mol.make_ansatz("HCB-SPA", edges=edges)
+    opt = sun.optimize_orbitals(molecule=mol, circuit=U, use_hcb=True, silent=True)
     # sun.plot_MO(opt.molecule,filename='Edmiston_Ruedenberg_SPA')
     return opt.energy
 
-def Tequila(mol):
-    mol = sun.MoleculeFromPyscf(mol)
-    mol = mol.use_native_orbitals()
-    smol = HybridBase.from_tequila(mol)
-    edges = smol.get_spa_edges()
-    U = mol.make_ansatz("HCB-SPA",edges=edges)
-    opt = sun.optimize_orbitals(molecule=mol,circuit=U,use_hcb=True,silent=True)
+
+def CASSCF_OTR(mol, ncas=6, nelecas=8, edges=None):
+    # HF with the OpenTrustRegion second-order solver
+    mf = mf_to_otr(scf.RHF(mol))
+    mf.conv_tol = 1e-8  # set after conversion, its meaning differs from pyscf
+    mf.kernel()
+    # CASSCF orbital optimization with the OpenTrustRegion solver
+    # (default CAS(8,6) for water leaves O 1s as core, matching sunrise's frozen core)
+    mc = casscf_to_otr(mcscf.CASSCF(mf, ncas, nelecas))
+    mc.conv_tol = 1e-6
+    mc.line_search = True
+    mc.kernel()
+    if edges is None:
+        edges = spa_edges(mol, mc.mo_coeff)
+    # transform to sunrise
+    mol = sun.MoleculeFromPyscf(mol, mo_coeff=mc.mo_coeff, nature="q")
+    # sun.plot_MO(mol, filename="CASSCF_OTR")
+    U = mol.make_ansatz("HCB-SPA", edges=edges)
+    opt = sun.optimize_orbitals(molecule=mol, circuit=U, use_hcb=True, silent=True)
+    # sun.plot_MO(opt.molecule,filename='CASSCF_OTR_SPA')
+    return opt.energy
+
+
+def JANPA(mol):
+    mol = sun.MoleculeFromPyscf(mol, nature="q")
+    mol, edges = mol.use_CLPO_orbitals_and_edges()
+    U = mol.make_ansatz("HCB-SPA", edges=edges)
+    opt = sun.optimize_orbitals(molecule=mol, circuit=U, use_hcb=True, silent=True)
     # sun.plot_MO(opt.molecule,filename='SPA')
     return opt.energy
+
 
 # define molecule
 mol = gto.Mole()
@@ -106,7 +138,7 @@ mol.build(
     basis="sto-3g",
     symmetry=False,
 )
-#edges = [(2,), (3,), (0, 4), (1, 5)]
+# edges = [(2,), (3,), (0, 4), (1, 5)]
 beg = time()
 PM = Pipek_Mezey(mol)
 tpm = time()
@@ -114,9 +146,12 @@ FB = Foster_Boys(mol)
 tfm = time()
 ER = Edmiston_Ruedenberg(mol)
 ter = time()
-teq = Tequila(mol)
+CAS = CASSCF_OTR(mol)
+tcas = time()
+teq = JANPA(mol)
 ttq = time()
-print(f"Pipek_Mezey {(PM-teq)*1000} mH with time {tpm-beg} s")
-print(f"Foster_Boys {(FB-teq)*1000} mH with time {tfm-tpm} s")
-print(f"Edmiston_Ruedenberg {(ER-teq)*1000} mH with time {ter-tfm} s")
-print(f"Tequila time {ttq-ter} s")
+print(f"Pipek_Mezey {(PM - teq) * 1000} mH with time {tpm - beg} s")
+print(f"Foster_Boys {(FB - teq) * 1000} mH with time {tfm - tpm} s")
+print(f"Edmiston_Ruedenberg {(ER - teq) * 1000} mH with time {ter - tfm} s")
+print(f"CASSCF_OTR {(CAS - teq) * 1000} mH with time {tcas - ter} s")
+print(f"JANPA time {ttq - tcas} s")

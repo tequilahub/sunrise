@@ -1,10 +1,9 @@
-import tequila as tq
-from tequila import TequilaException, TequilaWarning
-
-from ..chemistry_tools import NBodyTensor
+from __future__ import annotations
 
 import numpy
-from itertools import product
+from tequila import TequilaException
+
+from ..chemistry_tools import NBodyTensor
 
 
 class ExplicitCorrelationCorrection:
@@ -26,11 +25,11 @@ class ExplicitCorrelationCorrection:
     def __init__(
         self,
         mol=None,
-        rdm1: numpy.ndarray = None,
-        rdm2: numpy.ndarray = None,
+        rdm1: numpy.ndarray | None = None,
+        rdm2: numpy.ndarray | None = None,
         gamma: int = 1.4,
-        n_ri: int = None,
-        external_info: dict = None,
+        n_ri: int | None = None,
+        external_info: dict | None = None,
         **kwargs,
     ):
         """
@@ -77,7 +76,9 @@ class ExplicitCorrelationCorrection:
             elif "rdm__psi4_method" in kwargs:
                 self.rdm1, self.rdm2 = None, None
             else:
-                raise TequilaException("Need to either specify rdm's or provide a way how to compute them.")
+                raise TequilaException(
+                    "Need to either specify rdm's or provide a way how to compute them."
+                )
 
         # Set dimensionalities and active space if applicable
         self.n_ri = n_ri
@@ -114,9 +115,9 @@ class ExplicitCorrelationCorrection:
         amplitudes t_PQrs according to SP-ansatz
         """
         kron_d = numpy.eye(len(self.active))
-        t_PQrs = 3 / 8 * numpy.einsum("pr,qs -> pqrs", kron_d, kron_d, optimize="greedy") + 1 / 8 * numpy.einsum(
-            "pr,qs -> qprs", kron_d, kron_d, optimize="greedy"
-        )
+        t_PQrs = 3 / 8 * numpy.einsum(
+            "pr,qs -> pqrs", kron_d, kron_d, optimize="greedy"
+        ) + 1 / 8 * numpy.einsum("pr,qs -> qprs", kron_d, kron_d, optimize="greedy")
         return t_PQrs
 
     def build_fock_operator(self, h: NBodyTensor, g: NBodyTensor) -> NBodyTensor:
@@ -131,14 +132,20 @@ class ExplicitCorrelationCorrection:
         NBodyTensor
             spin-free, generalized fock operator
         """
-        g_1 = numpy.einsum("sr, krls -> kl", self.rdm1, g.sub_str("fafa"), optimize="greedy")
+        g_1 = numpy.einsum(
+            "sr, krls -> kl", self.rdm1, g.sub_str("fafa"), optimize="greedy"
+        )
         g_2 = numpy.einsum(
             "sr, krsl -> kl",
             self.rdm1,
             numpy.einsum("krls->krsl", g.sub_str("fafa"), optimize="greedy"),
             optimize="greedy",
         )
-        fock = NBodyTensor(elems=h.sub_str("ff") + g_1 - 1 / 2 * g_2, active_indices=self.active, size_full=self.n_ri)
+        fock = NBodyTensor(
+            elems=h.sub_str("ff") + g_1 - 1 / 2 * g_2,
+            active_indices=self.active,
+            size_full=self.n_ri,
+        )
 
         return fock
 
@@ -183,8 +190,12 @@ class ExplicitCorrelationCorrection:
             )
 
         # Load f12-tensor
-        if ("f12_filename" not in self.external_info) and ("ordering" not in self.external_info):
-            raise TequilaException("Need to specify information where to find f12-integrals and ordering scheme.")
+        if ("f12_filename" not in self.external_info) and (
+            "ordering" not in self.external_info
+        ):
+            raise TequilaException(
+                "Need to specify information where to find f12-integrals and ordering scheme."
+            )
         r_elems = numpy.load(self.external_info["f12_filename"])
         # Get n_ri via size of tensors, if has not been specified
         n_ri_max = r_elems.shape[0]
@@ -193,7 +204,10 @@ class ExplicitCorrelationCorrection:
         self.size_check(n_ri_max=n_ri_max)
         # This assumes a f12-operator of the kind -1/gamma*exp(-gamma*r12), adjust your integrals if necessary
         r = NBodyTensor(
-            elems=r_elems, ordering=self.external_info["ordering"], active_indices=self.active, size_full=self.n_ri
+            elems=r_elems,
+            ordering=self.external_info["ordering"],
+            active_indices=self.active,
+            size_full=self.n_ri,
         )
         r.reorder(to="phys")
 
@@ -204,8 +218,13 @@ class ExplicitCorrelationCorrection:
         #     ordering = "openfermion"
         # g = NBodyTensor(elems=self.mol.molecule.two_body_integrals, ordering=ordering,
         #                 active_indices=self.active, size_full=self.n_ri)
-        c, h, g = self.mol.integral_manager.get_integrals(ignore_active_space=True)
-        g = NBodyTensor(elems=g.elems, ordering=g.ordering, active_indices=self.active, size_full=self.n_ri)
+        _c, h, g = self.mol.integral_manager.get_integrals(ignore_active_space=True)
+        g = NBodyTensor(
+            elems=g.elems,
+            ordering=g.ordering,
+            active_indices=self.active,
+            size_full=self.n_ri,
+        )
         g.reorder(to="phys")
 
         # Load one-body tensor
@@ -216,15 +235,31 @@ class ExplicitCorrelationCorrection:
     def _compute_intermediate_V(self, g: NBodyTensor, r: NBodyTensor):
         """computes intermediate V, mixed geminal-reference block"""
         rdm1, rdm2 = self.rdm1, self.rdm2
-        gKLxy_rRSkl = numpy.einsum("klxy, rskl -> rsxy", g.sub_str("ffaa"), r.sub_str("aaff"), optimize="greedy")
-        gTUxy_rRStu = numpy.einsum("tuxy, rstu -> rsxy", g.sub_str("aaaa"), r.sub_str("aaaa"), optimize="greedy")
+        gKLxy_rRSkl = numpy.einsum(
+            "klxy, rskl -> rsxy",
+            g.sub_str("ffaa"),
+            r.sub_str("aaff"),
+            optimize="greedy",
+        )
+        gTUxy_rRStu = numpy.einsum(
+            "tuxy, rstu -> rsxy",
+            g.sub_str("aaaa"),
+            r.sub_str("aaaa"),
+            optimize="greedy",
+        )
 
         gATxy_rdm1Ut_rRSau = numpy.einsum(
-            "atxy,ut,rsau -> rsxy", g.sub_str("paaa"), rdm1, r.sub_str("aapa"), optimize="greedy"
+            "atxy,ut,rsau -> rsxy",
+            g.sub_str("paaa"),
+            rdm1,
+            r.sub_str("aapa"),
+            optimize="greedy",
         )
         V_mid = gKLxy_rRSkl - gTUxy_rRStu - gATxy_rdm1Ut_rRSau
 
-        V = numpy.einsum("pqrs, xypq, rsxy", self.t_PQrs, rdm2, V_mid, optimize="greedy")
+        V = numpy.einsum(
+            "pqrs, xypq, rsxy", self.t_PQrs, rdm2, V_mid, optimize="greedy"
+        )
 
         return V
 
@@ -232,16 +267,32 @@ class ExplicitCorrelationCorrection:
         """computes intermediate B, geminal-geminal block with Fock operator"""
         rdm1, rdm2 = self.rdm1, self.rdm2
         rZYpq_fockXy_rTUzx = numpy.einsum(
-            "zypq, xy, tuzx -> tupq", r.sub_str("aaaa"), fock.sub_str("aa"), r.sub_str("aaaa"), optimize="greedy"
+            "zypq, xy, tuzx -> tupq",
+            r.sub_str("aaaa"),
+            fock.sub_str("aa"),
+            r.sub_str("aaaa"),
+            optimize="greedy",
         )
         rAYpq_fockXa_rTUxy = numpy.einsum(
-            "aypq, xa, tuxy -> tupq", r.sub_str("paaa"), fock.sub_str("ap"), r.sub_str("aaaa"), optimize="greedy"
+            "aypq, xa, tuxy -> tupq",
+            r.sub_str("paaa"),
+            fock.sub_str("ap"),
+            r.sub_str("aaaa"),
+            optimize="greedy",
         )
         rYXpq_fockAx_rTUya = numpy.einsum(
-            "yxpq, ax, tuya -> tupq", r.sub_str("aaaa"), fock.sub_str("pa"), r.sub_str("aaap"), optimize="greedy"
+            "yxpq, ax, tuya -> tupq",
+            r.sub_str("aaaa"),
+            fock.sub_str("pa"),
+            r.sub_str("aaap"),
+            optimize="greedy",
         )
         rMLpq_fockKl_rTUmk = numpy.einsum(
-            "mlpq, kl, tumk -> tupq", r.sub_str("ffaa"), fock.sub_str("ff"), r.sub_str("aaff"), optimize="greedy"
+            "mlpq, kl, tumk -> tupq",
+            r.sub_str("ffaa"),
+            fock.sub_str("ff"),
+            r.sub_str("aaff"),
+            optimize="greedy",
         )
 
         rBYpq_rdm1Xy_fockAb_rTUax = numpy.einsum(
@@ -269,7 +320,14 @@ class ExplicitCorrelationCorrection:
             - 1 / 2 * rBYpq_rdm1Xy_fockAb_rTUax
             - 1 / 2 * rAYpq_rdm1Xy_fockKx_rTUak
         )
-        B = numpy.einsum("pqrs, vwtu, rsvw, tupq", self.t_PQrs, self.t_PQrs, rdm2, B_mid, optimize="greedy")
+        B = numpy.einsum(
+            "pqrs, vwtu, rsvw, tupq",
+            self.t_PQrs,
+            self.t_PQrs,
+            rdm2,
+            B_mid,
+            optimize="greedy",
+        )
 
         return B
 
@@ -277,24 +335,51 @@ class ExplicitCorrelationCorrection:
         """computes intermediate X, geminal-geminal overlap"""
         rdm1, rdm2 = self.rdm1, self.rdm2
 
-        rTUkl_rKLpq = numpy.einsum("tukl, klpq -> tupq", r.sub_str("aaff"), r.sub_str("ffaa"), optimize="greedy")
-        rTUyz_rYZpq = numpy.einsum("tuyz, yzpq -> tupq", r.sub_str("aaaa"), r.sub_str("aaaa"), optimize="greedy")
+        rTUkl_rKLpq = numpy.einsum(
+            "tukl, klpq -> tupq",
+            r.sub_str("aaff"),
+            r.sub_str("ffaa"),
+            optimize="greedy",
+        )
+        rTUyz_rYZpq = numpy.einsum(
+            "tuyz, yzpq -> tupq",
+            r.sub_str("aaaa"),
+            r.sub_str("aaaa"),
+            optimize="greedy",
+        )
 
         # rTUya_rdm1Yz_rZApq = numpy.einsum("tuya, yz, zapq -> tupq", r.sub_str("aaap"), rdm1,\
         # r.sub_str("apaa"), optimize="greedy")
         rUTya_rdm1Yz_rAZpq = numpy.einsum(
-            "utya, yz, azpq -> tupq", r.sub_str("aaap"), rdm1, r.sub_str("paaa"), optimize="greedy"
+            "utya, yz, azpq -> tupq",
+            r.sub_str("aaap"),
+            rdm1,
+            r.sub_str("paaa"),
+            optimize="greedy",
         )
         rTUay_rdm1Yz_rAZqp = numpy.einsum(
-            "tuay, yz, azqp -> tupq", r.sub_str("aapa"), rdm1, r.sub_str("paaa"), optimize="greedy"
+            "tuay, yz, azqp -> tupq",
+            r.sub_str("aapa"),
+            rdm1,
+            r.sub_str("paaa"),
+            optimize="greedy",
         )
 
         # X_mid = rTUkl_rKLpq - rTUyz_rYZpq - 1/2*rTUya_rdm1Yz_rZApq # in paper
         X_mid = (
-            rTUkl_rKLpq - rTUyz_rYZpq - 1 / 2 * rUTya_rdm1Yz_rAZpq - 1 / 2 * rTUay_rdm1Yz_rAZqp
+            rTUkl_rKLpq
+            - rTUyz_rYZpq
+            - 1 / 2 * rUTya_rdm1Yz_rAZpq
+            - 1 / 2 * rTUay_rdm1Yz_rAZqp
         )  # adjusted to python script
         X = -1 * numpy.einsum(
-            "pqrs, vwtu, rsvx, xw, tupq", self.t_PQrs, self.t_PQrs, rdm2, fock.sub_str("aa"), X_mid, optimize="greedy"
+            "pqrs, vwtu, rsvx, xw, tupq",
+            self.t_PQrs,
+            self.t_PQrs,
+            rdm2,
+            fock.sub_str("aa"),
+            X_mid,
+            optimize="greedy",
         )
 
         return X
@@ -304,7 +389,9 @@ class ExplicitCorrelationCorrection:
         # Delta intermediate
         # Delta from paper:
         rdm1, rdm2 = self.rdm1, self.rdm2
-        tPQrs_rAYpq = numpy.einsum("pqrs, aypq -> ayrs", self.t_PQrs, r.sub_str("paaa"), optimize="greedy")
+        tPQrs_rAYpq = numpy.einsum(
+            "pqrs, aypq -> ayrs", self.t_PQrs, r.sub_str("paaa"), optimize="greedy"
+        )
         # build cumulant-like terms (call such bcs look a little bit alike, but are not same)
         cum_like_1 = numpy.einsum(
             "sv, xrwy -> sxrvwy",
@@ -338,16 +425,27 @@ class ExplicitCorrelationCorrection:
         cum_like_4 = numpy.einsum(
             "rw, xsvy -> sxrvwy",
             rdm1,
-            (-1 / 2 * rdm2 + 1 / 2 * numpy.einsum("sy, xv -> xsvy", rdm1, rdm1, optimize="greedy")),
+            (
+                -1 / 2 * rdm2
+                + 1 / 2 * numpy.einsum("sy, xv -> xsvy", rdm1, rdm1, optimize="greedy")
+            ),
             optimize="greedy",
         )
 
         Delta_mid = numpy.einsum(
-            "ayrs, sxrvwy -> axvw", tPQrs_rAYpq, (cum_like_1 + cum_like_2 + cum_like_3 + cum_like_4), optimize="greedy"
+            "ayrs, sxrvwy -> axvw",
+            tPQrs_rAYpq,
+            (cum_like_1 + cum_like_2 + cum_like_3 + cum_like_4),
+            optimize="greedy",
         )
 
         Delta = -1 * numpy.einsum(
-            "tuak, kx, vwtu, axvw", r.sub_str("aapf"), fock.sub_str("fa"), self.t_PQrs, Delta_mid, optimize="greedy"
+            "tuak, kx, vwtu, axvw",
+            r.sub_str("aapf"),
+            fock.sub_str("fa"),
+            self.t_PQrs,
+            Delta_mid,
+            optimize="greedy",
         )
         return Delta
 
@@ -493,7 +591,9 @@ class ExplicitCorrelationCorrection:
 
         return Delta
 
-    def _compute_intermediates(self, g: NBodyTensor, r: NBodyTensor, fock: NBodyTensor) -> list:
+    def _compute_intermediates(
+        self, g: NBodyTensor, r: NBodyTensor, fock: NBodyTensor
+    ) -> list:
         """calls computation of intermediates and returns them as list"""
         V = self._compute_intermediate_V(g, r)
         B = self._compute_intermediate_B(r, fock)
@@ -509,7 +609,9 @@ class ExplicitCorrelationCorrection:
 
         return [V, B, X, Delta]
 
-    def compute_correction(self, g: NBodyTensor, r: NBodyTensor, fock: NBodyTensor) -> float:
+    def compute_correction(
+        self, g: NBodyTensor, r: NBodyTensor, fock: NBodyTensor
+    ) -> float:
         """
         Computes correction based on Coulomb tensor, f12-tensor and generalized Fock operator
         Invokes SP-ansatz
