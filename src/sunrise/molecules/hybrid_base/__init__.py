@@ -8,18 +8,17 @@ from tequila import TequilaWarning
 from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC
 
 from .hybridbase import HybridBase
+from .madness_interface import QuantumChemistryMadness
 
-SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf"]  # , "psi4", "madness"
-INSTALLED_QCHEMISTRY_BACKENDS = {
-    "base": HybridBase
-}  # "madness": QuantumChemistryMadness
+SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf", "psi4", "madness"]
+INSTALLED_QCHEMISTRY_BACKENDS = {"base": HybridBase, "madness": QuantumChemistryMadness}
 
-# try:
-#     import QuantumChemistryPsi4
+try:
+    from .psi4_interface import QuantumChemistryPsi4
 
-#     INSTALLED_QCHEMISTRY_BACKENDS["psi4"] = QuantumChemistryPsi4
-# except ImportError:
-#     pass
+    INSTALLED_QCHEMISTRY_BACKENDS["psi4"] = QuantumChemistryPsi4
+except ImportError:
+    pass
 
 try:
     from .pyscf_interface import PyscfHybridBase
@@ -51,7 +50,7 @@ def HyMolecule(
     transformation
         The Fermion to Qubit Transformation (jordan-wigner, bravyi-kitaev, bravyi-kitaev-tree and whatever OpenFermion supports)
     backend
-        quantum chemistry backend (psi4, pyscf)
+        quantum chemistry backend (pyscf, madness)
     guess_wfn
         pass down a psi4 guess wavefunction to start the scf cycle from
         can also be a filename leading to a stored wavefunction

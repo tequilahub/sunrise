@@ -63,3 +63,6 @@ include-package-data = true
 
 [project.optional-dependencies]
 test = ["pytest"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sunrise"]
