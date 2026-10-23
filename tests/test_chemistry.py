@@ -1478,18 +1478,10 @@ def test_clpo_psi4():
     for backend in ["pyscf", "psi4"]:
         mol = sun.Molecule(geometry=geometry, basis_set="cc-pvdz", backend=backend)
         mol, edges = mol.use_CLPO_orbitals_and_edges()
-        # only the bond and lone pair orbitals of the edges are unique, janpa can order and mix the other CLPOs
-        # differently for tiny changes of the HF orbitals (e.g. another BLAS)
-        idx = [
-            mol.integral_manager.active_orbitals[i].idx_total
-            for edge in edges
-            for i in edge
-        ]
-        c = mol.integral_manager.orbital_coefficients[:, idx]
-        h.append(numpy.abs(c.T @ mol.integral_manager.one_body_integrals @ c))
-        if backend == "pyscf":
-            pyscf_edges = edges
-    assert edges == pyscf_edges
+        ## The orbitals and edges are adapted to each backed, so they cant be directly
+        ## Compared further than via the energy they minimize
+        _, energy = sun.SPAFP.spa_solve_graph(mol, edges)
+        h.append(energy)
     assert numpy.allclose(h[0], h[1], atol=1.0e-5)
 
 
