@@ -1311,12 +1311,27 @@ def test_orbital_optimization_hcb(geometry):
     U1 = mol.make_ansatz(name="HCB-SPA", edges=edges)
     import time
 
+    # tight convergence, otherwise both runs can stop at orbitals ~1e-4 apart
+    pyscf_arguments = {
+        "max_cycle_macro": 50,
+        "max_cycle_micro": 3,
+        "conv_tol": 1.0e-10,
+        "conv_tol_grad": 1.0e-6,
+    }
     start = time.time()
-    opt1 = sun.optimize_orbitals(circuit=U1, molecule=mol, silent=True, use_hcb=True)
+    opt1 = sun.optimize_orbitals(
+        circuit=U1,
+        molecule=mol,
+        silent=True,
+        use_hcb=True,
+        pyscf_arguments=pyscf_arguments,
+    )
     time1 = time.time() - start
     U2 = mol.make_ansatz(name="SPA", edges=edges)
     start = time.time()
-    opt2 = sun.optimize_orbitals(circuit=U2, molecule=mol, silent=True)
+    opt2 = sun.optimize_orbitals(
+        circuit=U2, molecule=mol, silent=True, pyscf_arguments=pyscf_arguments
+    )
     time2 = time.time() - start
 
     assert numpy.isclose(opt1.energy, opt2.energy, atol=1.0e-5)
@@ -1431,6 +1446,43 @@ def test_ghost_atom():
     fci1 = mol.compute_energy("fci")
     mol.make_molecule().get_molecular_hamiltonian()  # ensure that openfermion doesn't break with the ghost atom
     assert fci0 > fci1
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_clpo_pyscf_ao_order():
+    # cc-pVDZ has d shells, whose MOLDEN order (used by janpa) differs from the pyscf one
+    from pyscf import scf
+
+    from sunrise.CLPO.pyscf_janpa_interace import _run_janpa_pipeline
+
+    mol = sun.Molecule(
+        geometry="O 0.0 0.0 0.0\nH 0.757 0.586 0.0\nH -0.757 0.586 0.0",
+        basis_set="cc-pvdz",
+        backend="pyscf",
+    )
+    pfmol = sun.MoleculeToPyscf(mol)
+    mf = scf.RHF(pfmol).run()
+    aho, clpo, _, _ = _run_janpa_pipeline(pfmol, mf.mo_coeff, mf.mo_occ, mf.mo_energy)
+    s = pfmol.intor("int1e_ovlp")
+    assert numpy.allclose(aho.T @ s @ aho, numpy.eye(pfmol.nao), atol=1.0e-8)
+    assert numpy.allclose(clpo.T @ s @ clpo, numpy.eye(pfmol.nao), atol=1.0e-8)
+
+
+@pytest.mark.skipif(
+    condition=not HAS_PSI4 or not HAS_PYSCF, reason="you don't have psi4 and pyscf"
+)
+def test_clpo_psi4():
+    # psi4 orders and orients its AOs differently than pyscf, the CLPOs must be the same orbitals anyway
+    geometry = "O 0.0 0.0 0.0\nH 0.757 0.586 0.0\nH -0.757 0.586 0.0"
+    h = []
+    for backend in ["pyscf", "psi4"]:
+        mol = sun.Molecule(geometry=geometry, basis_set="cc-pvdz", backend=backend)
+        mol, edges = mol.use_CLPO_orbitals_and_edges()
+        ## The orbitals and edges are adapted to each backed, so they cant be directly
+        ## Compared further than via the energy they minimize
+        _, energy = sun.SPAFP.spa_solve_graph(mol, edges)
+        h.append(energy)
+    assert numpy.allclose(h[0], h[1], atol=1.0e-5)
 
 
 def save_and_load(mol, tmp_path, monkeypatch):

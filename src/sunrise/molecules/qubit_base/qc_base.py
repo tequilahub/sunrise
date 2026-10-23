@@ -1138,7 +1138,9 @@ class QuantumChemistryBase:
         )
 
         if inplace:
-            self.integral_manager = hao_mol.integral_manager
+            self.integral_manager.orbital_coefficients = (
+                hao_mol.integral_manager.orbital_coefficients.copy()
+            )
             try:
                 # hybrid molecules also take the encoding of the new molecule
                 self.transformation = hao_mol.transformation
@@ -1199,7 +1201,9 @@ class QuantumChemistryBase:
         )
 
         if inplace:
-            self.integral_manager = clpo_mol.integral_manager
+            self.integral_manager.orbital_coefficients = (
+                clpo_mol.integral_manager.orbital_coefficients.copy()
+            )
             try:
                 # hybrid molecules also take the encoding of the new molecule
                 self.transformation = clpo_mol.transformation

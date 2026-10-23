@@ -350,6 +350,8 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         # psi4.core objects are C++ bindings that cannot be pickled, so deepcopy fails on them.
         # They are only read after construction, so the copy shares them instead of duplicating them.
         memo[id(self.psi4_mol)] = self.psi4_mol
+        # compute_energy('hf') replaces logs['hf'], the reference wavefunction can then only be here
+        memo[id(self.ref_wfn)] = self.ref_wfn
         for log in self.logs.values():
             memo[id(log.wfn)] = log.wfn
             memo[id(log.mol)] = log.mol
