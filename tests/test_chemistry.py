@@ -1311,12 +1311,14 @@ def test_orbital_optimization_hcb(geometry):
     U1 = mol.make_ansatz(name="HCB-SPA", edges=edges)
     import time
 
+    # tight convergence, otherwise both runs can stop at orbitals ~1e-4 apart
+    pyscf_arguments = {"max_cycle_macro": 50, "max_cycle_micro": 3, "conv_tol": 1.0e-10, "conv_tol_grad": 1.0e-6}
     start = time.time()
-    opt1 = sun.optimize_orbitals(circuit=U1, molecule=mol, silent=True, use_hcb=True)
+    opt1 = sun.optimize_orbitals(circuit=U1, molecule=mol, silent=True, use_hcb=True, pyscf_arguments=pyscf_arguments)
     time1 = time.time() - start
     U2 = mol.make_ansatz(name="SPA", edges=edges)
     start = time.time()
-    opt2 = sun.optimize_orbitals(circuit=U2, molecule=mol, silent=True)
+    opt2 = sun.optimize_orbitals(circuit=U2, molecule=mol, silent=True, pyscf_arguments=pyscf_arguments)
     time2 = time.time() - start
 
     assert numpy.isclose(opt1.energy, opt2.energy, atol=1.0e-5)
