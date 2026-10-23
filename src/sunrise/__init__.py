@@ -49,6 +49,7 @@ from sunrise import spafastprototype as SPAFP
 from sunrise import ADAPT
 from sunrise import ADAPT as adapt
 from sunrise import graph_selection
+from sunrise import utils
 
 __all__ = [
     "ADAPT",
@@ -96,4 +97,5 @@ __all__ = [
     "show_available_modules",
     "show_supported_modules",
     "simulate",
+    "utils",
 ]
