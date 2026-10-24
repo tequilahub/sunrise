@@ -38,6 +38,8 @@ jobs:
           # qiskit (pulled in by TenCirChem-NG) uses most of the static TLS reserved for dlopen since 2.6,
           # so the libgomp of pyscf no longer fits: "cannot allocate memory in static TLS block"
           GLIBC_TUNABLES: glibc.rtld.optional_static_tls=4096
+          # one thread per xdist worker, otherwise the OpenMP threads of 4 workers fight for the 4 cores
+          OMP_NUM_THREADS: 1
         run: |
           pip install -e .
           pip install pytest pytest-xdist
