@@ -9,14 +9,22 @@ import sunrise as sun
 HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 
+# base needs integrals by hand; with the madness PNOs the three rotations leave too much
+# in the residual for the energy check below (0.04 Eh instead of 0.005 Eh)
+BACKENDS = [
+    pytest.param(
+        "pyscf",
+        marks=pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found"),
+    ),
+    pytest.param(
+        "psi4",
+        marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found"),
+    ),
+]
 
-@pytest.mark.skipif(
-    condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found"
-)
-@pytest.mark.parametrize("backend", sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS)
+
+@pytest.mark.parametrize("backend", BACKENDS)
 def test_hcb_measurement_linearH4_scenario2(backend):
-    if backend in ("base", "madness"):
-        pytest.skip(f"{backend} not available")
     # Create the molecule
     mol = sun.Molecule(
         geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5",
@@ -104,13 +112,8 @@ def test_hcb_measurement_linearH4_scenario2(backend):
     assert np.isclose(test_energy, energy, 10**-3)
 
 
-@pytest.mark.skipif(
-    condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf/madness not found"
-)
-@pytest.mark.parametrize("backend", sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS)
+@pytest.mark.parametrize("backend", BACKENDS)
 def test_hcb_measurement_linearH4_scenario1(backend):
-    if backend in ("base", "madness"):
-        pytest.skip(f"{backend} not available")
     # Create the molecule
     mol = sun.Molecule(
         geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5",

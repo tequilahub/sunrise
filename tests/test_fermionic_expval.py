@@ -159,8 +159,6 @@ def test_optimize_orbitals(geom, backend):
 )
 @pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
 def test_overlap_minimization(geom, backend):
-    if backend == "tequila":
-        pytest.skip("Skipping tequila")
     mol = sn.Molecule(
         geometry=geom,
         basis_set="sto-3g",
