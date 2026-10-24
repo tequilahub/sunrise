@@ -2353,6 +2353,10 @@ class QuantumChemistryBase:
                 have_hcb_trafo = False
         except Exception:  # noqa: BLE001
             have_hcb_trafo = False
+        # in tapered encodings the HCB qubit of the tapered orbital is implicit (see make_spa_ansatz),
+        # but the HCB doubles excite into it, so the doubles are built from fermionic excitations instead
+        if "TAPEREDBINARY" in self.transformation.name.upper():
+            have_hcb_trafo = False
 
         # consistency checks for optimization
         if have_hcb_trafo and hcb_optimization is None and include_reference:
