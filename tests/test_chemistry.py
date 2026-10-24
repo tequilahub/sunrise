@@ -4,9 +4,6 @@ import os
 import numpy
 import openfermion
 import pytest
-
-# Get QC backends for parametrized testing
-import select_backends
 import tequila as tq
 import tequila.simulators.simulator_api
 import tequila.tools.random_generators as rg
@@ -25,7 +22,6 @@ HAS_MADNESS = (
     and qc.QuantumChemistryMadness.find_executable() is not None
 )
 
-backends = select_backends.get()
 standard_trafos = ["JordanWigner", "ReorderedJordanWigner", "BravyiKitaev"]
 trafos = standard_trafos
 # trafos = list(known_encodings().keys() # currently issues with openfermion
@@ -221,10 +217,15 @@ def do_test_h2_hamiltonian(qc_interface):
 
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="you don't have psi4")
 @pytest.mark.parametrize("trafo", trafos)
-@pytest.mark.parametrize("backend", backends)
+# every installed simulator, symbolic is very slow so it only runs with --slow
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(k, marks=pytest.mark.slow if k == "symbolic" else ())
+        for k in tequila.simulators.simulator_api.INSTALLED_SIMULATORS
+    ],
+)  # symbolic: takes more than 9 min
 def test_ucc_psi4(trafo, backend):
-    if backend == "symbolic":
-        pytest.skip("skipping for symbolic simulator  ... way too slow")
     parameters_qc = sunrise.molecules.qubit_base.chemistry_tools.ParametersQC(
         geometry="data/h2.xyz", units="angstrom", basis_set="sto-3g"
     )
