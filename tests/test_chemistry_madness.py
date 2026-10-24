@@ -26,14 +26,12 @@ def test_executable():
         )
 
 
-@pytest.mark.skipif(
-    not (os.path.isfile("he_gtensor.npy") and os.path.isfile("he_htensor.npy")),
-    reason="data not there",
-)
 def test_madness_he_data():
-    # relies that he_xtensor.npy are present (x=g,h)
+    # reads the precomputed data/madness/he_xtensor.npy (x=g,h), no madness needed
     geomstring = "He 0.0 0.0 0.0"
-    molecule = sun.Molecule(name="he", geometry=geomstring, units="angstrom")
+    molecule = sun.Molecule(
+        name="data/madness/he", geometry=geomstring, units="angstrom", n_pno="read"
+    )
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
@@ -335,46 +333,50 @@ def test_orbital_optimization(restrict_to_hcb):
     assert success
 
 
-# # test takes a while
-# @pytest.mark.skipif(condition=not has_pyscf, reason="pyscf not found")
-# def test_orbital_optimization_adapt():
-#     name = "data/beh2_{R}"
-#     R = 4.5
-#     n_pno = None
-#     success = False
-#     for _ in range(1):
-#         mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
-#         U = mol.make_upccgsd_ansatz("SPA")
-#         operator_pool = sun.ADAPT.adapt.MolecularPool(molecule=mol, indices="UCCD")
+@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(condition=not has_pyscf, reason="pyscf not found")
+def test_orbital_optimization_adapt():
+    name = "data/beh2_{R}"
+    R = 4.5
+    n_pno = None
+    success = False
+    for _ in range(1):
+        mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
+        U = mol.make_upccgsd_ansatz("SPA")
+        operator_pool = sun.ADAPT.adapt.MolecularPool(molecule=mol, indices="UCCD")
 
-#         class AdaptWrapper:
-#             class ReturnWrapper:
-#                 def __init__(self, circuit, variables, energy):
-#                     self.circuit = circuit
-#                     self.variables = variables
-#                     self.energy = energy
+        class AdaptWrapper:
+            class ReturnWrapper:
+                def __init__(self, circuit, variables, energy):
+                    self.circuit = circuit
+                    self.variables = variables
+                    self.energy = energy
 
-#             def __init__(self, operator_pool, spa):
-#                 self.operator_pool = operator_pool
-#                 self.spa = spa
+            def __init__(self, operator_pool, spa):
+                self.operator_pool = operator_pool
+                self.spa = spa
 
-#             def __call__(self, H, circuit, molecule, *args, **kwargs):
-#                 solver = sun.adapt.Adapt(H=H, Upre=self.spa, operator_pool=self.operator_pool, maxiter=1)
-#                 result = solver(Upre=self.spa, operator_pool=self.operator_pool)
-#                 final_circuit = self.spa + result.U
-#                 return self.ReturnWrapper(circuit=final_circuit, variables=result.variables, energy=result.energy)
+            def __call__(self, H, circuit, molecule, *args, **kwargs):
+                solver = sun.adapt.Adapt(
+                    H=H, Upre=self.spa, operator_pool=self.operator_pool, maxiter=1
+                )
+                result = solver(Upre=self.spa, operator_pool=self.operator_pool)
+                final_circuit = self.spa + result.U
+                return self.ReturnWrapper(
+                    circuit=final_circuit,
+                    variables=result.variables,
+                    energy=result.energy,
+                )
 
-#         opt_mol = sun.optimize_orbitals(
-#             molecule=mol,
-#             circuit=U,
-#             silent=False,
-#             initial_guess="random_loc=0.0_scale=1.0",
-#             vqe_solver=AdaptWrapper(operator_pool, U),
-#         ).molecule
-#         H = opt_mol.make_hamiltonian()
-#         E = tq.ExpectationValue(H=H, U=U)
-#         result = tq.minimize(E, silent=False)
-#         success = numpy.isclose(result.energy, -15.562016590541667, atol=1.0e-2)
-#         if success:
-#             break
-#     assert success
+        # the energy of SPA + ADAPT in the optimized orbitals (SPA alone is higher)
+        result = sun.optimize_orbitals(
+            molecule=mol,
+            circuit=U,
+            silent=False,
+            initial_guess="random_loc=0.0_scale=1.0",
+            vqe_solver=AdaptWrapper(operator_pool, U),
+        )
+        success = numpy.isclose(result.energy, -15.562016590541667, atol=1.0e-2)
+        if success:
+            break
+    assert success
