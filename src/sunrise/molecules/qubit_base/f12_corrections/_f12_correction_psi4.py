@@ -149,8 +149,6 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
             Valeev, E. F. Improving on the resolution of the identity in
             linear R12 ab initio theories. Chem. Phys. Lett. 395, 190–195 (2004).
 
-        Uses psi4.core.OrbitalSpace.build_ri_space and build_cabs_space from psi4 itself
-
         Requires cabs_options with name of CABS basis by keyword "cabs_name"
 
         Returns
@@ -187,7 +185,6 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
             [obs_key, aux_key],
         )
         ri_basis = psi4.core.BasisSet.construct_from_pydict(ri_mol, ri_basis_dict, 0)
-        # Get RI-space by orthogonalizing ri_basis
         ri_space = psi4.core.OrbitalSpace.build_ri_space(
             ri_basis, lindep_tol=lindep_tol
         )

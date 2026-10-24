@@ -216,13 +216,13 @@ def do_test_h2_hamiltonian(qc_interface):
 
 
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="you don't have psi4")
-@pytest.mark.parametrize("trafo", trafos)
-# every installed simulator, symbolic only with --slow because it is very slow with BravyiKitaev
 @pytest.mark.parametrize(
-    "backend",
+    "backend, trafo",
     [
-        pytest.param(k, marks=pytest.mark.slow if k == "symbolic" else ())
+        (k, t)
         for k in tequila.simulators.simulator_api.INSTALLED_SIMULATORS
+        for t in trafos
+        if (k, t) != ("symbolic", "BravyiKitaev")
     ],
 )
 def test_ucc_psi4(trafo, backend):

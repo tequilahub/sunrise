@@ -203,13 +203,9 @@ def test_UpCCGSD_FER(system, hcb_optimization):
     assert numpy.isclose(abs(tqwfn.inner(wfn)), 1.0, atol=1.0e-4)
 
 
-@pytest.mark.slow
 def test_UCCSD_FER():
-    """
-    Take care, expensive test
-    """
     mol = sn.Molecule(
-        geometry="H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2",
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",
         basis_set="sto-6g",
         select="FFFFFFFFFFFFFFFFFFFFF",
         condense=False,
@@ -217,7 +213,7 @@ def test_UCCSD_FER():
         nature="hybrid",
     )
     tqmol = sn.Molecule(
-        geometry="H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2",
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",
         basis_set="sto-6g",
         backend="pyscf",
     )

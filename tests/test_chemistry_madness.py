@@ -27,7 +27,6 @@ def test_executable():
 
 
 def test_madness_he_data():
-    # reads the precomputed data/madness/he_xtensor.npy (x=g,h), no madness needed
     geomstring = "He 0.0 0.0 0.0"
     molecule = sun.Molecule(
         name="data/madness/he", geometry=geomstring, units="angstrom", n_pno="read"
@@ -340,7 +339,7 @@ def test_orbital_optimization_adapt():
     R = 4.5
     n_pno = None
     success = False
-    for _ in range(1):
+    for _ in range(10):
         mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
         U = mol.make_upccgsd_ansatz("SPA")
         operator_pool = sun.ADAPT.adapt.MolecularPool(molecule=mol, indices="UCCD")
@@ -368,7 +367,6 @@ def test_orbital_optimization_adapt():
                     energy=result.energy,
                 )
 
-        # the energy of SPA + ADAPT in the optimized orbitals (SPA alone is higher)
         result = sun.optimize_orbitals(
             molecule=mol,
             circuit=U,

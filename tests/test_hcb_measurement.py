@@ -9,8 +9,7 @@ import sunrise as sun
 HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 
-# base needs integrals by hand; with the madness PNOs the three rotations leave too much
-# in the residual for the energy check below (0.04 Eh instead of 0.005 Eh)
+# base needs integrals by hand; with the madness PNOs the three rotations leave too much in the residual
 BACKENDS = [
     pytest.param(
         "pyscf",
