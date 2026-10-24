@@ -83,8 +83,7 @@ def test_mixed_objective(backend, braket, same_variables):
 @pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
 def test_mixed_objective_minimize(backend, same_variables):
     # expectation values of test_mixed_objective, minimized with sunrise and compared with tq.minimize from the same
-    # starting point. no braket: tq.minimize of a tq.BraKet fails on tequila devel (complex objective) and takes
-    # more than 10 minutes per case on tequila PR #472 (gradients through the ancilla decomposition)
+    # starting point. no braket: a transition element is complex in general and tq.minimize refuses complex objectives
     geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
     snmol = sn.Molecule(
         geometry=geom, basis_set="sto-3g", nature="f"

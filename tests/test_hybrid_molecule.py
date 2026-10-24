@@ -203,7 +203,7 @@ def test_UpCCGSD_FER(system, hcb_optimization):
     assert numpy.isclose(abs(tqwfn.inner(wfn)), 1.0, atol=1.0e-4)
 
 
-@pytest.mark.slow  # takes 128 minutes
+@pytest.mark.slow
 def test_UCCSD_FER():
     """
     Take care, expensive test

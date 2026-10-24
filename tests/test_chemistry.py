@@ -217,14 +217,14 @@ def do_test_h2_hamiltonian(qc_interface):
 
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="you don't have psi4")
 @pytest.mark.parametrize("trafo", trafos)
-# every installed simulator, symbolic is very slow so it only runs with --slow
+# every installed simulator, symbolic only with --slow because it is very slow with BravyiKitaev
 @pytest.mark.parametrize(
     "backend",
     [
         pytest.param(k, marks=pytest.mark.slow if k == "symbolic" else ())
         for k in tequila.simulators.simulator_api.INSTALLED_SIMULATORS
     ],
-)  # symbolic: takes more than 9 min
+)
 def test_ucc_psi4(trafo, backend):
     parameters_qc = sunrise.molecules.qubit_base.chemistry_tools.ParametersQC(
         geometry="data/h2.xyz", units="angstrom", basis_set="sto-3g"
