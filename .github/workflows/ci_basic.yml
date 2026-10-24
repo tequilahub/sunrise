@@ -40,6 +40,6 @@ jobs:
           GLIBC_TUNABLES: glibc.rtld.optional_static_tls=4096
         run: |
           pip install -e .
-          pip install pytest
+          pip install pytest pytest-xdist
           cd tests
-          pytest -m "not dependencies"
+          pytest -m "not dependencies" -n auto
