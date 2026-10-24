@@ -57,3 +57,5 @@ jobs:
           cp -r tests/data data
           conda run -n psi4_env pytest tests/test_chemistry.py
           conda run -n psi4_env pytest tests/test_adapt.py
+          conda run -n psi4_env pytest tests/test_chemistry_f12.py
+          conda run -n psi4_env pytest tests/test_hcb_measurement.py
