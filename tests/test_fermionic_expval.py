@@ -286,7 +286,10 @@ def test_n_rotation_pi():
         ket = sn.FCircuit(initial_state=state) + mol.n_rotation(i, np.pi)
         ov = sn.simulate(
             Braket(
-                molecule=mol, bra=sn.FCircuit(initial_state=state), ket=ket, operator="I"
+                molecule=mol,
+                bra=sn.FCircuit(initial_state=state),
+                ket=ket,
+                operator="I",
             ),
             backend="spex",
         )
