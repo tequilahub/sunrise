@@ -274,10 +274,7 @@ def test_madness_save_load(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(not has_pyscf, reason="PySCF not installed")
-@pytest.mark.skipif(
-    executable is None and not os.path.isfile("balanced_be_gtensor.npy"),
-    reason="madness not installed and no files found",
-)
+@pytest.mark.skipif(executable is None, reason="madness was not found")
 def test_madness_pyscf_bridge():
     mol = sun.chemistry.Molecule(
         geometry="Be 0.0 0.0 0.0",
@@ -298,10 +295,7 @@ def test_madness_pyscf_bridge():
 
 
 @pytest.mark.skipif(condition=not has_pyscf, reason="pyscf not found")
-@pytest.mark.skipif(
-    executable is None and not os.path.isfile("balanced_be_gtensor.npy"),
-    reason="madness not installed and no files found",
-)
+@pytest.mark.skipif(executable is None, reason="madness was not found")
 @pytest.mark.parametrize("restrict_to_hcb", [False, True])
 def test_orbital_optimization(restrict_to_hcb):
     name = "data/beh2_{R}"

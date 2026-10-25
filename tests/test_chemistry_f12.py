@@ -45,13 +45,15 @@ def test_correction_psi4_cabsplus():
 
 
 data_path = "data/f12/"
+# the skipif is evaluated at collection, before conftest.py changes into the tests directory
+data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), data_path)
 
 
 @pytest.mark.skipif(
     not (
-        os.path.isfile(str(data_path) + "he-f12_gtensor.npy")
-        and os.path.isfile(str(data_path) + "he-f12_htensor.npy")
-        and os.path.isfile(str(data_path) + "he-f12_f12tensor.npy")
+        os.path.isfile(data_dir + "he-f12_gtensor.npy")
+        and os.path.isfile(data_dir + "he-f12_htensor.npy")
+        and os.path.isfile(data_dir + "he-f12_f12tensor.npy")
     ),
     reason="data not there",
 )
