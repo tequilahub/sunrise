@@ -574,6 +574,10 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                 kwargs["spin_adapt_singles"] = True
 
         if direct_compiling and not have_hcb_trafo and "HCB" not in name:
+            if "TAPEREDBINARY" in self.transformation.name.upper():
+                raise TequilaMadnessException(
+                    f"direct_compiling={direct_compiling} does not work with transformation={self.transformation.name}: the HCB doubles excite into the tapered orbital, which is implicit in this encoding"
+                )
             raise TequilaMadnessException(
                 f"direct_compiling={direct_compiling} demanded but no hcb_to_me in transformation={self.transformation}\ntry transformation='ReorderedJordanWigner' "
             )

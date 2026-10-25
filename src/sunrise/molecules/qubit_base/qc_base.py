@@ -2364,6 +2364,10 @@ class QuantumChemistryBase:
         if "HCB" in name:
             hcb_optimization = True
         if hcb_optimization and not have_hcb_trafo and "HCB" not in name:
+            if "TAPEREDBINARY" in self.transformation.name.upper():
+                raise TequilaException(
+                    f"use_hcb={hcb_optimization} does not work with transformation={self.transformation.name}: the HCB doubles excite into the tapered orbital, which is implicit in this encoding"
+                )
             raise TequilaException(
                 f"use_hcb={hcb_optimization} but transformation={self.transformation} has no 'hcb_to_me' function. Try transformation='ReorderedJordanWigner'"
             )
