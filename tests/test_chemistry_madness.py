@@ -147,7 +147,7 @@ def test_madness_full_be():
 def test_madness_upccgsd(trafo):
     n_pno = 2
     if os.path.isfile("balanced_be_gtensor.npy"):
-        n_pno = None
+        n_pno = "read"
     mol = sun.chemistry.Molecule(
         name="balanced_be",
         frozen_core=False,
@@ -307,9 +307,13 @@ def test_orbital_optimization(restrict_to_hcb):
     name = "data/beh2_{R}"
     R = 4.5
     n_pno = None
+    if os.path.isfile(name.format(R=R) + "_gtensor.npy"):
+        n_pno = "read"
     success = False
     for _ in range(10):
         mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
+        # the next attempts only change the random start, not the madness data
+        n_pno = "read"
         U = mol.make_upccgsd_ansatz("SPA")
         if restrict_to_hcb:
             U = mol.make_upccgsd_ansatz("HCB-SPA")
@@ -338,9 +342,13 @@ def test_orbital_optimization_adapt():
     name = "data/beh2_{R}"
     R = 4.5
     n_pno = None
+    if os.path.isfile(name.format(R=R) + "_gtensor.npy"):
+        n_pno = "read"
     success = False
     for _ in range(10):
         mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
+        # the next attempts only change the random start, not the madness data
+        n_pno = "read"
         U = mol.make_upccgsd_ansatz("SPA")
         operator_pool = sun.ADAPT.adapt.MolecularPool(molecule=mol, indices="UCCD")
 
