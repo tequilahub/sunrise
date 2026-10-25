@@ -700,8 +700,8 @@ class FCircuit:
                             gate.indices[0][0][0] // 2
                             + (gate.indices[0][0][0] % 2) * molecule.n_orbitals
                         ),
-                        angle=gate.variables,
-                    )  # TODO: Control
+                        angle=-0.5 * gate.variables,
+                    )  # TODO: Control, Ph(v) = exp(-i*v/2*n) while tq Phase(a) = exp(i*a*n)
                 else:
                     raise TequilaException(f"Gate {gate} not idenified")
             return res

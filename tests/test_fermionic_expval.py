@@ -17,6 +17,7 @@ from sunrise.expval import (
 )
 
 HAS_TCC = "tcc" in INSTALLED_FERMIONIC_BACKENDS
+HAS_SPEX = "spex" in INSTALLED_FERMIONIC_BACKENDS
 
 
 @pytest.mark.parametrize(
@@ -240,6 +241,56 @@ def test_circuit_simulate(geom, backend):
     )
 
     assert isclose(tq_wfn.inner(sn_wfn), 1)
+
+
+@pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
+def test_givens_circuit_signed_permutation():
+    # swapping orbitals 0 and 3 needs rotations by pi/2 and a phase of pi on orbital 3
+    geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
+    tqmol = sn.Molecule(
+        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner"
+    )
+    snmol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="f")
+    V = np.eye(4)
+    V[[0, 3]] = V[[3, 0]]
+    tqU = tqmol.make_ansatz("UpCCSD", hcb_optimization=False)
+    snU = snmol.make_ansatz("UpCCSD")
+    variables = {d: 0.1 + 0.3 * k for k, d in enumerate(tqU.extract_variables())}
+
+    tq_wfn = tq.simulate(tqU + tqmol.get_givens_circuit(V), variables=variables)
+    sn_wfn = sn.simulate(
+        snU + snmol.get_givens_circuit(V),
+        variables=variables,
+        n_orb=snmol.n_orbitals,
+        backend="spex",
+    )
+    qc_wfn = tq.simulate(
+        tqU + snmol.get_givens_circuit(V).to_qcircuit(tqmol), variables=variables
+    )
+
+    # tequila drops the constant part of the number operator in n_rotation, a global phase
+    assert isclose(abs(tq_wfn.inner(sn_wfn)), 1)
+    assert isclose(abs(tq_wfn.inner(qc_wfn)), 1)
+
+
+@pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
+def test_n_rotation_pi():
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5",
+        basis_set="sto-3g",
+        nature="f",
+    )
+    # orbital 0 is doubly and orbital 1 singly occupied, n_rotation(i, pi) gives (-1)^n_i
+    state = "|11101000>"
+    for i, sign in [(0, 1), (1, -1)]:
+        ket = sn.FCircuit(initial_state=state) + mol.n_rotation(i, np.pi)
+        ov = sn.simulate(
+            Braket(
+                molecule=mol, bra=sn.FCircuit(initial_state=state), ket=ket, operator="I"
+            ),
+            backend="spex",
+        )
+        assert isclose(ov, sign)
 
 
 @pytest.mark.parametrize(

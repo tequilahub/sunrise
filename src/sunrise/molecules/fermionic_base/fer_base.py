@@ -19,9 +19,9 @@ from tequila.objective.objective import Objective, Variable, Variables
 
 from sunrise.fermionic_operations import FCircuit, gates
 from sunrise.fermionic_operations.givens_rotations import (
-    get_givens_circuit as __get_givens_circuit,
+    get_givens_circuit as _get_givens_circuit,
 )
-from sunrise.fermionic_operations.givens_rotations import n_rotation as __n_rotation
+from sunrise.fermionic_operations.givens_rotations import n_rotation as _n_rotation
 from sunrise.fermionic_operations.givens_rotations import (
     reconstruct_matrix_from_circuit,
 )
@@ -1695,7 +1695,7 @@ class FermionicBase(QuantumChemistryBase):
         Returns:
         - FCircuit: A quantum circuit object containing the sequence of rotations applied to the up and down components of the specified qubit.
         """
-        return __n_rotation(i=i, phi=phi)
+        return _n_rotation(i=i, phi=phi)
 
     def get_givens_circuit(self, unitary, tol=1e-12, ordering=OPTIMIZED_ORDERING):
         """
@@ -1712,7 +1712,7 @@ class FermionicBase(QuantumChemistryBase):
         Returns:
         - FCircuit: A quantum circuit implementing the series of rotations decomposed from the unitary.
         """
-        return __get_givens_circuit(unitary=unitary, tol=tol, ordering=ordering)
+        return _get_givens_circuit(unitary=unitary, tol=tol, ordering=ordering)
 
     def __str__(self) -> str:
         result = str(type(self)) + "\n"

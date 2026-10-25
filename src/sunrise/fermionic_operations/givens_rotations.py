@@ -76,7 +76,11 @@ def get_givens_circuit(
 
     # Add all Givens rotations to the circuit.
     for theta in reversed(theta_list):
-        if isinstance(theta[0], numbers.Number) and abs(theta[0]) % numpy.pi < tol:
+        # theta = pi is not the identity: it flips the sign of both orbitals
+        if (
+            isinstance(theta[0], numbers.Number)
+            and abs(theta[0]) % (2 * numpy.pi) < tol
+        ):
             continue
         # (UR(i, j) moves an electron from i to j for a positive angle)
         if fix:
