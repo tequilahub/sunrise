@@ -18,6 +18,7 @@ from tequila import (
     compile_circuit,
 )
 from tequila.circuit import gates
+from tequila.circuit._gates_impl import DifferentiableGateImpl
 
 try:
     from openfermion.ops.representations import (
@@ -78,6 +79,13 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             ]
         self.sign = self.format_excitation_variables(self.indices)
         self.indices = self.format_excitation_indices(self.indices)
+
+    def shifted_gates(self):
+        if self.assume_real and len(self.p0) == 0:
+            # P0 vanishes if the generator has no zero eigenvalues, e.g. singles in tapered binary encodings
+            # with one explicit orbital per spin: the two-term shift rule is then exact
+            return DifferentiableGateImpl.shifted_gates(self)
+        return super().shifted_gates()
 
     def compile(self, *args, **kwargs):
         if self.is_convertable_to_qubit_excitation():

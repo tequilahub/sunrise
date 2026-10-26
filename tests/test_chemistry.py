@@ -484,6 +484,30 @@ def test_upccd_tapered_binary(trafo):
     assert numpy.isclose(energies[0], energies[1], atol=1.0e-8)
 
 
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize("trafo", ["TaperedBinary", "ReorderedTaperedBinary"])
+def test_upccgsd_singles_tapered_binary(trafo):
+    # with one explicit orbital per spin the P0 projector of the singles vanishes in the tapered
+    # encodings, the gradients have to come from the two-term shift rule and match Jordan-Wigner
+    gradients = []
+    variables = None
+    for transformation in ["JordanWigner", trafo]:
+        mol = sun.Molecule(
+            geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.7",
+            basis_set="sto-3g",
+            transformation=transformation,
+            backend="pyscf",
+        )
+        U = mol.make_upccgsd_ansatz(name="UpCCGSD")
+        if variables is None:
+            variables = {v: 0.1 * (i + 1) for i, v in enumerate(U.extract_variables())}
+        E = tq.ExpectationValue(H=mol.make_hamiltonian(), U=U)
+        dE = tq.grad(E)
+        gradients.append({k: tq.simulate(dE[k], variables=variables) for k in dE})
+    for k in variables:
+        assert numpy.isclose(gradients[0][k], gradients[1][k], atol=1.0e-8)
+
+
 @pytest.mark.skipif(
     condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4 or pyscf not found"
 )
