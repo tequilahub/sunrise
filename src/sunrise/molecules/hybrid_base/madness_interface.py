@@ -124,6 +124,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
         neglect_z=None,
         hcb_optimization=None,
         include_reference=True,
+        indices: list | None = None,
         *args,
         **kwargs,
     ):
@@ -139,6 +140,8 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
               Excitations: can be "S" (use only singles), "D" (use only doubles), "GSD" (generalized singles and doubles), "GASD" (approximate singles, neglecting Z terms in JW)
         neglect_z: neglect all Z terms in singles excitations generators
         order: repetition of layers, can be given over the name as well, the order needs to be the first in the name then (i.e. 2-UpCCGSD, 2-SPA-GSD, etc)
+        indices: excitation indices in the format of format_excitation_indices, e.g. [((0, 3),), ((1, 4),)]
+                 (see make_pno_upccgsd_ansatz), they replace the ones of the name in every layer
         args
         kwargs
 
@@ -220,8 +223,15 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
 
         # first layer
         U = QCircuit()
+        given_indices = indices
+        if indices is not None:
+            # raw pairs (p, q) as built by make_pno_upccgsd_ansatz, in the format of the layers ((p, q),)
+            given_indices = [
+                x if isinstance(x[0], tuple) else self.format_excitation_indices([x])
+                for x in indices
+            ]
         if hcb_optimization:
-            if "D" in excitations:
+            if "D" in excitations and given_indices is None:
                 U = self.make_hardcore_boson_pno_upccd_ansatz(
                     include_reference=include_reference,
                     direct_compiling=direct_compiling,
@@ -231,9 +241,12 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
                 U = self.prepare_hardcore_boson_reference()
 
             indices0 = [k.name[0] for k in U.extract_variables()]
-            indices1 = self.make_upccgsd_indices(
-                *args, label=label, name=name, exclude=indices0, **kwargs
-            )
+            if given_indices is None:
+                indices1 = self.make_upccgsd_indices(
+                    *args, label=label, name=name, exclude=indices0, **kwargs
+                )
+            else:
+                indices1 = [x for x in given_indices if x not in indices0]
             if "D" in excitations:
                 U += self.make_hardcore_boson_upccgd_layer(
                     *args, indices=indices1, label=(label, 0), **kwargs
@@ -252,9 +265,10 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
                     **kwargs,
                 )
         else:
-            indices = self.make_upccgsd_indices(
-                *args, label=(label, 0), name=name, **kwargs
-            )
+            if given_indices is None:
+                indices = self.make_upccgsd_indices(
+                    *args, label=(label, 0), name=name, **kwargs
+                )
             if include_reference:
                 U = self.prepare_reference()
             U += self.make_upccgsd_layer(
@@ -269,9 +283,11 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
 
         if order > 1:
             for layer in range(1, order):
-                indices = self.make_upccgsd_indices(
-                    *args, label=(label, layer), name=name, **kwargs
-                )
+                indices = given_indices
+                if given_indices is None:
+                    indices = self.make_upccgsd_indices(
+                        *args, label=(label, layer), name=name, **kwargs
+                    )
                 if "HCB" in name:
                     U += self.make_hardcore_boson_upccgd_layer(
                         *args, indices=indices, label=(label, layer), **kwargs
@@ -334,6 +350,16 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
 
         return U
 
+    def _verify_pair_excitation(self, idx) -> bool:
+        """
+        idx: pair excitation in the format of format_excitation_indices, e.g. ((p, q),)
+        verify_excitation works with spin-orbitals: both electrons of the pair move, (2p -> 2q) and (2p+1 -> 2q+1)
+        """
+        spin_orbitals = []
+        for p, q in idx:
+            spin_orbitals += [(2 * p, 2 * q), (2 * p + 1, 2 * q + 1)]
+        return self.verify_excitation(spin_orbitals, False)
+
     def make_upccgsd_indices(
         self, name="UpCCGD", exclude: list | None = None, *args, **kwargs
     ):
@@ -357,7 +383,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
                 if (
                     idx not in exclude
                     and idx not in indices
-                    and self.verify_excitation(idx, False)
+                    and self._verify_pair_excitation(idx)
                 ):
                     indices.append(idx)
 
@@ -372,7 +398,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
                         if (
                             idx not in exclude
                             and idx not in indices
-                            and self.verify_excitation(idx, False)
+                            and self._verify_pair_excitation(idx)
                         ):
                             indices.append(idx)
 
@@ -388,7 +414,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
                 if (
                     idx not in exclude
                     and idx not in indices
-                    and self.verify_excitation(idx, False)
+                    and self._verify_pair_excitation(idx)
                 ):
                     indices.append(idx)
         # HF-HF and PNO-PNO indices
@@ -401,7 +427,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
                     if (
                         idx not in exclude
                         and idx not in indices
-                        and self.verify_excitation(idx, False)
+                        and self._verify_pair_excitation(idx)
                     ):
                         indices.append(idx)
             for a in virtuals:
@@ -412,7 +438,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
                     if (
                         idx not in exclude
                         and idx not in indices
-                        and self.verify_excitation(idx, False)
+                        and self._verify_pair_excitation(idx)
                     ):
                         indices.append(idx)
         return indices

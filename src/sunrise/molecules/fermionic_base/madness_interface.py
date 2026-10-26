@@ -104,6 +104,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
         neglect_z=None,
         hcb_optimization=None,
         include_reference=True,
+        indices: list | None = None,
         *args,
         **kwargs,
     ):
@@ -119,6 +120,8 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
                 Excitations: can be "S" (use only singles), "D" (use only doubles), "GSD" (generalized singles and doubles), "GASD" (approximate singles, neglecting Z terms in JW)
         neglect_z: neglect all Z terms in singles excitations generators
         order: repetition of layers, can be given over the name as well, the order needs to be the first in the name then (i.e. 2-UpCCGSD, 2-SPA-GSD, etc)
+        indices: excitation indices in the format of format_excitation_indices, e.g. [((0, 3),), ((1, 4),)]
+                 (see make_pno_upccgsd_ansatz), they replace the ones of the name in every layer
         args
         kwargs
 
@@ -179,9 +182,18 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
         # first layer
         U = FCircuit()
 
-        indices = self.make_upccgsd_indices(
-            *args, label=(label, 0), name=name, **kwargs
-        )
+        given_indices = indices
+        if indices is not None:
+            # raw pairs (p, q) as built by make_pno_upccgsd_ansatz, in the format of the layers ((p, q),)
+            given_indices = [
+                x if isinstance(x[0], tuple) else self.format_excitation_indices([x])
+                for x in indices
+            ]
+        indices = given_indices
+        if given_indices is None:
+            indices = self.make_upccgsd_indices(
+                *args, label=(label, 0), name=name, **kwargs
+            )
         if include_reference:
             U = self.prepare_reference()
         U += self.make_upccgsd_layer(
@@ -196,9 +208,11 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
 
         if order > 1:
             for layer in range(1, order):
-                indices = self.make_upccgsd_indices(
-                    *args, label=(label, layer), name=name, **kwargs
-                )
+                indices = given_indices
+                if given_indices is None:
+                    indices = self.make_upccgsd_indices(
+                        *args, label=(label, layer), name=name, **kwargs
+                    )
                 if "HCB" in name:
                     U += self.make_hardcore_boson_upccgd_layer(
                         *args, indices=indices, label=(label, layer), **kwargs

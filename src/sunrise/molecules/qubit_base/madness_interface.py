@@ -128,7 +128,7 @@ class MadnessPNOMixin:
     def use_HAO_orbitals(self, *args, **kwargs):
         raise NotImplementedError
 
-    def make_spa_ansatz(self, label=None, hcb=False):
+    def make_spa_ansatz(self, label=None, hcb=False, edges=None, **kwargs):
         """
         Shortcut for convenience
         Parameters
@@ -137,11 +137,18 @@ class MadnessPNOMixin:
            label for the angles
         hcb:
            if True the circuit will not map from HCB to JW (or other encodings supported)
+        edges, kwargs:
+           if given, the SPA of the backend base class is used (e.g. edges=mol.get_spa_edges())
         Returns
         -------
         Default SPA ansatz (equivalent to PNO-UpCCD with madness PNOs)
 
         """
+        if edges is not None or kwargs:
+            # the fermionic SPA has no hcb option
+            if hcb:
+                kwargs["hcb"] = hcb
+            return super().make_spa_ansatz(edges=edges, label=label, **kwargs)
         name = "SPA-UpCCD"
         if hcb and "HCB" not in name.upper():
             name = "HCB-" + name
@@ -762,6 +769,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
         neglect_z=None,
         hcb_optimization=None,
         include_reference=True,
+        indices: list | None = None,
         *args,
         **kwargs,
     ):
@@ -777,6 +785,8 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
               Excitations: can be "S" (use only singles), "D" (use only doubles), "GSD" (generalized singles and doubles), "GASD" (approximate singles, neglecting Z terms in JW)
         neglect_z: neglect all Z terms in singles excitations generators
         order: repetition of layers, can be given over the name as well, the order needs to be the first in the name then (i.e. 2-UpCCGSD, 2-SPA-GSD, etc)
+        indices: excitation indices in the format of format_excitation_indices, e.g. [((0, 3),), ((1, 4),)]
+                 (see make_pno_upccgsd_ansatz), they replace the ones of the name in every layer
         args
         kwargs
 
@@ -866,8 +876,15 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
 
         # first layer
         U = QCircuit()
+        given_indices = indices
+        if indices is not None:
+            # raw pairs (p, q) as built by make_pno_upccgsd_ansatz, in the format of the layers ((p, q),)
+            given_indices = [
+                x if isinstance(x[0], tuple) else self.format_excitation_indices([x])
+                for x in indices
+            ]
         if hcb_optimization:
-            if "D" in excitations:
+            if "D" in excitations and given_indices is None:
                 U = self.make_hardcore_boson_pno_upccd_ansatz(
                     include_reference=include_reference,
                     direct_compiling=direct_compiling,
@@ -877,9 +894,12 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
                 U = self.prepare_hardcore_boson_reference()
 
             indices0 = [k.name[0] for k in U.extract_variables()]
-            indices1 = self.make_upccgsd_indices(
-                *args, label=label, name=name, exclude=indices0, **kwargs
-            )
+            if given_indices is None:
+                indices1 = self.make_upccgsd_indices(
+                    *args, label=label, name=name, exclude=indices0, **kwargs
+                )
+            else:
+                indices1 = [x for x in given_indices if x not in indices0]
             if "D" in excitations:
                 U += self.make_hardcore_boson_upccgd_layer(
                     *args, indices=indices1, label=(label, 0), **kwargs
@@ -898,9 +918,10 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
                     **kwargs,
                 )
         else:
-            indices = self.make_upccgsd_indices(
-                *args, label=(label, 0), name=name, **kwargs
-            )
+            if given_indices is None:
+                indices = self.make_upccgsd_indices(
+                    *args, label=(label, 0), name=name, **kwargs
+                )
             if include_reference:
                 U = self.prepare_reference()
             U += self.make_upccgsd_layer(
@@ -915,9 +936,11 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
 
         if order > 1:
             for layer in range(1, order):
-                indices = self.make_upccgsd_indices(
-                    *args, label=(label, layer), name=name, **kwargs
-                )
+                indices = given_indices
+                if given_indices is None:
+                    indices = self.make_upccgsd_indices(
+                        *args, label=(label, layer), name=name, **kwargs
+                    )
                 if "HCB" in name:
                     U += self.make_hardcore_boson_upccgd_layer(
                         *args, indices=indices, label=(label, layer), **kwargs
@@ -1049,15 +1072,13 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
         indices = []
         for i in self.reference_orbitals:
             for a in self.get_pair_orbitals(i=i, j=i, exclude=i):
-                if self.verify_excitation([(i.idx, a.idx)], False):
-                    indices.append((i.idx, a.idx))
+                indices.append((i.idx, a.idx))
             if generalized:
                 for a in self.get_pair_orbitals(i=i, j=i, exclude=i):
                     for b in self.get_pair_orbitals(i=i, j=i, exclude=i):
                         if b.idx_total <= a.idx_total:
                             continue
-                        elif self.verify_excitation([(i.idx, a.idx)], False):
-                            indices.append((i.idx, a.idx))
+                        indices.append((i.idx, a.idx))
 
         if include_offdiagonals:
             for i in self.reference_orbitals:
@@ -1066,25 +1087,13 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
                     if i.idx <= j.idx:
                         continue
                     for a in pairs_ij:
-                        if self.verify_excitation(
-                            [
-                                (j.idx, a.idx),
-                            ],
-                            False,
-                        ):
-                            indices.append((j.idx, a.idx))
+                        indices.append((j.idx, a.idx))
 
                     if generalized:
                         for a in pairs_ij:
                             for b in pairs_ij:
                                 if a.idx <= b.idx:
                                     continue
-                                elif self.verify_excitation(
-                                    [
-                                        (a.idx, b.idx),
-                                    ],
-                                    False,
-                                ):
-                                    indices.append((a.idx, b.idx))
+                                indices.append((a.idx, b.idx))
 
         return self.make_upccgsd_ansatz(indices=indices, **kwargs)
