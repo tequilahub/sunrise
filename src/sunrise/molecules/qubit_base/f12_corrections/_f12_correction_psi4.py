@@ -112,7 +112,7 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
 
         # Calculate r-intermediates using a fitted slater-type correlation factor -1*exp(-gamma*r)
         mints = psi4.core.MintsHelper(wfn.basisset())
-        correlationFactor = psi4.core.FittedSlaterCorrelationFactor(self.gamma)
+        correlationFactor = mints.f12_cgtg(self.gamma)
         r_elems = numpy.asarray(mints.mo_f12(correlationFactor, C_RI, C_RI, C_RI, C_RI))
         r = NBodyTensor(
             elems=r_elems,
@@ -124,20 +124,17 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         r.elems /= self.gamma  # ensure that f_12 = -1/gamma * exp(-gamma*r)
 
         # Load Coulomb matrix elements
-        if "two_body_ordering" in self.mol.kwargs:
-            ordering = self.mol.kwargs["two_body_ordering"]
-        else:
-            ordering = "openfermion"
+        _c, h, g = self.mol.integral_manager.get_integrals(ignore_active_space=True)
         g = NBodyTensor(
-            elems=self.mol.molecule.two_body_integrals,
-            ordering=ordering,
+            elems=g.elems,
+            ordering=g.ordering,
             active_indices=self.active,
             size_full=self.n_ri,
         )
         g.reorder(to="phys")
 
         h = NBodyTensor(
-            elems=self.mol.molecule.one_body_integrals,
+            elems=h,
             active_indices=self.active,
             size_full=self.n_ri,
         )
@@ -151,10 +148,6 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         Computes the required integrals via the CABS+ approach in
             Valeev, E. F. Improving on the resolution of the identity in
             linear R12 ab initio theories. Chem. Phys. Lett. 395, 190–195 (2004).
-
-        Currently, this requires that psi4 from the following fork is installed:
-            https://github.com/philipp-q/psi4/tree/ri_space
-            (integration into psi4 is planned)
 
         Requires cabs_options with name of CABS basis by keyword "cabs_name"
 
@@ -183,21 +176,16 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         ri_mol = ref_mol  # ok, psi4.core.Molecule does not have a member BasisSet; way to inherit geometry information
         obs_key = ref_wfn.basisset().name()
         aux_key = cabs_name
-        # This function is commented in psi4-github (the following procedure is a lousy way to get a working
-        # variant of psi4.core.BasisSet.build_ri_space
+        # Passing the geometry as a string makes psi4 return the basis-set dict instead of a qcdb.BasisSet
         ri_basis_dict = psi4.driver.qcdb.BasisSet.pyconstruct_combined(
-            psi4.driver.qcdb.Molecule(ri_mol.to_dict()),
+            ri_mol.save_string_xyz(),
             [obs_key, aux_key],
             [obs_key, aux_key],
             ["ORBITAL", "F12"],
             [obs_key, aux_key],
         )
-        # Augment libints-basis-dict by key and blend for psi4
-        ri_basis_dict["key"] = "RI-BASIS"
-        ri_basis_dict["blend"] = "RI-BASIS"
         ri_basis = psi4.core.BasisSet.construct_from_pydict(ri_mol, ri_basis_dict, 0)
-        # Get RI-space by orthogonalizing ri_basis (function not in public psi4-github)
-        ri_space = psi4.core.OrbitalSpace.cheap_ri_space(
+        ri_space = psi4.core.OrbitalSpace.build_ri_space(
             ri_basis, lindep_tol=lindep_tol
         )
         # Re-overwrite ri_basis, to play safe
@@ -254,7 +242,7 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
 
         # Set up mints
         mints = psi4.core.MintsHelper(ri_basis)
-        correlationFactor = psi4.core.FittedSlaterCorrelationFactor(self.gamma)
+        correlationFactor = mints.f12_cgtg(self.gamma)
 
         # Compute and assemble tensors
         # Helper functions

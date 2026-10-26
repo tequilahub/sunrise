@@ -15,9 +15,9 @@ jobs:
       matrix:
         python-version: ['3.10', '3.11', '3.12' ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install basic dependencies
@@ -38,8 +38,10 @@ jobs:
           # qiskit (pulled in by TenCirChem-NG) uses most of the static TLS reserved for dlopen since 2.6,
           # so the libgomp of pyscf no longer fits: "cannot allocate memory in static TLS block"
           GLIBC_TUNABLES: glibc.rtld.optional_static_tls=4096
+          # one thread per xdist worker, otherwise the OpenMP threads of 4 workers fight for the 4 cores
+          OMP_NUM_THREADS: 1
         run: |
           pip install -e .
-          pip install pytest
+          pip install pytest pytest-xdist
           cd tests
-          pytest -m "not dependencies"
+          pytest -m "not dependencies" -n auto

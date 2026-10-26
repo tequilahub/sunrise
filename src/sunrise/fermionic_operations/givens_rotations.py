@@ -264,6 +264,10 @@ def reconstruct_matrix_from_givens(
         g = givens_matrix(n, i, j, angle)
         reconstructed = reconstructed.dot(g)
 
+    # givens_matrix returns a QTensor, so with numeric angles the entries are numbers in an object array
+    if all(isinstance(x, numbers.Number) for x in numpy.ravel(reconstructed)):
+        reconstructed = numpy.asarray(reconstructed, dtype=complex)
+
     # Convert matrix to real if its imaginary part is negligible unless disabled via to_real_if_possible
     if to_real_if_possible and numpy.all(reconstructed.imag == 0):
         # Directly apply a sign flip if the rotation angle is π
