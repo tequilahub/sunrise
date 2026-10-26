@@ -461,6 +461,29 @@ def test_upccgsd(geometry, trafo):
     assert numpy.isclose(fci, energy2, atol=1.0e-3)
 
 
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize("trafo", ["TaperedBinary", "ReorderedTaperedBinary"])
+def test_upccd_tapered_binary(trafo):
+    # the HCB qubit of the tapered orbital is implicit, so UpCCD is built from fermionic excitations
+    # there; it has to give the same energies as the HCB construction in Jordan-Wigner
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
+    energies = []
+    variables = None
+    for transformation in ["JordanWigner", trafo]:
+        mol = sun.Molecule(
+            geometry=geometry,
+            basis_set="sto-3g",
+            transformation=transformation,
+            backend="pyscf",
+        ).use_native_orbitals()
+        U = mol.make_upccgsd_ansatz(name="UpCCD")
+        if variables is None:
+            variables = {v: 0.1 * (i + 1) for i, v in enumerate(U.extract_variables())}
+        E = tq.ExpectationValue(H=mol.make_hamiltonian(), U=U)
+        energies.append(tq.simulate(E, variables=variables))
+    assert numpy.isclose(energies[0], energies[1], atol=1.0e-8)
+
+
 @pytest.mark.skipif(
     condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4 or pyscf not found"
 )

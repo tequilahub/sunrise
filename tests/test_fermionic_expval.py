@@ -352,6 +352,16 @@ def test_optimize_orbitals_respects_fermionic_backend(kwargs):
     } == {"tcc"}
 
 
+@pytest.mark.parametrize(
+    "backend, module", [("spex", "spex_tequila"), ("tcc", "tencirchem"), ("fqe", "fqe")]
+)
+def test_installed_fermionic_backends(backend, module):
+    # the backends are registered in a try/except ImportError, so if the library is installed
+    # but the backend fails to import, its tests would just disappear
+    pytest.importorskip(module)
+    assert backend in INSTALLED_FERMIONIC_BACKENDS
+
+
 def test_pick_backend_default():
     # without a backend the first installed one in SUPPORTED_FERMIONIC_BACKENDS is chosen, spex first
     expected = next(
