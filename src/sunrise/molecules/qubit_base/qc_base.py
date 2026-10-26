@@ -744,6 +744,10 @@ class QuantumChemistryBase:
         p0 = self.make_excitation_generator(
             indices=indices, form="P0", remove_constant_term=control is None
         )
+        if len(p0) == 0:
+            # P0 vanishes if the generator has no zero eigenvalues, e.g. singles in tapered binary
+            # encodings with one explicit orbital per spin: use the shift rule that does not need it
+            assume_real = False
         if self.transformation.up_then_down:
             idx = []
             for pair in indices:
