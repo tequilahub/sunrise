@@ -488,7 +488,7 @@ def test_upccd_tapered_binary(trafo):
 @pytest.mark.parametrize("trafo", ["TaperedBinary", "ReorderedTaperedBinary"])
 def test_upccgsd_singles_tapered_binary(trafo):
     # with one explicit orbital per spin the P0 projector of the singles vanishes in the tapered
-    # encodings, the gradients have to come from the two-term shift rule and match Jordan-Wigner
+    # encodings, the gradients have to come from a shift rule without P0 and match Jordan-Wigner
     gradients = []
     variables = None
     for transformation in ["JordanWigner", trafo]:
