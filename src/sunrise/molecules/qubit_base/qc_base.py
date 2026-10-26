@@ -17,7 +17,7 @@ from scipy.optimize import linear_sum_assignment
 from tequila import BitString, QTensor, TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
-from tequila.hamiltonian.paulis import Sm, Sp, Zero
+from tequila.hamiltonian.paulis import I, Sm, Sp, Z, Zero
 from tequila.objective.objective import ExpectationValue, Objective, Variable, Variables
 from tequila.simulators.simulator_api import simulate
 from tequila.utils import to_float
@@ -564,9 +564,23 @@ class QuantumChemistryBase:
                 "TAPEREDBINARY" in self.transformation.name.upper()
                 and self.n_orbitals - 1 in pair
             ):
-                p = [i for i in pair if i != self.n_orbitals - 1]
-                U += gates.Ry(
-                    angle=angle, target=p, assume_real=assume_real, control=control
+                # the tapered orbital L is implicit (see make_hardcore_boson_hamiltonian): the pair only
+                # moves between k and L if the orbitals other than k and L hold one pair less than the reference
+                L = self.n_orbitals - 1
+                k = pair[0] + pair[1] - L
+                others = [self.transformation.up(i) for i in range(L) if i != k]
+                parity = (-1) ** (self.n_electrons // 2 - 1)
+                Qk = 0.5 + 0.5 * parity * (Z(others) if others else I())
+                G = Sp(self.transformation.up(k)) if pair[1] == L else Sm(self.transformation.up(k))
+                G = (1.0j * (G - G.dagger()) * Qk).simplify()
+                p0 = (1.0 - Qk).simplify()
+                U += gates.GeneralizedRotation(
+                    angle=angle,
+                    generator=G,
+                    p0=p0,
+                    # without other orbitals P0 vanishes (see make_excitation_gate)
+                    assume_real=assume_real and len(p0) > 0,
+                    control=control,
                 )
             else:
                 target += [
@@ -1769,11 +1783,29 @@ class QuantumChemistryBase:
                 if p != q:
                     g[p, q] += 2 * tbt.elems[p, q, q, p] - tbt.elems[p, q, p, q]
 
+        # in tapered binary encodings the last orbital L is implicit: it holds a pair if the other
+        # orbitals hold one pair less than the reference, which the parity of their Z operators tells
+        tapered = "TAPEREDBINARY" in self.transformation.name.upper()
+        L = n_orbitals - 1
+        parity = (-1) ** (self.n_electrons // 2 - 1)
+        ZL = Z(list(range(L))) if L > 0 else I()
         H = c
         for p in range(n_orbitals):
             for q in range(n_orbitals):
                 up = p
                 uq = q
+                if tapered and L in (p, q):
+                    k = p + q - L
+                    nL = 0.5 + 0.5 * parity * ZL
+                    if p == q:
+                        H += h[p, q] * nL
+                    else:
+                        # the pair moves between k and L if the orbitals other than k and L hold one pair less
+                        others = [i for i in range(L) if i != k]
+                        Qk = 0.5 + 0.5 * parity * (Z(others) if others else I())
+                        hop = Sm(k) if p == k else Sp(k)
+                        H += h[p, q] * hop * Qk + g[p, q] * Sm(k) * Sp(k) * nL
+                    continue
                 H += h[p, q] * Sm(up) * Sp(uq) + g[p, q] * Sm(up) * Sp(up) * Sm(
                     uq
                 ) * Sp(uq)
@@ -2108,7 +2140,8 @@ class QuantumChemistryBase:
                         elif (i - 1 == 0) and (
                             q1 == self.transformation.up(self.n_orbitals - 1)
                         ):
-                            U += gates.Ry(angle=angle, target=c, control=None)
+                            # rotating the explicit orbital instead of L: same angle convention as the other encodings
+                            U += gates.Ry(angle=-angle, target=c, control=None)
                         else:
                             U += gates.Ry(angle=angle, target=q1, control=c)
                         if q1 != self.transformation.up(self.n_orbitals - 1):
@@ -2357,10 +2390,6 @@ class QuantumChemistryBase:
                 have_hcb_trafo = False
         except Exception:  # noqa: BLE001
             have_hcb_trafo = False
-        # in tapered encodings the HCB qubit of the tapered orbital is implicit (see make_spa_ansatz),
-        # but the HCB doubles excite into it, so the doubles are built from fermionic excitations instead
-        if "TAPEREDBINARY" in self.transformation.name.upper():
-            have_hcb_trafo = False
 
         # consistency checks for optimization
         if have_hcb_trafo and hcb_optimization is None and include_reference:
@@ -2368,10 +2397,6 @@ class QuantumChemistryBase:
         if "HCB" in name:
             hcb_optimization = True
         if hcb_optimization and not have_hcb_trafo and "HCB" not in name:
-            if "TAPEREDBINARY" in self.transformation.name.upper():
-                raise TequilaException(
-                    f"use_hcb={hcb_optimization} does not work with transformation={self.transformation.name}: the HCB doubles excite into the tapered orbital, which is implicit in this encoding"
-                )
             raise TequilaException(
                 f"use_hcb={hcb_optimization} but transformation={self.transformation} has no 'hcb_to_me' function. Try transformation='ReorderedJordanWigner'"
             )
