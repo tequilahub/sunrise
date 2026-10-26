@@ -2353,6 +2353,10 @@ class QuantumChemistryBase:
                 have_hcb_trafo = False
         except Exception:  # noqa: BLE001
             have_hcb_trafo = False
+        # in tapered encodings the HCB qubit of the tapered orbital is implicit (see make_spa_ansatz),
+        # but the HCB doubles excite into it, so the doubles are built from fermionic excitations instead
+        if "TAPEREDBINARY" in self.transformation.name.upper():
+            have_hcb_trafo = False
 
         # consistency checks for optimization
         if have_hcb_trafo and hcb_optimization is None and include_reference:
@@ -2360,6 +2364,10 @@ class QuantumChemistryBase:
         if "HCB" in name:
             hcb_optimization = True
         if hcb_optimization and not have_hcb_trafo and "HCB" not in name:
+            if "TAPEREDBINARY" in self.transformation.name.upper():
+                raise TequilaException(
+                    f"use_hcb={hcb_optimization} does not work with transformation={self.transformation.name}: the HCB doubles excite into the tapered orbital, which is implicit in this encoding"
+                )
             raise TequilaException(
                 f"use_hcb={hcb_optimization} but transformation={self.transformation} has no 'hcb_to_me' function. Try transformation='ReorderedJordanWigner'"
             )
@@ -3798,6 +3806,10 @@ def reconstruct_matrix_from_givens(
         reconstructed = numpy.dot(
             g.conj().T, reconstructed
         )  # Transpose of Givens matrix applied to the left
+
+    # givens_matrix returns a QTensor, so with numeric angles the entries are numbers in an object array
+    if all(isinstance(x, numbers.Number) for x in numpy.ravel(reconstructed)):
+        reconstructed = numpy.asarray(reconstructed, dtype=complex)
 
     # Convert matrix to real if its imaginary part is negligible unless disabled via to_real_if_possible
     if to_real_if_possible and numpy.all(reconstructed.imag == 0):

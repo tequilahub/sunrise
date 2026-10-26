@@ -4,9 +4,6 @@ import os
 import numpy
 import openfermion
 import pytest
-
-# Get QC backends for parametrized testing
-import select_backends
 import tequila as tq
 import tequila.simulators.simulator_api
 import tequila.tools.random_generators as rg
@@ -25,7 +22,6 @@ HAS_MADNESS = (
     and qc.QuantumChemistryMadness.find_executable() is not None
 )
 
-backends = select_backends.get()
 standard_trafos = ["JordanWigner", "ReorderedJordanWigner", "BravyiKitaev"]
 trafos = standard_trafos
 # trafos = list(known_encodings().keys() # currently issues with openfermion
@@ -220,11 +216,16 @@ def do_test_h2_hamiltonian(qc_interface):
 
 
 @pytest.mark.skipif(condition=not HAS_PSI4, reason="you don't have psi4")
-@pytest.mark.parametrize("trafo", trafos)
-@pytest.mark.parametrize("backend", backends)
+@pytest.mark.parametrize(
+    "backend, trafo",
+    [
+        (k, t)
+        for k in tequila.simulators.simulator_api.INSTALLED_SIMULATORS
+        for t in trafos
+        if (k, t) != ("symbolic", "BravyiKitaev")
+    ],
+)
 def test_ucc_psi4(trafo, backend):
-    if backend == "symbolic":
-        pytest.skip("skipping for symbolic simulator  ... way too slow")
     parameters_qc = sunrise.molecules.qubit_base.chemistry_tools.ParametersQC(
         geometry="data/h2.xyz", units="angstrom", basis_set="sto-3g"
     )
@@ -458,6 +459,29 @@ def test_upccgsd(geometry, trafo):
     assert numpy.isclose(fci, energy, atol=1.0e-3)
     energy2 = do_test_upccgsd(molecule, label="asd", order=2)
     assert numpy.isclose(fci, energy2, atol=1.0e-3)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize("trafo", ["TaperedBinary", "ReorderedTaperedBinary"])
+def test_upccd_tapered_binary(trafo):
+    # the HCB qubit of the tapered orbital is implicit, so UpCCD is built from fermionic excitations
+    # there; it has to give the same energies as the HCB construction in Jordan-Wigner
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
+    energies = []
+    variables = None
+    for transformation in ["JordanWigner", trafo]:
+        mol = sun.Molecule(
+            geometry=geometry,
+            basis_set="sto-3g",
+            transformation=transformation,
+            backend="pyscf",
+        ).use_native_orbitals()
+        U = mol.make_upccgsd_ansatz(name="UpCCD")
+        if variables is None:
+            variables = {v: 0.1 * (i + 1) for i, v in enumerate(U.extract_variables())}
+        E = tq.ExpectationValue(H=mol.make_hamiltonian(), U=U)
+        energies.append(tq.simulate(E, variables=variables))
+    assert numpy.isclose(energies[0], energies[1], atol=1.0e-8)
 
 
 @pytest.mark.skipif(

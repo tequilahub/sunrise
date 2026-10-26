@@ -57,7 +57,14 @@ def test_spa(geom, backend):
         "H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2",
     ],
 )
-@pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
+# TODO: don't mark tequila slow when tequilahub/tequila#479 is in tequila master
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(b, marks=pytest.mark.slow if b == "tequila" else ())
+        for b in INSTALLED_FERMIONIC_BACKENDS
+    ],
+)
 def test_upccsd(geom, backend):
     mol = sn.Molecule(
         geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner"
@@ -132,7 +139,14 @@ def test_mapped_variables(geom, backend):
         "H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2",
     ],
 )
-@pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
+# TODO: don't mark tequila slow when tequilahub/tequila#479 is in tequila master
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(b, marks=pytest.mark.slow if b == "tequila" else ())
+        for b in INSTALLED_FERMIONIC_BACKENDS
+    ],
+)
 def test_optimize_orbitals(geom, backend):
     if backend == "fqe":
         pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
@@ -159,8 +173,6 @@ def test_optimize_orbitals(geom, backend):
 )
 @pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
 def test_overlap_minimization(geom, backend):
-    if backend == "tequila":
-        pytest.skip("Skipping tequila")
     mol = sn.Molecule(
         geometry=geom,
         basis_set="sto-3g",
@@ -338,6 +350,16 @@ def test_optimize_orbitals_respects_fermionic_backend(kwargs):
         c.kwargs.get("fbackend") or c.kwargs.get("backend")
         for c in compile_spy.call_args_list
     } == {"tcc"}
+
+
+@pytest.mark.parametrize(
+    "backend, module", [("spex", "spex_tequila"), ("tcc", "tencirchem"), ("fqe", "fqe")]
+)
+def test_installed_fermionic_backends(backend, module):
+    # the backends are registered in a try/except ImportError, so if the library is installed
+    # but the backend fails to import, its tests would just disappear
+    pytest.importorskip(module)
+    assert backend in INSTALLED_FERMIONIC_BACKENDS
 
 
 def test_pick_backend_default():
