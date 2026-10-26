@@ -484,7 +484,9 @@ def test_upccd_tapered_binary(trafo):
         ]:
             U = mol.make_upccgsd_ansatz(name=name, hcb_optimization=hcb_optimization)
             if variables is None:
-                variables = {v: 0.1 * (i + 1) for i, v in enumerate(U.extract_variables())}
+                variables = {
+                    v: 0.1 * (i + 1) for i, v in enumerate(U.extract_variables())
+                }
             E = tq.ExpectationValue(H=H, U=U)
             energies.append(tq.simulate(E, variables=variables))
     assert numpy.allclose(energies[:3], energies[3:], atol=1.0e-8)

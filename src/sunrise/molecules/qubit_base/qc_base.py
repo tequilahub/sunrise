@@ -571,7 +571,11 @@ class QuantumChemistryBase:
                 others = [self.transformation.up(i) for i in range(L) if i != k]
                 parity = (-1) ** (self.n_electrons // 2 - 1)
                 Qk = 0.5 + 0.5 * parity * (Z(others) if others else I())
-                G = Sp(self.transformation.up(k)) if pair[1] == L else Sm(self.transformation.up(k))
+                G = (
+                    Sp(self.transformation.up(k))
+                    if pair[1] == L
+                    else Sm(self.transformation.up(k))
+                )
                 G = (1.0j * (G - G.dagger()) * Qk).simplify()
                 p0 = (1.0 - Qk).simplify()
                 U += gates.GeneralizedRotation(
