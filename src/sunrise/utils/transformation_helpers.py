@@ -325,6 +325,10 @@ class FermionicSWAP:
         """
         This is a helper function for fermionic_swap.
 
+        The fermionic swap (SWAP followed by CZ) of the two adjacent qubit
+        modes (i, j), built from 2 CNOTs:
+                |00> -> |00>, |01> -> |10>, |10> -> |01>, |11> -> -|11>
+
         Parameters
         ----------
         i : int
@@ -336,14 +340,11 @@ class FermionicSWAP:
         ------
         Francisco Javier Del Arco Santos
         """
-        # TODO: check if fswap is used
-        # U = self.mol.make_excitation_gate(indices=(i,j),angle=numpy.pi)
-        # return U
         return (
-            tequila.gates.CNOT(target=i, control=j)
+            tequila.gates.H(target=i)
             + tequila.gates.CNOT(target=j, control=i)
-            + tequila.gates.Rz(target=i, angle=numpy.pi)
             + tequila.gates.CNOT(target=i, control=j)
+            + tequila.gates.H(target=j)
         )
 
     def f_swap(self, i: int, j: int) -> tequila.QCircuit:
