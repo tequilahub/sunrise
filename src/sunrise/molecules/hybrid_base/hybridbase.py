@@ -324,7 +324,7 @@ class HybridBase(qc_base):
         New molecule in the native (orthonormalized) basis given
         e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
         """
-        from sunrise.molecules.utils_orbital_transformation import (
+        from sunrise.utils.orbital_transformation import (
             get_active,
             get_core,
             orthogonalize_active_space,
