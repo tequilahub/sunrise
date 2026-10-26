@@ -5,7 +5,6 @@ import tequila as tq
 from tequila import QubitWaveFunction, TequilaException
 
 from sunrise.expval.fqe.fermionic_utils import *
-from sunrise.expval.fqe.fqe_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
 
 from ..fermionic_braket import FermBraketImpl

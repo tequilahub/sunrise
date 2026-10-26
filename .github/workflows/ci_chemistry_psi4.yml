@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       - name: Set up Conda
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: 'latest'
           auto-activate-base: false
@@ -57,3 +57,5 @@ jobs:
           cp -r tests/data data
           conda run -n psi4_env pytest tests/test_chemistry.py
           conda run -n psi4_env pytest tests/test_adapt.py
+          conda run -n psi4_env pytest tests/test_chemistry_f12.py
+          conda run -n psi4_env pytest tests/test_hcb_measurement.py

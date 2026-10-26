@@ -24,24 +24,9 @@ def test_correction_psi4_active():
     assert numpy.isclose(dE, -0.023784170991254745, atol=1.0e-7)
 
 
-cabs_ready_psi4 = False
-if HAS_PSI4:
-    import psi4
-
-    # The function "cheap_ri_space"  was added on top of psi4, but is unused at the moment.
-    # This means it might be removed again when a PR into psi4 is issued,
-    # but if successful the test does not need to be skipped anymore :)
-    if hasattr(psi4.core.OrbitalSpace, "cheap_ri_space"):
-        cabs_ready_psi4 = True
-
-
-@pytest.mark.skipif(
-    condition=not cabs_ready_psi4,
-    reason="You don't have the correct version of psi4 with CABS-hack.",
-)
+@pytest.mark.skipif(condition=not HAS_PSI4, reason="you don't have psi4")
 def test_correction_psi4_cabsplus():
-    # Try to run CABS+, which as of now is only available via direct installation of personal fork
-    # Choice of CABS also not sensible here
+    # Choice of CABS not sensible here
     geomstring = "He 0.0 0.0 0.0"
     mol = sun.Molecule(
         geometry=geomstring,
@@ -60,13 +45,15 @@ def test_correction_psi4_cabsplus():
 
 
 data_path = "data/f12/"
+# the skipif is evaluated at collection, before conftest.py changes into the tests directory
+data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), data_path)
 
 
 @pytest.mark.skipif(
     not (
-        os.path.isfile(str(data_path) + "he-f12_gtensor.npy")
-        and os.path.isfile(str(data_path) + "he-f12_htensor.npy")
-        and os.path.isfile(str(data_path) + "he-f12_f12tensor.npy")
+        os.path.isfile(data_dir + "he-f12_gtensor.npy")
+        and os.path.isfile(data_dir + "he-f12_htensor.npy")
+        and os.path.isfile(data_dir + "he-f12_f12tensor.npy")
     ),
     reason="data not there",
 )
@@ -81,10 +68,10 @@ def test_correction_madness(trafo):
         n_pno="read",
         active_orbitals=[0, 1],
         madness_root_dir=None,
-        keep_mad_files=trafo,
+        transformation=trafo,
     )
     if not mol.supports_ucc():
-        return
+        pytest.skip(f"{trafo} has no UCC support")
     U = mol.make_upccgsd_ansatz(name="UpCCD")
     angles = {(((0, 1),), "D", (None, 0)): -0.1278860185100716}
     rdminfo = {"U": U, "variables": angles}

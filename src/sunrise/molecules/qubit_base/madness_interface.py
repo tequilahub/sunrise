@@ -517,6 +517,10 @@ class QuantumChemistryMadness(QuantumChemistryBase):
             have_hcb_trafo = self.transformation.hcb_to_me() is not None
         except Exception:  # noqa: BLE001
             have_hcb_trafo = False
+        # in tapered encodings the HCB qubit of the tapered orbital is implicit (see make_spa_ansatz),
+        # but the HCB doubles excite into it, so the doubles are built from fermionic excitations instead
+        if "TAPEREDBINARY" in self.transformation.name.upper():
+            have_hcb_trafo = False
         name = name.upper()
 
         # Default Method
@@ -570,6 +574,10 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                 kwargs["spin_adapt_singles"] = True
 
         if direct_compiling and not have_hcb_trafo and "HCB" not in name:
+            if "TAPEREDBINARY" in self.transformation.name.upper():
+                raise TequilaMadnessException(
+                    f"direct_compiling={direct_compiling} does not work with transformation={self.transformation.name}: the HCB doubles excite into the tapered orbital, which is implicit in this encoding"
+                )
             raise TequilaMadnessException(
                 f"direct_compiling={direct_compiling} demanded but no hcb_to_me in transformation={self.transformation}\ntry transformation='ReorderedJordanWigner' "
             )
