@@ -23,4 +23,8 @@ U += UR(1, 2, "a") + UC(1, 2, "b")
 print(U)
 ```
 
+<p align="center"><img src="example_circuit.png" width="360" alt="Example circuit"/></p>
+
+*Circuit from the snippet: SPA pair excitations on (0,1) and (2,3), then an orbital rotation `UR(1, 2)` (circles) and a pair excitation `UC(1, 2)` (hexagons).*
+
 **See also:** [Givens rotation example](../../../examples/givens_rotation/givens_rotation.py) · [orbital rotator tests](../../../tests/test_Orbital_Rotator.py)
