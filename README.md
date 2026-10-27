@@ -76,6 +76,9 @@ import sunrise as sun  # First time might take some seconds
 
 sun.show_supported_modules()
 ```
+### [spex](https://github.com/tequilahub/spex)
+Sparse fermionic simulator, installed together with sunrise (`spex-tequila`) and used by default.
+
 ### [FQE](https://github.com/quantumlib/OpenFermion-FQE)
 Install with:
 ```bash
