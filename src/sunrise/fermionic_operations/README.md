@@ -18,6 +18,7 @@ Orbital rotations can be compiled into Givens-rotation networks (`givens_rotatio
 ```python
 import sunrise as sn
 from sunrise.fermionic_operations import UR, UC
+
 U = sn.FCircuit.from_edges(n_orb=4, edges=[(0, 1), (2, 3)])
 U += UR(1, 2, "a") + UC(1, 2, "b")
 print(U)

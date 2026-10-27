@@ -11,7 +11,10 @@ Quantifies how strongly orbitals are correlated in a molecular wavefunction, usi
 
 ```python
 import sunrise as sun
-from sunrise.orbital_correlation.quantum_info_utils import mutual_info_simple, one_orb_entanglement
+from sunrise.orbital_correlation.quantum_info_utils import (
+    mutual_info_simple,
+    one_orb_entanglement,
+)
 
 mol = sun.chemistry.Molecule("H 0 0 0\nH 0 0 0.7", "sto-3g").use_native_orbitals()
 U = mol.make_ansatz(name="SPA", edges=[(0, 1)], label=None)

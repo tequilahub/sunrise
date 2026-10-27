@@ -9,9 +9,15 @@ Builds many-electron states that respect the molecule's symmetries: total spin (
 
 ```python
 import sunrise as sun
-from sunrise.symmetry_adaptation import FockSpaceState, IrrepProvider, SpinSymmetrizationProcedure
+from sunrise.symmetry_adaptation import (
+    FockSpaceState,
+    IrrepProvider,
+    SpinSymmetrizationProcedure,
+)
 
-mol = sun.chemistry.Molecule(geometry="H 0 0 0\nH 0 0 0.748", basis_set="sto-3g", backend="pyscf")
+mol = sun.chemistry.Molecule(
+    geometry="H 0 0 0\nH 0 0 0.748", basis_set="sto-3g", backend="pyscf"
+)
 states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
 print(FockSpaceState.dataframe(SpinSymmetrizationProcedure(mol).symmetrize(states)))
 ```

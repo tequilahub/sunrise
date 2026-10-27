@@ -1,5 +1,5 @@
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest import mock
 
 import numpy as np
@@ -111,7 +111,7 @@ def test_transition(backend):
 )
 @pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
 def test_mapped_variables(geom, backend):
-    random.seed(datetime.now().timestamp())
+    random.seed(datetime.now(tz=timezone.utc).timestamp())
     mol = sn.Molecule(
         geometry=geom,
         basis_set="sto-3g",
@@ -210,7 +210,7 @@ def test_gradient(geom, backend):
     snmol = sn.Molecule(
         geometry=geom, basis_set="sto-3g", nature="f"
     ).use_native_orbitals()
-    random.seed(datetime.now().timestamp())
+    random.seed(datetime.now(tz=timezone.utc).timestamp())
     tqU = tqmol.make_ansatz("UpCCSD", hcb_optimization=False)
     snU = snmol.make_ansatz("UpCCSD")
     tqval = tq.ExpectationValue(H=tqmol.make_hamiltonian(), U=tqU)
@@ -242,7 +242,7 @@ def test_circuit_simulate(geom, backend):
         units="a",
     )
     snmol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="f")
-    random.seed(datetime.now().timestamp())
+    random.seed(datetime.now(tz=timezone.utc).timestamp())
     tqU = tqmol.make_ansatz("UpCCSD", hcb_optimization=False)
     snU = snmol.make_ansatz("UpCCSD")
     variables = {d: random.random() * np.pi for d in tqU.extract_variables()}

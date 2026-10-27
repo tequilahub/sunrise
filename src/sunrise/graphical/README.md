@@ -9,8 +9,9 @@ Draws tequila and sunrise circuits as publication-quality figures using [qpic](h
 
 ```python
 import sunrise as sn
+
 U = sn.FCircuit.from_edges(n_orb=4, edges=[(0, 1), (2, 3)])
-sn.draw(U, filename="spa")      # -> spa.png (also shown inline in Jupyter)
+sn.draw(U, filename="spa")  # -> spa.png (also shown inline in Jupyter)
 ```
 
 Requires `qpic`, LaTeX and ImageMagick (`convert`) for PDF/PNG output.

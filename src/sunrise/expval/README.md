@@ -16,7 +16,10 @@ Everything needed to evaluate $\langle\psi|H|\psi\rangle$ (and overlaps $\langle
 
 ```python
 import sunrise as sn
-mol = sn.Molecule(geometry="H 0 0 0\nH 0 0 1\nH 0 0 2\nH 0 0 3", basis_set="sto-3g", nature="f")
+
+mol = sn.Molecule(
+    geometry="H 0 0 0\nH 0 0 1\nH 0 0 2\nH 0 0 3", basis_set="sto-3g", nature="f"
+)
 U = sn.FCircuit.from_edges(n_orb=mol.n_orbitals, edges=[(0, 1), (2, 3)])
 opt = sn.optimize_orbitals(circuit=U, molecule=mol, backend="tcc")
 print(opt.energy)

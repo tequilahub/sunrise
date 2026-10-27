@@ -14,9 +14,13 @@ Useful methods: `make_ansatz("SPA", edges=...)`, `make_hamiltonian()`, `compute_
 
 ```python
 import sunrise as sn
-mol = sn.Molecule(geometry="H 0 0 0\nLi 0 0 1.5", basis_set="sto-3g", nature="h", select="BBFBF")
+
+mol = sn.Molecule(
+    geometry="H 0 0 0\nLi 0 0 1.5", basis_set="sto-3g", nature="h", select="BBFBF"
+)
 U = mol.make_ansatz("SPA", edges=[(0, 1)])
-mol.save("lih.h5");  mol2 = sn.load_molecule("lih.h5")
+mol.save("lih.h5")
+mol2 = sn.load_molecule("lih.h5")
 ```
 
 Converters: `MoleculeFromPyscf`, `MoleculeToPyscf`, `MoleculeFromOpenFermion`, `MoleculeFromSunrise`.

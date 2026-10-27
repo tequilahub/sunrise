@@ -10,8 +10,9 @@ and finds the coefficients $c_k$ by solving a small generalized eigenvalue probl
 import sunrise as sun
 from sunrise.MCVBT.gnm import mcvbt
 
-mol = sun.chemistry.Molecule(geometry="H 1.5 0 0\nH 0 0 0\nH 1.5 0 1.5\nH 0 0 1.5",
-                             basis_set="sto-6g").use_native_orbitals()
+mol = sun.chemistry.Molecule(
+    geometry="H 1.5 0 0\nH 0 0 0\nH 1.5 0 1.5\nH 0 0 1.5", basis_set="sto-6g"
+).use_native_orbitals()
 graphs = [[(0, 1), (2, 3)], [(0, 3), (1, 2)], [(0, 2), (1, 3)]]
 solver = mcvbt(mol=mol, graphs=graphs, solver="qulacs")
 solver.calculate_groundstate()

@@ -23,7 +23,7 @@ from sunrise.CLPO import generate_CLPO_molecule_edges
 mol = sn.Molecule(geometry="N 0 0 0\nN 0 0 1.098", basis_set="sto-3g", backend="pyscf")
 mol, edges = generate_CLPO_molecule_edges(mol)
 U = mol.make_ansatz("HCB-SPA", edges=edges)
-sn.plot_MO(mol, filename="N2_CLPO")   # look at the orbitals
+sn.plot_MO(mol, filename="N2_CLPO")  # look at the orbitals
 ```
 
 **See also:** [CLPO example](../../../examples/CLPO_orbitals/clpo_example.py) · [HAO example](../../../examples/Hybrid_Atomic_Orbitals/HAO.py)

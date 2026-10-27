@@ -15,6 +15,7 @@ and `run_spa_optimization` to score a candidate graph by its SPA energy.
 ```python
 import numpy as np
 from sunrise.graph_selection import generate_min_global_distance_edges
+
 coords = np.array([[0, 0, 0], [0, 0, 1], [0, 0, 2.5], [0, 0, 3.5]])
 edges = generate_min_global_distance_edges(coords)
 ```
