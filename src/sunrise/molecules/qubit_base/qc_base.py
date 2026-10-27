@@ -1776,6 +1776,30 @@ class QuantumChemistryBase:
         if condensed=False then JordanWigner would give back the Hamiltonian defined on even qubits between 0 to 2N
         """
 
+        def hcb_ham_tappered():
+            # the last orbital L is implicit: it holds a pair if the other orbitals hold one pair less
+            # than the reference, which the parity of their Z operators tells
+            L = n_orbitals - 1
+            parity = (-1) ** (self.n_electrons // 2 - 1)
+            nL = 0.5 + 0.5 * parity * (Z(list(range(L))) if L > 0 else I())
+            H = c + h[L, L] * nL
+            for p in range(L):
+                # the pair moves between p and L if the orbitals other than p and L hold one pair less
+                others = [i for i in range(L) if i != p]
+                Qp = 0.5 + 0.5 * parity * (Z(others) if others else I())
+                H += (h[p, L] * Sm(p) + h[L, p] * Sp(p)) * Qp
+                H += (g[p, L] + g[L, p]) * Sm(p) * Sp(p) * nL
+                for q in range(L):
+                    H += h[p, q] * Sm(p) * Sp(q)
+                    H += g[p, q] * Sm(p) * Sp(p) * Sm(q) * Sp(q)
+
+            if not self.transformation.up_then_down and not condensed:
+                alpha_map = {
+                    k.idx: self.transformation.up(k.idx) for k in self.orbitals
+                }
+                H = H.map_qubits(alpha_map)
+            return H
+
         # integrate with QubitEncoding at some point
         n_orbitals = self.n_orbitals
         c, obt, tbt = self.get_integrals()
@@ -1788,29 +1812,14 @@ class QuantumChemistryBase:
                 if p != q:
                     g[p, q] += 2 * tbt.elems[p, q, q, p] - tbt.elems[p, q, p, q]
 
-        # in tapered binary encodings the last orbital L is implicit: it holds a pair if the other
-        # orbitals hold one pair less than the reference, which the parity of their Z operators tells
-        tapered = "TAPEREDBINARY" in self.transformation.name.upper()
-        L = n_orbitals - 1
-        parity = (-1) ** (self.n_electrons // 2 - 1)
-        ZL = Z(list(range(L))) if L > 0 else I()
+        if "TAPEREDBINARY" in self.transformation.name.upper():
+            return hcb_ham_tappered()
+
         H = c
         for p in range(n_orbitals):
             for q in range(n_orbitals):
                 up = p
                 uq = q
-                if tapered and L in (p, q):
-                    k = p + q - L
-                    nL = 0.5 + 0.5 * parity * ZL
-                    if p == q:
-                        H += h[p, q] * nL
-                    else:
-                        # the pair moves between k and L if the orbitals other than k and L hold one pair less
-                        others = [i for i in range(L) if i != k]
-                        Qk = 0.5 + 0.5 * parity * (Z(others) if others else I())
-                        hop = Sm(k) if p == k else Sp(k)
-                        H += h[p, q] * hop * Qk + g[p, q] * Sm(k) * Sp(k) * nL
-                    continue
                 H += h[p, q] * Sm(up) * Sp(uq) + g[p, q] * Sm(up) * Sp(up) * Sm(
                     uq
                 ) * Sp(uq)
