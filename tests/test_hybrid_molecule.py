@@ -71,6 +71,29 @@ def test_opt_SPA(two_qubit, transformation):
     assert numpy.isclose(tqopt.energy, opt.energy, 10**-5)
 
 
+# Tests that the hybrid molecule gets the same native orbitals and ground state energy as the qubit molecule
+def test_native_orbitals():
+    system = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
+    mol = sn.Molecule(
+        geometry=system,
+        basis_set="sto-6g",
+        select="FFFF",
+        backend="pyscf",
+        nature="hybrid",
+    ).use_native_orbitals()
+    tqmol = sn.Molecule(
+        geometry=system, basis_set="sto-6g", backend="pyscf"
+    ).use_native_orbitals()
+
+    assert numpy.allclose(
+        mol.integral_manager.orbital_coefficients,
+        tqmol.integral_manager.orbital_coefficients,
+    )
+    energy = numpy.linalg.eigvalsh(mol.make_hamiltonian().to_matrix())[0]
+    tqenergy = numpy.linalg.eigvalsh(tqmol.make_hamiltonian().to_matrix())[0]
+    assert numpy.isclose(energy, tqenergy)
+
+
 @pytest.mark.parametrize(
     "system",
     [
