@@ -5,7 +5,7 @@ Draws tequila and sunrise circuits as publication-quality figures using [qpic](h
 - `draw(circuit, ...)` – render a circuit; it can show it in **spin** or **spatial-orbital** view, with symbolic or numeric angles, and group gates into named blocks.
 - `qpic_to_pdf`, `qpic_to_png` – convert an existing `.qpic` file.
 
-<p align="center"><img src="../fermionic_operations/spa_circuit.png" width="220" alt="SPA circuit"/></p>
+<p align="center"><img src="../fermionic_operations/example_circuit.png" width="320" alt="SPA circuit"/></p>
 
 ```python
 import sunrise as sn
