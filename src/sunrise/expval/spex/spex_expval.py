@@ -4,7 +4,7 @@ from numbers import Number
 from typing import Callable
 
 import spex_tequila as spex
-from numpy import array, ceil, complex128, ndarray, real
+from numpy import array, ceil, complex128, exp, ndarray, real
 from openfermion import FermionOperator, normal_ordered
 from tequila import QubitHamiltonian, QubitWaveFunction, TequilaException, Variable
 from tequila.objective.objective import Objective, Variables
@@ -414,6 +414,14 @@ def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
         for term_pairs in indices:
             creation = [p[1] for p in term_pairs]
             annihilation = [p[0] for p in term_pairs]
+            if creation == annihilation:
+                # spex drops a+_p a_p terms (generator a+_p a_p - h.c. = 0), so apply exp(-i*theta/2*n_p) here
+                mask = sum(1 << p for p in creation)
+                phase = exp(-0.5j * theta)
+                result = {
+                    k: v * phase if k & mask == mask else v for k, v in result.items()
+                }
+                continue
             n_pairs = len(term_pairs)
             weight = 1.0j * ((-1) ** (n_pairs * (n_pairs - 1) // 2))
             term = spex.FermionTerm(creation, annihilation, weight)
