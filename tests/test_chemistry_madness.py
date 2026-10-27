@@ -223,6 +223,93 @@ def test_madness_upccgsd(trafo):
     assert numpy.isclose(result.energy, oigawert, atol=1.0e-3)
 
 
+@pytest.fixture(scope="module")
+def madness_be_dir(tmp_path_factory):
+    # one madness calculation, the molecules of the natures read its files
+    if executable is None:
+        pytest.skip("madness was not found")
+    path = tmp_path_factory.mktemp("madness_be")
+    cwd = os.getcwd()
+    os.chdir(path)
+    try:
+        sun.Molecule(**MADNESS_ANSATZ_CASES["be"][0], n_pno=2)
+    finally:
+        os.chdir(cwd)
+    return path
+
+
+# molecule keyword arguments, number of orbitals and number of variables of the ansatz names
+MADNESS_ANSATZ_CASES = {
+    "he": (
+        {"name": "data/madness/he", "geometry": "He 0.0 0.0 0.0", "units": "angstrom"},
+        2,
+        {"SPA-D": 1, "SPA-UpCCSD": 2, "UpCCGD": 1, "UpCCGSD": 2},
+    ),
+    "be": (
+        {
+            "name": "be",
+            "geometry": "Be 0.0 0.0 0.0",
+            "units": "angstrom",
+            "frozen_core": False,
+            "pno": {"diagonal": True, "maxrank": 1},
+        },
+        4,
+        {"SPA-D": 2, "SPA-UpCCSD": 4, "UpCCGD": 6, "UpCCGSD": 12},
+    ),
+}
+
+
+def _ansatz_energy(mol, U):
+    if isinstance(U, tq.QCircuit):
+        E = tq.ExpectationValue(H=mol.make_hamiltonian(), U=U)
+        return tq.minimize(E, silent=True).energy
+    # fermionic circuit
+    return sun.minimize(sun.Braket(molecule=mol, ket=U), silent=True).energy
+
+
+@pytest.mark.parametrize("case", ["he", "be"])
+@pytest.mark.parametrize(
+    "nature,select",
+    [("qubit", None), ("fermionic", None), ("hybrid", "F"), ("hybrid", "B")],
+)
+def test_madness_upccgsd_natures(case, nature, select, request, monkeypatch):
+    # the PNO restricted ansatzes give the same circuits and energies in all natures
+    if case == "be":
+        monkeypatch.chdir(request.getfixturevalue("madness_be_dir"))
+    kwargs, n_orbitals, n_variables = MADNESS_ANSATZ_CASES[case]
+    kwargs = {**kwargs, "n_pno": "read"}
+    reference = sun.Molecule(**kwargs)
+    if select is not None:
+        kwargs["select"] = select * n_orbitals
+    mol = sun.Molecule(**kwargs, nature=nature)
+
+    # the bosonic orbitals only hold electron pairs, no singles
+    # seniority zero ansatzes have the same energy with the hardcore boson Hamiltonian
+    names = [x for x in n_variables if select != "B" or "S" not in x.split("-")[-1]]
+    energies = {}
+    for name in names:
+        U = mol.make_upccgsd_ansatz(name=name)
+        assert len(U.extract_variables()) == n_variables[name], name
+        energies[name] = _ansatz_energy(mol, U)
+        reference_energy = _ansatz_energy(
+            reference, reference.make_upccgsd_ansatz(name=name)
+        )
+        assert numpy.isclose(energies[name], reference_energy, atol=1.0e-5), name
+    if case == "he" and "UpCCGSD" in energies:
+        assert numpy.isclose(energies["UpCCGSD"], -2.87761809, atol=1.0e-5)
+
+    # the excitations within the PNO pairs are the SPA
+    U = mol.make_pno_upccgsd_ansatz(name="UpCCD")
+    assert len(U.extract_variables()) == n_variables["SPA-D"]
+    assert numpy.isclose(_ansatz_energy(mol, U), energies["SPA-D"], atol=1.0e-5)
+    if select != "B":
+        U = mol.make_pno_upccgsd_ansatz(name="UpCCSD")
+        assert len(U.extract_variables()) == n_variables["SPA-UpCCSD"]
+        assert numpy.isclose(
+            _ansatz_energy(mol, U), energies["SPA-UpCCSD"], atol=1.0e-5
+        )
+
+
 @pytest.mark.skipif(executable is None, reason="madness was not found")
 def test_madness_save_load(tmp_path, monkeypatch):
     # the PNO pair structure is saved with the molecule, it is loaded without madness files
