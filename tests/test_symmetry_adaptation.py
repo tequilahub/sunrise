@@ -1,4 +1,5 @@
 import numpy as np
+import openfermion
 import pytest
 import tequila as tq
 
@@ -11,6 +12,7 @@ from sunrise.symmetry_adaptation import (
     SpinSymmetrizationProcedure,
     SymmetryAdaptedLinearCombintationSymmetrization,
 )
+from sunrise.utils.transformation_helpers import FermionicSWAP
 
 HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 
@@ -77,6 +79,46 @@ def test_point_group_keyword(point_group, expected, expected_abelian) -> None:
     assert mol.point_group.schoenflies_label == expected
     assert mol.abelian_point_group.schoenflies_label == expected_abelian
     assert mol.pyscf_molecule.groupname == expected_abelian
+
+
+# Tests the operations of Td and D8h on the atoms: the atom permutations decompose into the expected irreps
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize(
+    "geometry, expected, n_distinct, expected_irreps",
+    [
+        (
+            "C 0. 0. 0. \n H 0.6276 0.6276 0.6276 \n H -0.6276 -0.6276 0.6276 \n H -0.6276 0.6276 -0.6276 \n H 0.6276 -0.6276 -0.6276",
+            "Td",
+            24,
+            {"A1": 2, "T2": 1},
+        ),
+        (
+            "\n".join(
+                f"H {np.cos(k * np.pi / 4):.10f} {np.sin(k * np.pi / 4):.10f} 0."
+                for k in range(8)
+            ),
+            "D8h",
+            16,
+            {"A1g": 1, "B1g": 1, "E1u": 1, "E2g": 1, "E3u": 1},
+        ),
+    ],
+)
+def test_atomic_permutations_non_abelian(
+    geometry, expected, n_distinct, expected_irreps
+) -> None:
+    mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf")
+    assert mol.point_group.schoenflies_label == expected
+
+    operations = mol.atomic_permutation_representation().operations
+    # a planar molecule cannot tell an operation from its product with sh apart
+    assert len({op.tobytes() for op in operations.values()}) == n_distinct
+
+    characters = np.array([np.trace(op) for op in operations.values()])
+    table = mol.point_group.character_table
+    multiplicities = np.round(table.matrix @ characters / mol.point_group.order, 10)
+    assert dict(zip(table.irreps, multiplicities)) == {
+        irrep: expected_irreps.get(irrep, 0) for irrep in table.irreps
+    }
 
 
 # Tests that the canonical provider falls back to the largest Abelian subgroup for non-Abelian groups
@@ -410,3 +452,51 @@ def test_spin_CG_build_physical_state_correctness() -> None:
     assert (
         len(list(n2.wavefunction.items())) == 20
     )  # O_{6,1}^{0,0} has exactly 20 terms
+
+
+# Tests the fermionic swap against the exact openfermion operator 1 - n_p - n_q + a_p^ a_q + a_q^ a_p (Jordan-Wigner):
+# f(p, q) on two adjacent modes, f_swap(0, 3) as the orbital swap of H4 and the inversion commuting with the Hamiltonian
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+def test_fermionic_swap_correctness() -> None:
+    mol = sun.Molecule(
+        geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.",
+        basis_set="sto-3g",
+        backend="pyscf",
+    ).use_native_orbitals()
+    fswap = FermionicSWAP(mol)
+    n_qubits = 2 * mol.n_orbitals
+
+    exact = {}
+    for p, q, n in [(0, 1, 2), (0, 6, n_qubits), (1, 7, n_qubits)]:
+        F = (
+            openfermion.FermionOperator("")
+            - openfermion.FermionOperator(f"{p}^ {p}")
+            - openfermion.FermionOperator(f"{q}^ {q}")
+            + openfermion.FermionOperator(f"{p}^ {q}")
+            + openfermion.FermionOperator(f"{q}^ {p}")
+        )
+        exact[(p, q)] = openfermion.get_sparse_operator(F, n_qubits=n).toarray()
+
+    # the columns of the circuit matrices are the simulated basis states
+    U = fswap.f(0, 1)
+    f_matrix = np.array(
+        [tq.simulate(U, initial_state=s).to_array() for s in range(4)]
+    ).T
+    assert np.allclose(f_matrix, exact[(0, 1)])
+
+    U = fswap.f_swap(0, 3) + tq.gates.I(target=list(range(n_qubits)))
+    f_swap_matrix = np.array(
+        [tq.simulate(U, initial_state=s).to_array() for s in range(2**n_qubits)]
+    ).T
+    assert np.allclose(f_swap_matrix, exact[(0, 6)] @ exact[(1, 7)])
+
+    U = (
+        fswap.f_swap(0, 3)
+        + fswap.f_swap(1, 2)
+        + tq.gates.I(target=list(range(n_qubits)))
+    )
+    R = np.array(
+        [tq.simulate(U, initial_state=s).to_array() for s in range(2**n_qubits)]
+    ).T
+    H = mol.make_hamiltonian().to_matrix()
+    assert np.allclose(H @ R, R @ H)

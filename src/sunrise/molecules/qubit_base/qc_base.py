@@ -5,6 +5,7 @@ import inspect
 import json
 import numbers
 import typing
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from itertools import product
 
@@ -870,7 +871,7 @@ class QuantumChemistryBase:
         if "active_space" not in kwargs:
             active_orbitals = [i for i in range(one_body_integrals.shape[0])]
             if "active_orbitals" in kwargs and kwargs["active_orbitals"] is not None:
-                active_orbitals = kwargs["active_orbitals"]
+                active_orbitals = deepcopy(kwargs["active_orbitals"])
             if "frozen_orbitals" in kwargs and kwargs["frozen_orbitals"] is not None:
                 for fo in kwargs["frozen_orbitals"]:
                     if fo in active_orbitals:
@@ -1240,7 +1241,7 @@ class QuantumChemistryBase:
     def point_group(self):
         """
         The point group of the molecule. If it is not given with the point_group keyword, it is detected from the
-        geometry as the largest point group defined in sunrise: the full point group if it is D4h or D6h,
+        geometry as the largest point group defined in sunrise: the full point group if it is D4h, D6h, D8h or Td,
         the largest Abelian subgroup otherwise. The quantum chemistry backends compute in abelian_point_group.
         It can be set with a PointGroup or its Schoenflies label, e.g. to work in a subgroup.
         """

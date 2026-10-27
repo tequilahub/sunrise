@@ -324,7 +324,7 @@ class HybridBase(qc_base):
         New molecule in the native (orthonormalized) basis given
         e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
         """
-        from sunrise.molecules.utils_orbital_transformation import (
+        from sunrise.utils.orbital_transformation import (
             get_active,
             get_core,
             orthogonalize_active_space,
@@ -2541,8 +2541,17 @@ class HybridBase(qc_base):
             compile_options=compile_options,
         )
 
-    def hcb_to_me(self, **kwargs) -> QCircuit:
-        return self.transformation.hcb_to_me(**kwargs)
+    def hcb_to_me(self, U: QCircuit | None = None, **kwargs) -> QCircuit:
+        """
+        Transform a circuit in the hardcore-boson encoding (HCB) to the encoding of this molecule
+        U: HCB circuit (on the up qubits), the encoding circuit is appended to it
+           if None only the encoding circuit is returned
+        kwargs: passed to the encoding (e.g. all, bos)
+        """
+        UX = self.transformation.hcb_to_me(**kwargs)
+        if U is None:
+            return UX
+        return U + UX
 
     def compute_energy(self, method: str, *args, **kwargs) -> float:
         """
