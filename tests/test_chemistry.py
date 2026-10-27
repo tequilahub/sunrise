@@ -465,8 +465,8 @@ def test_upccgsd(geometry, trafo):
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("trafo", ["TaperedBinary", "ReorderedTaperedBinary"])
 def test_upccd_tapered_binary(trafo):
-    # the HCB qubit of the tapered orbital is implicit, the HCB doubles into it depend on the occupation
-    # of the other orbitals; UpCCD with and without HCB optimization and HCB-UpCCD with the HCB Hamiltonian
+    # the HCB qubit of the tapered orbital is implicit, so the HCB doubles into it depend on the occupation
+    # of the other orbitals; UpCCD with and without HCB optimization, and HCB-UpCCD with the HCB Hamiltonian,
     # have to give the same energies as in Jordan-Wigner
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
     energies = []
@@ -497,7 +497,7 @@ def test_upccd_tapered_binary(trafo):
 @pytest.mark.parametrize("trafo", ["TaperedBinary", "ReorderedTaperedBinary"])
 def test_upccgsd_singles_tapered_binary(trafo):
     # with one explicit orbital per spin the P0 projector of the singles vanishes in the tapered
-    # encodings, the gradients have to come from a shift rule without P0 and match Jordan-Wigner
+    # encodings, so the gradients have to come from a shift rule without P0 and match Jordan-Wigner
     gradients = []
     variables = None
     for transformation in ["JordanWigner", trafo]:

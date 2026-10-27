@@ -558,7 +558,7 @@ class QuantumChemistryBase:
 
         """
 
-        def make_hcb_exct_tappered(pair):
+        def make_hcb_exct_tapered(pair):
             # the tapered orbital L is implicit (see make_hardcore_boson_hamiltonian): the pair only
             # moves between k and L if the orbitals other than k and L hold one pair less than the reference
             L = self.n_orbitals - 1
@@ -587,7 +587,7 @@ class QuantumChemistryBase:
                 "TAPEREDBINARY" in self.transformation.name.upper()
                 and self.n_orbitals - 1 in pair
             ):
-                U += make_hcb_exct_tappered(pair)
+                U += make_hcb_exct_tapered(pair)
             else:
                 target += [
                     self.transformation.up(pair[0]),
@@ -1777,15 +1777,15 @@ class QuantumChemistryBase:
         if condensed=False then JordanWigner would give back the Hamiltonian defined on even qubits between 0 to 2N
         """
 
-        def hcb_ham_tappered():
+        def hcb_ham_tapered():
             # the last orbital L is implicit: it holds a pair if the other orbitals hold one pair less
-            # than the reference, which the parity of their Z operators tells
+            # than the reference, and the parity of their Z operators tells whether they do
             L = n_orbitals - 1
             parity = (-1) ** (self.n_electrons // 2 - 1)
             nL = 0.5 + 0.5 * parity * (Z(list(range(L))) if L > 0 else I())
             H = c + h[L, L] * nL
             for p in range(L):
-                # the pair moves between p and L if the orbitals other than p and L hold one pair less
+                # the pair moves between p and L if the other orbitals hold one pair less than the reference
                 others = [i for i in range(L) if i != p]
                 Qp = 0.5 + 0.5 * parity * (Z(others) if others else I())
                 H += (h[p, L] * Sm(p) + h[L, p] * Sp(p)) * Qp
@@ -1814,7 +1814,7 @@ class QuantumChemistryBase:
                     g[p, q] += 2 * tbt.elems[p, q, q, p] - tbt.elems[p, q, p, q]
 
         if "TAPEREDBINARY" in self.transformation.name.upper():
-            return hcb_ham_tappered()
+            return hcb_ham_tapered()
 
         H = c
         for p in range(n_orbitals):
@@ -2113,7 +2113,7 @@ class QuantumChemistryBase:
         ladder: if true the excitation pattern will be local. E.g. in the pair from orbitals (1,2,3) we will have the excitations 1->2 and 2->3, if set to false we will have standard coupled-cluster style excitations - in this case this would be 1->2 and 1->3
         """
 
-        def _make_spa_tappered(
+        def _make_spa_tapered(
             edges,
             hcb=False,
             use_units_of_pi=False,
@@ -2155,7 +2155,7 @@ class QuantumChemistryBase:
                         elif (i - 1 == 0) and (
                             q1 == self.transformation.up(self.n_orbitals - 1)
                         ):
-                            # rotating the explicit orbital instead of L: same angle convention as the other encodings
+                            # rotate the explicit orbital instead of L, with the angle convention of the other encodings
                             U += gates.Ry(angle=-angle, target=c, control=None)
                         else:
                             U += gates.Ry(angle=angle, target=q1, control=c)
@@ -2215,7 +2215,7 @@ class QuantumChemistryBase:
 
         U = QCircuit()
         if "TAPEREDBINARY" in self.transformation.name.upper():
-            return _make_spa_tappered(
+            return _make_spa_tapered(
                 edges=edges,
                 hcb=hcb,
                 use_units_of_pi=use_units_of_pi,
