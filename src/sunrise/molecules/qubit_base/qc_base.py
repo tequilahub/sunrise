@@ -557,6 +557,28 @@ class QuantumChemistryBase:
         -------
 
         """
+
+        def make_hcb_exct_tappered(pair):
+            # the tapered orbital L is implicit (see make_hardcore_boson_hamiltonian): the pair only
+            # moves between k and L if the orbitals other than k and L hold one pair less than the reference
+            L = self.n_orbitals - 1
+            k = pair[0] if pair[1] == L else pair[1]
+            others = [self.transformation.up(i) for i in range(L) if i != k]
+            parity = (-1) ** (self.n_electrons // 2 - 1)
+            Qk = 0.5 + 0.5 * parity * (Z(others) if others else I())
+            uk = self.transformation.up(k)
+            G = Sp(uk) if pair[1] == L else Sm(uk)
+            G = (1.0j * (G - G.dagger()) * Qk).simplify()
+            p0 = (1.0 - Qk).simplify()
+            return gates.GeneralizedRotation(
+                angle=angle,
+                generator=G,
+                p0=p0,
+                # without other orbitals P0 vanishes (see make_excitation_gate)
+                assume_real=assume_real and len(p0) > 0,
+                control=control,
+            )
+
         U = QCircuit()
         target = []
         for pair in indices:
@@ -565,28 +587,7 @@ class QuantumChemistryBase:
                 "TAPEREDBINARY" in self.transformation.name.upper()
                 and self.n_orbitals - 1 in pair
             ):
-                # the tapered orbital L is implicit (see make_hardcore_boson_hamiltonian): the pair only
-                # moves between k and L if the orbitals other than k and L hold one pair less than the reference
-                L = self.n_orbitals - 1
-                k = pair[0] + pair[1] - L
-                others = [self.transformation.up(i) for i in range(L) if i != k]
-                parity = (-1) ** (self.n_electrons // 2 - 1)
-                Qk = 0.5 + 0.5 * parity * (Z(others) if others else I())
-                G = (
-                    Sp(self.transformation.up(k))
-                    if pair[1] == L
-                    else Sm(self.transformation.up(k))
-                )
-                G = (1.0j * (G - G.dagger()) * Qk).simplify()
-                p0 = (1.0 - Qk).simplify()
-                U += gates.GeneralizedRotation(
-                    angle=angle,
-                    generator=G,
-                    p0=p0,
-                    # without other orbitals P0 vanishes (see make_excitation_gate)
-                    assume_real=assume_real and len(p0) > 0,
-                    control=control,
-                )
+                U += make_hcb_exct_tappered(pair)
             else:
                 target += [
                     self.transformation.up(pair[0]),
