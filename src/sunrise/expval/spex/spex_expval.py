@@ -411,15 +411,17 @@ def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
             theta = float(simulate(parameter, dvars))
         else:
             theta = parameter
-        if gate.name == "Ph":
-            # spex drops a+_p a_p terms (generator a+_p a_p - h.c. = 0), so apply exp(-i*theta/2*n_p) here
-            p = indices[0][0][0]
-            phase = exp(-0.5j * theta)
-            result = {k: v * phase if (k >> p) & 1 else v for k, v in result.items()}
-            continue
         for term_pairs in indices:
             creation = [p[1] for p in term_pairs]
             annihilation = [p[0] for p in term_pairs]
+            if creation == annihilation:
+                # spex drops a+_p a_p terms (generator a+_p a_p - h.c. = 0), so apply exp(-i*theta/2*n_p) here
+                mask = sum(1 << p for p in creation)
+                phase = exp(-0.5j * theta)
+                result = {
+                    k: v * phase if k & mask == mask else v for k, v in result.items()
+                }
+                continue
             n_pairs = len(term_pairs)
             weight = 1.0j * ((-1) ** (n_pairs * (n_pairs - 1) // 2))
             term = spex.FermionTerm(creation, annihilation, weight)
