@@ -877,6 +877,83 @@ def test_fci_guess_wfn():
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize("nature", ["fermionic", "hybrid"])
+@pytest.mark.parametrize(
+    "geometry, kwargs",
+    [
+        ("Li 0.0 0.0 0.0\nH 0.0 0.0 1.6", {"frozen_core": False}),
+        ("Li 0.0 0.0 0.0\nH 0.0 0.0 1.6", {"frozen_core": True}),
+        ("Li 0.0 0.0 0.0\nH 0.0 0.0 1.6", {"active_orbitals": [0, 1, 2, 5]}),
+        ("H 0.0 0.0 0.0\nH 0.0 0.0 0.75\nghost:H 0.0 0.0 2.0", {}),
+    ],
+)
+def test_pyscf_natures(nature, geometry, kwargs):
+    # the three natures share the pyscf interface (PySCFMixin), so they have to agree with the qubit molecule
+    # the fermionic wavefunctions are ordered up then down, the hybrid ones as JordanWigner
+    transformation = (
+        "ReorderedJordanWigner" if nature == "fermionic" else "JordanWigner"
+    )
+    given = {k: list(v) if isinstance(v, list) else v for k, v in kwargs.items()}
+    qmol = sun.Molecule(
+        geometry=geometry,
+        basis_set="sto-3g",
+        units="angstrom",
+        backend="pyscf",
+        transformation=transformation,
+        **kwargs,
+    )
+    # the frozen orbitals are not removed from the list given by the user
+    assert kwargs == given
+    if nature == "hybrid":
+        # all fermionic, same hamiltonian as the qubit molecule
+        kwargs = {**kwargs, "select": "F" * qmol.n_orbitals}
+    mol = sun.Molecule(
+        geometry=geometry,
+        basis_set="sto-3g",
+        units="angstrom",
+        backend="pyscf",
+        nature=nature,
+        **kwargs,
+    )
+
+    assert mol.n_orbitals == qmol.n_orbitals
+    assert mol.n_electrons == qmol.n_electrons
+    assert len(mol.parameters.get_geometry()) == len(qmol.parameters.get_geometry())
+    assert [o.irrep for o in mol.integral_manager.orbitals] == [
+        o.irrep for o in qmol.integral_manager.orbitals
+    ]
+    c, h, g = mol.get_integrals()
+    qc_, qh, qg = qmol.get_integrals()
+    assert numpy.isclose(c, qc_)
+    assert numpy.allclose(h, qh)
+    assert numpy.allclose(g.elems, qg.elems)
+
+    for method in ["hf", "mp2", "cisd", "ccsd", "ccsd(t)", "fci"]:
+        assert numpy.isclose(mol.compute_energy(method), qmol.compute_energy(method)), (
+            method
+        )
+    with pytest.raises(ValueError):
+        mol.compute_energy("not-a-method")
+
+    energy, wfn = mol.compute_fci(get_wfn=True)
+    qenergy, qwfn = qmol.compute_fci(get_wfn=True)
+    assert numpy.isclose(energy, qenergy)
+    assert numpy.isclose(abs(wfn.inner(qwfn)) ** 2, 1.0)
+    assert numpy.allclose(mol.create_ci_vector(wfn), qmol.create_ci_vector(qwfn))
+    # the fci wavefunction as guess is already the solution
+    assert numpy.isclose(mol.compute_fci(ci0=wfn), qenergy)
+
+    # the hamiltonian of each nature is built from the same (active space) integrals
+    H = mol.make_hamiltonian()
+    if isinstance(H, tq.QubitHamiltonian):
+        H = H.to_openfermion()
+    ground_state_energy, _ = openfermion.get_ground_state(
+        openfermion.get_sparse_operator(H)
+    )
+    assert numpy.isclose(ground_state_energy, qenergy)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_fci_nroots():
     geometry = """H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"""
     mol = sun.Molecule(
