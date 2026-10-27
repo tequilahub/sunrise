@@ -41,14 +41,16 @@ class OpenVQEEPySCFException(TequilaException):
     pass
 
 
-class QuantumChemistryPySCF(QuantumChemistryBase):
-    def __init__(
-        self,
-        parameters: ParametersQC,
-        transformation: str | typing.Callable | None = None,
-        *args,
-        **kwargs,
-    ):
+class PySCFMixin:
+    """
+    PySCF functionality shared by the qubit, hybrid and fermionic pyscf molecules
+    Put it first in the bases so that it overrides the methods of the backend base class
+    """
+
+    def __init__(self, parameters: ParametersQC, *args, **kwargs):
+        """
+        kwargs are passed to the backend base class (e.g. transformation, select)
+        """
         orbitals = None
         if "one_body_integrals" not in kwargs:
             geometry = parameters.get_geometry(ghost="pyscf")
@@ -120,13 +122,14 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
             if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()
 
-        super().__init__(
-            *args,
-            parameters=parameters,
-            transformation=transformation,
-            orbitals=orbitals,
-            **kwargs,
-        )
+        super().__init__(*args, parameters=parameters, orbitals=orbitals, **kwargs)
+
+    @property
+    def _up_then_down(self) -> bool:
+        # the fermionic molecules have no qubit encoding, their wavefunctions are ordered up then down
+        if self.transformation is None:
+            return True
+        return self.transformation.up_then_down
 
     def compute_fci(self, get_wfn=False, ci0=None, use_hcb=False, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="chem")
@@ -162,7 +165,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                     wfn = numpy.zeros(wfn_dim)
                     for i, alpha_str in enumerate(alpha_strs):
                         for j, beta_str in enumerate(beta_strs):
-                            if not self.transformation.up_then_down:
+                            if not self._up_then_down:
                                 merged_str, phase = _merge_alpha_beta_strs(
                                     alpha_str, beta_str, norb
                                 )
@@ -195,7 +198,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
         """
         if not isinstance(wfn, numpy.ndarray):
             if hasattr(wfn, "to_array"):
-                wfn = wfn.to_array()
+                wfn = wfn.to_array(out_numbering=BitNumbering.LSB)
             else:
                 raise TequilaException(
                     f"create_ci_vector received wfn object of type {type(wfn)} but needs numpy.ndarray or tq.QubitWaveFunction\nwfn={wfn}"
@@ -203,7 +206,10 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
 
         wfn = numpy.real_if_close(wfn).astype(numpy.float64)
 
-        if type(self.transformation).__name__ != "JordanWigner":
+        if (
+            self.transformation is not None
+            and type(self.transformation).__name__ != "JordanWigner"
+        ):
             warnings.warn(
                 "!!!guess wavefunctions for pyscf need to be in JordanWigner encoding!!!"
             )
@@ -230,7 +236,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                 beta_str = alpha_str
             else:
                 state_binary_str = bin(i)[2:].zfill(2 * norb)
-                if not self.transformation.up_then_down:
+                if not self._up_then_down:
                     alpha_str = state_binary_str[0::2]
                     beta_str = state_binary_str[1::2]
                 else:
@@ -282,7 +288,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
         elif method == "fci":
             return self.compute_fci(**kwargs)
         else:
-            raise TequilaException(f"unknown method: {method}")
+            raise ValueError(f"unknown method: {method}")
 
     def _get_hf(self, do_not_solve=True, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="mulliken")
@@ -360,5 +366,12 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
         return base
 
 
-if __name__ == "__main__":
-    pass
+class QuantumChemistryPySCF(PySCFMixin, QuantumChemistryBase):
+    def __init__(
+        self,
+        parameters: ParametersQC,
+        transformation: str | typing.Callable | None = None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(parameters, *args, transformation=transformation, **kwargs)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import typing
+import warnings
 from itertools import product
 from numbers import Number
 
@@ -52,7 +53,6 @@ except Exception:  # noqa: BLE001
         raise TequilaException(
             f"{E!s}\nIssue with Tequila Chemistry: Please update openfermion"
         ) from E
-import warnings
 
 OPTIMIZED_ORDERING = "Optimized"
 
@@ -335,7 +335,28 @@ class FermionicBase(QuantumChemistryBase):
     def make_hardcore_boson_excitation_gate(
         self, indices, angle, control=None, assume_real=True, compile_options="optimize"
     ) -> FCircuit:
-        raise TequilaException("No HCB operations in Fermionic Backends")
+        """
+        Make excitation generator in the hardcore-boson approximation (all electrons are forced to spin-pairs)
+        use only in combination with make_hardcore_boson_hamiltonian()
+
+        Parameters
+        ----------
+        indices
+        angle
+        control
+        assume_real
+        compile_options
+
+        Returns
+        -------
+
+        """
+        if control is not None:
+            raise NotImplementedError("Not implemented yet for Fermionic Backends")
+        spin_indices = []
+        for p, q in indices:
+            spin_indices += [(2 * p, 2 * q), (2 * p + 1, 2 * q + 1)]
+        return gates.FermionicExcitation(indices=spin_indices, variables=angle)
 
     def UR(
         self, i, j, angle=None, label=None, control=None, *args, **kwargs
@@ -724,10 +745,24 @@ class FermionicBase(QuantumChemistryBase):
         return U
 
     def prepare_hardcore_boson_reference(self):
-        raise TequilaException("No HCB operations in Fermionic Backends")
+        (
+            warnings.warn(
+                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
+            ),
+            TequilaWarning,
+        )
+        return self.prepare_reference()
 
     def hcb_to_me(self, U=None, condensed=False):
-        raise TequilaException("No HCB operations in Fermionic Backends")
+        (
+            warnings.warn(
+                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
+            ),
+            TequilaWarning,
+        )
+        if U is None:
+            return FCircuit()
+        return U
 
     def make_hardcore_boson_upccgd_layer(
         self,
@@ -737,7 +772,22 @@ class FermionicBase(QuantumChemistryBase):
         *args,
         **kwargs,
     ):
-        raise TequilaException("No HCB operations in Fermionic Backends")
+        (
+            warnings.warn(
+                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
+            ),
+            TequilaWarning,
+        )
+        if hasattr(indices, "lower"):
+            indices = self.make_upccgsd_indices(key=indices.lower())
+
+        UD = FCircuit()
+        for idx in indices:
+            UD += self.make_hardcore_boson_excitation_gate(
+                indices=idx, angle=(idx, "D", label), assume_real=assume_real
+            )
+
+        return UD
 
     def make_spa_ansatz(
         self, edges, use_units_of_pi=False, label=None, ladder=True
@@ -830,7 +880,12 @@ class FermionicBase(QuantumChemistryBase):
             return self.make_uccsd_ansatz(*args, **kwargs)
         elif "spa" in name.lower():
             if "hcb" in kwargs or "hcb" in name.lower():
-                raise ValueError("No HCB operations in Fermionic Backends")
+                (
+                    warnings.warn(
+                        "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
+                    ),
+                    TequilaWarning,
+                )
             return self.make_spa_ansatz(*args, **kwargs)
         elif "d" in name or "s" in name:
             return self.make_upccgsd_ansatz(*args, name=name, **kwargs)
@@ -894,7 +949,9 @@ class FermionicBase(QuantumChemistryBase):
         indices = self.make_upccgsd_indices(key=name)
 
         if "HCB" in name:
-            raise ValueError("No HCB operations in Fermionic Backends")
+            warnings.warn(
+                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
+            )
 
         # convenience
         S = "S" in name.upper()

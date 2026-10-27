@@ -42,7 +42,13 @@ class Psi4Results:
     mol: psi4.core.Molecule = None
 
 
-class QuantumChemistryPsi4(QuantumChemistryBase):
+class Psi4Mixin:
+    """
+    psi4 functionality shared by the qubit, hybrid and fermionic psi4 molecules
+    Put it first in the bases so that it overrides the methods of the backend base class
+    (e.g. initialize_integral_manager, compute_energy, compute_rdms), which it calls with super()
+    """
+
     def _make_psi4_active_space_data(self, active_orbitals, reference=None):
         """
         Small helper function
@@ -187,7 +193,6 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
     def __init__(
         self,
         parameters: ParametersQC,
-        transformation: str | typing.Callable | None = None,
         active_orbitals=None,
         reference_orbitals=None,
         frozen_orbitals=None,
@@ -199,7 +204,6 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         Parameters
         ----------
         parameters
-        transformation
         active_orbitals: dictionary :
             dictionary with irreps as keys and a list of integers as values
             i.e. occ = {"A1":[0,1], "A2":[0]}
@@ -214,6 +218,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
             and the corresponding active orbitals are removed
         args
         kwargs
+            passed to the backend base class (e.g. transformation, select)
             ref_wfn: psi4 HF wavefunction of the molecule (in kwargs), then it is not recomputed
             can also be a dictionary in the layout of wfn.to_file() (as stored by mol.save) or the file it wrote
             the integrals are computed from it, unless they are given as well (as by sun.load_molecule)
@@ -263,7 +268,6 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         super().__init__(
             *args,
             parameters=parameters,
-            transformation=transformation,
             active_orbitals=None,
             reference_orbitals=reference_orbitals,
             frozen_orbitals=[],
@@ -340,11 +344,17 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
             self.compute_energy(*args, method="hf", recompute=True, **kwargs)
         self.ref_wfn = self.logs["hf"].wfn
 
-        self.transformation = self._initialize_transformation(
-            *args, transformation=transformation, **kwargs
-        )
+        # the backend base class was initialized before the active space was known
+        self._update_after_active_space(*args, **kwargs)
 
         self.kwargs = kwargs
+
+    def _update_after_active_space(self, *args, **kwargs):
+        """
+        Hook for the backend class, called once the psi4 active space is set
+        (e.g. to rebuild the transformation for the number of active orbitals)
+        args and kwargs: the ones of __init__
+        """
 
     def __deepcopy__(self, memo):
         # psi4.core objects are C++ bindings that cannot be pickled, so deepcopy fails on them.
@@ -531,7 +541,7 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
 
         # easier guess read in
         if guess_wfn is not None:
-            if isinstance(guess_wfn, QuantumChemistryPsi4):
+            if isinstance(guess_wfn, Psi4Mixin):
                 guess_wfn = guess_wfn.logs["hf"].wfn
             if isinstance(guess_wfn, str):
                 guess_wfn = psi4.core.Wavefunction.from_file(guess_wfn)
@@ -929,3 +939,29 @@ class QuantumChemistryPsi4(QuantumChemistryBase):
         )
 
         return correction.compute()
+
+
+class QuantumChemistryPsi4(Psi4Mixin, QuantumChemistryBase):
+    def __init__(
+        self,
+        parameters: ParametersQC,
+        transformation: str | typing.Callable | None = None,
+        active_orbitals=None,
+        reference_orbitals=None,
+        frozen_orbitals=None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(
+            parameters,
+            active_orbitals,
+            reference_orbitals,
+            frozen_orbitals,
+            *args,
+            transformation=transformation,
+            **kwargs,
+        )
+
+    def _update_after_active_space(self, *args, **kwargs):
+        # the transformation needs the number of active orbitals
+        self.transformation = self._initialize_transformation(*args, **kwargs)
