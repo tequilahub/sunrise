@@ -79,6 +79,46 @@ def test_point_group_keyword(point_group, expected, expected_abelian) -> None:
     assert mol.pyscf_molecule.groupname == expected_abelian
 
 
+# Tests the operations of Td and D8h on the atoms: the atom permutations decompose into the expected irreps
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize(
+    "geometry, expected, n_distinct, expected_irreps",
+    [
+        (
+            "C 0. 0. 0. \n H 0.6276 0.6276 0.6276 \n H -0.6276 -0.6276 0.6276 \n H -0.6276 0.6276 -0.6276 \n H 0.6276 -0.6276 -0.6276",
+            "Td",
+            24,
+            {"A1": 2, "T2": 1},
+        ),
+        (
+            "\n".join(
+                f"H {np.cos(k * np.pi / 4):.10f} {np.sin(k * np.pi / 4):.10f} 0."
+                for k in range(8)
+            ),
+            "D8h",
+            16,
+            {"A1g": 1, "B1g": 1, "E1u": 1, "E2g": 1, "E3u": 1},
+        ),
+    ],
+)
+def test_atomic_permutations_non_abelian(
+    geometry, expected, n_distinct, expected_irreps
+) -> None:
+    mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf")
+    assert mol.point_group.schoenflies_label == expected
+
+    operations = mol.atomic_permutation_representation().operations
+    # a planar molecule cannot tell an operation from its product with sh apart
+    assert len({op.tobytes() for op in operations.values()}) == n_distinct
+
+    characters = np.array([np.trace(op) for op in operations.values()])
+    table = mol.point_group.character_table
+    multiplicities = np.round(table.matrix @ characters / mol.point_group.order, 10)
+    assert dict(zip(table.irreps, multiplicities)) == {
+        irrep: expected_irreps.get(irrep, 0) for irrep in table.irreps
+    }
+
+
 # Tests that the canonical provider falls back to the largest Abelian subgroup for non-Abelian groups
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_canonical_abelian_fallback() -> None:
