@@ -22,7 +22,7 @@ mol = sn.Molecule(
 )
 U = sn.FCircuit.from_edges(n_orb=mol.n_orbitals, edges=[(0, 1), (2, 3)])
 opt = sn.optimize_orbitals(circuit=U, molecule=mol, backend="tcc")
-print(opt.energy)
+print(opt.energy)  # -1.4592 (Hartree)
 ```
 
 **See also:** [tests](../../../tests/test_fermionic_expval.py) · [mixed qubit/fermionic tests](../../../tests/test_mixed_expval.py)
