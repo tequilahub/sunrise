@@ -5,6 +5,7 @@ import inspect
 import json
 import numbers
 import typing
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from itertools import product
 
@@ -848,7 +849,7 @@ class QuantumChemistryBase:
         if "active_space" not in kwargs:
             active_orbitals = [i for i in range(one_body_integrals.shape[0])]
             if "active_orbitals" in kwargs and kwargs["active_orbitals"] is not None:
-                active_orbitals = kwargs["active_orbitals"]
+                active_orbitals = deepcopy(kwargs["active_orbitals"])
             if "frozen_orbitals" in kwargs and kwargs["frozen_orbitals"] is not None:
                 for fo in kwargs["frozen_orbitals"]:
                     if fo in active_orbitals:
