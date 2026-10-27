@@ -9,4 +9,4 @@ Main functions:
 
 Workflow: pick a set of graphs → build one rotator per graph → measure each rotated HCB part → sum up the residual.
 
-**Background:** [*State Specific Measurement Protocols for the Variational Quantum Eigensolver*, arXiv:2504.03019](https://arxiv.org/abs/2504.03019) (reports 30–80 % fewer measurements than state-of-the-art grouping) · **See also:** [scenario 1](../../../examples/optimized_measurement/example_scenario1.py) · [scenario 2](../../../examples/optimized_measurement/example_scenario2.py) · [tests](../../../tests/test_hcb_measurement.py)
+**Background:** [Bincoletto & Kottmann, *A physics-informed measurement protocol for expectation values of fermionic observables*, Digital Discovery 2026](https://doi.org/10.1039/D5DD00251F) (reports 30–80 % fewer measurements than state-of-the-art grouping) · **See also:** [scenario 1](../../../examples/optimized_measurement/example_scenario1.py) · [scenario 2](../../../examples/optimized_measurement/example_scenario2.py) · [tests](../../../tests/test_hcb_measurement.py)
