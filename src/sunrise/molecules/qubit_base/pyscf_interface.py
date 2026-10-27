@@ -1,15 +1,15 @@
-from tequila import TequilaException, QubitWaveFunction, BitNumbering
-from .qc_base import QuantumChemistryBase
-from .encodings import JordanWigner
-from .chemistry_tools import ParametersQC, NBodyTensor
-import pyscf
-from pyscf import fci
+from __future__ import annotations
 
-from .chemistry_tools import OrbitalData
-
-import numpy
 import typing
 import warnings
+
+import numpy
+import pyscf
+from pyscf import fci
+from tequila import BitNumbering, QubitWaveFunction, TequilaException
+
+from .chemistry_tools import NBodyTensor, OrbitalData, ParametersQC
+from .qc_base import QuantumChemistryBase
 
 
 def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
@@ -33,7 +33,7 @@ def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
 
     # Position of filled orbitals
     set_bits_beta = [i for i in range(norb) if (beta_str >> i) & 1]
-    phase = (-1) ** sum([(alpha_str & 2**i - 1).bit_count() for i in set_bits_beta])
+    phase = (-1) ** sum((alpha_str & 2**i - 1).bit_count() for i in set_bits_beta)
     return int(merged_str, 2), phase
 
 
@@ -41,21 +41,24 @@ class OpenVQEEPySCFException(TequilaException):
     pass
 
 
-class QuantumChemistryPySCF(QuantumChemistryBase):
-    def __init__(
-        self, parameters: ParametersQC, transformation: typing.Union[str, typing.Callable] = None, *args, **kwargs
-    ):
+class PySCFMixin:
+    """
+    PySCF functionality shared by the qubit, hybrid and fermionic pyscf molecules
+    Put it first in the bases so that it overrides the methods of the backend base class
+    """
+
+    def __init__(self, parameters: ParametersQC, *args, **kwargs):
+        """
+        kwargs are passed to the backend base class (e.g. transformation, select)
+        """
         orbitals = None
         if "one_body_integrals" not in kwargs:
             geometry = parameters.get_geometry(ghost="pyscf")
             pyscf_geomstring = ""
             for atom in geometry:
-                pyscf_geomstring += "{} {} {} {};".format(atom[0], atom[1][0], atom[1][1], atom[1][2])
+                pyscf_geomstring += f"{atom[0]} {atom[1][0]} {atom[1][1]} {atom[1][2]};"
 
-            if "point_group" in kwargs:
-                point_group = kwargs["point_group"]
-            else:
-                point_group = None
+            point_group = kwargs.get("point_group", None)
 
             mol = pyscf.gto.Mole()
             mol.atom = pyscf_geomstring
@@ -66,7 +69,10 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                 if point_group.lower() != "c1":
                     mol.symmetry = True
                     # PySCF only computes in Abelian groups, for the others (e.g. D4h) it takes the largest Abelian subgroup
-                    if pyscf.symm.std_symb(point_group) in pyscf.symm.param.CHARACTER_TABLE:
+                    if (
+                        pyscf.symm.std_symb(point_group)
+                        in pyscf.symm.param.CHARACTER_TABLE
+                    ):
                         mol.symmetry_subgroup = point_group
                 else:
                     mol.symmetry = False
@@ -83,7 +89,9 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
 
             mf.kernel()
 
-            self.irreps = pyscf.symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff).tolist()
+            self.irreps = pyscf.symm.label_orb_symm(
+                mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff
+            ).tolist()
 
             orbital_energies = mf.mo_energy
 
@@ -114,7 +122,14 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
             if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()
 
-        super().__init__(parameters=parameters, transformation=transformation, orbitals=orbitals, *args, **kwargs)
+        super().__init__(*args, parameters=parameters, orbitals=orbitals, **kwargs)
+
+    @property
+    def _up_then_down(self) -> bool:
+        # the fermionic molecules have no qubit encoding, their wavefunctions are ordered up then down
+        if self.transformation is None:
+            return True
+        return self.transformation.up_then_down
 
     def compute_fci(self, get_wfn=False, ci0=None, use_hcb=False, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="chem")
@@ -150,8 +165,10 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                     wfn = numpy.zeros(wfn_dim)
                     for i, alpha_str in enumerate(alpha_strs):
                         for j, beta_str in enumerate(beta_strs):
-                            if not self.transformation.up_then_down:
-                                merged_str, phase = _merge_alpha_beta_strs(alpha_str, beta_str, norb)
+                            if not self._up_then_down:
+                                merged_str, phase = _merge_alpha_beta_strs(
+                                    alpha_str, beta_str, norb
+                                )
                                 wfn[merged_str] = phase * fcivec[i, j]
                             else:
                                 alpha_str_b = bin(alpha_str)[2:].zfill(norb)
@@ -159,7 +176,9 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                                 merged_str_b = alpha_str_b + beta_str_b
                                 merged_str = int(merged_str_b, 2)
                                 wfn[merged_str] = fcivec[i, j]
-                wfns.append(QubitWaveFunction.from_array(wfn, numbering=BitNumbering.LSB))
+                wfns.append(
+                    QubitWaveFunction.from_array(wfn, numbering=BitNumbering.LSB)
+                )
             if not ("nroots" in kwargs and kwargs["nroots"] > 1):
                 return energies[0], wfns[0]
             return energies, wfns
@@ -179,7 +198,7 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
         """
         if not isinstance(wfn, numpy.ndarray):
             if hasattr(wfn, "to_array"):
-                wfn = wfn.to_array()
+                wfn = wfn.to_array(out_numbering=BitNumbering.LSB)
             else:
                 raise TequilaException(
                     f"create_ci_vector received wfn object of type {type(wfn)} but needs numpy.ndarray or tq.QubitWaveFunction\nwfn={wfn}"
@@ -187,8 +206,13 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
 
         wfn = numpy.real_if_close(wfn).astype(numpy.float64)
 
-        if type(self.transformation).__name__ != "JordanWigner":
-            warnings.warn("!!!guess wavefunctions for pyscf need to be in JordanWigner encoding!!!")
+        if (
+            self.transformation is not None
+            and type(self.transformation).__name__ != "JordanWigner"
+        ):
+            warnings.warn(
+                "!!!guess wavefunctions for pyscf need to be in JordanWigner encoding!!!"
+            )
 
         norb = self.n_orbitals
         nelec = self.n_electrons
@@ -212,12 +236,14 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                 beta_str = alpha_str
             else:
                 state_binary_str = bin(i)[2:].zfill(2 * norb)
-                if not self.transformation.up_then_down:
+                if not self._up_then_down:
                     alpha_str = state_binary_str[0::2]
                     beta_str = state_binary_str[1::2]
                 else:
                     alpha_str = state_binary_str[0 : len(state_binary_str) // 2]
-                    beta_str = state_binary_str[len(state_binary_str) // 2 : len(state_binary_str)]
+                    beta_str = state_binary_str[
+                        len(state_binary_str) // 2 : len(state_binary_str)
+                    ]
 
             # Only keep states that are particle-number conserving
             if alpha_str.count("1") == neleca and beta_str.count("1") == nelecb:
@@ -227,9 +253,13 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
                 # Compute the phase as in _merge_alpha_beta_strs(alpha_str, beta_str, norb)
                 set_bits_beta = [i for i in range(norb) if (beta_int >> i) & 1]
                 try:
-                    phase = (-1) ** sum([(alpha_int & 2**i - 1).bit_count() for i in set_bits_beta])
-                except AttributeError as error:
-                    phase = (-1) ** sum([bin(alpha_int & 2**i - 1).count("1") for i in set_bits_beta])
+                    phase = (-1) ** sum(
+                        [(alpha_int & 2**i - 1).bit_count() for i in set_bits_beta]
+                    )
+                except AttributeError:
+                    phase = (-1) ** sum(
+                        [bin(alpha_int & 2**i - 1).count("1") for i in set_bits_beta]
+                    )
 
                 coeff = wfn[i]
                 row_idx = fci.cistring.str2addr(norb, neleca, alpha_int)
@@ -252,11 +282,13 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
             return self._run_ccsd(**kwargs).e_tot
         elif method == "ccsd(t)":
             ccsd = self._run_ccsd(**kwargs)
-            return ccsd.e_tot + self._compute_perturbative_triples_correction(ccsd=ccsd, **kwargs)
+            return ccsd.e_tot + self._compute_perturbative_triples_correction(
+                ccsd=ccsd, **kwargs
+            )
         elif method == "fci":
             return self.compute_fci(**kwargs)
         else:
-            raise TequilaException("unknown method: {}".format(method))
+            raise ValueError(f"unknown method: {method}")
 
     def _get_hf(self, do_not_solve=True, **kwargs):
         c, h1, h2 = self.get_integrals(ordering="mulliken")
@@ -323,14 +355,23 @@ class QuantumChemistryPySCF(QuantumChemistryBase):
         try:
             if hasattr(self, "pyscf_molecule"):
                 base += "{:15} : {} ({})\n".format(
-                    "point_group", self.pyscf_molecule.groupname, self.pyscf_molecule.topgroup
+                    "point_group",
+                    self.pyscf_molecule.groupname,
+                    self.pyscf_molecule.topgroup,
                 )
             if hasattr(self, "irreps"):
                 base += "{:15} : {}\n".format("irreps", self.irreps)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return base
         return base
 
 
-if __name__ == "__main__":
-    pass
+class QuantumChemistryPySCF(PySCFMixin, QuantumChemistryBase):
+    def __init__(
+        self,
+        parameters: ParametersQC,
+        transformation: str | typing.Callable | None = None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(parameters, *args, transformation=transformation, **kwargs)

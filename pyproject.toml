@@ -32,7 +32,7 @@ dependencies = [
     "pyscf",
     "networkx",
     "janpa @ git+https://github.com/davibinco/janpa-py.git@main",
-    "spex-tequila @ git+https://github.com/tequilahub/spex.git@main",
+    "spex-tequila>=1.1.2",
 ]
 
 classifiers = [
@@ -63,3 +63,6 @@ include-package-data = true
 
 [project.optional-dependencies]
 test = ["pytest"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sunrise"]

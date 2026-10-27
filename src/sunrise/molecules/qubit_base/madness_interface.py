@@ -1,13 +1,21 @@
-from .qc_base import QuantumChemistryBase, TequilaException, TequilaWarning, QCircuit, gates
-from .chemistry_tools import ParametersQC, NBodyTensor
-from tequila import ExpectationValue
-from .chemistry_tools import OrbitalData
-import typing
-import numpy
-import warnings
+from __future__ import annotations
+
 import os
 import shutil
+import typing
+import warnings
 
+import numpy
+from tequila import ExpectationValue
+
+from .chemistry_tools import NBodyTensor, OrbitalData, ParametersQC
+from .qc_base import (
+    QCircuit,
+    QuantumChemistryBase,
+    TequilaException,
+    TequilaWarning,
+    gates,
+)
 
 # Examples how to initialize the madness backend
 # sun.Molecule(geometry="...") will initialize a molecule with n_qubits=n_electrons (n_electrons//2 HF orbitals + n_electrons//2 PNOs)
@@ -25,15 +33,12 @@ class TequilaMadnessException(TequilaException):
         return "Error in madness backend:" + self.message
 
 
-class QuantumChemistryMadness(QuantumChemistryBase):
-    @staticmethod
-    def find_executable(madness_root_dir=None):
-        executable = shutil.which("pno_integrals")
-        if madness_root_dir is None:
-            madness_root_dir = str(os.environ.get("MAD_ROOT_DIR"))
-        if executable is None and madness_root_dir is not None:
-            executable = shutil.which("{}/src/apps/pno/pno_integrals".format(madness_root_dir))
-        return executable
+class MadnessPNOMixin:
+    """
+    MRA-PNO functionality shared by the qubit, fermionic and hybrid madness molecules
+    Only needs self.orbitals and self.integral_manager (with the pair information of the PNOs)
+    Put it first in the bases so that it overrides the methods of the backend base class
+    """
 
     def plot2cube(self, orbital, filename=None, *args, **kwargs):
         """
@@ -60,37 +65,225 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         else:
             idx = self.orbitals[orbital].idx_total
 
-        callist = [plot2cube, "file=mra_orbital_{}".format(idx)]
+        callist = [plot2cube, f"file=mra_orbital_{idx}"]
 
         if filename is not None:
-            callist.append("outfile={}".format(filename))
+            callist.append(f"outfile={filename}")
         for k, v in kwargs.items():
-            callist.append("{}={}".format(k, v))
+            callist.append(f"{k}={v}")
         for k in args:
-            callist.append("{}".format(k))
+            callist.append(f"{k}")
 
         import subprocess
 
         try:
-            with open("plot2cube_{}.log".format(orbital), "w") as logfile:
+            with open(f"plot2cube_{orbital}.log", "w") as logfile:
                 subprocess.call(callist, stdout=logfile)
-        except Exception:
+        except Exception:  # noqa: BLE001
             print("plotting failed ....")
-            print("see plot2cube_{}.log".format(orbital))
+            print(f"see plot2cube_{orbital}.log")
 
-    def __init__(
+    def get_pair_orbitals(
+        self, i: OrbitalData, j: OrbitalData, exclude: list[OrbitalData] | None = None
+    ):
+        if isinstance(i, int):
+            i = self.orbitals[i]
+        if isinstance(j, int):
+            j = self.orbitals[j]
+        if isinstance(exclude, int):
+            exclude = [self.orbitals[exclude]]
+        if exclude is None or isinstance(exclude, OrbitalData):
+            exclude = [exclude]
+        return [
+            x
+            for x in self.orbitals
+            if (i.idx_total, j.idx_total) == x.pair and x not in exclude
+        ]
+
+    def get_virtual_orbitals(self):
+        return [x for x in self.orbitals if len(x.pair) == 1 and x.pair[0] < 0]
+
+    # mol.save stores the PNO pair structure, sun.load_molecule gives it back to the qubit madness interface
+    def _backend_data(self):
+        # the pnoinfo of the madness calculation (the integrals and the nuclear repulsion are stored by mol.save)
+        orbitals = self.integral_manager.orbitals
+        if any(o.pair is None or o.occ is None for o in orbitals):
+            warnings.warn(
+                "the orbitals lost their PNO pair structure (e.g. they were transformed), "
+                "the molecule is loaded with the base backend",
+                TequilaWarning,
+            )
+            return None
+        return {
+            "pairinfo": [o.pair for o in orbitals],
+            "occinfo": [o.occ for o in orbitals],
+        }
+
+    def use_CLPO_orbitals_and_edges(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def use_CLPO_orbitals(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def use_HAO_orbitals(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def make_spa_ansatz(self, label=None, hcb=False, edges=None, **kwargs):
+        """
+        Shortcut for convenience
+        Parameters
+        ----------
+        label:
+           label for the angles
+        hcb:
+           if True the circuit will not map from HCB to JW (or other encodings supported)
+        edges, kwargs:
+           if given, the SPA of the backend base class is used (e.g. edges=mol.get_spa_edges())
+        Returns
+        -------
+        Default SPA ansatz (equivalent to PNO-UpCCD with madness PNOs)
+
+        """
+        if edges is not None or kwargs:
+            # the fermionic SPA has no hcb option
+            if hcb:
+                kwargs["hcb"] = hcb
+            return super().make_spa_ansatz(edges=edges, label=label, **kwargs)
+        name = "SPA-UpCCD"
+        if hcb and "HCB" not in name.upper():
+            name = "HCB-" + name
+        return self.make_upccgsd_ansatz(name=name, label=label)
+
+    @staticmethod
+    def find_executable(madness_root_dir=None):
+        executable = shutil.which("pno_integrals")
+        if madness_root_dir is None:
+            madness_root_dir = str(os.environ.get("MAD_ROOT_DIR"))
+        if executable is None and madness_root_dir is not None:
+            executable = shutil.which(f"{madness_root_dir}/src/apps/pno/pno_integrals")
+        return executable
+
+    def read_tensors(self, name="molecule", filetype="npy", datadir=None):
+        """
+        Try to read files "name_htensor.npy" and "name_gtensor.npy"
+        """
+
+        path = name
+        if datadir is not None:
+            path = f"{datadir}/{name}"
+
+        try:
+            h = numpy.load(f"{path}_htensor.{filetype}")
+        except Exception:  # noqa: BLE001
+            h = "failed"
+
+        try:
+            g = numpy.load(f"{path}_gtensor.{filetype}")
+        except Exception:  # noqa: BLE001
+            g = "failed"
+
+        return h, g
+
+    def cleanup(self, warn=False, delete_all_files=False):
+        filenames = ["pnoinfo.txt", "molecule_htensor.bin", "molecule.gtensor.bin"]
+        if delete_all_files:
+            filenames = [
+                f"{self.parameters.name}_htensor.npy",
+                f"{self.parameters.name}_gtensor.npy",
+                f"{self.parameters.name}_pnoinfo.txt",
+                f"{self.parameters.name}_pno_integrals.out",
+            ]
+        for filename in filenames:
+            if os.path.exists(filename):
+                if warn:
+                    warnings.warn(
+                        f"Found file {filename} from previous calculation ... deleting it",
+                        TequilaWarning,
+                    )
+                os.remove(filename)
+
+    def perturbative_f12_correction(
         self,
+        rdm1: numpy.ndarray | None = None,
+        rdm2: numpy.ndarray | None = None,
+        n_ri: int | None = None,
+        f12_filename: str = "molecule_f12tensor.bin",
+        **kwargs,
+    ) -> float:
+        """
+        Computes the spin-free [2]_R12 correction, needing only the 1- and 2-RDM of a reference method
+        Requires either 1-RDM, 2-RDM or information to compute them in kwargs
+
+        Parameters
+        ----------
+        rdm1 :
+            1-electron reduced density matrix
+        rdm2 :
+            2-electron reduced density matrix
+        gamma :
+            f12-exponent, for a correlation factor f_12 = -1/gamma * exp[-gamma*r_12]
+        n_ri :
+            dimensionality of RI-basis; if None, then the maximum available via tensors / basis-set is used
+        f12_filename :
+            when using madness_interface, <q|h|p> and <rs|1/r_12|pq> already available;
+            need to provide f12-tensor <rs|f_12|pq> as ".bin" from madness or ".npy", assuming Mulliken ordering
+        kwargs :
+            e.g. RDM-information via {"U": QCircuit, "variables": optimal angles}, needs to be passed if rdm1,rdm2 not
+            yet computed
+
+        Returns
+        -------
+            the f12 correction for the energy
+        """
+        from .f12_corrections._f12_correction_madness import (
+            ExplicitCorrelationCorrectionMadness,
+        )
+
+        correction = ExplicitCorrelationCorrectionMadness(
+            mol=self,
+            rdm1=rdm1,
+            rdm2=rdm2,
+            n_ri=n_ri,
+            f12_filename=f12_filename,
+            **kwargs,
+        )
+
+        return correction.compute()
+
+    def __str__(self):
+        path = self.parameters.name
+        if hasattr(self, "datadir") and self.datadir is not None:
+            path = f"{self.datadir}/{path}"
+        info = super().__str__()
+        info += "\n"
+        info += "{:15} : {}\n".format("executable", self.executable)
+        info += "{:15} : {}\n".format("htensor", f"{path}_htensor.npy")
+        info += "{:15} : {}\n".format("gtensor", f"{path}_gtensor.npy")
+
+        return info
+
+    def __repr__(self):
+        return self.__str__()
+
+    def _init_madness(
+        self,
+        build: typing.Callable,
         parameters: ParametersQC,
-        transformation: typing.Union[str, typing.Callable] = None,
+        *args,
         active_orbitals: list = "auto",
-        executable: str = None,
-        n_pno: int = None,
+        executable: str | None = None,
+        n_pno: int | None = None,
         n_virt: int = 0,
         keep_mad_files=False,
         datadir=None,
-        *args,
         **kwargs,
     ):
+        """
+        Get the integrals and the PNO pair structure from madness (run it, read in the files with n_pno="read"
+        or take the data given by sun.load_molecule) and initialize the molecule with them
+        build is the __init__ of the backend base class (QuantumChemistryBase, HybridBase or FermionicBase),
+        all other keyword arguments (e.g. transformation, select) are passed to it
+        """
         # can not use "geometry"
         # as this is already used for other things furter up
         if "mad_geometry_options" in kwargs:
@@ -105,7 +298,8 @@ class QuantumChemistryMadness(QuantumChemistryBase):
             executable = self.find_executable()
             if executable is None and self.madness_root_dir is not None:
                 warnings.warn(
-                    "MAD_ROOT_DIR={} found\nbut couldn't find executable".format(self.madness_root_dir), TequilaWarning
+                    f"MAD_ROOT_DIR={self.madness_root_dir} found\nbut couldn't find executable",
+                    TequilaWarning,
                 )
 
         else:
@@ -119,17 +313,30 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         # if no n_pno is given, look for MRA data (default)
         name = parameters.name
 
+        # the data of a madness calculation can be given directly (e.g. by sun.load_molecule):
+        # one_body_integrals, two_body_integrals, nuclear_repulsion, pairinfo and occinfo, then no files are read
+        given = "one_body_integrals" in kwargs and "pairinfo" in kwargs
+        if given:
+            h = kwargs.pop("one_body_integrals")
+            g = kwargs.pop("two_body_integrals")
+            if isinstance(g, NBodyTensor):
+                g = g.reorder(to="chem").elems
+            n_pno = None
         # try to read in data in the following cases
         # - no executable found
         # - executable found but read in explicitly demanded through n_pno="read"
-        if (n_pno is None and executable is None) or (hasattr(n_pno, "lower") and n_pno.lower() == "read"):
+        elif (n_pno is None and executable is None) or (
+            hasattr(n_pno, "lower") and n_pno.lower() == "read"
+        ):
             h, g = self.read_tensors(name=name, datadir=datadir)
             n_pno = None
         else:
             h = "failed"
             g = "failed"
 
-        if (isinstance(h, str) and "failed" in h) or (isinstance(g, str) and "failed" in g):
+        if (isinstance(h, str) and "failed" in h) or (
+            isinstance(g, str) and "failed" in g
+        ):
             status = "found {}_htensor.npy={}\n".format(name, "failed" not in h)
             status += "found {}_gtensor.npy={}\n".format(name, "failed" not in g)
             try:
@@ -138,13 +345,18 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                 status += "madness="
                 madness_status = self.run_madness(*args, **kwargs)
                 if int(madness_status) != 0:
-                    warnings.warn("MADNESS did not terminate as expected! status = {}".format(status), TequilaWarning)
+                    warnings.warn(
+                        f"MADNESS did not terminate as expected! status = {status}",
+                        TequilaWarning,
+                    )
                 status += str(madness_status) + "\n"
-            except Exception as E:
+            except Exception as E:  # noqa: BLE001 - any failure is reported in the status message below
                 status += str(E) + "\n"
 
             # will read the binary files, convert them and save them with the right name
-            h, g, pinfo = self.convert_madness_output_from_bin_to_npy(name=name, datadir=datadir)
+            h, g, pinfo = self.convert_madness_output_from_bin_to_npy(
+                name=name, datadir=datadir
+            )
             status += "found {}_htensor.npy={}\n".format(name, "failed" not in h)
             status += "found {}_gtensor.npy={}\n".format(name, "failed" not in g)
             status += "found {}_pnoinfo.txt={}\n".format(name, "failed" not in pinfo)
@@ -155,46 +367,52 @@ class QuantumChemistryMadness(QuantumChemistryBase):
             status += "pnoinfo report:\n"
             status += str(pinfo)
 
-            solution = "Solution 1: Assuming precomputed files are available:\n    provide {name}_gtensor.npy, {name}_htensor.npy and {name}_pnoinfo.txt\n    and call the Molecule constructor with n_pno='read' keyword \n\nSolution 2: Try installing with conda\n    conda install madtequila -c kottmann\n\nSolution 3: Install from source\n    follow instructions on github.com/kottmanj/madness".format(
-                name=name
-            )
+            solution = f"Solution 1: Assuming precomputed files are available:\n    provide {name}_gtensor.npy, {name}_htensor.npy and {name}_pnoinfo.txt\n    and call the Molecule constructor with n_pno='read' keyword \n\nSolution 2: Try installing with conda\n    conda install madtequila -c kottmann\n\nSolution 3: Install from source\n    follow instructions on github.com/kottmanj/madness"
             if self.executable is not None:
-                solution = "madness executable was found, but calculation did not succeed, check {name}_pno_integrals.out for clues".format(
-                    name=name
-                )
+                solution = f"madness executable was found, but calculation did not succeed, check {name}_pno_integrals.out for clues"
 
             if "failed" in h or "failed" in g:
                 raise TequilaMadnessException(
-                    "Could not initialize the madness interface\nStatus report is\n{status}\n\n".format(status=status)
+                    f"Could not initialize the madness interface\nStatus report is\n{status}\n\n"
                     + solution
                 )
         # get additional information from madness file
-        nuclear_repulsion = 0.0
-        pairinfo = None
-        occinfo = None
+        nuclear_repulsion = kwargs.pop("nuclear_repulsion", 0.0)
+        pairinfo = kwargs.pop("pairinfo", None)
+        occinfo = kwargs.pop("occinfo", None)
         path = parameters.name
         if datadir is not None:
-            path = "{}/{}".format(datadir, path)
-        for name in [path + "_pnoinfo.txt", parameters.name + "_pnoinfo.txt", "pnoinfo.txt"]:
-            try:
-                with open(name, "r") as f:
-                    for line in f.readlines():
-                        if "nuclear_repulsion" in line:
-                            nuclear_repulsion = float(line.split("=")[1])
-                        elif "pairinfo" in line:
-                            pairinfo = line.split("=")[1].split(",")
-                            pairinfo = [tuple([int(i) for i in x.split(".")]) for x in pairinfo]
-                        elif "occinfo" in line:
-                            occinfo = line.split("=")[1].split(",")
-                            occinfo = [float(x) for x in occinfo]
+            path = f"{datadir}/{path}"
+        if not given:
+            for name in [
+                path + "_pnoinfo.txt",
+                parameters.name + "_pnoinfo.txt",
+                "pnoinfo.txt",
+            ]:
+                try:
+                    with open(name, "r") as f:
+                        for line in f:
+                            if "nuclear_repulsion" in line:
+                                nuclear_repulsion = float(line.split("=")[1])
+                            elif "pairinfo" in line:
+                                pairinfo = line.split("=")[1].split(",")
+                                pairinfo = [
+                                    tuple([int(i) for i in x.split(".")])
+                                    for x in pairinfo
+                                ]
+                            elif "occinfo" in line:
+                                occinfo = line.split("=")[1].split(",")
+                                occinfo = [float(x) for x in occinfo]
 
-                if pairinfo is not None:
-                    break
-            except Exception:
-                continue
+                    if pairinfo is not None:
+                        break
+                except Exception:  # noqa: BLE001, S112
+                    continue
 
         if pairinfo is None:
-            raise TequilaMadnessException("Pairinfo from madness calculation not found\nPlease provide pnoinfo.txt")
+            raise TequilaMadnessException(
+                "Pairinfo from madness calculation not found\nPlease provide pnoinfo.txt"
+            )
 
         n_orbitals_total = h.shape[0]
         if "n_orbitals" in kwargs:
@@ -210,10 +428,17 @@ class QuantumChemistryMadness(QuantumChemistryBase):
 
         orbitals = []
         if pairinfo is not None:
-            orbitals = [OrbitalData(idx_total=i, idx=i, pair=p, occ=occinfo[i]) for i, p in enumerate(pairinfo)]
+            orbitals = [
+                OrbitalData(idx_total=i, idx=i, pair=p, occ=occinfo[i])
+                for i, p in enumerate(pairinfo)
+            ]
             reference_orbitals = [x for x in orbitals if x.occ == 2.0]
             if active_orbitals == "auto":
-                not_active = [i for i in reference_orbitals if sum([1 for x in orbitals if i.idx_total in x.pair]) < 2]
+                not_active = [
+                    i
+                    for i in reference_orbitals
+                    if sum([1 for x in orbitals if i.idx_total in x.pair]) < 2
+                ]
                 active_orbitals = [x.idx_total for x in orbitals if x not in not_active]
 
             if active_orbitals is not None:
@@ -225,14 +450,20 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     else:
                         orbitals[x.idx_total].idx = None
         else:
-            raise TequilaMadnessException("No pairinfo given: madness interface needs a file moleculename_pnoinfo.txt")
+            raise TequilaMadnessException(
+                "No pairinfo given: madness interface needs a file moleculename_pnoinfo.txt"
+            )
 
         # convert to indices only
         # active space data will be set in baseclass constructor
         reference_orbitals = [x.idx_total for x in reference_orbitals]
-        super().__init__(
+        if kwargs.get("reference_orbitals") is not None:
+            # given (e.g. by sun.load_molecule) instead of the doubly occupied orbitals
+            reference_orbitals = kwargs.pop("reference_orbitals")
+        kwargs.pop("reference_orbitals", None)
+        build(
+            *args,
             parameters=parameters,
-            transformation=transformation,
             active_orbitals=active_orbitals,
             one_body_integrals=h,
             two_body_integrals=g,
@@ -240,7 +471,6 @@ class QuantumChemistryMadness(QuantumChemistryBase):
             n_orbitals=n_orbitals_total,
             orbitals=orbitals,
             reference_orbitals=reference_orbitals,
-            *args,
             **kwargs,
         )
 
@@ -249,37 +479,18 @@ class QuantumChemistryMadness(QuantumChemistryBase):
             nrefs = len(self.reference_orbitals)
             if n_pno + nrefs + n_virt != self.n_orbitals:
                 warnings.warn(
-                    "read in data has {} pnos/virtuals, but n_pno and n_virt where set to {} and {}".format(
-                        self.n_orbitals - nrefs, n_pno, n_virt
-                    ),
+                    f"read in data has {self.n_orbitals - nrefs} pnos/virtuals, but n_pno and n_virt where set to {n_pno} and {n_virt}",
                     TequilaWarning,
                 )
 
-        # delete *.bin files and pnoinfo.txt form madness calculation
-        if not keep_mad_files:
+        # delete *.bin files and pnoinfo.txt form madness calculation (none if the data was given)
+        if not keep_mad_files and not given:
             self.cleanup(warn=False, delete_all_files=False)
-
-    def cleanup(self, warn=False, delete_all_files=False):
-        filenames = ["pnoinfo.txt", "molecule_htensor.bin", "molecule.gtensor.bin"]
-        if delete_all_files:
-            filenames = [
-                "{}_htensor.npy".format(self.parameters.name),
-                "{}_gtensor.npy".format(self.parameters.name),
-                "{}_pnoinfo.txt".format(self.parameters.name),
-                "{}_pno_integrals.out".format(self.parameters.name),
-            ]
-        for filename in filenames:
-            if os.path.exists(filename):
-                if warn:
-                    warnings.warn(
-                        "Found file {} from previous calculation ... deleting it".format(filename), TequilaWarning
-                    )
-                os.remove(filename)
 
     def run_madness(self, *args, **kwargs):
         if self.executable is None:
             return "\n\n----> pno_integrals executable not found <----\n\n"
-        self.write_madness_input(n_pno=self.n_pno, n_virt=self.n_virt, *args, **kwargs)
+        self.write_madness_input(*args, n_pno=self.n_pno, n_virt=self.n_virt, **kwargs)
 
         # prevent reading in old files
         self.cleanup(warn=True, delete_all_files=True)
@@ -288,51 +499,204 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         import time
 
         start = time.time()
-        filename = "{}_pno_integrals.out".format(self.parameters.name)
+        filename = f"{self.parameters.name}_pno_integrals.out"
         print("Starting madness calculation with executable: ", self.executable)
-        print("output redirected to {} logfile".format(filename))
+        print(f"output redirected to {filename} logfile")
         with open(filename, "w") as logfile:
             madout = subprocess.call([self.executable], stdout=logfile)
-        print("finished after {}s".format(time.time() - start))
+        print(f"finished after {time.time() - start}s")
 
-        os.rename("pnoinfo.txt", "{}_pnoinfo.txt".format(self.parameters.name))
+        os.rename("pnoinfo.txt", f"{self.parameters.name}_pnoinfo.txt")
 
         return madout
 
-    def read_tensors(self, name="molecule", filetype="npy", datadir=None):
-        """
-        Try to read files "name_htensor.npy" and "name_gtensor.npy"
-        """
+    def write_madness_input(
+        self,
+        n_pno=None,
+        n_virt=0,
+        filename="input",
+        maxrank=None,
+        n_orbitals=None,
+        *args,
+        **kwargs,
+    ):
+        if n_pno is not None and n_orbitals is not None:
+            raise TequilaMadnessException(
+                f"n_pno={n_pno} and n_orbitals={n_orbitals} given ... please pick one"
+            )
 
+        n_electrons = self.parameters.total_n_electrons
+        if self.parameters.frozen_core:
+            # only count active electrons (will not compute pnos for frozen pairs)
+            n_core_electrons = self.parameters.get_number_of_core_electrons()
+            n_electrons -= n_core_electrons
+
+        n_pairs = n_electrons // 2
+        if n_orbitals is None:
+            n_orbitals = n_electrons  # minimal correlated (each active pair will have one virtual)
+
+        if n_pno is None:
+            n_pno = n_orbitals - n_pairs
+
+        if maxrank is None:
+            # need at least maxrank=1, otherwise no PNOs are computed
+            # this was a bug in <=v1.8.5
+            maxrank = max(1, int(numpy.ceil(n_pno / n_pairs)))
+
+        if maxrank <= 0:
+            warnings.warn(
+                f"maxrank={maxrank} in tequila madness backend! No PNOs will be computed. Set the value when initializing the Molecule as sun.Molecule(..., pno={'maxrank':1, ...})",
+                TequilaWarning,
+            )
+
+        data = {}
+        if self.parameters.multiplicity != 1:
+            raise TequilaMadnessException(
+                f"Currently only closed shell supported for MRA-PNO-MP2, you demanded multiplicity={self.parameters.multiplicity} for the surrogate"
+            )
+        data["dft"] = {
+            "charge": self.parameters.charge,
+            "xc": "hf",
+            "k": 7,
+            "econv": 1.0e-4,
+            "dconv": 5.0e-4,
+            "localize": "boys",
+            "ncf": "( none , 1.0 )",
+        }
+        data["pno"] = {
+            "maxrank": maxrank,
+            "f12": "false",
+            "thresh": 1.0e-4,
+            "diagonal": True,
+        }
+        if not self.parameters.frozen_core:
+            data["pno"]["freeze"] = 0
+        data["pnoint"] = {"n_pno": n_pno, "n_virt": n_virt, "orthog": "symmetric"}
+        data["plot"] = {}
+        data["f12"] = {}
+        for key, value in data.items():
+            if key in kwargs:
+                data[key] = {**value, **kwargs[key]}
+
+        geom = {}
+        if hasattr(self, "mad_geometry_options"):
+            geom = self.mad_geometry_options
+
+        if "units" not in geom:
+            geom["units"] = "angstrom"
+        if "eprec" not in geom:
+            geom["eprec"] = 1.0e-6
+        if "no_orient" not in geom:
+            geom["no_orient"] = 1
+        if filename is not None:
+            with open(filename, "w") as f:
+                for k1, v1 in data.items():
+                    print(k1, file=f)
+                    for k2, v2 in v1.items():
+                        print(f"{k2} {v2}", file=f)
+                    print("end\n", file=f)
+
+                print("geometry", file=f)
+                for k, v in geom.items():
+                    print(f"{k} {v}", file=f)
+                for line in self.parameters.get_geometry_string().split("\n"):
+                    line = line.strip()
+                    if line != "":
+                        print(line, file=f)
+                print("end", file=f)
+
+        return data
+
+    def convert_madness_output_from_bin_to_npy(self, name, datadir=None):
         path = name
         if datadir is not None:
-            path = "{}/{}".format(datadir, name)
+            # if the datadir does not exist then tequila will crash
+            try:
+                import os
+
+                if not os.path.exists(datadir):
+                    os.makedirs(datadir)
+            except Exception as E:  # noqa: BLE001  # reported in status
+                warnings.warn(
+                    f"tried to create datadir={datadir} and caught\n{E!s}",
+                    TequilaWarning,
+                )
+
+            path = f"{datadir}/{name}"
+        try:
+            g_data = numpy.fromfile("molecule_gtensor.bin".format())
+            sd = int(numpy.power(g_data.size, 0.25))
+            assert sd**4 == g_data.size
+            sds = [sd] * 4
+            g = g_data.reshape(sds)
+            numpy.save(f"{path}_gtensor.npy", arr=g)
+        except Exception as E:  # noqa: BLE001  # reported in status
+            g = f"failed\n{E!s}\n"
 
         try:
-            h = numpy.load("{}_htensor.{}".format(path, filetype))
-        except Exception:
-            h = "failed"
+            h_data = numpy.fromfile("molecule_htensor.bin")
+            sd = int(numpy.sqrt(h_data.size))
+            assert sd**2 == h_data.size
+            sds = [sd] * 2
+            h = h_data.reshape(sds)
+            numpy.save(f"{path}_htensor.npy", arr=h)
+        except Exception as E:  # noqa: BLE001  # reported in status
+            h = f"failed\n{E!s}\n"
 
         try:
-            g = numpy.load("{}_gtensor.{}".format(path, filetype))
-        except Exception:
-            g = "failed"
+            with open(f"{name}_pnoinfo.txt", "r") as f1:
+                pnoinfo = f1.read().strip()
+        except Exception as E:  # noqa: BLE001
+            pnoinfo = f"failed\n{E!s}\n"
 
-        return h, g
+        if datadir is not None:
+            try:
+                with (
+                    open(f"{name}_pnoinfo.txt", "r") as f1,
+                    open(f"{path}_pnoinfo.txt", "w") as f2,
+                ):
+                    f2.write(f1.read().strip())
+            except Exception as E:  # noqa: BLE001
+                pnoinfo = f"failed\n{E!s}\n"
+            try:
+                with (
+                    open(f"{name}_pno_integrals.out", "r") as f1,
+                    open(f"{path}_pno_integrals.out", "w") as f2,
+                ):
+                    f2.write(f1.read().strip())
+            except Exception:  # noqa: BLE001, S110
+                pass
 
-    def get_pair_orbitals(self, i: OrbitalData, j: OrbitalData, exclude: typing.List[OrbitalData] = None):
-        if isinstance(i, int):
-            i = self.orbitals[i]
-        if isinstance(j, int):
-            j = self.orbitals[j]
-        if isinstance(exclude, int):
-            exclude = [self.orbitals[exclude]]
-        if exclude is None or isinstance(exclude, OrbitalData):
-            exclude = [exclude]
-        return [x for x in self.orbitals if (i.idx_total, j.idx_total) == x.pair and x not in exclude]
+        return h, g, pnoinfo
 
-    def get_virtual_orbitals(self):
-        return [x for x in self.orbitals if len(x.pair) == 1 and x.pair[0] < 0]
+
+class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
+    def __init__(
+        self,
+        parameters: ParametersQC,
+        transformation: str | typing.Callable | None = None,
+        active_orbitals: list = "auto",
+        executable: str | None = None,
+        n_pno: int | None = None,
+        n_virt: int = 0,
+        keep_mad_files=False,
+        datadir=None,
+        *args,
+        **kwargs,
+    ):
+        self._init_madness(
+            super().__init__,
+            parameters,
+            *args,
+            transformation=transformation,
+            active_orbitals=active_orbitals,
+            executable=executable,
+            n_pno=n_pno,
+            n_virt=n_virt,
+            keep_mad_files=keep_mad_files,
+            datadir=datadir,
+            **kwargs,
+        )
 
     def compute_energy(self, method, *args, **kwargs):
         """
@@ -354,7 +718,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
 
         """
 
-        if any([x in method.upper() for x in ["U", "SPA", "PNO", "HCB"]]):
+        if any(x in method.upper() for x in ["U", "SPA", "PNO", "HCB"]):
             # simulate entirely in HCB representation if no singles are involved
             if "S" not in method.upper().split("-")[-1] and "HCB" not in method.upper():
                 method = "HCB-" + method
@@ -366,9 +730,9 @@ class QuantumChemistryMadness(QuantumChemistryBase):
             E = ExpectationValue(H=H, U=U)
             from tequila import minimize
 
-            return minimize(objective=E, *args, **kwargs).energy
+            return minimize(*args, objective=E, **kwargs).energy
         else:
-            return super().compute_energy(method=method, *args, **kwargs)
+            return super().compute_energy(*args, method=method, **kwargs)
 
     def local_qubit_map(self, hcb=False, up_then_down=False):
         # re-arrange orbitals to result in more local circuits
@@ -396,25 +760,6 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         qubit_map = {x: i for i, x in enumerate(ordered_qubits)}
         return qubit_map
 
-    def make_spa_ansatz(self, label=None, hcb=False):
-        """
-        Shortcut for convenience
-        Parameters
-        ----------
-        label:
-           label for the angles
-        hcb:
-           if True the circuit will not map from HCB to JW (or other encodings that might be supported in the future)
-        Returns
-        -------
-        Default SPA ansatz (equivalent to PNO-UpCCD with madness PNOs)
-
-        """
-        name = "SPA-UpCCD"
-        if hcb and "HCB" not in name.upper():
-            name = "HCB-" + name
-        return self.make_upccgsd_ansatz(name=name, label=label)
-
     def make_upccgsd_ansatz(
         self,
         name="UpCCGSD",
@@ -424,6 +769,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         neglect_z=None,
         hcb_optimization=None,
         include_reference=True,
+        indices: list | None = None,
         *args,
         **kwargs,
     ):
@@ -439,6 +785,8 @@ class QuantumChemistryMadness(QuantumChemistryBase):
               Excitations: can be "S" (use only singles), "D" (use only doubles), "GSD" (generalized singles and doubles), "GASD" (approximate singles, neglecting Z terms in JW)
         neglect_z: neglect all Z terms in singles excitations generators
         order: repetition of layers, can be given over the name as well, the order needs to be the first in the name then (i.e. 2-UpCCGSD, 2-SPA-GSD, etc)
+        indices: excitation indices in the format of format_excitation_indices, e.g. [((0, 3),), ((1, 4),)]
+                 (see make_pno_upccgsd_ansatz), they replace the ones of the name in every layer
         args
         kwargs
 
@@ -449,7 +797,11 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         # check if the used qubit encoding has a hcb transformation
         try:
             have_hcb_trafo = self.transformation.hcb_to_me() is not None
-        except Exception:
+        except Exception:  # noqa: BLE001
+            have_hcb_trafo = False
+        # in tapered encodings the HCB qubit of the tapered orbital is implicit (see make_spa_ansatz),
+        # but the HCB doubles excite into it, so the doubles are built from fermionic excitations instead
+        if "TAPEREDBINARY" in self.transformation.name.upper():
             have_hcb_trafo = False
         name = name.upper()
 
@@ -460,18 +812,33 @@ class QuantumChemistryMadness(QuantumChemistryBase):
         excitations = name.split("-")[-1]
 
         if "HCB" in name and "S" in excitations:
-            raise TequilaMadnessException("name={}, HCB + Singles can't be realized".format(name))
+            raise TequilaMadnessException(
+                f"name={name}, HCB + Singles can't be realized"
+            )
 
         if "HCB" in name and "D" not in excitations:
-            raise warnings.warn("name={}, HCB without Doubles has no result ".format(name), TequilaWarning)
+            raise warnings.warn(
+                f"name={name}, HCB without Doubles has no result ",
+                TequilaWarning,
+            )
 
         if "S" not in excitations and "D" not in excitations:
-            raise warnings.warn("name={}, neither singles nor doubles requested".format(name), TequilaWarning)
+            raise warnings.warn(
+                f"name={name}, neither singles nor doubles requested",
+                TequilaWarning,
+            )
 
         if "T" in excitations or "Q" in excitations:
-            raise warnings.warn("name={}, only singles and doubles supported".format(name), TequilaWarning)
+            raise warnings.warn(
+                f"name={name}, only singles and doubles supported",
+                TequilaWarning,
+            )
 
-        if (have_hcb_trafo and "D" in excitations or "HCB" in name) and include_reference and hcb_optimization is None:
+        if (
+            (have_hcb_trafo and "D" in excitations or "HCB" in name)
+            and include_reference
+            and hcb_optimization is None
+        ):
             hcb_optimization = True
 
         if hcb_optimization and direct_compiling is None:
@@ -489,10 +856,12 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                 kwargs["spin_adapt_singles"] = True
 
         if direct_compiling and not have_hcb_trafo and "HCB" not in name:
-            raise TequilaMadnessException(
-                "direct_compiling={} demanded but no hcb_to_me in transformation={}\ntry transformation='ReorderedJordanWigner' ".format(
-                    direct_compiling, self.transformation
+            if "TAPEREDBINARY" in self.transformation.name.upper():
+                raise TequilaMadnessException(
+                    f"direct_compiling={direct_compiling} does not work with transformation={self.transformation.name}: the HCB doubles excite into the tapered orbital, which is implicit in this encoding"
                 )
+            raise TequilaMadnessException(
+                f"direct_compiling={direct_compiling} demanded but no hcb_to_me in transformation={self.transformation}\ntry transformation='ReorderedJordanWigner' "
             )
 
         name = name.upper()
@@ -502,70 +871,108 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     order = int(name.split("-")[0])
                 else:
                     order = 1
-            except Exception:
+            except Exception:  # noqa: BLE001
                 order = 1
 
         # first layer
         U = QCircuit()
+        given_indices = indices
+        if indices is not None:
+            # raw pairs (p, q) as built by make_pno_upccgsd_ansatz, in the format of the layers ((p, q),)
+            given_indices = [
+                x if isinstance(x[0], tuple) else self.format_excitation_indices([x])
+                for x in indices
+            ]
         if hcb_optimization:
-            if "D" in excitations:
+            if "D" in excitations and given_indices is None:
                 U = self.make_hardcore_boson_pno_upccd_ansatz(
-                    include_reference=include_reference, direct_compiling=direct_compiling, label=(label, 0)
+                    include_reference=include_reference,
+                    direct_compiling=direct_compiling,
+                    label=(label, 0),
                 )
             elif include_reference:
                 U = self.prepare_hardcore_boson_reference()
 
             indices0 = [k.name[0] for k in U.extract_variables()]
-            indices1 = self.make_upccgsd_indices(label=label, name=name, exclude=indices0, *args, **kwargs)
+            if given_indices is None:
+                indices1 = self.make_upccgsd_indices(
+                    *args, label=label, name=name, exclude=indices0, **kwargs
+                )
+            else:
+                indices1 = [x for x in given_indices if x not in indices0]
             if "D" in excitations:
-                U += self.make_hardcore_boson_upccgd_layer(indices=indices1, label=(label, 0), *args, **kwargs)
+                U += self.make_hardcore_boson_upccgd_layer(
+                    *args, indices=indices1, label=(label, 0), **kwargs
+                )
             indices = indices0 + indices1
             if "HCB" not in name and len(U.gates) > 0:
                 U = self.hcb_to_me(U=U)
             else:
                 assert "S" not in excitations
             if "S" in excitations:
-                U += self.make_upccgsd_singles(indices=indices, label=(label, 0), neglect_z=neglect_z, *args, **kwargs)
+                U += self.make_upccgsd_singles(
+                    *args,
+                    indices=indices,
+                    label=(label, 0),
+                    neglect_z=neglect_z,
+                    **kwargs,
+                )
         else:
-            indices = self.make_upccgsd_indices(label=(label, 0), name=name, *args, **kwargs)
+            if given_indices is None:
+                indices = self.make_upccgsd_indices(
+                    *args, label=(label, 0), name=name, **kwargs
+                )
             if include_reference:
                 U = self.prepare_reference()
             U += self.make_upccgsd_layer(
+                *args,
                 indices=indices,
                 include_singles="S" in excitations,
                 include_doubles="D" in excitations,
                 label=(label, 0),
                 neglect_z=neglect_z,
-                *args,
                 **kwargs,
             )
 
         if order > 1:
             for layer in range(1, order):
-                indices = self.make_upccgsd_indices(label=(label, layer), name=name, *args, **kwargs)
+                indices = given_indices
+                if given_indices is None:
+                    indices = self.make_upccgsd_indices(
+                        *args, label=(label, layer), name=name, **kwargs
+                    )
                 if "HCB" in name:
-                    U += self.make_hardcore_boson_upccgd_layer(indices=indices, label=(label, layer), *args, **kwargs)
+                    U += self.make_hardcore_boson_upccgd_layer(
+                        *args, indices=indices, label=(label, layer), **kwargs
+                    )
                 else:
                     U += self.make_upccgsd_layer(
+                        *args,
                         indices=indices,
                         include_singles="S" in excitations,
                         include_doubles="D" in excitations,
                         label=(label, layer),
                         neglect_z=neglect_z,
-                        *args,
                         **kwargs,
                     )
         return U
 
     def make_hardcore_boson_pno_upccd_ansatz(
-        self, pairs=None, label=None, include_reference=True, direct_compiling=False
+        self,
+        pairs=None,
+        label=None,
+        include_reference: bool = True,
+        direct_compiling: bool = False,
+        ladder: bool = True,
     ):
         if pairs is None:
             pairs = [x for x in self.reference_orbitals]
         U = QCircuit()
         if direct_compiling:
             if not include_reference:
-                raise Exception("HCB_PNO_UPCCD: Direct compiling needs reference included")
+                raise TequilaException(
+                    "HCB_PNO_UPCCD: Direct compiling needs reference included"
+                )
             for x in pairs:
                 U += gates.X(x.idx)
                 c = [None, x.idx]
@@ -575,7 +982,7 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     idx = self.format_excitation_indices([(x.idx, a.idx)])
                     U += gates.Ry(angle=(idx, "D", label), target=a.idx, control=c[0])
                     U += gates.X(target=c[1], control=a.idx)
-                    if hasattr(direct_compiling, "lower") and direct_compiling.lower() == "ladder":
+                    if ladder:
                         c = [a.idx, a.idx]
                     else:
                         c = [x.idx, x.idx]
@@ -590,11 +997,15 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                     if x == a:
                         continue
                     idx = self.format_excitation_indices([(x.idx, a.idx)])
-                    U += self.make_hardcore_boson_excitation_gate(indices=idx, angle=(idx, "D", label))
+                    U += self.make_hardcore_boson_excitation_gate(
+                        indices=idx, angle=(idx, "D", label)
+                    )
 
         return U
 
-    def make_upccgsd_indices(self, label=None, name="UpCCGD", exclude: list = None, *args, **kwargs):
+    def make_upccgsd_indices(
+        self, name="UpCCGD", exclude: list | None = None, *args, **kwargs
+    ):
         """
         :param label: label the angles
         :param generalized: if true the complement to UpCCGD is created (otherwise UpCCD)
@@ -655,9 +1066,10 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                         indices.append(idx)
         return indices
 
-    def make_pno_upccgsd_ansatz(self, generalized=False, include_offdiagonals=False, **kwargs):
+    def make_pno_upccgsd_ansatz(
+        self, generalized=False, include_offdiagonals=False, **kwargs
+    ):
         indices = []
-        refs = self.reference_orbitals
         for i in self.reference_orbitals:
             for a in self.get_pair_orbitals(i=i, j=i, exclude=i):
                 indices.append((i.idx, a.idx))
@@ -685,204 +1097,3 @@ class QuantumChemistryMadness(QuantumChemistryBase):
                                 indices.append((a.idx, b.idx))
 
         return self.make_upccgsd_ansatz(indices=indices, **kwargs)
-
-    def write_madness_input(
-        self, n_pno=None, n_virt=0, filename="input", maxrank=None, n_orbitals=None, *args, **kwargs
-    ):
-        if n_pno is not None and n_orbitals is not None:
-            raise TequilaMadnessException(
-                "n_pno={} and n_orbitals={} given ... please pick one".format(n_pno, n_orbitals)
-            )
-
-        n_electrons = self.parameters.total_n_electrons
-        if self.parameters.frozen_core:
-            # only count active electrons (will not compute pnos for frozen pairs)
-            n_core_electrons = self.parameters.get_number_of_core_electrons()
-            n_electrons -= n_core_electrons
-
-        n_pairs = n_electrons // 2
-        if n_orbitals is None:
-            n_orbitals = n_electrons  # minimal correlated (each active pair will have one virtual)
-
-        if n_pno is None:
-            n_pno = n_orbitals - n_pairs
-
-        if maxrank is None:
-            # need at least maxrank=1, otherwise no PNOs are computed
-            # this was a bug in <=v1.8.5
-            maxrank = max(1, int(numpy.ceil(n_pno / n_pairs)))
-
-        if maxrank <= 0:
-            warnings.warn(
-                'maxrank={} in tequila madness backend! No PNOs will be computed. Set the value when initializing the Molecule as sun.Molecule(..., pno={"maxrank":1, ...})'.format(
-                    maxrank
-                ),
-                TequilaWarning,
-            )
-
-        data = {}
-        if self.parameters.multiplicity != 1:
-            raise TequilaMadnessException(
-                "Currently only closed shell supported for MRA-PNO-MP2, you demanded multiplicity={} for the surrogate".format(
-                    self.parameters.multiplicity
-                )
-            )
-        data["dft"] = {
-            "charge": self.parameters.charge,
-            "xc": "hf",
-            "k": 7,
-            "econv": 1.0e-4,
-            "dconv": 5.0e-4,
-            "localize": "boys",
-            "ncf": "( none , 1.0 )",
-        }
-        data["pno"] = {"maxrank": maxrank, "f12": "false", "thresh": 1.0e-4, "diagonal": True}
-        if not self.parameters.frozen_core:
-            data["pno"]["freeze"] = 0
-        data["pnoint"] = {"n_pno": n_pno, "n_virt": n_virt, "orthog": "symmetric"}
-        data["plot"] = {}
-        data["f12"] = {}
-        for key in data.keys():
-            if key in kwargs:
-                data[key] = {**data[key], **kwargs[key]}
-
-        geom = {}
-        if hasattr(self, "mad_geometry_options"):
-            geom = self.mad_geometry_options
-
-        if "units" not in geom:
-            geom["units"] = "angstrom"
-        if "eprec" not in geom:
-            geom["eprec"] = 1.0e-6
-        if "no_orient" not in geom:
-            geom["no_orient"] = 1
-        if filename is not None:
-            with open(filename, "w") as f:
-                for k1, v1 in data.items():
-                    print(k1, file=f)
-                    for k2, v2 in v1.items():
-                        print("{} {}".format(k2, v2), file=f)
-                    print("end\n", file=f)
-
-                print("geometry", file=f)
-                for k, v in geom.items():
-                    print("{} {}".format(k, v), file=f)
-                for line in self.parameters.get_geometry_string().split("\n"):
-                    line = line.strip()
-                    if line != "":
-                        print(line, file=f)
-                print("end", file=f)
-
-        return data
-
-    def convert_madness_output_from_bin_to_npy(self, name, datadir=None):
-        path = name
-        if datadir is not None:
-            # if the datadir does not exist then tequila will crash
-            try:
-                import os
-
-                if not os.path.exists(datadir):
-                    os.makedirs(datadir)
-            except Exception as E:
-                warnings.warn("tried to create datadir={} and caught\n{}".format(datadir, str(E)), TequilaWarning)
-
-            path = "{}/{}".format(datadir, name)
-        try:
-            g_data = numpy.fromfile("molecule_gtensor.bin".format())
-            sd = int(numpy.power(g_data.size, 0.25))
-            assert sd**4 == g_data.size
-            sds = [sd] * 4
-            g = g_data.reshape(sds)
-            numpy.save("{}_gtensor.npy".format(path), arr=g)
-        except Exception as E:
-            g = "failed\n{}\n".format(str(E))
-
-        try:
-            h_data = numpy.fromfile("molecule_htensor.bin")
-            sd = int(numpy.sqrt(h_data.size))
-            assert sd**2 == h_data.size
-            sds = [sd] * 2
-            h = h_data.reshape(sds)
-            numpy.save("{}_htensor.npy".format(path), arr=h)
-        except Exception as E:
-            h = "failed\n{}\n".format(str(E))
-
-        try:
-            with open("{}_pnoinfo.txt".format(name), "r") as f1:
-                pnoinfo = f1.read().strip()
-        except Exception as E:
-            pnoinfo = "failed\n{}\n".format(str(E))
-
-        if datadir is not None:
-            try:
-                with open("{}_pnoinfo.txt".format(name), "r") as f1, open("{}_pnoinfo.txt".format(path), "w") as f2:
-                    f2.write(f1.read().strip())
-            except Exception as E:
-                pnoinfo = "failed\n{}\n".format(str(E))
-            try:
-                with (
-                    open("{}_pno_integrals.out".format(name), "r") as f1,
-                    open("{}_pno_integrals.out".format(path), "w") as f2,
-                ):
-                    f2.write(f1.read().strip())
-            except Exception as E:
-                pass
-
-        return h, g, pnoinfo
-
-    def perturbative_f12_correction(
-        self,
-        rdm1: numpy.ndarray = None,
-        rdm2: numpy.ndarray = None,
-        n_ri: int = None,
-        f12_filename: str = "molecule_f12tensor.bin",
-        **kwargs,
-    ) -> float:
-        """
-        Computes the spin-free [2]_R12 correction, needing only the 1- and 2-RDM of a reference method
-        Requires either 1-RDM, 2-RDM or information to compute them in kwargs
-
-        Parameters
-        ----------
-        rdm1 :
-            1-electron reduced density matrix
-        rdm2 :
-            2-electron reduced density matrix
-        gamma :
-            f12-exponent, for a correlation factor f_12 = -1/gamma * exp[-gamma*r_12]
-        n_ri :
-            dimensionality of RI-basis; if None, then the maximum available via tensors / basis-set is used
-        f12_filename :
-            when using madness_interface, <q|h|p> and <rs|1/r_12|pq> already available;
-            need to provide f12-tensor <rs|f_12|pq> as ".bin" from madness or ".npy", assuming Mulliken ordering
-        kwargs :
-            e.g. RDM-information via {"U": QCircuit, "variables": optimal angles}, needs to be passed if rdm1,rdm2 not
-            yet computed
-
-        Returns
-        -------
-            the f12 correction for the energy
-        """
-        from .f12_corrections._f12_correction_madness import ExplicitCorrelationCorrectionMadness
-
-        correction = ExplicitCorrelationCorrectionMadness(
-            mol=self, rdm1=rdm1, rdm2=rdm2, n_ri=n_ri, f12_filename=f12_filename, **kwargs
-        )
-
-        return correction.compute()
-
-    def __str__(self):
-        path = self.parameters.name
-        if hasattr(self, "datadir") and self.datadir is not None:
-            path = "{}/{}".format(self.datadir, path)
-        info = super().__str__()
-        info += "\n"
-        info += "{:15} : {}\n".format("executable", self.executable)
-        info += "{:15} : {}\n".format("htensor", "{}_htensor.npy".format(path))
-        info += "{:15} : {}\n".format("gtensor", "{}_gtensor.npy".format(path))
-
-        return info
-
-    def __repr__(self):
-        return self.__str__()

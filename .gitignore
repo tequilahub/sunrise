@@ -237,5 +237,23 @@ erik/*
 *.out
 *.clean
 timer.dat
+/tests/data/test_wfn.npy
+/tests/1/
+# madness files (integrals, pno info, restart data, orbitals and input)
+*_gtensor.npy
+*_htensor.npy
+*_f12tensor.npy
+*tensor.bin
+*_pnoinfo.txt
+*.00000
+mad.*
+nemo_iterations
+*.cube
+/tests/input
+# circuits drawn with sun.draw() without a filename
+sunrise_draw_*.png
+# precomputed madness data the tests read
+!/tests/data/f12/*
+!/tests/data/madness/*
 # copy of tests/data that the psi4 CI workflow makes at the repository root
 /data/

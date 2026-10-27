@@ -1,30 +1,42 @@
-from sunrise import fermionic_operations as fe
-from tequila import QTensor,Variable,Objective,TequilaException,simulate
-import numpy
+from __future__ import annotations
+
 import numbers
-from typing import Union
+
+import numpy
+from tequila import Objective, QTensor, TequilaException, Variable
+
+from sunrise import fermionic_operations as fe
+
 # Adaptation of get_gives_decompostion from tequila qc_base at version 1.9.9dev at August 2025
 
 OPTIMIZED_ORDERING = "Optimized"
 
-def n_rotation(i:int, phi)->fe.FCircuit:
-        """
-        Creates a quantum circuit that applies a phase rotation based on phi to both components (up and down) of a given spatial orbital.
 
-        Parameters:
-        - i (int): The index of the qubit to which the rotation will be applied.
-        - phi (float): The rotation angle. The actual rotation applied will be multiplied with -2 for both components.
+def n_rotation(i: int, phi) -> fe.FCircuit:
+    """
+    Creates a quantum circuit that applies a phase rotation based on phi to both components (up and down) of a given spatial orbital.
 
-        Returns:
-        - FCircuit: A quantum circuit object containing the sequence of rotations applied to the up and down components of the specified spatial orbital.
-        """
+    Parameters:
+    - i (int): The index of the qubit to which the rotation will be applied.
+    - phi (float): The rotation angle. The actual rotation applied will be multiplied with -2 for both components.
 
-        # Start a new circuit and apply rotations to each component.
-        circuit = fe.Phase(2*i, variables=-2 * phi)
-        circuit += fe.Phase(2*i+1, variables=-2 * phi)
-        return circuit
+    Returns:
+    - FCircuit: A quantum circuit object containing the sequence of rotations applied to the up and down components of the specified spatial orbital.
+    """
 
-def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[list,tuple,str]=OPTIMIZED_ORDERING, fix: bool = True, label=None,)->fe.FCircuit:
+    # Start a new circuit and apply rotations to each component.
+    circuit = fe.Phase(2 * i, variables=-2 * phi)
+    circuit += fe.Phase(2 * i + 1, variables=-2 * phi)
+    return circuit
+
+
+def get_givens_circuit(
+    unitary: numpy.ndarray,
+    tol: float = 1e-6,
+    ordering: list | tuple | str | None = OPTIMIZED_ORDERING,
+    fix: bool = True,
+    label=None,
+) -> fe.FCircuit:
     """
     Constructs a quantum circuit from a given real unitary matrix using Givens rotations.
 
@@ -49,8 +61,8 @@ def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[lis
 
     # Add all Rz (phase) rotations to the circuit.
     for phi in phi_list:
-        if  isinstance(phi[0],numbers.Number) and abs(phi[0])%(2*numpy.pi)<tol:
-                continue
+        if isinstance(phi[0], numbers.Number) and abs(phi[0]) % (2 * numpy.pi) < tol:
+            continue
         if fix:
             circuit += n_rotation(i=phi[1], phi=phi[0])
         else:
@@ -64,8 +76,12 @@ def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[lis
 
     # Add all Givens rotations to the circuit.
     for theta in reversed(theta_list):
-        if  isinstance(theta[0],numbers.Number) and abs(theta[0])%numpy.pi<tol:
-                continue
+        # theta = pi is not the identity: it flips the sign of both orbitals
+        if (
+            isinstance(theta[0], numbers.Number)
+            and abs(theta[0]) % (2 * numpy.pi) < tol
+        ):
+            continue
         # (UR(i, j) moves an electron from i to j for a positive angle)
         if fix:
             circuit += fe.UR(i=theta[1], j=theta[2], variables=theta[0] * 2)
@@ -83,7 +99,8 @@ def get_givens_circuit(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[lis
 
     return circuit
 
-def givens_matrix(n, p, q, theta)->QTensor:
+
+def givens_matrix(n, p, q, theta) -> QTensor:
     """
     Construct a complex Givens rotation matrix of dimension n by theta between rows/columns p and q.
     """
@@ -99,8 +116,10 @@ def givens_matrix(n, p, q, theta)->QTensor:
     Returns:
     - numpy.array: The Givens rotation matrix.
     """
-    matrix = QTensor(shape=(n, n), objective_list=numpy.eye(n).reshape(n * n))  # Matrix to hold complex numbers
-    
+    matrix = QTensor(
+        shape=(n, n), objective_list=numpy.eye(n).reshape(n * n)
+    )  # Matrix to hold complex numbers
+
     if isinstance(theta, (Variable, Objective)):
         cos_theta = theta.apply(numpy.cos)
         sin_theta = theta.apply(numpy.sin)
@@ -116,7 +135,13 @@ def givens_matrix(n, p, q, theta)->QTensor:
 
     return matrix
 
-def get_givens_decomposition(unitary:numpy.ndarray, tol:float=1e-6, ordering:Union[list,tuple,str]=OPTIMIZED_ORDERING, return_diagonal:bool=False):
+
+def get_givens_decomposition(
+    unitary: numpy.ndarray,
+    tol: float = 1e-6,
+    ordering: list | tuple | str | None = OPTIMIZED_ORDERING,
+    return_diagonal: bool = False,
+):
     """
     Decomposes a real unitary matrix into Givens rotations (theta) and Rz rotations (phi).
 
@@ -145,7 +170,9 @@ def get_givens_decomposition(unitary:numpy.ndarray, tol:float=1e-6, ordering:Uni
     def calcTheta(U, c, r):
         """Calculate and apply the Givens rotation for a specific matrix element."""
         t = arctan2(-U[r, c], U[r - 1, c])
-        if isinstance(t,numbers.Number) and numpy.isclose(numpy.abs(t)%numpy.pi,0,atol=tol):
+        if isinstance(t, numbers.Number) and numpy.isclose(
+            numpy.abs(t) % numpy.pi, 0, atol=tol
+        ):
             return U
         theta_list.append((t, r, r - 1))
         g = givens_matrix(n, r, r - 1, t)  # is a QTensor
@@ -174,7 +201,7 @@ def get_givens_decomposition(unitary:numpy.ndarray, tol:float=1e-6, ordering:Uni
         if isinstance(theta[0], (Variable, Objective)):
             if len(theta[0].args):
                 theta_list_new.append(theta)
-        elif (abs(theta[0])%( 2 * numpy.pi)) > tol:
+        elif (abs(theta[0]) % (2 * numpy.pi)) > tol:
             theta_list_new.append(theta)
     phi_list_new = []
     for i, phi in enumerate(phi_list):
@@ -189,7 +216,14 @@ def get_givens_decomposition(unitary:numpy.ndarray, tol:float=1e-6, ordering:Uni
     else:
         return theta_list_new, phi_list_new
 
-def reconstruct_matrix_from_givens(n:int, theta_list:Union[list,tuple], phi_list:Union[list,tuple], to_real_if_possible:bool=True, tol:float=1e-12)->numpy.ndarray:
+
+def reconstruct_matrix_from_givens(
+    n: int,
+    theta_list: list | tuple | None,
+    phi_list: list | tuple | None,
+    to_real_if_possible: bool = True,
+    tol: float = 1e-12,
+) -> numpy.ndarray:
     """
     Reconstructs a matrix from given Givens rotations and Phase diagonal rotations.
     This function is effectively an inverse of get_givens_decomposition, and therefore only works with data in the same format as its output.
@@ -206,37 +240,49 @@ def reconstruct_matrix_from_givens(n:int, theta_list:Union[list,tuple], phi_list
     """
     # Start with an identity matrix
     # reconstructed = numpy.eye(norb, dtype=complex)
-    reconstructed =QTensor(shape=(n, n), objective_list=numpy.eye(n, dtype=complex).reshape(n * n))
-    
+    reconstructed = QTensor(
+        shape=(n, n), objective_list=numpy.eye(n, dtype=complex).reshape(n * n)
+    )
+
     # Apply Rz rotations for diagonal elements
     for phi in phi_list:
         angle, i = phi
         if isinstance(angle, (Variable, Objective)):
-            reconstructed[i, i] = reconstructed[i, i]*angle.apply(numpy.cos) + 1j*reconstructed[i, i]*angle.apply(numpy.sin)
+            reconstructed[i, i] = reconstructed[i, i] * angle.apply(
+                numpy.cos
+            ) + 1j * reconstructed[i, i] * angle.apply(numpy.sin)
         else:
             # Directly apply a sign flip if the rotation angle is π
             if numpy.isclose(angle, numpy.pi, atol=tol):
                 reconstructed[i, i] *= -1
             else:
                 reconstructed[i, i] *= numpy.exp(1j * angle)
-    
-    
+
     # Apply Givens rotations in reverse order
     for theta in reversed(theta_list):
         angle, i, j = theta
         g = givens_matrix(n, i, j, angle)
-        reconstructed = reconstructed.dot(g)  
+        reconstructed = reconstructed.dot(g)
+
+    # givens_matrix returns a QTensor, so with numeric angles the entries are numbers in an object array
+    if all(isinstance(x, numbers.Number) for x in numpy.ravel(reconstructed)):
+        reconstructed = numpy.asarray(reconstructed, dtype=complex)
 
     # Convert matrix to real if its imaginary part is negligible unless disabled via to_real_if_possible
-    if to_real_if_possible:
+    if to_real_if_possible and numpy.all(reconstructed.imag == 0):
         # Directly apply a sign flip if the rotation angle is π
-        if numpy.all(reconstructed.imag == 0):
-            # Convert to real by taking the real part
-            reconstructed = reconstructed.real
+        # Convert to real by taking the real part
+        reconstructed = reconstructed.real
 
     return reconstructed.T
 
-def reconstruct_matrix_from_circuit(U:fe.FCircuit,norb:int=None, to_real_if_possible:bool=True, tol:float=1e-12)->QTensor:#numpy.ndarray:
+
+def reconstruct_matrix_from_circuit(
+    U: fe.FCircuit,
+    norb: int | None = None,
+    to_real_if_possible: bool = True,
+    tol: float = 1e-12,
+) -> QTensor:  # numpy.ndarray:
     """
     Reconstructs a matrix from a UR + Phase FCircuit.
     This function is effectively an inverse of get_givens_circuit.
@@ -254,43 +300,100 @@ def reconstruct_matrix_from_circuit(U:fe.FCircuit,norb:int=None, to_real_if_poss
     if norb is None:
         norb = U.n_qubits // 2
     phi_list = []
-    theta_list = []  
+    theta_list = []
     first = True
-    for i,gate in enumerate(U.gates):
-        if gate.name =='UR':
-            theta_list.append((-0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
+    for i, gate in enumerate(U.gates):
+        if gate.name == "UR":
+            theta_list.append(
+                (
+                    -0.5 * gate.variables,
+                    gate.indices[0][0][0] // 2,
+                    gate.indices[0][0][1] // 2,
+                )
+            )
         elif gate.name == "Ph":
             if not first:
                 first = True
                 continue
-            if i+1!=len(U.gates) and U.gates[i+1].name == "Ph"  and U.gates[i+1].indices[0][0][0]//2 == gate.indices[0][0][0]//2:
-                if isinstance(gate.variables, (Variable, Objective)) and isinstance(U.gates[i+1].variables, (Variable, Objective)): # Not sure if I can check the to Objectives to be the same, so I just go on
-                    phi_list.append((-0.5*gate.variables, gate.indices[0][0][0]//2))
-                elif isinstance(gate.variables, numbers.Number) and isinstance(U.gates[i+1].variables, numbers.Number) and numpy.isclose(gate.variables,U.gates[i+1].variables, atol=tol):
-                    phi_list.append((-0.5*gate.variables, gate.indices[0][0][0]//2))
+            if (
+                i + 1 != len(U.gates)
+                and U.gates[i + 1].name == "Ph"
+                and U.gates[i + 1].indices[0][0][0] // 2 == gate.indices[0][0][0] // 2
+            ):
+                if (
+                    isinstance(gate.variables, (Variable, Objective))
+                    and isinstance(U.gates[i + 1].variables, (Variable, Objective))
+                ):  # Not sure if I can check the to Objectives to be the same, so I just go on
+                    phi_list.append((-0.5 * gate.variables, gate.indices[0][0][0] // 2))
+                elif (
+                    isinstance(gate.variables, numbers.Number)
+                    and isinstance(U.gates[i + 1].variables, numbers.Number)
+                    and numpy.isclose(
+                        gate.variables, U.gates[i + 1].variables, atol=tol
+                    )
+                ):
+                    phi_list.append((-0.5 * gate.variables, gate.indices[0][0][0] // 2))
                 else:
-                    raise TequilaException("Phase gates must come in pairs to be converted to matrix.")
+                    raise TequilaException(
+                        "Phase gates must come in pairs to be converted to matrix."
+                    )
                 first = False
             else:
-                raise TequilaException("Phase gates must come in pairs to be converted to matrix.")
+                raise TequilaException(
+                    "Phase gates must come in pairs to be converted to matrix."
+                )
         elif gate.name == "FermionicExcitation":
             if not first:
                 first = True
                 continue
-            if i+1!=len(U.gates) and U.gates[i+1].name == "FermionicExcitation" and len(U.gates[i+1].indices[0])==len(gate.indices[0])==1 and gate.indices[0][0][0]//2 == U.gates[i+1].indices[0][0][0]//2 and gate.indices[0][0][1]//2 == U.gates[i+1].indices[0][0][1]//2:
-                if isinstance(gate.variables, (Variable, Objective)) and isinstance(U.gates[i+1].variables, (Variable, Objective)): # Not sure if I can check the to Objectives to be the same, so I just go on
-                    theta_list.append((-0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
-                elif isinstance(gate.variables, numbers.Number) and isinstance(U.gates[i+1].variables, numbers.Number) and numpy.isclose(gate.variables, U.gates[i+1].variables, atol=tol):
-                    theta_list.append((-0.5*gate.variables, gate.indices[0][0][0]//2, gate.indices[0][0][1]//2))
+            if (
+                i + 1 != len(U.gates)
+                and U.gates[i + 1].name == "FermionicExcitation"
+                and len(U.gates[i + 1].indices[0]) == len(gate.indices[0]) == 1
+                and gate.indices[0][0][0] // 2 == U.gates[i + 1].indices[0][0][0] // 2
+                and gate.indices[0][0][1] // 2 == U.gates[i + 1].indices[0][0][1] // 2
+            ):
+                if (
+                    isinstance(gate.variables, (Variable, Objective))
+                    and isinstance(U.gates[i + 1].variables, (Variable, Objective))
+                ):  # Not sure if I can check the to Objectives to be the same, so I just go on
+                    theta_list.append(
+                        (
+                            -0.5 * gate.variables,
+                            gate.indices[0][0][0] // 2,
+                            gate.indices[0][0][1] // 2,
+                        )
+                    )
+                elif (
+                    isinstance(gate.variables, numbers.Number)
+                    and isinstance(U.gates[i + 1].variables, numbers.Number)
+                    and numpy.isclose(
+                        gate.variables, U.gates[i + 1].variables, atol=tol
+                    )
+                ):
+                    theta_list.append(
+                        (
+                            -0.5 * gate.variables,
+                            gate.indices[0][0][0] // 2,
+                            gate.indices[0][0][1] // 2,
+                        )
+                    )
                 else:
-                    raise TequilaException("FermionicExcitation gates must come in pairs to be converted to UR gates.")
+                    raise TequilaException(
+                        "FermionicExcitation gates must come in pairs to be converted to UR gates."
+                    )
                 first = False
             else:
-                raise TequilaException("FermionicExcitation gates must come in pairs to be converted to UR gates.")
+                raise TequilaException(
+                    "FermionicExcitation gates must come in pairs to be converted to UR gates."
+                )
         else:
-            raise TequilaException(f"Reconstruction from circuits gate {gate} not implented.")
-    return reconstruct_matrix_from_givens(norb, theta_list[::-1], phi_list[::-1], to_real_if_possible, tol)
-
+            raise TequilaException(
+                f"Reconstruction from circuits gate {gate} not implented."
+            )
+    return reconstruct_matrix_from_givens(
+        norb, theta_list[::-1], phi_list[::-1], to_real_if_possible, tol
+    )
 
 
 def arctan2(x1, x2, *args, **kwargs):
@@ -302,8 +405,8 @@ def arctan2(x1, x2, *args, **kwargs):
         return numpy.arctan2(x1.imag, x2.imag) + numpy.arctan2(x1.real, x2.real)
 
 
-#This one copied from tequila.grouping.fermionic_functions, same date and patch as above
-def depth_eff_order_mf(N:int)->list:
+# This one copied from tequila.grouping.fermionic_functions, same date and patch as above
+def depth_eff_order_mf(N: int) -> list:
     """
     Returns index ordering for linear depth circuit
 
@@ -316,7 +419,7 @@ def depth_eff_order_mf(N:int)->list:
     [ 1.  4.  9. 13. 15.  0.]
     """
     l = []
-    for c in range(0, N - 1):
+    for c in range(N - 1):
         for r in range(1, N):
             if r - c > 0:
                 l.append([r, c, 2 * c - r + N])

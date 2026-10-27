@@ -1,9 +1,10 @@
-import pytest
-import numpy
 import os
-import tequila as tq
-import sunrise as sun
 
+import numpy
+import pytest
+import tequila as tq
+
+import sunrise as sun
 from sunrise.molecules.qubit_base import INSTALLED_QCHEMISTRY_BACKENDS
 
 has_pyscf = "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS
@@ -11,27 +12,25 @@ has_pyscf = "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS
 executable = sun.chemistry.madness_interface.QuantumChemistryMadness.find_executable()
 root = os.environ.get("MAD_ROOT_DIR")
 if executable is None:
-    executable = sun.chemistry.madness_interface.QuantumChemistryMadness.find_executable(root)
+    executable = (
+        sun.chemistry.madness_interface.QuantumChemistryMadness.find_executable(root)
+    )
 print("root = ", root)
 print("executable = ", executable)
 
 
 def test_executable():
     if root is not None and executable is None:
-        raise Exception(
-            "Found no pno_integrals executable but found MAD_ROOT_DIR={}\nSeems like you wanted that tested".format(
-                root
-            )
+        raise tq.TequilaException(
+            "Found no pno_integrals executable but found MAD_ROOT_DIR={root}\nSeems like you wanted that tested"
         )
 
 
-@pytest.mark.skipif(
-    not (os.path.isfile("he_gtensor.npy") and os.path.isfile("he_htensor.npy")), reason="data not there"
-)
 def test_madness_he_data():
-    # relies that he_xtensor.npy are present (x=g,h)
     geomstring = "He 0.0 0.0 0.0"
-    molecule = sun.Molecule(name="he", geometry=geomstring, units="angstrom")
+    molecule = sun.Molecule(
+        name="data/madness/he", geometry=geomstring, units="angstrom", n_pno="read"
+    )
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
@@ -45,7 +44,9 @@ def test_madness_he_data():
 
 @pytest.mark.skipif(executable is None, reason="madness was not found")
 def test_madness_frozen_core():
-    molecule = sun.chemistry.Molecule(geometry="Li 0.0 0.0 0.0\nLi 0.0 0.0 1.6", units="angstrom")
+    molecule = sun.chemistry.Molecule(
+        geometry="Li 0.0 0.0 0.0\nLi 0.0 0.0 1.6", units="angstrom"
+    )
     assert molecule.n_orbitals == 2
     assert molecule.parameters.get_number_of_core_electrons() == 4
 
@@ -68,14 +69,24 @@ def test_madness_full_he():
 
 @pytest.mark.skipif(executable is None, reason="madness was not found")
 def test_madness_data_io():
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom")
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", n_pno="read", units="angstrom")
+    sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom")
+    sun.Molecule(geometry="he 0.0 0.0 0.0", n_pno="read", units="angstrom")
 
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", units="angstrom")
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", n_pno="read", units="angstrom")
+    sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", units="angstrom")
+    sun.Molecule(
+        geometry="he 0.0 0.0 0.0", datadir="1/2/3", n_pno="read", units="angstrom"
+    )
 
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", units="angstrom")
-    mol = sun.Molecule(geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", n_pno="read", units="angstrom")
+    sun.Molecule(
+        geometry="he 0.0 0.0 0.0", datadir="1/2/3", name="asd", units="angstrom"
+    )
+    sun.Molecule(
+        geometry="he 0.0 0.0 0.0",
+        datadir="1/2/3",
+        name="asd",
+        n_pno="read",
+        units="angstrom",
+    )
 
 
 @pytest.mark.skipif(executable is None, reason="madness was not found")
@@ -84,7 +95,12 @@ def test_madness_full_li_plus():
     # or pno_integrals in the path
     geomstring = "Li 0.0 0.0 0.0"
     molecule = sun.Molecule(
-        name="li+", geometry=geomstring, units="angstrom", n_pno=1, charge=1, frozen_core=False
+        name="li+",
+        geometry=geomstring,
+        units="angstrom",
+        n_pno=1,
+        charge=1,
+        frozen_core=False,
     )  # need to deactivate frozen_core, otherwise there is no active orbital
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
@@ -101,7 +117,9 @@ def test_madness_full_be():
     # relies on madness being compiled and MAD_ROOT_DIR exported
     # or pno_integrals in the path
     geomstring = "Be 0.0 0.0 0.0"
-    molecule = sun.chemistry.Molecule(name="be", geometry=geomstring, units="angstrom", n_pno=3, frozen_core=True)
+    molecule = sun.chemistry.Molecule(
+        name="be", geometry=geomstring, units="angstrom", n_pno=3, frozen_core=True
+    )
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
@@ -113,15 +131,23 @@ def test_madness_full_be():
 
 
 @pytest.mark.parametrize(
-    "trafo", ["BravyiKitaev", "JordanWigner", "BravyiKitaevTree", "ReorderedJordanWigner", "ReorderedBravyiKitaev"]
+    "trafo",
+    [
+        "BravyiKitaev",
+        "JordanWigner",
+        "BravyiKitaevTree",
+        "ReorderedJordanWigner",
+        "ReorderedBravyiKitaev",
+    ],
 )
 @pytest.mark.skipif(
-    executable is None and not os.path.isfile("balanced_be_gtensor.npy"), reason="madness was not found"
+    executable is None and not os.path.isfile("balanced_be_gtensor.npy"),
+    reason="madness was not found",
 )
 def test_madness_upccgsd(trafo):
     n_pno = 2
     if os.path.isfile("balanced_be_gtensor.npy"):
-        n_pno = None
+        n_pno = "read"
     mol = sun.chemistry.Molecule(
         name="balanced_be",
         frozen_core=False,
@@ -147,7 +173,7 @@ def test_madness_upccgsd(trafo):
     assert numpy.isclose(result.energy, oigawert, atol=1.0e-3)
 
     H = mol.make_hamiltonian()
-    oigawert2 = numpy.linalg.eigvalsh(H.to_matrix())[0]
+    numpy.linalg.eigvalsh(H.to_matrix())[0]
     U = mol.make_upccgsd_ansatz(name="SPA-D")
     E = tq.ExpectationValue(H=H, U=U)
     assert len(E.extract_variables()) == 2
@@ -169,7 +195,9 @@ def test_madness_upccgsd(trafo):
     result = tq.minimize(E)
     assert numpy.isclose(result.energy, -14.60266198, atol=1.0e-3)
 
-    U = mol.make_upccgsd_ansatz(name="SPA-UpCCGSD")  # in this case no difference to SPA-UpCCSD
+    U = mol.make_upccgsd_ansatz(
+        name="SPA-UpCCGSD"
+    )  # in this case no difference to SPA-UpCCSD
     E = tq.ExpectationValue(H=H, U=U)
     assert len(E.extract_variables()) == 4
     result = tq.minimize(E)
@@ -195,11 +223,145 @@ def test_madness_upccgsd(trafo):
     assert numpy.isclose(result.energy, oigawert, atol=1.0e-3)
 
 
-@pytest.mark.skipif(not has_pyscf, reason="PySCF not installed")
-@pytest.mark.skipif(
-    executable is None and not os.path.isfile("balanced_be_gtensor.npy"),
-    reason="madness not installed and no files found",
+@pytest.fixture(scope="module")
+def madness_be_dir(tmp_path_factory):
+    # one madness calculation, the molecules of the natures read its files
+    if executable is None:
+        pytest.skip("madness was not found")
+    path = tmp_path_factory.mktemp("madness_be")
+    cwd = os.getcwd()
+    os.chdir(path)
+    try:
+        sun.Molecule(**MADNESS_ANSATZ_CASES["be"][0], n_pno=2)
+    finally:
+        os.chdir(cwd)
+    return path
+
+
+# molecule keyword arguments, number of orbitals and number of variables of the ansatz names
+MADNESS_ANSATZ_CASES = {
+    "he": (
+        {"name": "data/madness/he", "geometry": "He 0.0 0.0 0.0", "units": "angstrom"},
+        2,
+        {"SPA-D": 1, "SPA-UpCCSD": 2, "UpCCGD": 1, "UpCCGSD": 2},
+    ),
+    "be": (
+        {
+            "name": "be",
+            "geometry": "Be 0.0 0.0 0.0",
+            "units": "angstrom",
+            "frozen_core": False,
+            "pno": {"diagonal": True, "maxrank": 1},
+        },
+        4,
+        {"SPA-D": 2, "SPA-UpCCSD": 4, "UpCCGD": 6, "UpCCGSD": 12},
+    ),
+}
+
+
+def _ansatz_energy(mol, U):
+    if isinstance(U, tq.QCircuit):
+        E = tq.ExpectationValue(H=mol.make_hamiltonian(), U=U)
+        return tq.minimize(E, silent=True).energy
+    # fermionic circuit
+    return sun.minimize(sun.Braket(molecule=mol, ket=U), silent=True).energy
+
+
+@pytest.mark.parametrize("case", ["he", "be"])
+@pytest.mark.parametrize(
+    "nature,select",
+    [("qubit", None), ("fermionic", None), ("hybrid", "F"), ("hybrid", "B")],
 )
+def test_madness_upccgsd_natures(case, nature, select, request, monkeypatch):
+    # the PNO restricted ansatzes give the same circuits and energies in all natures
+    if case == "be":
+        monkeypatch.chdir(request.getfixturevalue("madness_be_dir"))
+    kwargs, n_orbitals, n_variables = MADNESS_ANSATZ_CASES[case]
+    kwargs = {**kwargs, "n_pno": "read"}
+    reference = sun.Molecule(**kwargs)
+    if select is not None:
+        kwargs["select"] = select * n_orbitals
+    mol = sun.Molecule(**kwargs, nature=nature)
+
+    # the bosonic orbitals only hold electron pairs, no singles
+    # seniority zero ansatzes have the same energy with the hardcore boson Hamiltonian
+    names = [x for x in n_variables if select != "B" or "S" not in x.split("-")[-1]]
+    energies = {}
+    for name in names:
+        U = mol.make_upccgsd_ansatz(name=name)
+        assert len(U.extract_variables()) == n_variables[name], name
+        energies[name] = _ansatz_energy(mol, U)
+        reference_energy = _ansatz_energy(
+            reference, reference.make_upccgsd_ansatz(name=name)
+        )
+        assert numpy.isclose(energies[name], reference_energy, atol=1.0e-5), name
+    if case == "he" and "UpCCGSD" in energies:
+        assert numpy.isclose(energies["UpCCGSD"], -2.87761809, atol=1.0e-5)
+
+    # the excitations within the PNO pairs are the SPA
+    U = mol.make_pno_upccgsd_ansatz(name="UpCCD")
+    assert len(U.extract_variables()) == n_variables["SPA-D"]
+    assert numpy.isclose(_ansatz_energy(mol, U), energies["SPA-D"], atol=1.0e-5)
+    if select != "B":
+        U = mol.make_pno_upccgsd_ansatz(name="UpCCSD")
+        assert len(U.extract_variables()) == n_variables["SPA-UpCCSD"]
+        assert numpy.isclose(
+            _ansatz_energy(mol, U), energies["SPA-UpCCSD"], atol=1.0e-5
+        )
+
+
+@pytest.mark.skipif(executable is None, reason="madness was not found")
+def test_madness_save_load(tmp_path, monkeypatch):
+    # the PNO pair structure is saved with the molecule, it is loaded without madness files
+    monkeypatch.chdir(tmp_path)
+    geometry = "Be 0.0 0.0 0.0"
+    molecules = {
+        "qubit": sun.Molecule(
+            geometry=geometry,
+            n_pno=3,
+            transformation="ReorderedJordanWigner",
+            point_group="c2v",
+        )
+    }
+    # the other natures read the files of the madness calculation
+    molecules["fermionic"] = sun.Molecule(
+        geometry=geometry, n_pno="read", point_group="c2v", nature="fermionic"
+    )
+    molecules["hybrid"] = sun.Molecule(
+        geometry=geometry,
+        n_pno="read",
+        point_group="c2v",
+        select="FBBF",
+        nature="hybrid",
+    )
+    for nature, mol in molecules.items():
+        mol.save(str(tmp_path / f"be_{nature}.h5"))
+    (tmp_path / "other").mkdir()
+    monkeypatch.chdir(tmp_path / "other")
+
+    for nature, mol in molecules.items():
+        loaded = sun.load_molecule(str(tmp_path / f"be_{nature}.h5"))
+        assert type(loaded) is type(mol)
+        assert [(o.pair, o.occ, o.idx) for o in loaded.integral_manager.orbitals] == [
+            (o.pair, o.occ, o.idx) for o in mol.integral_manager.orbitals
+        ]
+        assert loaded.point_group.schoenflies_label == "C2v"
+        assert loaded.make_hamiltonian() == mol.make_hamiltonian()
+        # the madness methods use the pair structure
+        if nature == "qubit":
+            assert loaded.make_spa_ansatz() == mol.make_spa_ansatz()
+            assert loaded.make_upccgsd_ansatz("UpCCGSD") == mol.make_upccgsd_ansatz(
+                "UpCCGSD"
+            )
+            assert loaded.local_qubit_map() == mol.local_qubit_map()
+        else:
+            assert loaded.get_spa_edges() == mol.get_spa_edges()
+        if nature == "hybrid":
+            assert loaded.select == mol.select
+
+
+@pytest.mark.skipif(not has_pyscf, reason="PySCF not installed")
+@pytest.mark.skipif(executable is None, reason="madness was not found")
 def test_madness_pyscf_bridge():
     mol = sun.chemistry.Molecule(
         geometry="Be 0.0 0.0 0.0",
@@ -220,18 +382,19 @@ def test_madness_pyscf_bridge():
 
 
 @pytest.mark.skipif(condition=not has_pyscf, reason="pyscf not found")
-@pytest.mark.skipif(
-    executable is None and not os.path.isfile("balanced_be_gtensor.npy"),
-    reason="madness not installed and no files found",
-)
+@pytest.mark.skipif(executable is None, reason="madness was not found")
 @pytest.mark.parametrize("restrict_to_hcb", [False, True])
 def test_orbital_optimization(restrict_to_hcb):
     name = "data/beh2_{R}"
     R = 4.5
     n_pno = None
+    if os.path.isfile(name.format(R=R) + "_gtensor.npy"):
+        n_pno = "read"
     success = False
     for _ in range(10):
         mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
+        # the next attempts only change the random start, not the madness data
+        n_pno = "read"
         U = mol.make_upccgsd_ansatz("SPA")
         if restrict_to_hcb:
             U = mol.make_upccgsd_ansatz("HCB-SPA")
@@ -254,46 +417,53 @@ def test_orbital_optimization(restrict_to_hcb):
     assert success
 
 
-# # test takes a while
-# @pytest.mark.skipif(condition=not has_pyscf, reason="pyscf not found")
-# def test_orbital_optimization_adapt():
-#     name = "data/beh2_{R}"
-#     R = 4.5
-#     n_pno = None
-#     success = False
-#     for _ in range(1):
-#         mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
-#         U = mol.make_upccgsd_ansatz("SPA")
-#         operator_pool = sun.ADAPT.adapt.MolecularPool(molecule=mol, indices="UCCD")
+@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(condition=not has_pyscf, reason="pyscf not found")
+def test_orbital_optimization_adapt():
+    name = "data/beh2_{R}"
+    R = 4.5
+    n_pno = None
+    if os.path.isfile(name.format(R=R) + "_gtensor.npy"):
+        n_pno = "read"
+    success = False
+    for _ in range(10):
+        mol = sun.Molecule(n_pno=n_pno, name=name.format(R=R))
+        # the next attempts only change the random start, not the madness data
+        n_pno = "read"
+        U = mol.make_upccgsd_ansatz("SPA")
+        operator_pool = sun.ADAPT.adapt.MolecularPool(molecule=mol, indices="UCCD")
 
-#         class AdaptWrapper:
-#             class ReturnWrapper:
-#                 def __init__(self, circuit, variables, energy):
-#                     self.circuit = circuit
-#                     self.variables = variables
-#                     self.energy = energy
+        class AdaptWrapper:
+            class ReturnWrapper:
+                def __init__(self, circuit, variables, energy):
+                    self.circuit = circuit
+                    self.variables = variables
+                    self.energy = energy
 
-#             def __init__(self, operator_pool, spa):
-#                 self.operator_pool = operator_pool
-#                 self.spa = spa
+            def __init__(self, operator_pool, spa):
+                self.operator_pool = operator_pool
+                self.spa = spa
 
-#             def __call__(self, H, circuit, molecule, *args, **kwargs):
-#                 solver = sun.adapt.Adapt(H=H, Upre=self.spa, operator_pool=self.operator_pool, maxiter=1)
-#                 result = solver(Upre=self.spa, operator_pool=self.operator_pool)
-#                 final_circuit = self.spa + result.U
-#                 return self.ReturnWrapper(circuit=final_circuit, variables=result.variables, energy=result.energy)
+            def __call__(self, H, circuit, molecule, *args, **kwargs):
+                solver = sun.adapt.Adapt(
+                    H=H, Upre=self.spa, operator_pool=self.operator_pool, maxiter=1
+                )
+                result = solver(Upre=self.spa, operator_pool=self.operator_pool)
+                final_circuit = self.spa + result.U
+                return self.ReturnWrapper(
+                    circuit=final_circuit,
+                    variables=result.variables,
+                    energy=result.energy,
+                )
 
-#         opt_mol = sun.optimize_orbitals(
-#             molecule=mol,
-#             circuit=U,
-#             silent=False,
-#             initial_guess="random_loc=0.0_scale=1.0",
-#             vqe_solver=AdaptWrapper(operator_pool, U),
-#         ).molecule
-#         H = opt_mol.make_hamiltonian()
-#         E = tq.ExpectationValue(H=H, U=U)
-#         result = tq.minimize(E, silent=False)
-#         success = numpy.isclose(result.energy, -15.562016590541667, atol=1.0e-2)
-#         if success:
-#             break
-#     assert success
+        result = sun.optimize_orbitals(
+            molecule=mol,
+            circuit=U,
+            silent=False,
+            initial_guess="random_loc=0.0_scale=1.0",
+            vqe_solver=AdaptWrapper(operator_pool, U),
+        )
+        success = numpy.isclose(result.energy, -15.562016590541667, atol=1.0e-2)
+        if success:
+            break
+    assert success
