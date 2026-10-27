@@ -4,6 +4,7 @@ import os
 import numpy
 import openfermion
 import pytest
+import scipy.sparse.linalg
 import tequila as tq
 import tequila.simulators.simulator_api
 import tequila.tools.random_generators as rg
@@ -790,6 +791,81 @@ def test_hybrid_backends(backend, basis_set, tmp_path, monkeypatch):
         tq.ExpectationValue(H=mol.make_hamiltonian(), U=U), silent=True
     )
     assert numpy.isclose(result.energy, qmol.compute_energy("fci"), atol=1.0e-5)
+
+
+def _ground_state_energy(mol):
+    # lowest eigenvalue of the hamiltonian, whatever the nature returns
+    H = mol.make_hamiltonian()
+    if isinstance(H, tq.QubitHamiltonian):
+        H = H.to_openfermion()
+    H = openfermion.get_sparse_operator(H)
+    return scipy.sparse.linalg.eigsh(H, k=1, which="SA")[0][0]
+
+
+@pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found")
+@pytest.mark.parametrize("nature", ["fermionic", "hybrid"])
+@pytest.mark.parametrize(
+    "geometry, kwargs",
+    [
+        ("Li 0.0 0.0 0.0\nH 0.0 0.0 1.6", {"frozen_core": False}),
+        ("Li 0.0 0.0 0.0\nH 0.0 0.0 1.6", {"frozen_core": True}),
+        ("Li 0.0 0.0 0.0\nH 0.0 0.0 1.6", {"active_orbitals": [0, 1, 2, 5]}),
+        ("H 0.0 0.0 0.0\nH 0.0 0.0 0.75\nghost:H 0.0 0.0 2.0", {}),
+    ],
+)
+def test_psi4_natures(nature, geometry, kwargs, tmp_path, monkeypatch):
+    # the three natures share the psi4 interface (Psi4Mixin), so they have to agree with the qubit molecule
+    monkeypatch.chdir(tmp_path)
+    qmol = sun.Molecule(
+        geometry=geometry,
+        basis_set="sto-3g",
+        units="angstrom",
+        backend="psi4",
+        transformation="JordanWigner",
+        **kwargs,
+    )
+    if nature == "hybrid":
+        # all fermionic, same hamiltonian as the qubit molecule
+        kwargs = {**kwargs, "select": "F" * qmol.n_orbitals}
+    mol = sun.Molecule(
+        geometry=geometry,
+        basis_set="sto-3g",
+        units="angstrom",
+        backend="psi4",
+        nature=nature,
+        **kwargs,
+    )
+
+    assert mol.n_orbitals == qmol.n_orbitals
+    assert mol.n_electrons == qmol.n_electrons
+    assert len(mol.parameters.get_geometry_string(ghost="psi4").splitlines()) == len(
+        qmol.parameters.get_geometry_string(ghost="psi4").splitlines()
+    )
+    c, h, g = mol.get_integrals()
+    qc_, qh, qg = qmol.get_integrals()
+    assert numpy.isclose(c, qc_)
+    assert numpy.allclose(h, qh)
+    assert numpy.allclose(g.elems, qg.elems)
+
+    for method in ["hf", "mp2", "ccsd", "cisd", "fci"]:
+        assert numpy.isclose(mol.compute_energy(method), qmol.compute_energy(method)), (
+            method
+        )
+
+    if "ghost" not in geometry:
+        # the orbitals with ghost atoms are not canonical, the amplitudes can not be computed
+        amplitudes = mol.compute_amplitudes("mp2")
+        qamplitudes = qmol.compute_amplitudes("mp2")
+        assert numpy.allclose(amplitudes.tIjAb, qamplitudes.tIjAb)
+
+    psi4_options = {"detci__ex_level": 2, "detci__opdm": True, "detci__tpdm": True}
+    mol.compute_rdms(U=None, psi4_method="detci", psi4_options=psi4_options)
+    qmol.compute_rdms(U=None, psi4_method="detci", psi4_options=psi4_options)
+    assert numpy.allclose(mol.rdm1, qmol.rdm1)
+    assert numpy.allclose(mol.rdm2, qmol.rdm2)
+
+    # the hamiltonian of each nature is built from the same (active space) integrals
+    assert numpy.isclose(_ground_state_energy(mol), qmol.compute_energy("fci"))
 
 
 @pytest.mark.skipif(condition=not HAS_MADNESS, reason="madness not found")
