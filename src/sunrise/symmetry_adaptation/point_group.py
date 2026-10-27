@@ -301,6 +301,125 @@ PointGroup.D6h = PointGroup(
     ),
 )
 
+# D8h, also non-Abelian and also absent from PySCF. Written as the published
+# class table plus class sizes, and expanded to one column per operation.
+#
+# Convention: the C8 axis is z and the atoms lie at 0, 45, ... 315 degrees in
+# the xy-plane. C2' then passes through opposite atoms (along x, y and the
+# diagonals) and C2'' through opposite edge midpoints (22.5, 67.5, ... degrees);
+# sigma_v contains the atoms and sigma_d bisects them. Choosing the opposite
+# convention swaps the B1/B2 labels.
+_D8H_CLASS_SIZES = [1, 2, 2, 2, 1, 4, 4, 1, 2, 2, 2, 1, 4, 4]
+_R2 = numpy.sqrt(2)
+#                         E   2C8  2C8³ 2C4  C2 4C2' 4C2''  i 2S8³  2S8 2S4  sh 4sv 4sd
+_D8H_CLASS_CHARACTERS = {
+    "A1g": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "A2g": [1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1, 1, -1, -1],
+    "B1g": [1, -1, -1, 1, 1, 1, -1, 1, -1, -1, 1, 1, 1, -1],
+    "B2g": [1, -1, -1, 1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1],
+    "E1g": [2, _R2, -_R2, 0, -2, 0, 0, 2, _R2, -_R2, 0, -2, 0, 0],
+    "E2g": [2, 0, 0, -2, 2, 0, 0, 2, 0, 0, -2, 2, 0, 0],
+    "E3g": [2, -_R2, _R2, 0, -2, 0, 0, 2, -_R2, _R2, 0, -2, 0, 0],
+    "A1u": [1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1],
+    "A2u": [1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, 1, 1],
+    "B1u": [1, -1, -1, 1, 1, 1, -1, -1, 1, 1, -1, -1, -1, 1],
+    "B2u": [1, -1, -1, 1, 1, -1, 1, -1, 1, 1, -1, -1, 1, -1],
+    "E1u": [2, _R2, -_R2, 0, -2, 0, 0, -2, -_R2, _R2, 0, 2, 0, 0],
+    "E2u": [2, 0, 0, -2, 2, 0, 0, -2, 0, 0, 2, -2, 0, 0],
+    "E3u": [2, -_R2, _R2, 0, -2, 0, 0, -2, _R2, -_R2, 0, 2, 0, 0],
+}
+PointGroup.D8h = PointGroup(
+    schoenflies_label="D8h",
+    character_table=CharacterTable(
+        _expand_class_table(_D8H_CLASS_CHARACTERS, _D8H_CLASS_SIZES),
+        operation_symbols=[
+            "E",
+            "C8",
+            "C8^7",
+            "C8^3",
+            "C8^5",
+            "C4",
+            "C4^3",
+            "C2z",
+            "C2x",
+            "C2a",
+            "C2y",
+            "C2b",
+            "C2c",
+            "C2d",
+            "C2e",
+            "C2f",
+            "i",
+            "S8^3",
+            "S8^5",
+            "S8",
+            "S8^7",
+            "S4",
+            "S4^3",
+            "sz",
+            "sy",
+            "sda",
+            "sx",
+            "sdb",
+            "sdc",
+            "sdd",
+            "sde",
+            "sdf",
+        ],
+    ),
+)
+
+# Td (e.g. CH4), also non-Abelian and also absent from PySCF, written in the same
+# way as D6h and D8h.
+#
+# Convention: the three C2 (and S4) axes are x, y and z, so the four outer atoms
+# sit on alternating corners of a cube, e.g. (1, 1, 1), (-1, -1, 1), (-1, 1, -1)
+# and (1, -1, -1). The C3 axes are then the body diagonals through these four
+# corners (a, b, c, d in this order) and the six mirror planes contain one axis
+# and bisect the other two: sda, sdb from D4h (x = +/-y), sdy1, sdy2 (x = +/-z)
+# and sdx1, sdx2 (y = +/-z).
+_TD_CLASS_SIZES = [1, 8, 3, 6, 6]
+#                 E 8C3 3C2 6S4 6sd
+_TD_CLASS_CHARACTERS = {
+    "A1": [1, 1, 1, 1, 1],
+    "A2": [1, 1, 1, -1, -1],
+    "E": [2, -1, 2, 0, 0],
+    "T1": [3, 0, -1, 1, -1],
+    "T2": [3, 0, -1, -1, 1],
+}
+PointGroup.Td = PointGroup(
+    schoenflies_label="Td",
+    character_table=CharacterTable(
+        _expand_class_table(_TD_CLASS_CHARACTERS, _TD_CLASS_SIZES),
+        operation_symbols=[
+            "E",
+            "C3a",
+            "C3a^2",
+            "C3b",
+            "C3b^2",
+            "C3c",
+            "C3c^2",
+            "C3d",
+            "C3d^2",
+            "C2x",
+            "C2y",
+            "C2z",
+            "S4x",
+            "S4x^3",
+            "S4y",
+            "S4y^3",
+            "S4",
+            "S4^3",
+            "sda",
+            "sdb",
+            "sdy1",
+            "sdy2",
+            "sdx1",
+            "sdx2",
+        ],
+    ),
+)
+
 PointGroup.C2h = PointGroup(
     schoenflies_label="C2h",
     character_table=CharacterTable(
@@ -510,6 +629,45 @@ class PointGroupRepresentation(Generic[T, S]):
             "sd1": _mirror_v(numpy.pi / 6),
             "sd2": _mirror_v(numpy.pi / 2),
             "sd3": _mirror_v(5 * numpy.pi / 6),
+            # --- D8h: eightfold axis about z ---
+            "C8": _rot_z(numpy.pi / 4),
+            "C8^7": _rot_z(-numpy.pi / 4),
+            "C8^3": _rot_z(3 * numpy.pi / 4),
+            "C8^5": _rot_z(-3 * numpy.pi / 4),
+            "S8": _improper_z(numpy.pi / 4),
+            "S8^7": _improper_z(-numpy.pi / 4),
+            "S8^3": _improper_z(3 * numpy.pi / 4),
+            "S8^5": _improper_z(-3 * numpy.pi / 4),
+            # For an octagon whose atoms sit at 0, 45, ... 315 degrees, C2' and
+            # sigma_v are C2x, C2a, C2y, C2b and sy, sda, sx, sdb from D4h;
+            # C2'' and sigma_d lie between the atoms (22.5, 67.5, 112.5, 157.5 degrees).
+            "C2c": _c2_in_plane(numpy.pi / 8),
+            "C2d": _c2_in_plane(3 * numpy.pi / 8),
+            "C2e": _c2_in_plane(5 * numpy.pi / 8),
+            "C2f": _c2_in_plane(7 * numpy.pi / 8),
+            "sdc": _mirror_v(numpy.pi / 8),
+            "sdd": _mirror_v(3 * numpy.pi / 8),
+            "sde": _mirror_v(5 * numpy.pi / 8),
+            "sdf": _mirror_v(7 * numpy.pi / 8),
+            # --- Td: threefold axes along the body diagonals (1, 1, 1), (-1, -1, 1),
+            # (-1, 1, -1) and (1, -1, -1), S4 about x and y ---
+            # Mirror planes containing y (x = z, x = -z) and x (y = z, y = -z).
+            "C3a": numpy.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]]),
+            "C3a^2": numpy.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]]),
+            "C3b": numpy.array([[0, 0, -1], [1, 0, 0], [0, -1, 0]]),
+            "C3b^2": numpy.array([[0, 1, 0], [0, 0, -1], [-1, 0, 0]]),
+            "C3c": numpy.array([[0, 0, 1], [-1, 0, 0], [0, -1, 0]]),
+            "C3c^2": numpy.array([[0, -1, 0], [0, 0, -1], [1, 0, 0]]),
+            "C3d": numpy.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]]),
+            "C3d^2": numpy.array([[0, -1, 0], [0, 0, 1], [-1, 0, 0]]),
+            "S4x": numpy.array([[-1, 0, 0], [0, 0, -1], [0, 1, 0]]),
+            "S4x^3": numpy.array([[-1, 0, 0], [0, 0, 1], [0, -1, 0]]),
+            "S4y": numpy.array([[0, 0, 1], [0, -1, 0], [-1, 0, 0]]),
+            "S4y^3": numpy.array([[0, 0, -1], [0, -1, 0], [1, 0, 0]]),
+            "sdy1": numpy.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]]),
+            "sdy2": numpy.array([[0, 0, -1], [0, 1, 0], [-1, 0, 0]]),
+            "sdx1": numpy.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]]),
+            "sdx2": numpy.array([[1, 0, 0], [0, 0, -1], [0, -1, 0]]),
         }
 
         operations: dict[str, NDArray[numpy.complex128]] = {}
