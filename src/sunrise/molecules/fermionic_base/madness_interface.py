@@ -141,19 +141,19 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
             )
 
         if "HCB" in name and "D" not in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, HCB without Doubles has no result ",
                 TequilaWarning,
             )
 
         if "S" not in excitations and "D" not in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, neither singles nor doubles requested",
                 TequilaWarning,
             )
 
         if "T" in excitations or "Q" in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, only singles and doubles supported",
                 TequilaWarning,
             )
