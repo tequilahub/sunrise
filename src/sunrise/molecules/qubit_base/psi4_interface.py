@@ -652,7 +652,7 @@ class Psi4Mixin:
             return result
 
         c = numpy.fromfunction(
-            function=numpy.vectorize(func), shape=arr_shape, dtype=numpy.int
+            function=numpy.vectorize(func), shape=arr_shape, dtype=int
         )
 
         return numpy.extract(condition=c, arr=arr).reshape(final_shape)
