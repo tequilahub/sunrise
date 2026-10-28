@@ -229,12 +229,11 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
     def make_hardcore_boson_pno_upccd_ansatz(
         self, pairs=None, label=None, include_reference=True, direct_compiling=False
     ):
-        (
-            warnings.warn(
-                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
-            ),
+        warnings.warn(
+            "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
             TequilaWarning,
         )
+        
         if pairs is None:
             pairs = [x for x in self.reference_orbitals]
         U = FCircuit()

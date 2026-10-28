@@ -706,7 +706,8 @@ class FermionicBase(QuantumChemistryBase):
         # warnings for backward comp
         if "active_indices" in kwargs:
             warnings.warn(
-                "active space can't be changed in molecule. Will ignore active_orbitals passed to make_hamiltonian"
+                "active space can't be changed in molecule. Will ignore active_orbitals passed to make_hamiltonian",
+                TequilaWarning,
             )
 
         of_molecule = self.make_molecule()
@@ -745,19 +746,15 @@ class FermionicBase(QuantumChemistryBase):
         return U
 
     def prepare_hardcore_boson_reference(self):
-        (
-            warnings.warn(
-                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
-            ),
+        warnings.warn(
+            "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
             TequilaWarning,
         )
         return self.prepare_reference()
 
     def hcb_to_me(self, U=None, condensed=False):
-        (
-            warnings.warn(
-                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
-            ),
+        warnings.warn(
+            "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
             TequilaWarning,
         )
         if U is None:
@@ -772,10 +769,8 @@ class FermionicBase(QuantumChemistryBase):
         *args,
         **kwargs,
     ):
-        (
-            warnings.warn(
-                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
-            ),
+        warnings.warn(
+            "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
             TequilaWarning,
         )
         if hasattr(indices, "lower"):
@@ -880,10 +875,8 @@ class FermionicBase(QuantumChemistryBase):
             return self.make_uccsd_ansatz(*args, **kwargs)
         elif "spa" in name.lower():
             if "hcb" in kwargs or "hcb" in name.lower():
-                (
-                    warnings.warn(
-                        "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
-                    ),
+                warnings.warn(
+                    "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
                     TequilaWarning,
                 )
             return self.make_spa_ansatz(*args, **kwargs)
@@ -950,7 +943,8 @@ class FermionicBase(QuantumChemistryBase):
 
         if "HCB" in name:
             warnings.warn(
-                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
+                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
+                TequilaWarning,
             )
 
         # convenience
