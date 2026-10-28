@@ -2889,9 +2889,7 @@ class QuantumChemistryBase:
                 F[k, l] = tmp
         return F
 
-    def compute_mp2_amplitudes(
-        self, hf_energy=None, return_energy=False
-    ) -> ClosedShellAmplitudes:
+    def compute_mp2_amplitudes(self, return_energy=False) -> ClosedShellAmplitudes:
         """
 
         Compute closed-shell mp2 amplitudes (canonical amplitudes only)
