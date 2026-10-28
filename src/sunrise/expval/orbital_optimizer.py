@@ -336,11 +336,11 @@ def optimizer(
                 if "random" in initial_guess.lower():
                     scale = 1.0
                 loc = 0.0
-                if "scale" in kwargs:
+                if "scale" in initial_guess.lower():
                     scale = float(
                         initial_guess.split("scale")[1].split("_")[0].split("=")[1]
                     )
-                if "loc" in kwargs:
+                if "loc" in initial_guess.lower():
                     loc = float(
                         initial_guess.split("loc")[1].split("_")[0].split("=")[1]
                     )
