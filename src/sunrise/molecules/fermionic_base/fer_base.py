@@ -668,7 +668,7 @@ class FermionicBase(QuantumChemistryBase):
         """
         Compute the spin+ operator of the molecule
         """
-        sp = OFFermionOperator
+        sp = OFFermionOperator()
         for i in range(self.n_orbitals):
             sp += self.make_creation_op(i * 2) * self.make_annihilation_op(i * 2 + 1)
         return sp
@@ -714,7 +714,7 @@ class FermionicBase(QuantumChemistryBase):
         fop = openfermion.transforms.get_fermion_operator(fop)
         return fop
 
-    def make_hardcore_boson_hamiltonian(self) -> OFFermionOperator:
+    def make_hardcore_boson_hamiltonian(self) -> OFFermionOperator | str:
         """
         Only expected to be used when HCB orbital optimization, where it is faster to use the default fermionic hamiltonian with pseudo-'HCB' states/circuits
         """
