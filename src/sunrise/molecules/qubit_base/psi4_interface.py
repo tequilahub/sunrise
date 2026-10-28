@@ -699,7 +699,7 @@ class Psi4Mixin:
                 )
             else:
                 assert (
-                    self.integral_manager.trivial_active_space()
+                    self.integral_manager.active_space_is_trivial()
                 )  # only for closed-shell currently
                 return Amplitudes(
                     **{k: v.to_array() for k, v in all_amplitudes.items()}
