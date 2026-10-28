@@ -1132,6 +1132,7 @@ class EXPVAL(UCC):
             v = deepcopy(self.var_to_param_bra)
             v.update(self.var_to_param_ket)
             return v
+
     @property
     def total_variables(self) -> list[Variable] | None:
         if self.variables_bra is not None and self.variables_bra is not None:
