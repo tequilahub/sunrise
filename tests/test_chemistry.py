@@ -465,8 +465,9 @@ def test_upccgsd(geometry, trafo):
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("trafo", ["TaperedBinary", "ReorderedTaperedBinary"])
 def test_upccd_tapered_binary(trafo):
-    # the HCB qubit of the tapered orbital is implicit, so UpCCD is built from fermionic excitations
-    # there; it has to give the same energies as the HCB construction in Jordan-Wigner
+    # the HCB qubit of the tapered orbital is implicit, so the HCB doubles into it depend on the occupation
+    # of the other orbitals; UpCCD with and without HCB optimization, and HCB-UpCCD with the HCB Hamiltonian,
+    # have to give the same energies as in Jordan-Wigner
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5"
     energies = []
     variables = None
@@ -477,12 +478,43 @@ def test_upccd_tapered_binary(trafo):
             transformation=transformation,
             backend="pyscf",
         ).use_native_orbitals()
-        U = mol.make_upccgsd_ansatz(name="UpCCD")
+        for name, hcb_optimization, H in [
+            ("UpCCD", True, mol.make_hamiltonian()),
+            ("UpCCD", False, mol.make_hamiltonian()),
+            ("HCB-UpCCD", True, mol.make_hardcore_boson_hamiltonian()),
+        ]:
+            U = mol.make_upccgsd_ansatz(name=name, hcb_optimization=hcb_optimization)
+            if variables is None:
+                variables = {
+                    v: 0.1 * (i + 1) for i, v in enumerate(U.extract_variables())
+                }
+            E = tq.ExpectationValue(H=H, U=U)
+            energies.append(tq.simulate(E, variables=variables))
+    assert numpy.allclose(energies[:3], energies[3:], atol=1.0e-8)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize("trafo", ["TaperedBinary", "ReorderedTaperedBinary"])
+def test_upccgsd_singles_tapered_binary(trafo):
+    # with one explicit orbital per spin the P0 projector of the singles vanishes in the tapered
+    # encodings, so the gradients have to come from a shift rule without P0 and match Jordan-Wigner
+    gradients = []
+    variables = None
+    for transformation in ["JordanWigner", trafo]:
+        mol = sun.Molecule(
+            geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.7",
+            basis_set="sto-3g",
+            transformation=transformation,
+            backend="pyscf",
+        )
+        U = mol.make_upccgsd_ansatz(name="UpCCGSD")
         if variables is None:
             variables = {v: 0.1 * (i + 1) for i, v in enumerate(U.extract_variables())}
         E = tq.ExpectationValue(H=mol.make_hamiltonian(), U=U)
-        energies.append(tq.simulate(E, variables=variables))
-    assert numpy.isclose(energies[0], energies[1], atol=1.0e-8)
+        dE = tq.grad(E)
+        gradients.append({k: tq.simulate(dE[k], variables=variables) for k in dE})
+    for k in variables:
+        assert numpy.isclose(gradients[0][k], gradients[1][k], atol=1.0e-8)
 
 
 @pytest.mark.skipif(

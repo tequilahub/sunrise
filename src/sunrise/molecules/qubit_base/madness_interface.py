@@ -799,10 +799,6 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
             have_hcb_trafo = self.transformation.hcb_to_me() is not None
         except Exception:  # noqa: BLE001
             have_hcb_trafo = False
-        # in tapered encodings the HCB qubit of the tapered orbital is implicit (see make_spa_ansatz),
-        # but the HCB doubles excite into it, so the doubles are built from fermionic excitations instead
-        if "TAPEREDBINARY" in self.transformation.name.upper():
-            have_hcb_trafo = False
         name = name.upper()
 
         # Default Method
@@ -856,10 +852,6 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
                 kwargs["spin_adapt_singles"] = True
 
         if direct_compiling and not have_hcb_trafo and "HCB" not in name:
-            if "TAPEREDBINARY" in self.transformation.name.upper():
-                raise TequilaMadnessException(
-                    f"direct_compiling={direct_compiling} does not work with transformation={self.transformation.name}: the HCB doubles excite into the tapered orbital, which is implicit in this encoding"
-                )
             raise TequilaMadnessException(
                 f"direct_compiling={direct_compiling} demanded but no hcb_to_me in transformation={self.transformation}\ntry transformation='ReorderedJordanWigner' "
             )
@@ -973,22 +965,36 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
                 raise TequilaException(
                     "HCB_PNO_UPCCD: Direct compiling needs reference included"
                 )
+            up = self.transformation.up
             for x in pairs:
-                U += gates.X(x.idx)
+                U += gates.X(up(x.idx))
                 c = [None, x.idx]
                 for a in self.get_pair_orbitals(i=x, j=x):
                     if a == x:
                         continue
                     idx = self.format_excitation_indices([(x.idx, a.idx)])
-                    U += gates.Ry(angle=(idx, "D", label), target=a.idx, control=c[0])
-                    U += gates.X(target=c[1], control=a.idx)
+                    if (
+                        "TAPEREDBINARY" in self.transformation.name.upper()
+                        and a.idx == self.n_orbitals - 1
+                    ):
+                        # the tapered orbital is implicit: move the pair from c[1] into it with the
+                        # HCB excitation gate, which is what Ry + CNOT do in the other encodings
+                        U += self.make_hardcore_boson_excitation_gate(
+                            indices=self.format_excitation_indices([(c[1], a.idx)]),
+                            angle=(idx, "D", label),
+                        )
+                    else:
+                        U += gates.Ry(
+                            angle=(idx, "D", label),
+                            target=up(a.idx),
+                            control=None if c[0] is None else up(c[0]),
+                        )
+                        U += gates.X(target=up(c[1]), control=up(a.idx))
                     if ladder:
                         c = [a.idx, a.idx]
                     else:
                         c = [x.idx, x.idx]
 
-            alpha_map = {k.idx: self.transformation.up(k.idx) for k in self.orbitals}
-            U = U.map_qubits(alpha_map)
         else:
             for x in pairs:
                 if include_reference:

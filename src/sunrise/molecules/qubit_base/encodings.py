@@ -478,11 +478,11 @@ class TaperedBinary(EncodingBase):
         In case of upthendown, expected to be qubit_{n_orbital} free, otherwise please map it properly
         """
         U = QCircuit()
-        if self.spin_parity:  # since we now the spin parity
+        if self.spin_parity:  # since we know the spin parity
             U += X(2 * self.n_orbitals - 2) + X(2 * self.n_orbitals - 1)
         for i in range(
             self.n_orbitals - 1
-        ):  # we can tapper only one electron per \sigma, we need only to find the difference
+        ):  # we can taper only one electron per \sigma, we need only to find the difference
             U += CNOT(2 * i, 2 * self.n_orbitals - 2)
             U += CNOT(2 * i + 1, 2 * self.n_orbitals - 1)
         if self.up_then_down:
@@ -494,8 +494,8 @@ class TaperedBinary(EncodingBase):
 
     def hcb_to_me(self) -> QCircuit:
         """
-        The HCB term of the tappered orbital is not proyected out but should affect to the ExpValue since it is not
-        on the Hamiltonian
+        The HCB term of the tapered orbital is not projected out but should affect the ExpValue since it is not
+        in the Hamiltonian
         """
         U = QCircuit()
         for i in range(self.n_orbitals - 1):
