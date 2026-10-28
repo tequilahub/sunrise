@@ -2338,6 +2338,7 @@ class QuantumChemistryBase:
         self,
         include_reference: bool = True,
         name: str = "UpCCGSD",
+        indices: list[tuple[tuple[int]]] | None = None,
         label: str | None = None,
         order: int | None = None,
         assume_real: bool = True,
@@ -2394,7 +2395,8 @@ class QuantumChemistryBase:
             except Exception:  # noqa: BLE001
                 order = 1
 
-        indices = self.make_upccgsd_indices(key=name)
+        if indices is None:
+            indices = self.make_upccgsd_indices(key=name)
 
         # check if the used qubit encoding has a hcb transformation
         have_hcb_trafo = True
