@@ -233,7 +233,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
             "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
             TequilaWarning,
         )
-        
+
         if pairs is None:
             pairs = [x for x in self.reference_orbitals]
         U = FCircuit()

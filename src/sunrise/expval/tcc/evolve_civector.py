@@ -40,7 +40,7 @@ def get_expval_and_grad_civector(
     for p in params:
         pa.append(map_variables(p, dangles))
     pa_bra = []
-    for p in params:
+    for p in params_bra:
         pa_bra.append(map_variables(p, dangles))
     map_params = tc.backend.numpy(tc.backend.convert_to_tensor(pa).astype(tc.rdtypestr))
     map_params_bra = tc.backend.numpy(
@@ -167,7 +167,7 @@ def get_expval_and_grad_civector_nocache(
     for p in params:
         pa.append(map_variables(p, dangles))
     pa_bra = []
-    for p in params:
+    for p in params_bra:
         pa_bra.append(map_variables(p, dangles))
     map_params = tc.backend.numpy(tc.backend.convert_to_tensor(pa).astype(tc.rdtypestr))
     map_params_bra = tc.backend.numpy(
