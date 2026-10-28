@@ -23,6 +23,10 @@ print("I_01:", mutual_info_simple(mol, U, orb_a=0, orb_b=1))  # I_01: 0.1117
 print("E_0: ", one_orb_entanglement(mol, U, orb_a=0))  # E_0:  0.0558
 ```
 
+<p align="center"><img src="mutual_info_h6.png" width="620" alt="Mutual information of H6"/></p>
+
+*Mutual information between the atomic orbitals of an H₆ chain (SPA, from the [H₆ example](../../../examples/orbital_correlation/h6.py)): strong correlation inside each pair (pink), weak correlation between neighbouring pairs (grey).*
+
 **Background:** [Ding et al., *Concept of Orbital Entanglement and Correlation in Quantum Chemistry*, JCTC 2020](https://doi.org/10.1021/acs.jctc.0c00559) · [Tenti et al., *Entanglement and Mutual Information in Molecules: Comparing Localized and Delocalized Orbitals*, JCTC 2024](https://doi.org/10.1021/acs.jctc.4c01101) · [Rissler et al., *Measuring orbital interaction using quantum information theory*, Chem. Phys. 2006](https://doi.org/10.1016/j.chemphys.2005.10.018)
 
 **See also:** [H₂ example](../../../examples/orbital_correlation/h2.py) · [bond stretching](../../../examples/orbital_correlation/h2_with_distance.py) · [π systems (ethylene, butadiene, benzene)](../../../examples/orbital_correlation/benzene_pi_sys.py) · [all metrics on H₄](../../../examples/orbital_correlation/h4_all_metrics.py) · [mutual information plots (notebook)](../../../examples/orbital_correlation/mutual_info_plots.ipynb)

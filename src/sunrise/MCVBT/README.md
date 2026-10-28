@@ -19,6 +19,10 @@ solver.calculate_groundstate()
 solver.compare_to_fci()
 ```
 
+<p align="center"><img src="mcvbt_graphs.png" width="560" alt="Three H4 graphs"/></p>
+
+*The three H₄ graphs of the snippet: each one is an SPA circuit $U_k$, and MCVBT mixes them like resonance structures.*
+
 Results are also written to a CSV file (`filename=`).
 
 **Background:** [Kottmann & Scala, *Quantum Algorithmic Approach to Multiconfigurational Valence Bond Theory: Insights from Interpretable Circuit Design*, JCTC 2024](https://doi.org/10.1021/acs.jctc.3c00565) · **See also:** [example](../../../examples/MCVBT/MCVBT_example.py)

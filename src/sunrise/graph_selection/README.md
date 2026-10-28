@@ -20,4 +20,8 @@ coords = np.array([[0, 0, 0], [0, 0, 1], [0, 0, 2.5], [0, 0, 3.5]])
 edges = generate_min_global_distance_edges(coords)
 ```
 
+<p align="center"><img src="graph_selection.png" width="380" alt="Selected SPA edges"/></p>
+
+*SPA edges chosen by `generate_min_global_distance_edges` for the 6-atom H cluster of the [example](../../../examples/graph_selection/graph_selection.py).*
+
 **See also:** [example](../../../examples/graph_selection/graph_selection.py) · [tests](../../../tests/test_graph_selection.py)
