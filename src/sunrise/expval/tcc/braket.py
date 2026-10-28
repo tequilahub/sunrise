@@ -293,10 +293,10 @@ class EXPVAL(UCC):
             if np.isclose(hamiltonian, 0.0):
                 return 0.0
             else:
-                hamiltonian = lambda ket: ket
+                H = lambda ket: ket
                 e, s = get_expval(
                     angles=angles,
-                    hamiltonian=hamiltonian,
+                    hamiltonian=H,
                     n_qubits=self.n_qubits,
                     n_elec_s=self.n_elec_s,
                     total_variables=self.total_variables,
@@ -374,10 +374,10 @@ class EXPVAL(UCC):
             if np.isclose(hamiltonian, 0.0):
                 return 0.0
             else:
-                hamiltonian = lambda ket: ket
+                H = lambda ket: ket
                 e = get_energy(
                     angles=angles,
-                    hamiltonian=hamiltonian,
+                    hamiltonian=H,
                     n_qubits=self.n_qubits,
                     n_elec_s=self.n_elec_s,
                     total_variables=self.total_variables,
