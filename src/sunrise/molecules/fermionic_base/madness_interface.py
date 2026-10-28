@@ -118,7 +118,6 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
                 if HCB is included in name: do not map from hard-core Boson to qubit encoding of this molecule
                 if SPA is included in name: Use the separable pair ansatz (excitations will be restricted to the PNO structure of the surrogate model)
                 Excitations: can be "S" (use only singles), "D" (use only doubles), "GSD" (generalized singles and doubles), "GASD" (approximate singles, neglecting Z terms in JW)
-        neglect_z: neglect all Z terms in singles excitations generators
         order: repetition of layers, can be given over the name as well, the order needs to be the first in the name then (i.e. 2-UpCCGSD, 2-SPA-GSD, etc)
         indices: excitation indices in the format of format_excitation_indices, e.g. [((0, 3),), ((1, 4),)]
                  (see make_pno_upccgsd_ansatz), they replace the ones of the name in every layer
@@ -158,13 +157,11 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
                 TequilaWarning,
             )
 
-        if ("A" in excitations) and neglect_z is None:
-            neglect_z = True
+        if "A" in excitations:
             # spin adaption does not work with z neglected
             if "spin_adapt_singles" not in kwargs:
                 kwargs["spin_adapt_singles"] = False
         else:
-            neglect_z = False
             # switch on by default
             if "spin_adapt_singles" not in kwargs:
                 kwargs["spin_adapt_singles"] = True
@@ -202,7 +199,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
             include_singles="S" in excitations,
             include_doubles="D" in excitations,
             label=(label, 0),
-            neglect_z=neglect_z,
+            neglect_z=False,
             **kwargs,
         )
 
@@ -224,7 +221,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
                         include_singles="S" in excitations,
                         include_doubles="D" in excitations,
                         label=(label, layer),
-                        neglect_z=neglect_z,
+                        neglect_z=False,
                         **kwargs,
                     )
         return U

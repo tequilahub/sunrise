@@ -2209,10 +2209,8 @@ class HybridBase(qc_base):
 
         name = name.upper()
 
-        if ("A" in name) and neglect_z is None:
+        if "A" in name:
             neglect_z = True
-        else:
-            neglect_z = False
 
         if order is None:
             try:
