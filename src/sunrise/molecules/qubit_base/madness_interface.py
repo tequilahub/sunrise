@@ -1084,7 +1084,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
                     for b in self.get_pair_orbitals(i=i, j=i, exclude=i):
                         if b.idx_total <= a.idx_total:
                             continue
-                        indices.append((i.idx, a.idx))
+                        indices.append((a.idx, b.idx))
 
         if include_offdiagonals:
             for i in self.reference_orbitals:
