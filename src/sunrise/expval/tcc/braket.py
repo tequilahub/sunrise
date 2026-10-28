@@ -1149,7 +1149,7 @@ class EXPVAL(UCC):
     @property
     def init_guess(self):
         if isinstance(self._init_guess, dict):
-            return [self._init_guess[i] for i in self.total_variables()]
+            return [self._init_guess[i] for i in self.total_variables]
         elif isinstance(self._init_guess, Number):
             return [self._init_guess]
         else:
