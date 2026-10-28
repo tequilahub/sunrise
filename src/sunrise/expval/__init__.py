@@ -169,7 +169,7 @@ def Overlap(
     A tq.Objective that evaluated to the overlap between the two states
 
     """
-    return Braket(*args, ket=ket, bra=bra, operator=None, mol=mol, **kwargs)
+    return Braket(*args, ket=ket, bra=bra, operator="I", mol=mol, **kwargs)
 
 
 def Braket(
