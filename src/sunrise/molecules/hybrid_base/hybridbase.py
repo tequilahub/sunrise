@@ -1598,8 +1598,8 @@ class HybridBase(qc_base):
         Parameters
         ----------
         :param indices: turple of pair turples (a_i,b_j) where the electron is excited from a_i to b_j
-        :warning bool: change the action in case of forbiden excitations, from raising and Exception to return False
-        :return : True if the excitations are allowed, raises an exception otherwise
+        :warning bool: change the action in case of forbiden excitations, from raising and Exception (if True) to just return False
+        :return : True if the excitations are allowed, False or raises an exception otherwise
         Returns
         -------
             Optimized Tequila Hybrid Molecule
@@ -2162,6 +2162,7 @@ class HybridBase(qc_base):
         self,
         include_reference: bool = True,
         name: str = "UpCCGSD",
+        indices: list[tuple[tuple[int]]] | None = None,
         label: str | None = None,
         order: int | None = None,
         assume_real: bool = True,
@@ -2209,10 +2210,8 @@ class HybridBase(qc_base):
 
         name = name.upper()
 
-        if ("A" in name) and neglect_z is None:
+        if "A" in name:
             neglect_z = True
-        else:
-            neglect_z = False
 
         if order is None:
             try:
@@ -2223,7 +2222,8 @@ class HybridBase(qc_base):
             except Exception:  # noqa: BLE001
                 order = 1
 
-        indices = self.make_upccgsd_indices(key=name)
+        if indices is None:
+            indices = self.make_upccgsd_indices(key=name)
         # check if the used qubit encoding has a hcb transformation
         have_hcb_trafo = self.transformation.hcb_to_me() is not None
 

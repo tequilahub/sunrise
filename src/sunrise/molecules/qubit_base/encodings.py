@@ -319,14 +319,14 @@ class BravyiKitaevFast(EncodingBase):
 
 
 class TaperedBravyKitaev(EncodingBase):
-    _ucc_support = False
-
     """
     Uses OpenFermion::symmetry_conserving_bravyi_kitaev (tapered bravyi_kitaev_tree arxiv:1701.07072)
     Reduces Hamiltonian by 2 qubits
     See OpenFermion Documentation for more
     Does not work for UCC generators yet
     """
+
+    _ucc_support = False
 
     def __init__(
         self,
@@ -391,13 +391,13 @@ class TaperedBravyKitaev(EncodingBase):
 
 
 class TaperedBinary(EncodingBase):
-    _ucc_support = True
-
     """
     Uses OpenFermion::binary_code_transform (checksum code arxiv:1712.07067)
     Reduces Hamiltonian by 2 qubits
     See OpenFermion Documentation for more
     """
+
+    _ucc_support = True
 
     def __init__(
         self,

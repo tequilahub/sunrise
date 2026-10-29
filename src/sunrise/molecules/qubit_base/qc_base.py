@@ -2338,6 +2338,7 @@ class QuantumChemistryBase:
         self,
         include_reference: bool = True,
         name: str = "UpCCGSD",
+        indices: list[tuple[tuple[int]]] | None = None,
         label: str | None = None,
         order: int | None = None,
         assume_real: bool = True,
@@ -2382,10 +2383,8 @@ class QuantumChemistryBase:
 
         name = name.upper()
 
-        if ("A" in name) and neglect_z is None:
+        if "A" in name:
             neglect_z = True
-        else:
-            neglect_z = False
 
         if order is None:
             try:
@@ -2396,7 +2395,8 @@ class QuantumChemistryBase:
             except Exception:  # noqa: BLE001
                 order = 1
 
-        indices = self.make_upccgsd_indices(key=name)
+        if indices is None:
+            indices = self.make_upccgsd_indices(key=name)
 
         # check if the used qubit encoding has a hcb transformation
         have_hcb_trafo = True
@@ -2889,9 +2889,7 @@ class QuantumChemistryBase:
                 F[k, l] = tmp
         return F
 
-    def compute_mp2_amplitudes(
-        self, hf_energy=None, return_energy=False
-    ) -> ClosedShellAmplitudes:
+    def compute_mp2_amplitudes(self, return_energy=False) -> ClosedShellAmplitudes:
         """
 
         Compute closed-shell mp2 amplitudes (canonical amplitudes only)
@@ -3706,9 +3704,6 @@ class QuantumChemistryBase:
 
 
 def givens_matrix(n, p, q, theta):
-    """
-    Construct a complex Givens rotation matrix of dimension n by theta between rows/columns p and q.
-    """
     """
     Generates a Givens rotation matrix of size n x n to rotate by angle theta in the (p, q) plane. This matrix can be complex
 

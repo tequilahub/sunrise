@@ -26,7 +26,6 @@ class SpexExpval:
         **kwargs,
     ):
         self.operator = None
-        self.hamiltonian: list[spex.FermionTerm] = []
         self._init_state_bra: dict = None
         self._init_state_ket: dict = None
         self._ket = None
@@ -54,7 +53,6 @@ class SpexExpval:
         run_hf = (bra is None or bra.initial_state is None) and (
             ket is None or ket.initial_state is None
         )
-        self.hamiltonian = self._build_hamiltonian()
 
         if run_hf:
             occupied = [i for i in range(self.n_alpha)] + [
@@ -182,7 +180,7 @@ class SpexExpval:
             if operator.upper() == "I":
                 return lambda x: x
             elif operator.upper() == "H":
-                return self.hamiltonian
+                return self._build_hamiltonian()
             else:
                 raise TequilaException(
                     f"No operator str {operator} supported on Spex BraKet"
@@ -344,7 +342,7 @@ class SpexExpval:
         return self.__str__()
 
     def count_measurements(self) -> int:
-        return len(self.hamiltonian)
+        return self.norb**4
 
     @property
     def molecule(self) -> QuantumChemistryBase:

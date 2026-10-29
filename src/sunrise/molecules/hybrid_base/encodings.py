@@ -8,7 +8,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 import openfermion
-from tequila import QubitHamiltonian, TequilaException
+from tequila import QubitHamiltonian
 from tequila.circuit.circuit import QCircuit
 from tequila.circuit.gates import X
 from tequila.hamiltonian.paulis import Sm, Sp, Z
@@ -188,7 +188,7 @@ class JordanWigner(EB):
             for i in range(self.n_orbitals)
             if self.select[i] == "B"
         ):
-            raise TequilaException("Incompatible state and encoding selection")
+            raise ValueError("Incompatible state and encoding selection")
         for i in range(len(state) // 2):
             if self.select[i] == "B":
                 if self.two_qubit:
@@ -290,7 +290,7 @@ class JordanWigner(EB):
                 if select[i] in ["F", "B"]:
                     sel.update({i: select[i]})
                 else:
-                    TequilaException(
+                    raise ValueError(
                         f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic)."
                     )
             return sel
