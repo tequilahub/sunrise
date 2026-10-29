@@ -293,10 +293,10 @@ class EXPVAL(UCC):
             if np.isclose(hamiltonian, 0.0):
                 return 0.0
             else:
-                hamiltonian = lambda ket: ket
+                H = lambda ket: ket
                 e, s = get_expval(
                     angles=angles,
-                    hamiltonian=hamiltonian,
+                    hamiltonian=H,
                     n_qubits=self.n_qubits,
                     n_elec_s=self.n_elec_s,
                     total_variables=self.total_variables,
@@ -374,10 +374,10 @@ class EXPVAL(UCC):
             if np.isclose(hamiltonian, 0.0):
                 return 0.0
             else:
-                hamiltonian = lambda ket: ket
+                H = lambda ket: ket
                 e = get_energy(
                     angles=angles,
-                    hamiltonian=hamiltonian,
+                    hamiltonian=H,
                     n_qubits=self.n_qubits,
                     n_elec_s=self.n_elec_s,
                     total_variables=self.total_variables,
@@ -1129,7 +1129,9 @@ class EXPVAL(UCC):
         if self.var_to_param_bra is None:
             return self.var_to_param_ket
         else:
-            return self.var_to_param_bra.update(self.var_to_param_ket)
+            v = deepcopy(self.var_to_param_bra)
+            v.update(self.var_to_param_ket)
+            return v
 
     @property
     def total_variables(self) -> list[Variable] | None:
@@ -1147,7 +1149,7 @@ class EXPVAL(UCC):
     @property
     def init_guess(self):
         if isinstance(self._init_guess, dict):
-            return [self._init_guess[i] for i in self.total_variables()]
+            return [self._init_guess[i] for i in self.total_variables]
         elif isinstance(self._init_guess, Number):
             return [self._init_guess]
         else:

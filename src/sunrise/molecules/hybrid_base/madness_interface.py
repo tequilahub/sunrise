@@ -168,19 +168,19 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
             )
 
         if "HCB" in name and "D" not in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, HCB without Doubles has no result ",
                 TequilaWarning,
             )
 
         if "S" not in excitations and "D" not in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, neither singles nor doubles requested",
                 TequilaWarning,
             )
 
         if "T" in excitations or "Q" in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, only singles and doubles supported",
                 TequilaWarning,
             )
@@ -455,7 +455,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
                     for b in self.get_pair_orbitals(i=i, j=i, exclude=i):
                         if b.idx_total <= a.idx_total:
                             continue
-                        indices.append((i.idx, a.idx))
+                        indices.append((a.idx, b.idx))
 
         if include_offdiagonals:
             for i in self.reference_orbitals:

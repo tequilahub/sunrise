@@ -118,7 +118,6 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
                 if HCB is included in name: do not map from hard-core Boson to qubit encoding of this molecule
                 if SPA is included in name: Use the separable pair ansatz (excitations will be restricted to the PNO structure of the surrogate model)
                 Excitations: can be "S" (use only singles), "D" (use only doubles), "GSD" (generalized singles and doubles), "GASD" (approximate singles, neglecting Z terms in JW)
-        neglect_z: neglect all Z terms in singles excitations generators
         order: repetition of layers, can be given over the name as well, the order needs to be the first in the name then (i.e. 2-UpCCGSD, 2-SPA-GSD, etc)
         indices: excitation indices in the format of format_excitation_indices, e.g. [((0, 3),), ((1, 4),)]
                  (see make_pno_upccgsd_ansatz), they replace the ones of the name in every layer
@@ -141,30 +140,28 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
             )
 
         if "HCB" in name and "D" not in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, HCB without Doubles has no result ",
                 TequilaWarning,
             )
 
         if "S" not in excitations and "D" not in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, neither singles nor doubles requested",
                 TequilaWarning,
             )
 
         if "T" in excitations or "Q" in excitations:
-            raise warnings.warn(
+            warnings.warn(
                 f"name={name}, only singles and doubles supported",
                 TequilaWarning,
             )
 
-        if ("A" in excitations) and neglect_z is None:
-            neglect_z = True
+        if "A" in excitations:
             # spin adaption does not work with z neglected
             if "spin_adapt_singles" not in kwargs:
                 kwargs["spin_adapt_singles"] = False
         else:
-            neglect_z = False
             # switch on by default
             if "spin_adapt_singles" not in kwargs:
                 kwargs["spin_adapt_singles"] = True
@@ -202,7 +199,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
             include_singles="S" in excitations,
             include_doubles="D" in excitations,
             label=(label, 0),
-            neglect_z=neglect_z,
+            neglect_z=False,
             **kwargs,
         )
 
@@ -224,7 +221,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
                         include_singles="S" in excitations,
                         include_doubles="D" in excitations,
                         label=(label, layer),
-                        neglect_z=neglect_z,
+                        neglect_z=False,
                         **kwargs,
                     )
         return U
@@ -232,12 +229,11 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
     def make_hardcore_boson_pno_upccd_ansatz(
         self, pairs=None, label=None, include_reference=True, direct_compiling=False
     ):
-        (
-            warnings.warn(
-                "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs"
-            ),
+        warnings.warn(
+            "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
             TequilaWarning,
         )
+
         if pairs is None:
             pairs = [x for x in self.reference_orbitals]
         U = FCircuit()
@@ -329,7 +325,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
                     for b in self.get_pair_orbitals(i=i, j=i, exclude=i):
                         if b.idx_total <= a.idx_total:
                             continue
-                        indices.append((i.idx, a.idx))
+                        indices.append((a.idx, b.idx))
 
         if include_offdiagonals:
             for i in self.reference_orbitals:

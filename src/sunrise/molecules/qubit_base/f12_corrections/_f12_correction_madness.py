@@ -17,7 +17,7 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
         rdm1: numpy.ndarray | None = None,
         rdm2: numpy.ndarray | None = None,
         n_ri: int | None = None,
-        gamma: int = 1.4,
+        gamma: float = 1.4,
         f12_filename: str = "molecule_f12tensor.bin",
         **kwargs,
     ):

@@ -27,7 +27,7 @@ class ExplicitCorrelationCorrection:
         mol=None,
         rdm1: numpy.ndarray | None = None,
         rdm2: numpy.ndarray | None = None,
-        gamma: int = 1.4,
+        gamma: float = 1.4,
         n_ri: int | None = None,
         external_info: dict | None = None,
         **kwargs,

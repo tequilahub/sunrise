@@ -100,7 +100,7 @@ class SPASolver:
             return OptimizerResults(energy=energy, history=None, variables=variables)
 
         if "restrict_to_hcb" in kwargs:
-            self.restrict_to_hcb = kwargs
+            self.restrict_to_hcb = kwargs.pop("restrict_to_hcb")
         # failsave:
         if self.restrict_to_hcb:
             n = molecule.n_orbitals

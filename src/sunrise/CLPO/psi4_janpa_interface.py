@@ -191,7 +191,7 @@ def generate_CLPO_molecule_edges_psi4(
         psi4mol.set_molecular_charge(mol.parameters.charge)
         psi4.activate(psi4mol)
         _, wfn = psi4.energy(name="scf", return_wfn=True, molecule=psi4mol)
-    elif hasattr(kwargs, "wfn"):
+    elif "wfn" in kwargs:
         wfn = getattr(kwargs, "wfn", None)
     else:
         wfn = getattr(mol, "ref_wfn", None)
