@@ -3705,9 +3705,6 @@ class QuantumChemistryBase:
 
 def givens_matrix(n, p, q, theta):
     """
-    Construct a complex Givens rotation matrix of dimension n by theta between rows/columns p and q.
-    """
-    """
     Generates a Givens rotation matrix of size n x n to rotate by angle theta in the (p, q) plane. This matrix can be complex
 
     Parameters:
