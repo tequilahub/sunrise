@@ -227,10 +227,6 @@ class Psi4Mixin:
         psi4.core.clean_options()
         psi4.core.clean_variables()
 
-        psi4.core.clean()
-        psi4.core.clean_options()
-        psi4.core.clean_variables()
-
         ref_wfn = kwargs.pop("ref_wfn", None)
         if ref_wfn is not None and not isinstance(ref_wfn, psi4.core.Wavefunction):
             # psi4 prints the basis set it builds, to the output of the HF computation instead of stdout
