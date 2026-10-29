@@ -1598,8 +1598,8 @@ class HybridBase(qc_base):
         Parameters
         ----------
         :param indices: turple of pair turples (a_i,b_j) where the electron is excited from a_i to b_j
-        :warning bool: change the action in case of forbiden excitations, from raising and Exception to return False
-        :return : True if the excitations are allowed, raises an exception otherwise
+        :warning bool: change the action in case of forbiden excitations, from raising and Exception (if True) to just return False
+        :return : True if the excitations are allowed, False or raises an exception otherwise
         Returns
         -------
             Optimized Tequila Hybrid Molecule

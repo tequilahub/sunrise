@@ -8,7 +8,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 import openfermion
-from tequila import QubitHamiltonian, TequilaException
+from tequila import QubitHamiltonian
 from tequila.circuit.circuit import QCircuit
 from tequila.circuit.gates import X
 from tequila.hamiltonian.paulis import Sm, Sp, Z
