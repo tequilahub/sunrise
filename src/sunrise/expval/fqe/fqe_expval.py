@@ -176,7 +176,10 @@ class FQEBraKet:
             except ArgumentError:
                 # fqe crashes evaluating some DiagonalCoulomb operators (e.g. RDM elements n_p n_q), see
                 # https://github.com/quantumlib/OpenFermion-FQE/issues/142; as a SparseHamiltonian it works
-                if not isinstance(self.h_fqe, DiagonalCoulomb) or self.fermion_operator is None:
+                if (
+                    not isinstance(self.h_fqe, DiagonalCoulomb)
+                    or self.fermion_operator is None
+                ):
                     raise
                 self.h_fqe = SparseHamiltonian(self.fermion_operator)
                 result = fqe.expectationValue(wfn=ket_t, ops=self.h_fqe, brawfn=bra_t)
