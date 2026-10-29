@@ -54,7 +54,6 @@ class SpexExpval:
         run_hf = (bra is None or bra.initial_state is None) and (
             ket is None or ket.initial_state is None
         )
-        self.hamiltonian = self._build_hamiltonian()
 
         if run_hf:
             occupied = [i for i in range(self.n_alpha)] + [
