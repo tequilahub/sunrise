@@ -1361,6 +1361,18 @@ class QuantumChemistryBase:
             for r, c in zip(row_ind, col_ind):
                 perm[c] = int(r)
 
+            # every orbital has to be mapped onto plus or minus one orbital, otherwise the operation
+            # mixes orbitals (e.g. degenerate canonical orbitals) and is not a signed permutation
+            overlaps = numpy.abs(S_mo[perm, numpy.arange(self.n_orbitals)])
+            if not numpy.allclose(overlaps, 1.0, atol=1e-4):
+                j = int(numpy.argmin(overlaps))
+                raise ValueError(
+                    f"The operation {label} does not map orbital {j} onto one orbital (overlap {overlaps[j]:.4f}): "
+                    f"the orbitals are not mapped onto each other by the operations of {self.point_group.schoenflies_label}, "
+                    f"e.g. degenerate canonical orbitals or p orbitals under rotations by 60 or 45 degrees. "
+                    f"Use IrrepProvider(mol, 'canon') for canonical orbitals or set a subgroup with mol.point_group."
+                )
+
             phases = []
             for j in range(self.n_orbitals):
                 i = perm[j]
