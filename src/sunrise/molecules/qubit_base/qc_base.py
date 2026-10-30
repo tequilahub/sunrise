@@ -1303,7 +1303,7 @@ class QuantumChemistryBase:
         The operations act directly on the bitstrings of the states, no circuits are needed.
         """
         geom_repr = PointGroupRepresentation.get_geometric_representation(
-            self.point_group
+            self.point_group, self.parameters.get_geometry()
         )
         pyscf_mol = pyscf.gto.M(
             atom=str(self.parameters.geometry),

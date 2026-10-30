@@ -160,6 +160,33 @@ def test_orbital_permutations_non_abelian(geometry, expected, expected_irreps) -
     }
 
 
+# Tests that the operations are rotated onto the symmetry axes of a molecule that is not in the standard orientation:
+# the canonical determinants of water get the same irreps in both orientations
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+def test_rotated_molecule() -> None:
+    geometry = "O 0. 0. 0.1271 \n H 0.758 0. -0.5085 \n H -0.758 0. -0.5085"
+    c, s = np.cos(0.7), np.sin(0.7)
+    rotation = np.array([[1, 0, 0], [0, c, -s], [0, s, c]]) @ np.array(
+        [[c, 0, s], [0, 1, 0], [-s, 0, c]]
+    )
+    rotated = "\n".join(
+        f"{atom[0]} "
+        + " ".join(f"{x:.10f}" for x in rotation @ np.array(atom[1:], float))
+        for atom in (line.split() for line in geometry.split("\n"))
+    )
+
+    irreps = []
+    for g in [geometry, rotated]:
+        mol = sun.Molecule(geometry=g, basis_set="sto-3g", backend="pyscf")
+        assert mol.point_group.schoenflies_label == "C2v"
+        provider = IrrepProvider(mol, "loc")
+        irreps.append(
+            [state.irrep for state in FockSpaceState.non_ionic_states(mol, provider)]
+        )
+    assert None not in irreps[0]
+    assert irreps[0] == irreps[1]
+
+
 # Tests that the canonical provider falls back to the largest Abelian subgroup for non-Abelian groups
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_canonical_abelian_fallback() -> None:

@@ -47,9 +47,18 @@ class PointGroupRepresentation(Generic[T, S]):
 
     @classmethod
     def get_geometric_representation(
-        cls, pg: PointGroup
+        cls, pg: PointGroup, geometry: list | None = None
     ) -> PointGroupRepresentation[NDArray[numpy.complex128], NDArray[numpy.complex128]]:
-        """Returns the geometric representation of a point group, i.e. where the symmetry operations are represented as 3x3 matrices and the states are 3D vectors."""
+        """
+        Returns the geometric representation of a point group, i.e. where the symmetry operations are represented as 3x3 matrices and the states are 3D vectors.
+
+        The matrices are written for the standard orientation of the point group (e.g. the principal axis along z).
+        If the geometry of a molecule is given, e.g. [("H", (0.0, 0.0, 0.35)), ("H", (0.0, 0.0, -0.35))], they are
+        rotated onto the symmetry axes of the molecule. The given orientation is kept if it is the standard one,
+        otherwise the symmetry axes are searched among the directions of the atoms, of the sums and of the cross
+        products of their positions. The directions of the atoms are tried first, so the x-axis passes through an atom
+        when the point group allows it (e.g. the C2' axes of D6h through the atoms of benzene), which fixes labels like B1/B2.
+        """
 
         operation_dict: dict[str, NDArray[numpy.float64]] = {
             "E": numpy.eye(3),
@@ -179,4 +188,51 @@ class PointGroupRepresentation(Generic[T, S]):
 
             operations[op] = operation_dict[op]
 
-        return PointGroupRepresentation(operations)
+        if geometry is None:
+            return PointGroupRepresentation(operations)
+
+        coordinates = numpy.array([atom[1] for atom in geometry], dtype=float)
+        coordinates -= numpy.mean(coordinates, axis=0)
+        names = numpy.array([atom[0] for atom in geometry])
+        same_atom = names[:, None] == names[None, :]
+        standard = numpy.array(list(operations.values()), dtype=float)
+
+        # candidate axes, normalized and without duplicates up to the sign, in this order
+        i, j = numpy.triu_indices(len(coordinates), k=1)
+        directions = numpy.vstack(
+            [
+                coordinates,
+                coordinates[i] + coordinates[j],
+                numpy.cross(coordinates[i], coordinates[j]),
+                numpy.eye(3),
+            ]
+        )
+        norms = numpy.linalg.norm(directions, axis=1)
+        directions = directions[norms > 1e-4] / norms[norms > 1e-4, None]
+        first = numpy.argmax(numpy.abs(directions) > 1e-6, axis=1)
+        signs = numpy.sign(directions[numpy.arange(len(directions)), first])
+        directions = directions * signs[:, None]
+        # the rounding only finds the duplicates, the axes themselves are kept exact
+        _, index = numpy.unique(numpy.round(directions, 6), axis=0, return_index=True)
+        directions = directions[numpy.sort(index)]
+
+        # the frame has the x, y and z axes of the standard orientation as rows, the first one is the given orientation
+        for z in numpy.vstack([[0.0, 0.0, 1.0], directions]):
+            z = z / numpy.linalg.norm(z)
+            x_axes = numpy.vstack([[1.0, 0.0, 0.0], directions])
+            x_axes = x_axes - numpy.outer(x_axes @ z, z)
+            norms = numpy.linalg.norm(x_axes, axis=1)
+            for x in x_axes[norms > 1e-4] / norms[norms > 1e-4, None]:
+                frame = numpy.array([x, numpy.cross(z, x), z])
+                rotated = frame.T @ standard @ frame
+                # every atom has to be moved onto an atom of the same element by every operation
+                moved = coordinates @ rotated.transpose(0, 2, 1)
+                distances = numpy.linalg.norm(
+                    moved[:, :, None, :] - coordinates[None, None, :, :], axis=3
+                )
+                if numpy.all(numpy.any((distances < 1e-4) & same_atom, axis=2)):
+                    return PointGroupRepresentation(dict(zip(operations, rotated)))
+
+        raise ValueError(
+            f"The molecule has no orientation in which the operations of {pg.schoenflies_label} are symmetries."
+        )
