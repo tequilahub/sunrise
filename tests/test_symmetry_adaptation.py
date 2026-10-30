@@ -194,6 +194,17 @@ def test_orbital_permutations_correctness() -> None:
     assert perm == [2, 3, 0, 1]
     assert phases == [1.0, 1.0, 1.0, 1.0]
 
+    # the canonical orbitals of the square are adapted to the D2h with axes through the atoms
+    # (the diagonals here), the operations about x and y mix them and are no permutation
+    mol = sun.Molecule(
+        geometry="H 1. -1. 0. \n H 1. 1. 0. \n H -1. 1. 0. \n H -1. -1. 0.",
+        basis_set="sto-3g",
+        backend="pyscf",
+    )
+    mol.point_group = "D2h"
+    with pytest.raises(ValueError, match="does not map orbital"):
+        mol.mo_permutation_representation()
+
 
 # Tests that orbital i is on the qubits 2*i (up) and 2*i+1 (down) of the states, as in the rest of sunrise
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
