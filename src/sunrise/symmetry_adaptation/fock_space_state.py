@@ -24,7 +24,7 @@ def _fixed_popcount_bitstrings(
     for ones_positions in combinations(range(n_qubits), n_ones):
         val = 0
         for p in ones_positions:
-            val |= 1 << p
+            val |= 1 << (n_qubits - 1 - p)
         yield format(val, f"0{n_qubits}b")
 
 
@@ -58,10 +58,10 @@ def _fragment_bitstrings(
             frag_int = int(fragment_bs, 2)
             full_int = 0
             for idx, sp in enumerate(fragment_orbitals):
-                if (frag_int >> (2 * idx)) & 1:
-                    full_int |= 1 << (2 * sp)
-                if (frag_int >> (2 * idx + 1)) & 1:
-                    full_int |= 1 << (2 * sp + 1)
+                if (frag_int >> (n_fragment_qubits - 1 - 2 * idx)) & 1:
+                    full_int |= 1 << (2 * n_spatial - 1 - 2 * sp)
+                if (frag_int >> (n_fragment_qubits - 2 - 2 * idx)) & 1:
+                    full_int |= 1 << (2 * n_spatial - 2 - 2 * sp)
             yield format(full_int, f"0{2 * n_spatial}b")
 
 
@@ -117,14 +117,22 @@ class FockSpaceState:
             if self._fragment_orbitals is not None:
                 frag_bits = []
                 for i in self._fragment_orbitals:
-                    frag_bits.append(str((bs_int >> (2 * i)) & 1))
-                    frag_bits.append(str((bs_int >> (2 * i + 1)) & 1))
+                    frag_bits.append(
+                        str((bs_int >> (2 * self.mol.n_orbitals - 1 - 2 * i)) & 1)
+                    )
+                    frag_bits.append(
+                        str((bs_int >> (2 * self.mol.n_orbitals - 2 - 2 * i)) & 1)
+                    )
                 fragment_bs = "".join(frag_bits)
             else:
                 frag_bits = []
                 for i in range(self.mol.n_orbitals):
-                    frag_bits.append(str((bs_int >> (2 * i)) & 1))
-                    frag_bits.append(str((bs_int >> (2 * i + 1)) & 1))
+                    frag_bits.append(
+                        str((bs_int >> (2 * self.mol.n_orbitals - 1 - 2 * i)) & 1)
+                    )
+                    frag_bits.append(
+                        str((bs_int >> (2 * self.mol.n_orbitals - 2 - 2 * i)) & 1)
+                    )
                 fragment_bs = "".join(frag_bits)
 
             c = complex(coef)
@@ -143,8 +151,8 @@ class FockSpaceState:
         bs_int = int(next(iter(self.wavefunction.keys())))
         bits = []
         for i in range(self.mol.n_orbitals):
-            bits.append(str((bs_int >> (2 * i)) & 1))
-            bits.append(str((bs_int >> (2 * i + 1)) & 1))
+            bits.append(str((bs_int >> (2 * self.mol.n_orbitals - 1 - 2 * i)) & 1))
+            bits.append(str((bs_int >> (2 * self.mol.n_orbitals - 2 - 2 * i)) & 1))
         return "".join(bits)
 
     @cached_property
@@ -157,8 +165,8 @@ class FockSpaceState:
         bs_int = int(next(iter(self.wavefunction.keys())))
         bits = []
         for i in self._fragment_orbitals:
-            bits.append(str((bs_int >> (2 * i)) & 1))
-            bits.append(str((bs_int >> (2 * i + 1)) & 1))
+            bits.append(str((bs_int >> (2 * self.mol.n_orbitals - 1 - 2 * i)) & 1))
+            bits.append(str((bs_int >> (2 * self.mol.n_orbitals - 2 - 2 * i)) & 1))
         return "".join(bits)
 
     @property
@@ -176,8 +184,8 @@ class FockSpaceState:
             bs_int = int(bs)
             weight = abs(coef) ** 2
             for i in range(n_orbitals):
-                alpha = (bs_int >> (2 * i)) & 1
-                beta = (bs_int >> (2 * i + 1)) & 1
+                alpha = (bs_int >> (2 * n_orbitals - 1 - 2 * i)) & 1
+                beta = (bs_int >> (2 * n_orbitals - 2 - 2 * i)) & 1
                 mo_occ[i] += weight * (alpha + beta)
 
         return [round(x, 4) for x in mo_occ]
@@ -246,7 +254,9 @@ class FockSpaceState:
         return sum(
             1
             for i in range(n_orbitals)
-            if ((bs_int >> (2 * i)) & 1) + ((bs_int >> (2 * i + 1)) & 1) == 1
+            if ((bs_int >> (2 * n_orbitals - 1 - 2 * i)) & 1)
+            + ((bs_int >> (2 * n_orbitals - 2 - 2 * i)) & 1)
+            == 1
         )
 
     @cached_property
@@ -387,14 +397,14 @@ class FockSpaceState:
                 one_iter = iter(combo)
                 for i, v in enumerate(values):
                     if v == 2:
-                        result_int |= 1 << (2 * i)
-                        result_int |= 1 << (2 * i + 1)
+                        result_int |= 1 << (2 * mol.n_orbitals - 1 - 2 * i)
+                        result_int |= 1 << (2 * mol.n_orbitals - 2 - 2 * i)
                     elif v == 1:
                         pair = next(one_iter)
                         if pair[0] == "1":
-                            result_int |= 1 << (2 * i)
+                            result_int |= 1 << (2 * mol.n_orbitals - 1 - 2 * i)
                         if pair[1] == "1":
-                            result_int |= 1 << (2 * i + 1)
+                            result_int |= 1 << (2 * mol.n_orbitals - 2 - 2 * i)
                 yield format(result_int, f"0{2 * mol.n_orbitals}b")
 
         n_qubits: int = 2 * mol.n_orbitals

@@ -195,6 +195,37 @@ def test_orbital_permutations_correctness() -> None:
     assert phases["i"] == [1.0, 1.0, 1.0, 1.0]
 
 
+# Tests that orbital i is on the qubits 2*i (up) and 2*i+1 (down) of the states, as in the rest of sunrise
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+def test_orbital_order() -> None:
+    mol = sun.Molecule(
+        geometry="H 0. 0. 0. \n H 0. 0. 0.74804", basis_set="sto-3g", backend="pyscf"
+    )
+    # one electron in the bonding (Ag) or in the antibonding (B1u) orbital
+    for bitstring, mo_occ, irrep in [
+        ("1000", [1.0, 0.0], "Ag"),
+        ("0010", [0.0, 1.0], "B1u"),
+    ]:
+        for provider in ["canon", "loc"]:
+            state = FockSpaceState(mol, bitstring, IrrepProvider(mol, provider))
+            assert state.mo_occ == mo_occ
+            assert state.irrep == irrep
+
+    mol4 = sun.Molecule(
+        geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.",
+        basis_set="sto-3g",
+        backend="pyscf",
+    )
+    state = SpinCGSymmetrizationProcedure(mol4).build_physical_state(
+        open_shell_orbitals=[0, 1],
+        S=0,
+        m_s=0,
+        coupling="singlet",
+        closed_shell_orbitals=[2],
+    )
+    assert state.mo_occ == [1.0, 1.0, 2.0, 0.0]
+
+
 # Test spin symmetrization for canonical orbitals
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
