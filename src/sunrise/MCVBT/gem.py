@@ -16,6 +16,8 @@ def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True
     """
     transition_matrix = np.eye(len(circuits))
     overlap_matrix = np.eye(len(circuits))
+    if solver.lower() not in SUPPORTED_FERMIONIC_BACKENDS:
+        H = mol.make_hamiltonian()
 
     for i in range(len(circuits)):
         for j in range(i, len(circuits)):
@@ -31,12 +33,11 @@ def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True
                     overlap_element, variables=variables, backend=solver
                 )
             elif solver.lower() in INSTALLED_BACKENDS:
-                H = mol.make_hamiltonian()
                 transition_element = simulate(
-                    tqBraket(circuits[i], circuits[j], H), variables
+                    tqBraket(circuits[i], circuits[j], H), variables, backend=solver
                 )
                 overlap_element = simulate(
-                    tqOverlap(circuits[i], circuits[j]), variables
+                    tqOverlap(circuits[i], circuits[j]), variables, backend=solver
                 )
             else:
                 raise ValueError(f"Unknown solver {solver}")
