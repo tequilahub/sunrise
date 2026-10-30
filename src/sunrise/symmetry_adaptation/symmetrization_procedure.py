@@ -195,10 +195,10 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
             phase = 1.0
 
             for i in range(n_orbitals):
-                block = (bs_int >> (2 * i)) & 3
+                block = (bs_int >> (n_qubits - 2 - 2 * i)) & 3
                 if block:
                     j = perm[i]
-                    new_bs |= block << (2 * j)
+                    new_bs |= block << (n_qubits - 2 - 2 * j)
                     if block in (1, 2):  # Only apply phase to singly occupied orbitals
                         singly_occ.append(j)
                         phase *= phases[i]
@@ -477,7 +477,9 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         closed_shell_mask = 0
         if closed_shell_orbitals:
             for orb in closed_shell_orbitals:
-                closed_shell_mask |= (1 << (2 * orb)) | (1 << (2 * orb + 1))
+                closed_shell_mask |= (1 << (n_qubits - 1 - 2 * orb)) | (
+                    1 << (n_qubits - 2 - 2 * orb)
+                )
 
         def recurse(idx, j_so_far, m_so_far, det, coef):
             if coef == 0:
@@ -491,7 +493,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
             orb = orbitals[idx]
             for s2 in (0, 1):
                 m_e = 2 * s2 - 1
-                new_det = det | (1 << (2 * orb + (1 - s2)))
+                new_det = det | (1 << (n_qubits - 1 - (2 * orb + (1 - s2))))
                 if idx == 0:
                     recurse(1, 1, m_so_far + m_e, new_det, coef)
                 else:
@@ -519,7 +521,9 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         closed_shell_mask = 0
         if closed_shell_orbitals:
             for orb in closed_shell_orbitals:
-                closed_shell_mask |= (1 << (2 * orb)) | (1 << (2 * orb + 1))
+                closed_shell_mask |= (1 << (n_qubits - 1 - 2 * orb)) | (
+                    1 << (n_qubits - 2 - 2 * orb)
+                )
 
         def spin_of(tree):
             return 1 if isinstance(tree, int) else tree[2]
@@ -548,7 +552,9 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
             if abs(c) > 1e-12:
                 det = closed_shell_mask
                 for i in range(n):
-                    det |= 1 << (2 * orbitals[i] + (0 if choices[i] == 1 else 1))
+                    det |= 1 << (
+                        n_qubits - 1 - (2 * orbitals[i] + (0 if choices[i] == 1 else 1))
+                    )
                 terms[det] = terms.get(det, 0.0) + c
 
         wfn = tequila.QubitWaveFunction(n_qubits=n_qubits)
@@ -741,7 +747,9 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
 
             if not open_shell:
                 det = sum(
-                    (1 << (2 * orb)) | (1 << (2 * orb + 1)) for orb in closed_shell
+                    (1 << (2 * self.mol.n_orbitals - 1 - 2 * orb))
+                    | (1 << (2 * self.mol.n_orbitals - 2 - 2 * orb))
+                    for orb in closed_shell
                 )
                 wfn = tequila.QubitWaveFunction.from_string(
                     f"|{format(det, f'0{2 * self.mol.n_orbitals}b')}>"

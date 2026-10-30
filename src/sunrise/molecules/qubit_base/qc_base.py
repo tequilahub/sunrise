@@ -1349,19 +1349,9 @@ class QuantumChemistryBase:
         )
         S_ao = pyscf_mol.intor("int1e_ovlp")
 
-        try:
-            C_all = numpy.asarray(self.integral_manager.orbital_coefficients)
-            n_active = self.n_orbitals
-
-            # Slicing assumption: This grabs the last `n_active` columns.
-            # This works perfectly if the injected matrix is ordered [active, virtual]
-            # or if the active orbitals happen to be at the end.
-            # If you inject a full matrix ordered as [core, active, virtual],
-            # you may need to adjust this slice to C_all[:, n_core : n_core + n_active].
-            C_mo = C_all[:, -n_active:].copy()
-
-        except Exception:  # noqa: BLE001
-            C_mo = pyscf.scf.RHF(pyscf_mol).run().mo_coeff[:, : self.n_orbitals].copy()
+        C_mo = numpy.asarray(self.integral_manager.orbital_coefficients)[
+            :, [orbital.idx_total for orbital in self.orbitals]
+        ].copy()
 
         # Canonicalize global signs to prevent arbitrary sign flips
         for i in range(C_mo.shape[1]):
