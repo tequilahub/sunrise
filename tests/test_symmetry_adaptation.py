@@ -108,15 +108,14 @@ def test_orbital_permutations_non_abelian(geometry, expected, expected_irreps) -
     ).use_native_orbitals()
     assert mol.point_group.schoenflies_label == expected
 
-    perms, phases = mol.compute_mo_perms_and_phases()
+    operations = mol.mo_permutation_representation().operations
     table = mol.point_group.character_table
     # the character of an operation is the sum of the phases of the orbitals it keeps in place
-    characters = np.array(
-        [
-            sum(phases[op][i] for i in range(mol.n_orbitals) if perms[op][i] == i)
-            for op in table.operation_symbols
-        ]
-    )
+    characters = []
+    for op in table.operation_symbols:
+        perm, phases = operations[op]
+        characters.append(sum(phases[i] for i in range(mol.n_orbitals) if perm[i] == i))
+    characters = np.array(characters)
     multiplicities = np.round(table.matrix @ characters / mol.point_group.order, 10)
     assert dict(zip(table.irreps, multiplicities)) == {
         irrep: expected_irreps.get(irrep, 0) for irrep in table.irreps
@@ -155,7 +154,8 @@ def test_point_group_special_molecules(
     mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf", **kwargs)
     assert mol.point_group.schoenflies_label == "D2h"
     assert mol.compute_orbital_irreps() == expected_orbital_irreps
-    assert len(mol.compute_mo_perms_and_phases()[0]["i"]) == mol.n_orbitals
+    perm, phases = mol.mo_permutation_representation().operations["i"]
+    assert len(perm) == len(phases) == mol.n_orbitals
 
 
 # Tests that the localized irreps work for every encoding and nature of the molecule
@@ -189,10 +189,10 @@ def test_orbital_permutations_correctness() -> None:
         backend="pyscf",
     ).use_native_orbitals()
     mol.point_group = "D2h"
-    perms, phases = mol.compute_mo_perms_and_phases()
+    perm, phases = mol.mo_permutation_representation().operations["i"]
 
-    assert perms["i"] == [2, 3, 0, 1]
-    assert phases["i"] == [1.0, 1.0, 1.0, 1.0]
+    assert perm == [2, 3, 0, 1]
+    assert phases == [1.0, 1.0, 1.0, 1.0]
 
 
 # Tests that orbital i is on the qubits 2*i (up) and 2*i+1 (down) of the states, as in the rest of sunrise
@@ -331,38 +331,6 @@ def test_SALC_symmetrization_correctness() -> None:
         assert any(
             state.wavefunction.isclose(expected) for expected in expected_wavefunctions
         )
-
-
-# Tests fragment state generation (subset of orbitals treated as an open-shell fragment)
-@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
-def test_fragment_states() -> None:
-    mol = sun.Molecule(
-        geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.",
-        basis_set="sto-3g",
-        backend="pyscf",
-    )
-    mol.point_group = "D2h"
-    provider = IrrepProvider(mol, "loc")
-
-    # Full non-ionic space for reference: C(8,4) = 70 determinants
-    full_states = FockSpaceState.non_ionic_states(mol, provider)
-    assert len(full_states) == 70
-
-    # Fragment on orbitals [0, 1]: 2 electrons in 2 orbitals -> C(4,2) = 6 states
-    fragment_orbitals = [0, 1]
-    frag_states = FockSpaceState.non_ionic_states(
-        mol, provider, fragment_orbitals=fragment_orbitals
-    )
-    assert len(frag_states) == 6
-
-    for state in frag_states:
-        # each fragment state holds exactly 2 electrons in the fragment
-        assert abs(sum(state.fragment_mo_occ) - 2) < 1e-6
-        # orbitals outside the fragment are vacuum (occupation 0)
-        full_occ = state.mo_occ
-        for i in range(mol.n_orbitals):
-            if i not in fragment_orbitals:
-                assert abs(full_occ[i]) < 1e-6
 
 
 # Tests CG symmetrization: complete basis, pure spin states, and paper correctness

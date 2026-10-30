@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import numpy
 
+from .point_group_representation import PointGroupRepresentation
+
 if TYPE_CHECKING:
     # only for type hints, importing it at runtime would be circular
     from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
@@ -24,59 +26,24 @@ class LocalizedIrrepProvider(IrrepProviderBase):
     """
     An irrep provider that determines the irreducible representation of a state by directly
     comparing the effect of the symmetry operations on the state to the character table.
-    This assumes a representation that is based on localized occupancies.
+    This assumes orbitals that the symmetry operations map onto each other up to a sign,
+    e.g. the native orbitals of mol.use_native_orbitals() or hybrid orbitals.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
         super().__init__(mol)
+        self.pg = mol.point_group
+        # signed orbital permutations acting on the bitstrings, see mol.mo_permutation_representation
+        self._representation = mol.mo_permutation_representation()
 
-        # Fetch the MO-specific permutations and phases, keyed by the operations of the point group
-        self._pg = mol.point_group
-        self._spatial_perms, self._spatial_phases = mol.compute_mo_perms_and_phases()
+    @property
+    def representation(self) -> PointGroupRepresentation:
+        return self._representation
 
     def get_irrep(self, state) -> str | None:
-        from .symmetrization_procedure import (
-            SymmetryAdaptedLinearCombintationSymmetrization,
-        )
-
-        n_orbitals = self.mol.n_orbitals
-        pg = self._pg
-
-        fragment_orbitals = getattr(state, "fragment_orbitals", None)
-        if fragment_orbitals is not None:
-            fragment_set = set(fragment_orbitals)
-            selected_ops = [
-                label
-                for label in pg.character_table.operation_symbols
-                if all(
-                    self._spatial_perms[label][i] in fragment_set
-                    for i in fragment_orbitals
-                )
-            ]
-        else:
-            selected_ops = pg.character_table.operation_symbols
-
-        chars = []
-        for label in selected_ops:
-            perm = self._spatial_perms[label]
-            phases = self._spatial_phases[label]
-
-            transformed = SymmetryAdaptedLinearCombintationSymmetrization._apply_spatial_permutation_bitstring(
-                state.wavefunction, perm, n_orbitals, phases
-            )
-            expectation = state.wavefunction.inner(transformed).real
-            chars.append(numpy.round(expectation))
-
-        character_vector = numpy.array(chars)
-        for irrep_name, irrep_chars in pg.character_table.dict.items():
-            expected = [
-                irrep_chars[pg.character_table.operation_symbols.index(label)]
-                for label in selected_ops
-            ]
-            if all(abs(c - e) < 0.5 for c, e in zip(character_vector, expected)):
-                return irrep_name
-
-        return None
+        character_vector = self.representation.character_vector(state.wavefunction)
+        irrep = self.pg.character_table.vec_to_str(character_vector)
+        return irrep if irrep is not None else None
 
 
 class PySCFCanonicalIrrepProvider(IrrepProviderBase):
@@ -88,7 +55,7 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 
     def __init__(self, mol: QuantumChemistryBase):
         super().__init__(mol)
-        self._pg = mol.abelian_point_group
+        self.pg = mol.abelian_point_group
         self._mol_irreps = mol.compute_orbital_irreps()
 
     @property
@@ -112,36 +79,21 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
                     f"sectors. Use IrrepProvider(mol, 'loc') instead."
                 )
 
-        pg = self._pg
-        character_vector = numpy.ones(pg.order)
+        character_vector = numpy.ones(self.pg.order)
         for occ, irrep in zip(state.mo_occ, self.mol_irreps):
             chars = numpy.asarray(
-                pg.character_table.dict[irrep], dtype=numpy.complex128
+                self.pg.character_table.dict[irrep], dtype=numpy.complex128
             )
             character_vector = character_vector * numpy.power(chars, round(occ))
-        irrep = pg.character_table.vec_to_str(character_vector)
+
+        irrep = self.pg.character_table.vec_to_str(character_vector)
         return irrep if irrep is not None else None
 
 
-class MEAOIrrepProvider(LocalizedIrrepProvider):
-    """
-    An irrep provider for MEAOs.
-    Inherits from LocalizedIrrepProvider but uses MO-basis permutations and phases.
-    """
-
-    def __init__(self, mol: QuantumChemistryBase):
-        # Skip parent __init__'s AO permutation logic
-        IrrepProviderBase.__init__(self, mol)
-
-        self._pg = mol.point_group
-        self._spatial_perms, self._spatial_phases = mol.compute_mo_perms_and_phases()
-
-
-SUPPORTED_IRREP_PROVIDERS = ["loc", "canon", "meao"]
+SUPPORTED_IRREP_PROVIDERS = ["loc", "canon"]
 INSTALLED_IRREP_PROVIDERS = {
     "loc": LocalizedIrrepProvider,
     "canon": PySCFCanonicalIrrepProvider,
-    "meao": MEAOIrrepProvider,
 }
 
 
