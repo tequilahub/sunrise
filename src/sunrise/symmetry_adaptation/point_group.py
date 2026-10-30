@@ -335,3 +335,232 @@ PointGroup.Td = PointGroup(
         ],
     ),
 )
+
+# Oh (e.g. SF6). Oh = Td x Ci, so its operations are the ones of Td and their
+# products with the inversion.
+#
+# Convention: the C4 axes are x, y and z, so the six outer atoms of an octahedron
+# sit on the axes. The C3 axes are the body diagonals of Td, the C2 axes in the
+# 6C2 class are the face diagonals (C2a, C2b in the xy-plane and the axes
+# perpendicular to the Td mirror planes sdy1, sdy2, sdx1, sdx2).
+_OH_CLASS_SIZES = [1, 8, 6, 6, 3, 1, 6, 8, 3, 6]
+#                  E 8C3 6C2 6C4 3C2  i 6S4 8S6 3sh 6sd
+_OH_CLASS_CHARACTERS = {
+    "A1g": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "A2g": [1, 1, -1, -1, 1, 1, -1, 1, 1, -1],
+    "Eg": [2, -1, 0, 0, 2, 2, 0, -1, 2, 0],
+    "T1g": [3, 0, -1, 1, -1, 3, 1, 0, -1, -1],
+    "T2g": [3, 0, 1, -1, -1, 3, -1, 0, -1, 1],
+    "A1u": [1, 1, 1, 1, 1, -1, -1, -1, -1, -1],
+    "A2u": [1, 1, -1, -1, 1, -1, 1, -1, -1, 1],
+    "Eu": [2, -1, 0, 0, 2, -2, 0, 1, -2, 0],
+    "T1u": [3, 0, -1, 1, -1, -3, -1, 0, 1, 1],
+    "T2u": [3, 0, 1, -1, -1, -3, 1, 0, 1, -1],
+}
+PointGroup.Oh = PointGroup(
+    schoenflies_label="Oh",
+    character_table=CharacterTable(
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _OH_CLASS_SIZES))
+            for (x, y) in _OH_CLASS_CHARACTERS.items()
+        ],
+        operation_symbols=[
+            "E",
+            "C3a",
+            "C3a^2",
+            "C3b",
+            "C3b^2",
+            "C3c",
+            "C3c^2",
+            "C3d",
+            "C3d^2",
+            "C2a",
+            "C2b",
+            "C2dy1",
+            "C2dy2",
+            "C2dx1",
+            "C2dx2",
+            "C4",
+            "C4^3",
+            "C4x",
+            "C4x^3",
+            "C4y",
+            "C4y^3",
+            "C2z",
+            "C2x",
+            "C2y",
+            "i",
+            "S4",
+            "S4^3",
+            "S4x",
+            "S4x^3",
+            "S4y",
+            "S4y^3",
+            "S6a",
+            "S6a^5",
+            "S6b",
+            "S6b^5",
+            "S6c",
+            "S6c^5",
+            "S6d",
+            "S6d^5",
+            "sz",
+            "sy",
+            "sx",
+            "sda",
+            "sdb",
+            "sdy1",
+            "sdy2",
+            "sdx1",
+            "sdx2",
+        ],
+    ),
+)
+
+# C3v (e.g. NH3, CH3Cl), D3h (e.g. BF3, H3+, PF5) and D3d (e.g. staggered ethane,
+# chair cyclohexane) reuse the threefold operations of D6h.
+#
+# Convention: the C3 axis is z and the atoms lie at 0, 120 and 240 degrees around it
+# (seen from above), so one sigma_v is the xz-plane. For D3h the C2' axes then pass
+# through the atoms. For D3d the upper atoms sit at 0, 120, 240 degrees and the lower
+# ones at 60, 180, 300 degrees: the sigma_d contain the atoms (sv1, sv2, sv3 of D6h)
+# and the C2' axes lie between them (C2''1, C2''2, C2''3 of D6h).
+_C3V_CLASS_SIZES = [1, 2, 3]
+#                  E 2C3 3sv
+_C3V_CLASS_CHARACTERS = {
+    "A1": [1, 1, 1],
+    "A2": [1, 1, -1],
+    "E": [2, -1, 0],
+}
+PointGroup.C3v = PointGroup(
+    schoenflies_label="C3v",
+    character_table=CharacterTable(
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _C3V_CLASS_SIZES))
+            for (x, y) in _C3V_CLASS_CHARACTERS.items()
+        ],
+        operation_symbols=["E", "C3", "C3^2", "sv1", "sv2", "sv3"],
+    ),
+)
+
+_D3H_CLASS_SIZES = [1, 2, 3, 1, 2, 3]
+#                    E 2C3 3C2' sh 2S3 3sv
+_D3H_CLASS_CHARACTERS = {
+    "A1'": [1, 1, 1, 1, 1, 1],
+    "A2'": [1, 1, -1, 1, 1, -1],
+    "E'": [2, -1, 0, 2, -1, 0],
+    "A1''": [1, 1, 1, -1, -1, -1],
+    "A2''": [1, 1, -1, -1, -1, 1],
+    "E''": [2, -1, 0, -2, 1, 0],
+}
+PointGroup.D3h = PointGroup(
+    schoenflies_label="D3h",
+    character_table=CharacterTable(
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D3H_CLASS_SIZES))
+            for (x, y) in _D3H_CLASS_CHARACTERS.items()
+        ],
+        operation_symbols=[
+            "E",
+            "C3",
+            "C3^2",
+            "C2'1",
+            "C2'2",
+            "C2'3",
+            "sz",
+            "S3",
+            "S3^5",
+            "sv1",
+            "sv2",
+            "sv3",
+        ],
+    ),
+)
+
+_D3D_CLASS_SIZES = [1, 2, 3, 1, 2, 3]
+#                    E 2C3 3C2'  i 2S6 3sd
+_D3D_CLASS_CHARACTERS = {
+    "A1g": [1, 1, 1, 1, 1, 1],
+    "A2g": [1, 1, -1, 1, 1, -1],
+    "Eg": [2, -1, 0, 2, -1, 0],
+    "A1u": [1, 1, 1, -1, -1, -1],
+    "A2u": [1, 1, -1, -1, -1, 1],
+    "Eu": [2, -1, 0, -2, 1, 0],
+}
+PointGroup.D3d = PointGroup(
+    schoenflies_label="D3d",
+    character_table=CharacterTable(
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D3D_CLASS_SIZES))
+            for (x, y) in _D3D_CLASS_CHARACTERS.items()
+        ],
+        operation_symbols=[
+            "E",
+            "C3",
+            "C3^2",
+            "C2''1",
+            "C2''2",
+            "C2''3",
+            "i",
+            "S6",
+            "S6^5",
+            "sv1",
+            "sv2",
+            "sv3",
+        ],
+    ),
+)
+
+# C4v (e.g. BrF5, XeOF4) and D2d (e.g. allene) are subgroups of D4h and Td built
+# from their operations.
+#
+# Convention for C4v: the C4 axis is z, sigma_v are the xz- and yz-planes and
+# sigma_d the planes x = +/-y, as in D4h.
+# Convention for D2d: the S4 axis is z, the C2' axes are x and y and sigma_d the
+# planes x = +/-y, so for allene the CH2 groups lie in the sigma_d planes. Choosing
+# the opposite convention swaps the B1/B2 labels.
+_C4V_CLASS_SIZES = [1, 2, 1, 2, 2]
+#                  E 2C4 C2 2sv 2sd
+_C4V_CLASS_CHARACTERS = {
+    "A1": [1, 1, 1, 1, 1],
+    "A2": [1, 1, 1, -1, -1],
+    "B1": [1, -1, 1, 1, -1],
+    "B2": [1, -1, 1, -1, 1],
+    "E": [2, 0, -2, 0, 0],
+}
+PointGroup.C4v = PointGroup(
+    schoenflies_label="C4v",
+    character_table=CharacterTable(
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _C4V_CLASS_SIZES))
+            for (x, y) in _C4V_CLASS_CHARACTERS.items()
+        ],
+        operation_symbols=["E", "C4", "C4^3", "C2z", "sy", "sx", "sda", "sdb"],
+    ),
+)
+
+_D2D_CLASS_SIZES = [1, 2, 1, 2, 2]
+#                  E 2S4 C2 2C2' 2sd
+_D2D_CLASS_CHARACTERS = {
+    "A1": [1, 1, 1, 1, 1],
+    "A2": [1, 1, 1, -1, -1],
+    "B1": [1, -1, 1, 1, -1],
+    "B2": [1, -1, 1, -1, 1],
+    "E": [2, 0, -2, 0, 0],
+}
+PointGroup.D2d = PointGroup(
+    schoenflies_label="D2d",
+    character_table=CharacterTable(
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D2D_CLASS_SIZES))
+            for (x, y) in _D2D_CLASS_CHARACTERS.items()
+        ],
+        operation_symbols=["E", "S4", "S4^3", "C2z", "C2x", "C2y", "sda", "sdb"],
+    ),
+)

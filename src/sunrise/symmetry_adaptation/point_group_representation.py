@@ -149,6 +149,25 @@ class PointGroupRepresentation(Generic[T, S]):
             "sdy2": numpy.array([[0, 0, -1], [0, 1, 0], [-1, 0, 0]]),
             "sdx1": numpy.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]]),
             "sdx2": numpy.array([[1, 0, 0], [0, 0, -1], [0, -1, 0]]),
+            # --- Oh: fourfold axes along x and y, twofold face diagonals in the
+            # xz- and yz-planes (perpendicular to sdy1, sdy2, sdx1, sdx2) and the S6
+            # about the body diagonals (the C3 of Td times the inversion) ---
+            "C4x": numpy.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]]),
+            "C4x^3": numpy.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]]),
+            "C4y": numpy.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]]),
+            "C4y^3": numpy.array([[0, 0, -1], [0, 1, 0], [1, 0, 0]]),
+            "C2dy1": numpy.array([[0, 0, -1], [0, -1, 0], [-1, 0, 0]]),
+            "C2dy2": numpy.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]]),
+            "C2dx1": numpy.array([[-1, 0, 0], [0, 0, -1], [0, -1, 0]]),
+            "C2dx2": numpy.array([[-1, 0, 0], [0, 0, 1], [0, 1, 0]]),
+            "S6a": numpy.array([[0, -1, 0], [0, 0, -1], [-1, 0, 0]]),
+            "S6a^5": numpy.array([[0, 0, -1], [-1, 0, 0], [0, -1, 0]]),
+            "S6b": numpy.array([[0, -1, 0], [0, 0, 1], [1, 0, 0]]),
+            "S6b^5": numpy.array([[0, 0, 1], [-1, 0, 0], [0, 1, 0]]),
+            "S6c": numpy.array([[0, 1, 0], [0, 0, 1], [-1, 0, 0]]),
+            "S6c^5": numpy.array([[0, 0, -1], [1, 0, 0], [0, 1, 0]]),
+            "S6d": numpy.array([[0, 1, 0], [0, 0, -1], [1, 0, 0]]),
+            "S6d^5": numpy.array([[0, 0, 1], [1, 0, 0], [0, -1, 0]]),
         }
 
         operations: dict[str, NDArray[numpy.complex128]] = {}

@@ -8,6 +8,7 @@ from sunrise.symmetry_adaptation import (
     FockSpaceState,
     IrrepProvider,
     PointGroup,
+    PointGroupRepresentation,
     SpinCGSymmetrizationProcedure,
     SpinSymmetrizationProcedure,
     SymmetryAdaptedLinearCombintationSymmetrization,
@@ -81,7 +82,30 @@ def test_point_group_keyword(point_group, expected, expected_abelian) -> None:
     assert mol.pyscf_molecule.groupname == expected_abelian
 
 
-# Tests the operations of Td and D8h on the native orbitals: the signed orbital permutations
+# Tests the non-Abelian character tables: the operations form a group, the characters
+# are class functions and the irreps are orthogonal
+def test_non_abelian_character_tables() -> None:
+    for name in ["C3v", "C4v", "D2d", "D3h", "D3d", "D4h", "D6h", "D8h", "Td", "Oh"]:
+        pg = getattr(PointGroup, name)
+        operations = [
+            np.asarray(op, dtype=float)
+            for op in PointGroupRepresentation.get_geometric_representation(
+                pg
+            ).operations.values()
+        ]
+        characters = pg.character_table.matrix
+        for g in operations:
+            for j, h in enumerate(operations):
+                k = next(
+                    k for k, op in enumerate(operations) if np.allclose(op, g @ h @ g.T)
+                )
+                assert np.allclose(characters[:, k], characters[:, j]), name
+        assert np.allclose(
+            characters @ characters.T, pg.order * np.eye(len(characters))
+        )
+
+
+# Tests the operations of the non-Abelian groups on the native orbitals: the signed orbital permutations
 # decompose into the expected irreps (for CH4 the C 2s, 2p and the four H 1s orbitals)
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize(
@@ -99,6 +123,20 @@ def test_point_group_keyword(point_group, expected, expected_abelian) -> None:
             ),
             "D8h",
             {"A1g": 1, "B1g": 1, "E1u": 1, "E2g": 1, "E3u": 1},
+        ),
+        (
+            "\n".join(
+                f"H {np.cos(2 * k * np.pi / 3):.10f} {np.sin(2 * k * np.pi / 3):.10f} {z}"
+                for z in (0.6, -0.6)
+                for k in range(3)
+            ),
+            "D3h",
+            {"A1'": 1, "E'": 1, "A2''": 1, "E''": 1},
+        ),
+        (
+            "H 1. 0. 0. \n H -1. 0. 0. \n H 0. 1. 0. \n H 0. -1. 0. \n H 0. 0. 1. \n H 0. 0. -1.",
+            "Oh",
+            {"A1g": 1, "Eg": 1, "T1u": 1},
         ),
     ],
 )

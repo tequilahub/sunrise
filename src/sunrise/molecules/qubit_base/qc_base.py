@@ -1241,8 +1241,9 @@ class QuantumChemistryBase:
     def point_group(self):
         """
         The point group of the molecule. If it is not given with the point_group keyword, it is detected from the
-        geometry as the largest point group defined in sunrise: the full point group if it is D4h, D6h, D8h or Td,
-        the largest Abelian subgroup otherwise. The quantum chemistry backends compute in abelian_point_group.
+        geometry as the largest point group defined in sunrise: the full point group if it is C3v, C4v, D2d, D3h,
+        D3d, D4h, D6h, D8h, Td or Oh, the largest Abelian subgroup otherwise. The quantum chemistry backends compute
+        in abelian_point_group.
         It can be set with a PointGroup or its Schoenflies label, e.g. to work in a subgroup.
         """
         if self._point_group is None:
