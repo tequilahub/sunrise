@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections import OrderedDict
+from hashlib import sha1
 from numbers import Number
 from typing import Callable
 
 import spex_tequila as spex
-from numpy import array, ceil, complex128, exp, ndarray, real
+from numpy import array, ceil, complex128, exp, real
 from openfermion import FermionOperator, normal_ordered
 from tequila import QubitHamiltonian, QubitWaveFunction, TequilaException, Variable
 from tequila.objective.objective import Objective, Variables
@@ -16,6 +18,11 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from ..fermionic_braket import FermBraketImpl
 
 _ZERO_TOL = 1e-12
+
+# (operator name, norb, core energy, integrals hash) -> terms, least recently used
+# entries dropped first, see SpexExpval._cached_terms
+_OPERATOR_CACHE: OrderedDict = OrderedDict()
+_OPERATOR_CACHE_SIZE = 8
 
 
 class SpexExpval:
@@ -30,22 +37,12 @@ class SpexExpval:
         self._init_state_ket: dict = None
         self._ket = None
         self._bra = None
+        self._compiled_ket: _CompiledCircuit = None
+        self._compiled_bra: _CompiledCircuit = None
         self._name = None
         self._molecule = None
         # Molecule Data
         self.norb: int = None
-        self.n_alpha: int = None
-        self.n_beta: int = None
-        self.core_energy: float = 0.0
-        self.one_body_integrals: ndarray = None
-        self.two_body_integrals: ndarray = None
-        self.mo_coeff: ndarray = None
-        self.spin: float = 0
-        self.symmetry = None
-        self.atom = None
-        self.basis = None
-        self.active_space = None
-
         bra = braket.bra
         ket = braket.ket
         self.molecule = braket.molecule
@@ -76,42 +73,84 @@ class SpexExpval:
             self._name = "Transition Element"
         self.operator = self.build_operator(operator)
 
-    def _build_hamiltonian(self) -> list[spex.FermionTerm]:
+    def _cached_terms(self, name: str, build: Callable) -> list[spex.FermionTerm]:
+        # Every braket of a molecule needs the same term list, so it is built once and
+        # reused. The key is the content of the integrals, not the molecule object:
+        # the gradient deep-copies the brakets (molecule included), and a molecule whose
+        # orbitals were rotated must not reuse the old terms.
+        c, h, g = self.molecule.get_integrals()
+        h = array(h, dtype=complex128)
+        g = array(g.reorder("chem").elems, dtype=complex128)
+        digest = sha1(h.tobytes())
+        digest.update(g.tobytes())
+        key = (name, self.norb, complex(c), digest.hexdigest())
+        if key in _OPERATOR_CACHE:
+            _OPERATOR_CACHE.move_to_end(key)
+            return _OPERATOR_CACHE[key]
+        terms = build(c, h, g)
+        _OPERATOR_CACHE[key] = terms
+        if len(_OPERATOR_CACHE) > _OPERATOR_CACHE_SIZE:
+            _OPERATOR_CACHE.popitem(last=False)
+        return terms
+
+    def _build_hamiltonian(self, c, h, g) -> list[spex.FermionTerm]:
         # Integrals in chemists notation g[p,q,r,s]=(pq|rs); spatial orbital p maps to
         # spin orbitals p (alpha) and p+norb (beta) in up-then-down ordering.
         norb = self.norb
         terms: list[spex.FermionTerm] = []
-        if self.core_energy is not None and abs(self.core_energy) > _ZERO_TOL:
-            terms.append(spex.FermionTerm([], [], complex(self.core_energy)))
-        if self.one_body_integrals is not None:
-            h = array(self.one_body_integrals, dtype=complex128)
-            for p in range(norb):
-                for q in range(norb):
-                    if abs(h[p, q]) < _ZERO_TOL:
-                        continue
-                    terms.append(spex.FermionTerm([p], [q], h[p, q]))
-                    terms.append(spex.FermionTerm([p + norb], [q + norb], h[p, q]))
-        if self.two_body_integrals is not None:
-            g = array(self.two_body_integrals, dtype=complex128)
-            for p in range(norb):
-                for q in range(norb):
-                    for r in range(norb):
-                        for s in range(norb):
-                            w = 0.5 * g[p, r, q, s]
-                            if abs(w) < _ZERO_TOL:
-                                continue
-                            terms.append(spex.FermionTerm([q, p], [r, s], w))
-                            terms.append(
-                                spex.FermionTerm(
-                                    [q + norb, p + norb], [r + norb, s + norb], w
-                                )
+        if c is not None and abs(c) > _ZERO_TOL:
+            terms.append(spex.FermionTerm([], [], complex(c)))
+        for p in range(norb):
+            for q in range(norb):
+                if abs(h[p, q]) < _ZERO_TOL:
+                    continue
+                terms.append(spex.FermionTerm([p], [q], h[p, q]))
+                terms.append(spex.FermionTerm([p + norb], [q + norb], h[p, q]))
+        for p in range(norb):
+            for q in range(norb):
+                for r in range(norb):
+                    for s in range(norb):
+                        w = 0.5 * g[p, r, q, s]
+                        if abs(w) < _ZERO_TOL:
+                            continue
+                        terms.append(spex.FermionTerm([q, p], [r, s], w))
+                        terms.append(
+                            spex.FermionTerm(
+                                [q + norb, p + norb], [r + norb, s + norb], w
                             )
-                            terms.append(
-                                spex.FermionTerm([q + norb, p], [r, s + norb], w)
+                        )
+                        terms.append(spex.FermionTerm([q + norb, p], [r, s + norb], w))
+                        terms.append(spex.FermionTerm([q, p + norb], [r + norb, s], w))
+        return terms
+
+    def _build_hcb_hamiltonian(self, c, h, g) -> list[spex.FermionTerm]:
+        # Hardcore-boson Hamiltonian with each pair on two spin orbitals, as in
+        # HybridBase.make_hamiltonian (make_bosonic_hamiltonian with two_qubit=True).
+        # Integrals in chemists notation g[p,q,r,s]=(pq|rs); spatial orbital p maps to
+        # spin orbitals p (alpha) and p+norb (beta) in up-then-down ordering.
+        norb = self.norb
+        terms: list[spex.FermionTerm] = []
+        if c is not None and abs(c) > _ZERO_TOL:
+            terms.append(spex.FermionTerm([], [], complex(c)))
+        for i in range(norb):
+            for j in range(norb):
+                # pair hopping a^_{j,a} a^_{j,b} a_{i,b} a_{i,a}
+                e1 = g[j, i, j, i]
+                if i == j:
+                    e1 += 2 * h[i, i]
+                if abs(e1) > _ZERO_TOL:
+                    terms.append(spex.FermionTerm([j, j + norb], [i + norb, i], e1))
+                # pair-pair interaction n_{i,a} n_{i,b} n_{j,a} n_{j,b}
+                if i != j:
+                    e2 = 2 * g[j, j, i, i] - g[j, i, i, j]
+                    if abs(e2) > _ZERO_TOL:
+                        terms.append(
+                            spex.FermionTerm(
+                                [i, i + norb, j, j + norb],
+                                [j + norb, j, i + norb, i],
+                                e2,
                             )
-                            terms.append(
-                                spex.FermionTerm([q, p + norb], [r + norb, s], w)
-                            )
+                        )
         return terms
 
     @property
@@ -126,6 +165,7 @@ class SpexExpval:
             self._init_state_bra = self.__qwvf_to_civect(bra.initial_state)
         bra = bra.to_upthendown(self.norb)
         self._bra = bra
+        self._compiled_bra = _CompiledCircuit(bra)
 
     @property
     def ket(self) -> FCircuit:
@@ -139,6 +179,7 @@ class SpexExpval:
             self._init_state_ket = self.__qwvf_to_civect(ket.initial_state)
         ket = ket.to_upthendown(self.norb)
         self._ket = ket
+        self._compiled_ket = _CompiledCircuit(ket)
 
     @property
     def variables(self) -> list[Variable]:
@@ -172,21 +213,52 @@ class SpexExpval:
         return _qwvf_to_civect(wvf, 2 * self.norb)
 
     def build_operator(
-        self, operator: str | FermionOperator | QubitHamiltonian | None = None
+        self,
+        operator: str
+        | FermionOperator
+        | QubitHamiltonian
+        | list
+        | list[spex.FermionTerm]
+        | None = None,
     ) -> None | Callable | list[spex.FermionTerm]:
         # Supported: "I"/"H", openfermion FermionOperator, tequila QubitHamiltonian (callable on state dict)
+        #             list of supported operators, spex.FermionTerm or list of it.
 
         def from_string(operator: str) -> Callable | list[spex.FermionTerm]:
             if operator.upper() == "I":
                 return lambda x: x
             elif operator.upper() == "H":
-                return self._build_hamiltonian()
+                return self._cached_terms("H", self._build_hamiltonian)
+            elif operator.upper() == "HCB":
+                return self._cached_terms("HCB", self._build_hcb_hamiltonian)
             else:
                 raise TequilaException(
                     f"No operator str {operator} supported on Spex BraKet"
                 )
 
-        if isinstance(operator, str):
+        if isinstance(operator, list):
+            if all(isinstance(op, spex.FermionTerm) for op in operator):
+                return operator
+            # build every entry and merge them into one term list
+            fermionic, pauli = [], []
+            for op in operator:
+                built = self.build_operator(op)
+                if callable(built):  # identity
+                    fermionic.append(spex.FermionTerm([], [], 1.0))
+                elif built and isinstance(built[0], tuple):
+                    pauli += built
+                else:
+                    fermionic += built
+            if fermionic and pauli:
+                raise TequilaException(
+                    "Spex BraKet can't mix fermionic and qubit operators in one list"
+                )
+            operator = pauli if pauli else fermionic
+        elif isinstance(operator, spex.FermionTerm):
+            return [
+                operator,
+            ]
+        elif isinstance(operator, str):
             operator = from_string(operator)
         elif isinstance(operator, Number):
             operator = [spex.FermionTerm([], [], complex(operator))]
@@ -282,11 +354,13 @@ class SpexExpval:
                 f"Objective did not receive all variables: {variables} given, missing {missing}"
             )
 
-        ket_state = self._apply_circuit(self._init_state_ket, self.ket, dvars)
+        ket_state = self._apply_circuit(self._init_state_ket, self._compiled_ket, dvars)
         if self.is_diagonal:
             bra_state = ket_state
         else:
-            bra_state = self._apply_circuit(self._init_state_bra, self.bra, dvars)
+            bra_state = self._apply_circuit(
+                self._init_state_bra, self._compiled_bra, dvars
+            )
 
         if callable(self.operator):
             ket_state = self.operator(ket_state)
@@ -351,22 +425,10 @@ class SpexExpval:
     @molecule.setter
     def molecule(self, molecule: QuantumChemistryBase):
         self._molecule = molecule
-        self.mo_coeff = molecule.integral_manager.orbital_coefficients
-        c, h, g = molecule.get_integrals()
-        g = g.reorder("chem").elems
-        self.core_energy = c
-        self.one_body_integrals = h
-        self.two_body_integrals = g
         self.norb = molecule.n_orbitals
         self.spin = (molecule.parameters.multiplicity - 1) / 2
         self.n_alpha = int((molecule.n_electrons + 2 * self.spin) // 2)
         self.n_beta = int((molecule.n_electrons - 2 * self.spin) // 2)
-        self.symmetry = getattr(molecule, "point_group", None)
-        self.atom = molecule.parameters.get_geometry()
-        self.basis = molecule.parameters.basis_set
-        self.active_space = [
-            i.idx_total for i in molecule.integral_manager.active_orbitals
-        ]
 
 
 def _qwvf_to_civect(wvf: QubitWaveFunction, n_qubits: int) -> dict:
@@ -389,42 +451,62 @@ def _civect_to_qwvf(state_dict: dict, n_qubits: int) -> QubitWaveFunction:
     return wvf
 
 
-def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
-    from sunrise import simulate
+class _CompiledCircuit:
+    """
+    Gates of an (up-then-down) FCircuit translated once into spex terms, so that
+    simulating it only has to resolve the angles.
+    """
 
-    # each gate maps to FermionTerm(creation_idx=[to...], annihilation_idx=[from...], 1j): (p, q) destroys p and creates q
-    state = {} if state is None else state
-    result = {int(k): complex(v) for k, v in state.items() if abs(v) > _ZERO_TOL}
-    if circuit is None:
-        return result
-    for gate in circuit.gates:
-        indices = gate.indices
-        parameter = gate.variables
-        if not indices:
-            continue
-
-        if isinstance(parameter, Variable):
-            theta = float(parameter.map_variables(dvars))
-        elif isinstance(parameter, Objective):
-            theta = float(simulate(parameter, dvars))
-        else:
-            theta = parameter
-        for term_pairs in indices:
-            creation = [p[1] for p in term_pairs]
-            annihilation = [p[0] for p in term_pairs]
-            if creation == annihilation:
-                # spex drops a+_p a_p terms (generator a+_p a_p - h.c. = 0), so apply exp(-i*theta/2*n_p) here
-                mask = sum(1 << p for p in creation)
-                phase = exp(-0.5j * theta)
-                result = {
-                    k: v * phase if k & mask == mask else v for k, v in result.items()
-                }
+    def __init__(self, circuit: FCircuit | None):
+        # list of (parameter, [(phase mask, None) or (None, FermionTerm)]) per gate
+        self.gates = []
+        if circuit is None:
+            return
+        # each gate maps to FermionTerm(creation_idx=[to...], annihilation_idx=[from...], 1j): (p, q) destroys p and creates q
+        for gate in circuit.gates:
+            if not gate.indices:
                 continue
-            n_pairs = len(term_pairs)
-            weight = 1.0j * ((-1) ** (n_pairs * (n_pairs - 1) // 2))
-            term = spex.FermionTerm(creation, annihilation, weight)
-            result = spex.apply_fermion_excitation(result, term, theta)
-    return result
+            ops = []
+            for term_pairs in gate.indices:
+                creation = [p[1] for p in term_pairs]
+                annihilation = [p[0] for p in term_pairs]
+                if creation == annihilation:
+                    # spex drops a+_p a_p terms (generator a+_p a_p - h.c. = 0), so apply exp(-i*theta/2*n_p) by hand
+                    ops.append((sum(1 << p for p in creation), None))
+                    continue
+                n_pairs = len(term_pairs)
+                weight = 1.0j * ((-1) ** (n_pairs * (n_pairs - 1) // 2))
+                ops.append((None, spex.FermionTerm(creation, annihilation, weight)))
+            self.gates.append((gate.variables, ops))
+
+    def __call__(self, state: dict, dvars: dict) -> dict:
+        from sunrise import simulate
+
+        state = {} if state is None else state
+        result = {int(k): complex(v) for k, v in state.items() if abs(v) > _ZERO_TOL}
+        for parameter, ops in self.gates:
+            if isinstance(parameter, Variable):
+                theta = float(parameter.map_variables(dvars))
+            elif isinstance(parameter, Objective):
+                theta = float(simulate(parameter, dvars))
+            else:
+                theta = parameter
+            for mask, term in ops:
+                if term is None:
+                    phase = exp(-0.5j * theta)
+                    result = {
+                        k: v * phase if k & mask == mask else v
+                        for k, v in result.items()
+                    }
+                else:
+                    result = spex.apply_fermion_excitation(result, term, theta)
+        return result
+
+
+def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
+    if not isinstance(circuit, _CompiledCircuit):
+        circuit = _CompiledCircuit(circuit)
+    return circuit(state, dvars)
 
 
 def spex_circuit_simulator(
