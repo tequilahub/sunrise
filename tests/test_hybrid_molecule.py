@@ -1,7 +1,6 @@
 import numpy
 import pytest
 import tequila as tq
-from tequila import TequilaException
 
 import sunrise as sn
 
@@ -264,7 +263,9 @@ def test_UCCSD_FER():
         ("BravyiKitaev", {"select": "BFFB", "condense": False}),
         ("ReorderedBravyiKitaev", {"select": "FBFB"}),
         ("BravyiKitaevTree", {"select": "FBBF", "two_qubit": True}),
-        ("TaperedBinary", {"select": "FFFF"}),
+        ("TaperedBinary", {"select": "FFFB"}),
+        ("TaperedBravyiKitaev", {"select": "FBFB"}),
+        ("TaperedBravyiKitaev", {"select": "BFFB", "two_qubit": True}),
     ],
 )
 def test_encodings(transformation, encoding):
@@ -300,21 +301,6 @@ def test_encodings(transformation, encoding):
     assert numpy.isclose(E, E_jw, atol=1.0e-6)
 
 
-def test_tapered_binary_mixed():
-    # the pairs moving between B and F orbitals change the electron parities of the fermionic orbitals
-    with pytest.raises(
-        TequilaException, match="TaperedBinary needs a fixed number of electrons"
-    ):
-        sn.Molecule(
-            geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",
-            basis_set="sto-3g",
-            backend="pyscf",
-            nature="hybrid",
-            select="FBFB",
-            transformation="TaperedBinary",
-        )
-
-
 @pytest.mark.parametrize("select", ["FFFF", "FBFB"])
 def test_encodings_spectrum(select):
     # all fermionic and mixed orbitals: every encoding gives the spectrum of Jordan-Wigner
@@ -326,7 +312,11 @@ def test_encodings_spectrum(select):
         nature="hybrid",
         select=select,
     ).make_hamiltonian()
-    for transformation in ["BravyiKitaev", "BravyiKitaevTree", "ReorderedBravyiKitaev"]:
+    for transformation in [
+        "BravyiKitaev",
+        "BravyiKitaevTree",
+        "ReorderedBravyiKitaev",
+    ]:
         H = sn.Molecule(
             geometry=geom,
             basis_set="sto-3g",
@@ -338,4 +328,19 @@ def test_encodings_spectrum(select):
         assert numpy.allclose(
             numpy.linalg.eigvalsh(H.to_matrix()),
             numpy.linalg.eigvalsh(H_jw.to_matrix()),
+        )
+    # tapered encodings keep only the sector with the alpha and beta parities of the molecule
+    e_jw = numpy.linalg.eigvalsh(H_jw.to_matrix())
+    for transformation in ["TaperedBinary", "TaperedBravyiKitaev"]:
+        H = sn.Molecule(
+            geometry=geom,
+            basis_set="sto-3g",
+            backend="pyscf",
+            nature="hybrid",
+            select=select,
+            transformation=transformation,
+        ).make_hamiltonian()
+        assert H.n_qubits == H_jw.n_qubits - 2
+        assert all(
+            numpy.isclose(e, e_jw).any() for e in numpy.linalg.eigvalsh(H.to_matrix())
         )
