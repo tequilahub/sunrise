@@ -81,16 +81,16 @@ def test_point_group_keyword(point_group, expected, expected_abelian) -> None:
     assert mol.pyscf_molecule.groupname == expected_abelian
 
 
-# Tests the operations of Td and D8h on the atoms: the atom permutations decompose into the expected irreps
+# Tests the operations of Td and D8h on the native orbitals: the signed orbital permutations
+# decompose into the expected irreps (for CH4 the C 2s, 2p and the four H 1s orbitals)
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize(
-    "geometry, expected, n_distinct, expected_irreps",
+    "geometry, expected, expected_irreps",
     [
         (
             "C 0. 0. 0. \n H 0.6276 0.6276 0.6276 \n H -0.6276 -0.6276 0.6276 \n H -0.6276 0.6276 -0.6276 \n H 0.6276 -0.6276 -0.6276",
             "Td",
-            24,
-            {"A1": 2, "T2": 1},
+            {"A1": 2, "T2": 2},
         ),
         (
             "\n".join(
@@ -98,23 +98,25 @@ def test_point_group_keyword(point_group, expected, expected_abelian) -> None:
                 for k in range(8)
             ),
             "D8h",
-            16,
             {"A1g": 1, "B1g": 1, "E1u": 1, "E2g": 1, "E3u": 1},
         ),
     ],
 )
-def test_atomic_permutations_non_abelian(
-    geometry, expected, n_distinct, expected_irreps
-) -> None:
-    mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf")
+def test_orbital_permutations_non_abelian(geometry, expected, expected_irreps) -> None:
+    mol = sun.Molecule(
+        geometry=geometry, basis_set="sto-3g", backend="pyscf"
+    ).use_native_orbitals()
     assert mol.point_group.schoenflies_label == expected
 
-    operations = mol.atomic_permutation_representation().operations
-    # a planar molecule cannot tell an operation from its product with sh apart
-    assert len({op.tobytes() for op in operations.values()}) == n_distinct
-
-    characters = np.array([np.trace(op) for op in operations.values()])
+    perms, phases = mol.compute_mo_perms_and_phases()
     table = mol.point_group.character_table
+    # the character of an operation is the sum of the phases of the orbitals it keeps in place
+    characters = np.array(
+        [
+            sum(phases[op][i] for i in range(mol.n_orbitals) if perms[op][i] == i)
+            for op in table.operation_symbols
+        ]
+    )
     multiplicities = np.round(table.matrix @ characters / mol.point_group.order, 10)
     assert dict(zip(table.irreps, multiplicities)) == {
         irrep: expected_irreps.get(irrep, 0) for irrep in table.irreps
@@ -153,28 +155,20 @@ def test_point_group_special_molecules(
     mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf", **kwargs)
     assert mol.point_group.schoenflies_label == "D2h"
     assert mol.compute_orbital_irreps() == expected_orbital_irreps
-    assert (
-        mol.ao_permutation_representation().operations["E"].shape[0] == mol.n_orbitals
-    )
     assert len(mol.compute_mo_perms_and_phases()[0]["i"]) == mol.n_orbitals
 
 
-# Tests that the QCircuit representation needs the non-reordered Jordan-Wigner encoding,
-# while the localized irreps work for every molecule
+# Tests that the localized irreps work for every encoding and nature of the molecule
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize(
-    "nature, kwargs, has_qcircuit_representation",
+    "nature, kwargs",
     [
-        ("qubit", {}, True),
-        ("qubit", {"transformation": "BravyiKitaev"}, False),
-        ("hybrid", {"select": "FF"}, True),
-        ("hybrid", {"select": "FB"}, False),
-        ("fermionic", {}, False),
+        ("qubit", {"transformation": "BravyiKitaev"}),
+        ("hybrid", {"select": "FB"}),
+        ("fermionic", {}),
     ],
 )
-def test_qcircuit_representation_encoding(
-    nature, kwargs, has_qcircuit_representation
-) -> None:
+def test_localized_irreps_nature(nature, kwargs) -> None:
     mol = sun.Molecule(
         geometry="H 0. 0. 0. \n H 0. 0. 0.74804",
         basis_set="sto-3g",
@@ -182,65 +176,23 @@ def test_qcircuit_representation_encoding(
         nature=nature,
         **kwargs,
     )
-    if has_qcircuit_representation:
-        assert (
-            mol.qcircuit_representation().operations["E"].n_qubits == 2 * mol.n_orbitals
-        )
-    else:
-        with pytest.raises(tq.TequilaException):
-            mol.qcircuit_representation()
-
     for state in FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "loc")):
         assert state.irrep is not None
 
 
+# Statically tests the inversion of H4 (square) with D2h on the native orbitals
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
-@pytest.mark.parametrize("molecule_pointgroup", molecule_pointgroup_list)
-def test_representation_builder(molecule_pointgroup) -> None:
-    mol = sun.Molecule(
-        geometry=molecule_pointgroup[1], basis_set="sto-3g", backend="pyscf"
-    )
-    mol.point_group = molecule_pointgroup[0]
-    provider_canonical = IrrepProvider(mol, "canon")
-    states = FockSpaceState.non_ionic_states(mol, provider_canonical)
-
-    rep_ao = mol.ao_permutation_representation()
-    rep_qcircuit = mol.qcircuit_representation()
-
-    # assert the correct size for the ao matrices and the correct number of qubits for the qcircuit representation
-    assert rep_ao.operations["E"].shape[0] == mol.n_orbitals
-    assert rep_qcircuit.operations["E"].n_qubits == 2 * mol.n_orbitals
-
-    # test inversibility if the operation i exists in the point group
-    if "i" in mol.point_group.character_table.operation_symbols:
-        assert np.array_equal(
-            rep_ao.operations["i"], np.linalg.inv(rep_ao.operations["i"])
-        )
-
-    # test the application of the identity on a state in the Fock space
-    rep_qcircuit.apply(rep_qcircuit.operations["E"], states[0].wavefunction)
-
-    # test inversibility if the operation i exists in the point group
-    if "i" in mol.point_group.character_table.operation_symbols:
-        res = rep_qcircuit.apply(rep_qcircuit.operations["i"], states[0].wavefunction)
-        res = rep_qcircuit.apply(rep_qcircuit.operations["i"], res)
-        assert rep_qcircuit.is_close_function(states[0].wavefunction, res)
-
-
-# Statically tests the values for the inversion of H4 (square) with D2h
-# as imported from pyscf in its AO permutation representation
-@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
-def test_representation_builder_correctness() -> None:
+def test_orbital_permutations_correctness() -> None:
     mol = sun.Molecule(
         geometry="H 1. -1. 0. \n H 1. 1. 0. \n H -1. 1. 0. \n H -1. -1. 0.",
         basis_set="sto-3g",
         backend="pyscf",
-    )
+    ).use_native_orbitals()
     mol.point_group = "D2h"
-    rep_ao = mol.ao_permutation_representation()
+    perms, phases = mol.compute_mo_perms_and_phases()
 
-    i_expected = np.array([[0, 0, 1, 0], [0, 0, 0, 1], [1, 0, 0, 0], [0, 1, 0, 0]])
-    assert np.array_equal(rep_ao.operations["i"], i_expected)
+    assert perms["i"] == [2, 3, 0, 1]
+    assert phases["i"] == [1.0, 1.0, 1.0, 1.0]
 
 
 # Test spin symmetrization for canonical orbitals
@@ -271,7 +223,6 @@ def test_spin_symmetrization_correctness() -> None:
     provider_canonical = IrrepProvider(mol, "canon")
     states_list = FockSpaceState.non_ionic_states(mol, provider_canonical)
     symm_list = SpinSymmetrizationProcedure(mol).symmetrize(states_list)
-    rep_qcircuit = mol.qcircuit_representation()
 
     expected_wavefunctions = [
         tq.QubitWaveFunction.from_string(s)
@@ -291,8 +242,7 @@ def test_spin_symmetrization_correctness() -> None:
     assert len(symm_list) == len(expected_wavefunctions)
     for state in symm_list:
         assert any(
-            bool(rep_qcircuit.is_close_function(state.wavefunction, expected))
-            for expected in expected_wavefunctions
+            state.wavefunction.isclose(expected) for expected in expected_wavefunctions
         )
 
 
@@ -329,7 +279,6 @@ def test_SALC_symmetrization_correctness() -> None:
     symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(
         states_list
     )
-    rep_qcircuit = mol.qcircuit_representation()
 
     expected_wavefunctions = [
         tq.QubitWaveFunction.from_string(s)
@@ -349,8 +298,7 @@ def test_SALC_symmetrization_correctness() -> None:
     assert len(symm_list) == len(expected_wavefunctions)
     for state in symm_list:
         assert any(
-            bool(rep_qcircuit.is_close_function(state.wavefunction, expected))
-            for expected in expected_wavefunctions
+            state.wavefunction.isclose(expected) for expected in expected_wavefunctions
         )
 
 
