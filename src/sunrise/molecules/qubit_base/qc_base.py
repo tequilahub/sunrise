@@ -7,14 +7,13 @@ import numbers
 import typing
 from copy import deepcopy
 from dataclasses import asdict, dataclass
-from itertools import product
+from itertools import combinations, product
 
 import h5py
 import numpy
 import pyscf
 import tequila
 import tequila.grouping.fermionic_functions as ff
-from scipy.optimize import linear_sum_assignment
 from tequila import BitString, QTensor, TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
@@ -1293,14 +1292,16 @@ class QuantumChemistryBase:
         )
         return PointGroup.from_pyscf(pyscf_mol.groupname)
 
-    def mo_permutation_representation(self):
+    def mo_representation(self):
         """
-        Builds the representation of the point group where the symmetry operations are signed permutations of the
-        active orbitals and the states are QubitWaveFunctions with 2 * n_orbitals qubits.
+        Builds the representation of the point group where the symmetry operations are matrices acting on the active
+        orbitals and the states are QubitWaveFunctions with 2 * n_orbitals qubits.
 
         The geometric operations are projected into the basis of the active orbitals with exact AO rotation matrices
-        (s and p orbitals). Each operation is a tuple (perm, phases): orbital i is mapped onto phases[i] * orbital perm[i].
-        The operations act directly on the bitstrings of the states, no circuits are needed.
+        (s and p orbitals): the operation g transforms the orbitals as g phi_j = sum_i D[i, j] phi_i with
+        D[i, j] = <phi_i|g phi_j>. D is a signed permutation if g maps every orbital onto another one (e.g. localized
+        orbitals in the standard orientation), in general it mixes orbitals (e.g. degenerate canonical orbitals or
+        p orbitals under C3). The operations act directly on the bitstrings of the states, no circuits are needed.
         """
         geom_repr = PointGroupRepresentation.get_geometric_representation(
             self.point_group, self.parameters.get_geometry()
@@ -1318,15 +1319,10 @@ class QuantumChemistryBase:
         aoslice = pyscf_mol.aoslice_by_atom()
         n_ao = pyscf_mol.nao_nr()
 
+        # the matrices are written in the orbitals the states are written in, signs included
         C_mo = numpy.asarray(self.integral_manager.orbital_coefficients)[
             :, [orbital.idx_total for orbital in self.orbitals]
-        ].copy()
-
-        # Canonicalize global signs to prevent arbitrary sign flips
-        for i in range(C_mo.shape[1]):
-            max_idx = numpy.argmax(numpy.abs(C_mo[:, i]))
-            if C_mo[max_idx, i] < 0:
-                C_mo[:, i] *= -1.0
+        ]
 
         operations = {}
         for label, R_3x3 in geom_repr.operations.items():
@@ -1354,90 +1350,69 @@ class QuantumChemistryBase:
                             f"Angular momentum l={l} not supported."
                         )
 
-            S_mo = C_mo.T @ S_ao @ U_AO @ C_mo
+            D = C_mo.T @ S_ao @ U_AO @ C_mo
 
-            # Hungarian algorithm for guaranteed 1-to-1 mapping
-            row_ind, col_ind = linear_sum_assignment(-numpy.abs(S_mo))
-            perm = [0] * self.n_orbitals
-            for r, c in zip(row_ind, col_ind):
-                perm[c] = int(r)
-
-            # every orbital has to be mapped onto plus or minus one orbital, otherwise the operation
-            # mixes orbitals (e.g. degenerate canonical orbitals) and is not a signed permutation
-            overlaps = numpy.abs(S_mo[perm, numpy.arange(self.n_orbitals)])
-            if not numpy.allclose(overlaps, 1.0, atol=1e-4):
-                j = int(numpy.argmin(overlaps))
+            # D is orthogonal only if the operation maps the active orbitals onto themselves
+            if not numpy.allclose(D.T @ D, numpy.eye(self.n_orbitals), atol=1e-4):
                 raise ValueError(
-                    f"The operation {label} does not map orbital {j} onto one orbital (overlap {overlaps[j]:.4f}): "
-                    f"the orbitals are not mapped onto each other by the operations of {self.point_group.schoenflies_label}, "
-                    f"e.g. degenerate canonical orbitals or p orbitals under rotations by 60 or 45 degrees. "
-                    f"Use IrrepProvider(mol, 'canon') for canonical orbitals or set a subgroup with mol.point_group."
+                    f"The operation {label} maps the active orbitals out of the active space: choose active "
+                    f"orbitals that the operations of {self.point_group.schoenflies_label} map onto each other, "
+                    f"e.g. all orbitals of a degenerate set."
                 )
+            operations[label] = D
 
-            phases = []
-            for j in range(self.n_orbitals):
-                i = perm[j]
-                phase = numpy.sign(S_mo[i, j])
-                phases.append(float(phase if phase != 0 else 1.0))
-            operations[label] = (perm, phases)
-
-        def _apply(op, state):
+        def _apply(D, state):
             """
-            Apply a signed spatial orbital permutation directly to the bitstrings of the state:
-            perm[i] = j means orbital i maps to orbital j, with the sign phases[i].
+            Apply the orbital transformation a_j^dagger -> sum_i D[i, j] a_i^dagger, the same for both spins, directly
+            to the bitstrings of the state. Written with the up operators before the down ones, a determinant with the
+            up orbitals I and the down orbitals J goes to sum_{I', J'} det(D[I', I]) det(D[J', J]) |I', J'>.
             """
-            perm, phases = op
             n_orbitals = self.n_orbitals
             n_qubits = 2 * n_orbitals
             result_terms = {}
+            # expansions of the up and down orbital sets, shared by all determinants of the state
+            expansions = {}
 
             for bitstring, coef in state.items():
-                # Get the bitstring as a string of 0s and 1s
-                bs_int = int(bitstring)
-                bs_str = format(bs_int, f"0{n_qubits}b")
+                bs_str = format(int(bitstring), f"0{n_qubits}b")
+                up = tuple(i for i in range(n_orbitals) if bs_str[2 * i] == "1")
+                down = tuple(i for i in range(n_orbitals) if bs_str[2 * i + 1] == "1")
 
-                # Apply spatial permutation and track occupied spin-orbitals
-                new_bits = [0] * n_qubits
-                occupied_new = []
-                phase = 1.0
+                for occupied in (up, down):
+                    if occupied not in expansions:
+                        targets = list(combinations(range(n_orbitals), len(occupied)))
+                        targets = numpy.array(targets, dtype=int).reshape(
+                            len(targets), len(occupied)
+                        )
+                        dets = numpy.linalg.det(
+                            D[targets[:, :, None], numpy.array(occupied, dtype=int)]
+                        )
+                        expansions[occupied] = [
+                            (target, det)
+                            for target, det in zip(targets, dets)
+                            if abs(det) > 1e-12
+                        ]
 
-                for i in range(n_orbitals):
-                    alpha = int(bs_str[2 * i])
-                    beta = int(bs_str[2 * i + 1])
-                    j = perm[i]
+                # fermionic sign of moving the down operators behind the up ones, and back
+                sign = (-1) ** sum(j < i for i in up for j in down)
+                for new_up, det_up in expansions[up]:
+                    for new_down, det_down in expansions[down]:
+                        new_sign = (-1) ** sum(j < i for i in new_up for j in new_down)
+                        new_bits = ["0"] * n_qubits
+                        for i in new_up:
+                            new_bits[2 * i] = "1"
+                        for j in new_down:
+                            new_bits[2 * j + 1] = "1"
+                        new_bs_int = int("".join(new_bits), 2)
+                        result_terms[new_bs_int] = (
+                            result_terms.get(new_bs_int, 0)
+                            + sign * new_sign * det_up * det_down * coef
+                        )
 
-                    # every electron in orbital i picks up its sign
-                    if alpha:
-                        new_bits[2 * j] = 1
-                        occupied_new.append(2 * j)
-                        phase *= phases[i]
-                    if beta:
-                        new_bits[2 * j + 1] = 1
-                        occupied_new.append(2 * j + 1)
-                        phase *= phases[i]
-
-                # Compute fermionic sign: parity of permutation needed to sort occupied_new
-                # Count inversions in occupied_new
-                inversions = 0
-                for a in range(len(occupied_new)):
-                    for b in range(a + 1, len(occupied_new)):
-                        if occupied_new[a] > occupied_new[b]:
-                            inversions += 1
-
-                sign = (-1) ** inversions
-
-                # Accumulate
-                new_bs_str = "".join(str(bit) for bit in new_bits)
-                result_terms[new_bs_str] = (
-                    result_terms.get(new_bs_str, 0) + sign * phase * coef
-                )
-
-            # Build result wavefunction
             result = tequila.QubitWaveFunction(n_qubits=n_qubits)
-            for bs_str, c in result_terms.items():
+            for bs_int, c in result_terms.items():
                 if abs(c) > 1e-15:
-                    result += c * tequila.QubitWaveFunction.from_string(f"|{bs_str}>")
-
+                    result[bs_int] = c
             return result
 
         return PointGroupRepresentation(

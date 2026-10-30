@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from itertools import groupby
+from itertools import combinations, groupby
 from itertools import product as iproduct
 from typing import TYPE_CHECKING
 
@@ -119,7 +119,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
     def __post_init__(self):
         self.pg = self.mol.point_group
         if self.pgr is None:
-            self.pgr = self.mol.mo_permutation_representation()
+            self.pgr = self.mol.mo_representation()
 
     def symmetrize(
         self, states: list[FockSpaceState] | pd.DataFrame
@@ -137,79 +137,150 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
         # the output states.
         irrep_provider = state_list[0].irrep_provider
 
-        n_qubits = 2 * self.mol.n_orbitals
+        n_orbitals = self.mol.n_orbitals
+        n_qubits = 2 * n_orbitals
 
-        # Group projected SALCs by (irrep, S2, m_s) to preserve spin purity!
-        SALC_by_sector: dict[tuple, list[tequila.QubitWaveFunction]] = {}
+        # The operations keep the numbers of up and down electrons, so the states of a block (n_up, n_down) are
+        # matrices W[a, b] over its up strings a and down strings b. Written with the up operators before the down
+        # ones, the operation D acts as signs * (M_up @ (signs * W) @ M_down.T), where M[T, S] = det(D[T, S]) and
+        # signs[a, b] is the fermionic sign of moving the down operators behind the up ones
+        blocks = {}
+
+        # the spin operator is built once for all seeds
+        s2_op = self.mol.make_s2_op()
+
+        # Group projected SALCs by (irrep, S2, m_s, block) to preserve spin purity!
+        SALC_by_sector: dict[tuple, list[numpy.ndarray]] = {}
 
         for state in state_list:
-            # Extract spin quantum numbers from the seed state (O(1) since they are cached)
-            s2_val = state.S2
-            ms_val = state.m_s
+            terms = []
+            for bitstring, coef in state.wavefunction.items():
+                bs_str = format(int(bitstring), f"0{n_qubits}b")
+                up = tuple(i for i in range(n_orbitals) if bs_str[2 * i] == "1")
+                down = tuple(i for i in range(n_orbitals) if bs_str[2 * i + 1] == "1")
+                terms.append((up, down, coef))
+            block = {(len(up), len(down)) for up, down, _ in terms}
+            if len(block) != 1:
+                raise ValueError(
+                    "The SALC symmetrization needs states with fixed numbers of up and down electrons."
+                )
+            block = block.pop()
 
-            # assumes a consistent ordering of the operations
-            resulting_state_list: list[tequila.QubitWaveFunction] = []
+            # Extract spin quantum numbers from the seed state, m_s follows from the block. A single determinant has
+            # <S^2> = m_s (m_s + 1) + n_down - (number of doubly occupied orbitals), other seeds need the operator
+            ms_val = (block[0] - block[1]) / 2
+            if not isinstance(state, FockSpaceState) or state._S2 is not None:
+                s2_val = state.S2
+            elif len(terms) == 1:
+                up, down, _ = terms[0]
+                s2_val = ms_val * (ms_val + 1) + len(down) - len(set(up) & set(down))
+            else:
+                s2_val = numpy.round(
+                    state.wavefunction.inner(s2_op(state.wavefunction)).real,
+                    decimals=10,
+                )
+
+            if block not in blocks:
+                strings = [list(combinations(range(n_orbitals), n)) for n in block]
+                signs = numpy.array(
+                    [
+                        [(-1) ** sum(j < i for i in a for j in b) for b in strings[1]]
+                        for a in strings[0]
+                    ]
+                )
+                indices = [
+                    numpy.array(string, dtype=int).reshape(len(string), n)
+                    for string, n in zip(strings, block)
+                ]
+                matrices = [
+                    [
+                        numpy.linalg.det(
+                            D[index[:, None, :, None], index[None, :, None, :]]
+                        )
+                        for index in indices
+                    ]
+                    for D in self.pgr.operations.values()
+                ]
+                positions = [{string: k for k, string in enumerate(s)} for s in strings]
+                blocks[block] = (strings, signs, matrices, positions)
+            strings, signs, matrices, positions = blocks[block]
+
+            W = numpy.zeros((len(strings[0]), len(strings[1])), dtype=complex)
+            for up, down, coef in terms:
+                W[positions[0][up], positions[1][down]] += coef
 
             # apply all symmetry operations to the state
-            for op in self.pgr.operations.values():
-                resulting_state_list.append(self.pgr.apply(op, state.wavefunction))
+            resulting_state_list = [
+                signs * (M_up @ (signs * W) @ M_down.T) for M_up, M_down in matrices
+            ]
 
-            for j, irrep in enumerate(self.pg.character_table.dict.keys()):
-                state_SALC = tequila.QubitWaveFunction(n_qubits=n_qubits)
-                for k, character in enumerate(self.pg.character_table.dict[irrep]):
-                    if character != 0:
-                        state_SALC += character * resulting_state_list[k]
-
-                norm_sq = state_SALC.inner(state_SALC).real
-                if norm_sq > 1e-10:
-                    sector = (irrep, s2_val, ms_val)
+            for irrep, characters in self.pg.character_table.dict.items():
+                state_SALC = sum(
+                    character * W_op
+                    for character, W_op in zip(characters, resulting_state_list)
+                    if character != 0
+                )
+                norm = numpy.linalg.norm(state_SALC)
+                if norm**2 > 1e-10:
+                    sector = (irrep, s2_val, ms_val, block)
                     if sector not in SALC_by_sector:
                         SALC_by_sector[sector] = []
-                    SALC_by_sector[sector].append(state_SALC.normalize())
+                    SALC_by_sector[sector].append((state_SALC / norm).ravel())
 
         result_objects = []
+        # the states already kept for each (irrep, m_s, block), as rows
+        kept_wfns: dict[tuple, numpy.ndarray] = {}
 
-        for (irrep, s2_val, ms_val), wfn_list in SALC_by_sector.items():
-            # Deduplicate exact copies within this sector: the key of a wavefunction is its
-            # rounded coefficients with the phase of the first one divided out, so copies that
-            # only differ by a global phase get the same key
-            unique_wfns = []
-            seen_keys = set()
+        for (irrep, s2_val, ms_val, block), wfn_list in SALC_by_sector.items():
+            strings = blocks[block][0]
+
+            # Deduplicate copies within this sector, also when they differ by a global phase:
+            # the key of a state is its rounded coefficients with the phase of the first one divided out
+            unique_wfns = {}
             for wfn in wfn_list:
-                items = sorted(wfn.items())  # deterministic order by bitstring
-                phase = items[0][1] / abs(items[0][1])
-                key = tuple(
-                    (bitstring, complex(numpy.round(coef / phase, 8)))
-                    for bitstring, coef in items
-                )
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    unique_wfns.append(wfn)
+                first = wfn[numpy.argmax(numpy.abs(wfn) > 1e-12)]
+                key = (numpy.round(wfn * abs(first) / first, 8) + 0j).tobytes()
+                unique_wfns.setdefault(key, wfn)
+            V = numpy.array(list(unique_wfns.values()))
+
+            # Remove what the sectors with another S2 already span: when the operations mix orbitals, seeds that
+            # are no spin eigenstates (e.g. open-shell determinants) project onto states of several sectors
+            kept = kept_wfns.get((irrep, ms_val, block))
+            if kept is not None:
+                V = V - (V @ kept.conj().T) @ kept
 
             # Orthonormalize within this sector (canonical / Löwdin-style), removing
             # linear dependencies with overlap eigenvalues below 1e-8
-            n = len(unique_wfns)
-            S = numpy.zeros((n, n), dtype=complex)
-            for i in range(n):
-                for j in range(i, n):
-                    val = unique_wfns[i].inner(unique_wfns[j])
-                    S[i, j] = val
-                    S[j, i] = numpy.conj(val)
+            S = V.conj() @ V.T
             S = 0.5 * (S + S.conj().T)
             eigvals, U = numpy.linalg.eigh(S)
+            keep = eigvals > 1e-8
+            orthonormal_wfns = (U[:, keep] / numpy.sqrt(eigvals[keep])).T @ V
+            orthonormal_wfns /= numpy.linalg.norm(orthonormal_wfns, axis=1)[:, None]
+            kept_wfns[(irrep, ms_val, block)] = (
+                orthonormal_wfns
+                if kept is None
+                else numpy.vstack([kept, orthonormal_wfns])
+            )
 
-            for a in numpy.flatnonzero(eigvals > 1e-8):
+            for vector in orthonormal_wfns:
                 new_wfn = tequila.QubitWaveFunction(n_qubits=n_qubits)
-                for coeff, old_wfn in zip(
-                    U[:, a] / numpy.sqrt(eigvals[a]), unique_wfns
+                for (a, b), c in zip(
+                    numpy.ndindex(len(strings[0]), len(strings[1])), vector
                 ):
-                    if abs(coeff) > 1e-14:
-                        new_wfn += coeff * old_wfn
+                    if abs(c) > 1e-14:
+                        # qubits 2 * i (up) and 2 * i + 1 (down) of each orbital
+                        bits = ["0"] * n_qubits
+                        for i in strings[0][a]:
+                            bits[2 * i] = "1"
+                        for j in strings[1][b]:
+                            bits[2 * j + 1] = "1"
+                        new_wfn[int("".join(bits), 2)] = c
 
                 result_objects.append(
                     FockSpaceState(
                         mol=self.mol,
-                        wavefunction=new_wfn.normalize(),
+                        wavefunction=new_wfn,
                         provider=irrep_provider,
                         irrep=irrep,
                         S2=s2_val,

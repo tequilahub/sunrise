@@ -26,15 +26,16 @@ class LocalizedIrrepProvider(IrrepProviderBase):
     """
     An irrep provider that determines the irreducible representation of a state by directly
     comparing the effect of the symmetry operations on the state to the character table.
-    This assumes orbitals that the symmetry operations map onto each other up to a sign,
-    e.g. the native orbitals of mol.use_native_orbitals() or hybrid orbitals.
+    The operations act on the orbitals of the molecule (see mol.mo_representation), which can be any orbitals
+    the operations map onto themselves as a set, e.g. canonical, native or hybrid orbitals. The characters
+    <psi|O|psi> are rounded to +/-1, so only states of one-dimensional irreps are labelled.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
         super().__init__(mol)
         self.pg = mol.point_group
-        # signed orbital permutations acting on the bitstrings, see mol.mo_permutation_representation
-        self._representation = mol.mo_permutation_representation()
+        # the operations as orbital transformations acting on the bitstrings, see mol.mo_representation
+        self._representation = mol.mo_representation()
 
     @property
     def representation(self) -> PointGroupRepresentation:

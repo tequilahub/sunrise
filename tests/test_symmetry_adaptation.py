@@ -1,3 +1,5 @@
+from collections import Counter
+
 import numpy as np
 import openfermion
 import pytest
@@ -105,8 +107,8 @@ def test_non_abelian_character_tables() -> None:
         )
 
 
-# Tests the operations of the non-Abelian groups on the native orbitals: the signed orbital permutations
-# decompose into the expected irreps (for CH4 the C 2s, 2p and the four H 1s orbitals)
+# Tests the operations of the non-Abelian groups on the native orbitals: the orbital transformations decompose
+# into the expected irreps (for CH4 the C 2s, 2p and the four H 1s orbitals, for NH3 the p orbitals of N mix under C3)
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 @pytest.mark.parametrize(
     "geometry, expected, expected_irreps",
@@ -138,22 +140,25 @@ def test_non_abelian_character_tables() -> None:
             "Oh",
             {"A1g": 1, "Eg": 1, "T1u": 1},
         ),
+        (
+            "N 0. 0. 0.12 \n H 0.94 0. -0.27 \n H -0.47 0.8140638796 -0.27 \n H -0.47 -0.8140638796 -0.27",
+            "C3v",
+            {"A1": 3, "E": 2},
+        ),
     ],
 )
-def test_orbital_permutations_non_abelian(geometry, expected, expected_irreps) -> None:
+def test_orbital_representation_non_abelian(
+    geometry, expected, expected_irreps
+) -> None:
     mol = sun.Molecule(
         geometry=geometry, basis_set="sto-3g", backend="pyscf"
     ).use_native_orbitals()
     assert mol.point_group.schoenflies_label == expected
 
-    operations = mol.mo_permutation_representation().operations
+    operations = mol.mo_representation().operations
     table = mol.point_group.character_table
-    # the character of an operation is the sum of the phases of the orbitals it keeps in place
-    characters = []
-    for op in table.operation_symbols:
-        perm, phases = operations[op]
-        characters.append(sum(phases[i] for i in range(mol.n_orbitals) if perm[i] == i))
-    characters = np.array(characters)
+    # the character of an operation is the trace of its orbital transformation
+    characters = np.array([np.trace(operations[op]) for op in table.operation_symbols])
     multiplicities = np.round(table.matrix @ characters / mol.point_group.order, 10)
     assert dict(zip(table.irreps, multiplicities)) == {
         irrep: expected_irreps.get(irrep, 0) for irrep in table.irreps
@@ -219,8 +224,10 @@ def test_point_group_special_molecules(
     mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf", **kwargs)
     assert mol.point_group.schoenflies_label == "D2h"
     assert mol.compute_orbital_irreps() == expected_orbital_irreps
-    perm, phases = mol.mo_permutation_representation().operations["i"]
-    assert len(perm) == len(phases) == mol.n_orbitals
+    assert mol.mo_representation().operations["i"].shape == (
+        mol.n_orbitals,
+        mol.n_orbitals,
+    )
 
 
 # Tests that the localized irreps work for every encoding and nature of the molecule
@@ -245,30 +252,28 @@ def test_localized_irreps_nature(nature, kwargs) -> None:
         assert state.irrep is not None
 
 
-# Statically tests the inversion of H4 (square) with D2h on the native orbitals
+# Statically tests the inversion of H4 (square) with D2h on the native orbitals: it swaps opposite atoms
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
-def test_orbital_permutations_correctness() -> None:
+def test_orbital_representation_correctness() -> None:
     mol = sun.Molecule(
         geometry="H 1. -1. 0. \n H 1. 1. 0. \n H -1. 1. 0. \n H -1. -1. 0.",
         basis_set="sto-3g",
         backend="pyscf",
     ).use_native_orbitals()
     mol.point_group = "D2h"
-    perm, phases = mol.mo_permutation_representation().operations["i"]
+    D = mol.mo_representation().operations["i"]
+    assert np.allclose(D, np.eye(4)[[2, 3, 0, 1]], atol=1e-10)
 
-    assert perm == [2, 3, 0, 1]
-    assert phases == [1.0, 1.0, 1.0, 1.0]
-
-    # the canonical orbitals of the square are adapted to the D2h with axes through the atoms
-    # (the diagonals here), the operations about x and y mix them and are no permutation
+    # the orbitals 1 and 2 of the canonical orbitals are a degenerate pair, which C4 mixes:
+    # an active space with only one of them is not mapped onto itself
     mol = sun.Molecule(
         geometry="H 1. -1. 0. \n H 1. 1. 0. \n H -1. 1. 0. \n H -1. -1. 0.",
         basis_set="sto-3g",
         backend="pyscf",
+        active_orbitals=[0, 1],
     )
-    mol.point_group = "D2h"
-    with pytest.raises(ValueError, match="does not map orbital"):
-        mol.mo_permutation_representation()
+    with pytest.raises(ValueError, match="out of the active space"):
+        mol.mo_representation()
 
 
 # Tests that orbital i is on the qubits 2*i (up) and 2*i+1 (down) of the states, as in the rest of sunrise
@@ -407,6 +412,35 @@ def test_SALC_symmetrization_correctness() -> None:
         assert any(
             state.wavefunction.isclose(expected) for expected in expected_wavefunctions
         )
+
+
+# Tests SALC symmetrization when the operations mix orbitals: C3 mixes the degenerate canonical orbitals of H3+,
+# and every SALC is kept by the projector of its irrep, (d / |G|) sum_g chi(g) g
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+def test_SALC_symmetrization_mixed_orbitals() -> None:
+    mol = sun.Molecule(
+        geometry="H 1. 0. 0. \n H -0.5 0.8660254038 0. \n H -0.5 -0.8660254038 0.",
+        basis_set="sto-3g",
+        backend="pyscf",
+        charge=1,
+    )
+    assert mol.point_group.schoenflies_label == "D3h"
+
+    states_list = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
+    procedure = SymmetryAdaptedLinearCombintationSymmetrization(mol)
+    symm_list = procedure.symmetrize(states_list)
+    assert len(symm_list) == len(states_list)
+    assert Counter(state.irrep for state in symm_list) == {"A1'": 2, "A2'": 3, "E'": 10}
+
+    table = mol.point_group.character_table
+    for state in symm_list:
+        characters = table.dict[state.irrep]
+        projected = tq.QubitWaveFunction(n_qubits=2 * mol.n_orbitals)
+        for D, character in zip(procedure.pgr.operations.values(), characters):
+            projected += (
+                characters[0] * character / mol.point_group.order
+            ) * procedure.pgr.apply(D, state.wavefunction)
+        assert np.isclose(state.wavefunction.inner(projected), 1.0)
 
 
 # Tests CG symmetrization: complete basis, pure spin states, and paper correctness
