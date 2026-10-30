@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from ctypes import ArgumentError
+
 import fqe
 import tequila as tq
+from fqe.hamiltonians.diagonal_coulomb import DiagonalCoulomb
+from fqe.hamiltonians.sparse_hamiltonian import SparseHamiltonian
 from tequila import QubitWaveFunction, TequilaException
 
 from sunrise.expval.fqe.fermionic_utils import *
@@ -22,6 +26,7 @@ class FQEBraKet:
         self.bra_extract_variables_names = None
         self.bra_original_obj = None
         self.bra_generator = None
+        self.fermion_operator = None
 
         ket = braket.ket
         bra = braket.bra
@@ -49,6 +54,7 @@ class FQEBraKet:
             self.h_fqe = fqe.get_hamiltonian_from_openfermion(
                 operator, norb=mol.n_orbitals
             )
+            self.fermion_operator = operator
         elif isinstance(operator, float):
             operator = openfermion.ops.FermionOperator(term=None, coefficient=operator)
             self.h_fqe = fqe.get_hamiltonian_from_openfermion(
@@ -165,7 +171,18 @@ class FQEBraKet:
         self.ket_time_evolved = ket_t
         self.bra_time_evolved = bra_t
         if self.h_fqe is not None:
-            result = fqe.expectationValue(wfn=ket_t, ops=self.h_fqe, brawfn=bra_t)
+            try:
+                result = fqe.expectationValue(wfn=ket_t, ops=self.h_fqe, brawfn=bra_t)
+            except ArgumentError:
+                # fqe crashes evaluating some DiagonalCoulomb operators (e.g. RDM elements n_p n_q), see
+                # https://github.com/quantumlib/OpenFermion-FQE/issues/142; as a SparseHamiltonian it works
+                if (
+                    not isinstance(self.h_fqe, DiagonalCoulomb)
+                    or self.fermion_operator is None
+                ):
+                    raise
+                self.h_fqe = SparseHamiltonian(self.fermion_operator)
+                result = fqe.expectationValue(wfn=ket_t, ops=self.h_fqe, brawfn=bra_t)
         else:
             result = fqe.dot(bra_t, ket_t)
         return result.real

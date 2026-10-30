@@ -319,14 +319,14 @@ class BravyiKitaevFast(EncodingBase):
 
 
 class TaperedBravyKitaev(EncodingBase):
-    _ucc_support = False
-
     """
     Uses OpenFermion::symmetry_conserving_bravyi_kitaev (tapered bravyi_kitaev_tree arxiv:1701.07072)
     Reduces Hamiltonian by 2 qubits
     See OpenFermion Documentation for more
     Does not work for UCC generators yet
     """
+
+    _ucc_support = False
 
     def __init__(
         self,
@@ -391,13 +391,13 @@ class TaperedBravyKitaev(EncodingBase):
 
 
 class TaperedBinary(EncodingBase):
-    _ucc_support = True
-
     """
     Uses OpenFermion::binary_code_transform (checksum code arxiv:1712.07067)
     Reduces Hamiltonian by 2 qubits
     See OpenFermion Documentation for more
     """
+
+    _ucc_support = True
 
     def __init__(
         self,
@@ -478,11 +478,11 @@ class TaperedBinary(EncodingBase):
         In case of upthendown, expected to be qubit_{n_orbital} free, otherwise please map it properly
         """
         U = QCircuit()
-        if self.spin_parity:  # since we now the spin parity
+        if self.spin_parity:  # since we know the spin parity
             U += X(2 * self.n_orbitals - 2) + X(2 * self.n_orbitals - 1)
         for i in range(
             self.n_orbitals - 1
-        ):  # we can tapper only one electron per \sigma, we need only to find the difference
+        ):  # we can taper only one electron per \sigma, we need only to find the difference
             U += CNOT(2 * i, 2 * self.n_orbitals - 2)
             U += CNOT(2 * i + 1, 2 * self.n_orbitals - 1)
         if self.up_then_down:
@@ -494,8 +494,8 @@ class TaperedBinary(EncodingBase):
 
     def hcb_to_me(self) -> QCircuit:
         """
-        The HCB term of the tappered orbital is not proyected out but should affect to the ExpValue since it is not
-        on the Hamiltonian
+        The HCB term of the tapered orbital is not projected out but should affect the ExpValue since it is not
+        in the Hamiltonian
         """
         U = QCircuit()
         for i in range(self.n_orbitals - 1):

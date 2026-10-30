@@ -227,10 +227,6 @@ class Psi4Mixin:
         psi4.core.clean_options()
         psi4.core.clean_variables()
 
-        psi4.core.clean()
-        psi4.core.clean_options()
-        psi4.core.clean_variables()
-
         ref_wfn = kwargs.pop("ref_wfn", None)
         if ref_wfn is not None and not isinstance(ref_wfn, psi4.core.Wavefunction):
             # psi4 prints the basis set it builds, to the output of the HF computation instead of stdout
@@ -652,7 +648,7 @@ class Psi4Mixin:
             return result
 
         c = numpy.fromfunction(
-            function=numpy.vectorize(func), shape=arr_shape, dtype=numpy.int
+            function=numpy.vectorize(func), shape=arr_shape, dtype=int
         )
 
         return numpy.extract(condition=c, arr=arr).reshape(final_shape)
@@ -699,7 +695,7 @@ class Psi4Mixin:
                 )
             else:
                 assert (
-                    self.integral_manager.trivial_active_space()
+                    self.integral_manager.active_space_is_trivial()
                 )  # only for closed-shell currently
                 return Amplitudes(
                     **{k: v.to_array() for k, v in all_amplitudes.items()}

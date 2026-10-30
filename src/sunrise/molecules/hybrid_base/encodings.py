@@ -217,7 +217,7 @@ class JordanWigner(EB):
             for i in range(self.n_orbitals)
             if self.select[i] == "B"
         ):
-            raise TequilaException("Incompatible state and encoding selection")
+            raise ValueError("Incompatible state and encoding selection")
         if type(self) is not JordanWigner:
             return EB.map_state(self, state)
         for i in range(len(state) // 2):
@@ -321,7 +321,7 @@ class JordanWigner(EB):
                 if select[i] in ["F", "B"]:
                     sel.update({i: select[i]})
                 else:
-                    TequilaException(
+                    raise ValueError(
                         f"Warning, encoding character not recognised on position {i}: {select[i]}.\n Please choose between F (Fermionic) and B (Bosonic)."
                     )
             return sel

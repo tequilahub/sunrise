@@ -18,7 +18,7 @@ from scipy.optimize import linear_sum_assignment
 from tequila import BitString, QTensor, TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
-from tequila.hamiltonian.paulis import Sm, Sp, Zero
+from tequila.hamiltonian.paulis import I, Sm, Sp, Z, Zero
 from tequila.objective.objective import ExpectationValue, Objective, Variable, Variables
 from tequila.simulators.simulator_api import simulate
 from tequila.utils import to_float
@@ -557,6 +557,28 @@ class QuantumChemistryBase:
         -------
 
         """
+
+        def make_hcb_exct_tapered(pair):
+            # the tapered orbital L is implicit (see make_hardcore_boson_hamiltonian): the pair only
+            # moves between k and L if the orbitals other than k and L hold one pair less than the reference
+            L = self.n_orbitals - 1
+            k = pair[0] if pair[1] == L else pair[1]
+            others = [self.transformation.up(i) for i in range(L) if i != k]
+            parity = (-1) ** (self.n_electrons // 2 - 1)
+            Qk = 0.5 + 0.5 * parity * (Z(others) if others else I())
+            uk = self.transformation.up(k)
+            G = Sp(uk) if pair[1] == L else Sm(uk)
+            G = (1.0j * (G - G.dagger()) * Qk).simplify()
+            p0 = (1.0 - Qk).simplify()
+            return gates.GeneralizedRotation(
+                angle=angle,
+                generator=G,
+                p0=p0,
+                # without other orbitals P0 vanishes (see make_excitation_gate)
+                assume_real=assume_real and len(p0) > 0,
+                control=control,
+            )
+
         U = QCircuit()
         target = []
         for pair in indices:
@@ -565,10 +587,7 @@ class QuantumChemistryBase:
                 "TAPEREDBINARY" in self.transformation.name.upper()
                 and self.n_orbitals - 1 in pair
             ):
-                p = [i for i in pair if i != self.n_orbitals - 1]
-                U += gates.Ry(
-                    angle=angle, target=p, assume_real=assume_real, control=control
-                )
+                U += make_hcb_exct_tapered(pair)
             else:
                 target += [
                     self.transformation.up(pair[0]),
@@ -745,6 +764,10 @@ class QuantumChemistryBase:
         p0 = self.make_excitation_generator(
             indices=indices, form="P0", remove_constant_term=control is None
         )
+        if len(p0) == 0:
+            # P0 vanishes if the generator has no zero eigenvalues, e.g. singles in tapered binary
+            # encodings with one explicit orbital per spin: use the shift rule that does not need it
+            assume_real = False
         if self.transformation.up_then_down:
             idx = []
             for pair in indices:
@@ -1754,6 +1777,30 @@ class QuantumChemistryBase:
         if condensed=False then JordanWigner would give back the Hamiltonian defined on even qubits between 0 to 2N
         """
 
+        def hcb_ham_tapered():
+            # the last orbital L is implicit: it holds a pair if the other orbitals hold one pair less
+            # than the reference, and the parity of their Z operators tells whether they do
+            L = n_orbitals - 1
+            parity = (-1) ** (self.n_electrons // 2 - 1)
+            nL = 0.5 + 0.5 * parity * (Z(list(range(L))) if L > 0 else I())
+            H = c + h[L, L] * nL
+            for p in range(L):
+                # the pair moves between p and L if the other orbitals hold one pair less than the reference
+                others = [i for i in range(L) if i != p]
+                Qp = 0.5 + 0.5 * parity * (Z(others) if others else I())
+                H += (h[p, L] * Sm(p) + h[L, p] * Sp(p)) * Qp
+                H += (g[p, L] + g[L, p]) * Sm(p) * Sp(p) * nL
+                for q in range(L):
+                    H += h[p, q] * Sm(p) * Sp(q)
+                    H += g[p, q] * Sm(p) * Sp(p) * Sm(q) * Sp(q)
+
+            if not self.transformation.up_then_down and not condensed:
+                alpha_map = {
+                    k.idx: self.transformation.up(k.idx) for k in self.orbitals
+                }
+                H = H.map_qubits(alpha_map)
+            return H
+
         # integrate with QubitEncoding at some point
         n_orbitals = self.n_orbitals
         c, obt, tbt = self.get_integrals()
@@ -1765,6 +1812,9 @@ class QuantumChemistryBase:
                 h[p, q] += +tbt.elems[p, p, q, q]
                 if p != q:
                     g[p, q] += 2 * tbt.elems[p, q, q, p] - tbt.elems[p, q, p, q]
+
+        if "TAPEREDBINARY" in self.transformation.name.upper():
+            return hcb_ham_tapered()
 
         H = c
         for p in range(n_orbitals):
@@ -2063,7 +2113,7 @@ class QuantumChemistryBase:
         ladder: if true the excitation pattern will be local. E.g. in the pair from orbitals (1,2,3) we will have the excitations 1->2 and 2->3, if set to false we will have standard coupled-cluster style excitations - in this case this would be 1->2 and 1->3
         """
 
-        def _make_spa_tappered(
+        def _make_spa_tapered(
             edges,
             hcb=False,
             use_units_of_pi=False,
@@ -2105,7 +2155,8 @@ class QuantumChemistryBase:
                         elif (i - 1 == 0) and (
                             q1 == self.transformation.up(self.n_orbitals - 1)
                         ):
-                            U += gates.Ry(angle=angle, target=c, control=None)
+                            # rotate the explicit orbital instead of L, with the angle convention of the other encodings
+                            U += gates.Ry(angle=-angle, target=c, control=None)
                         else:
                             U += gates.Ry(angle=angle, target=q1, control=c)
                         if q1 != self.transformation.up(self.n_orbitals - 1):
@@ -2164,7 +2215,7 @@ class QuantumChemistryBase:
 
         U = QCircuit()
         if "TAPEREDBINARY" in self.transformation.name.upper():
-            return _make_spa_tappered(
+            return _make_spa_tapered(
                 edges=edges,
                 hcb=hcb,
                 use_units_of_pi=use_units_of_pi,
@@ -2287,6 +2338,7 @@ class QuantumChemistryBase:
         self,
         include_reference: bool = True,
         name: str = "UpCCGSD",
+        indices: list[tuple[tuple[int]]] | None = None,
         label: str | None = None,
         order: int | None = None,
         assume_real: bool = True,
@@ -2331,10 +2383,8 @@ class QuantumChemistryBase:
 
         name = name.upper()
 
-        if ("A" in name) and neglect_z is None:
+        if "A" in name:
             neglect_z = True
-        else:
-            neglect_z = False
 
         if order is None:
             try:
@@ -2345,7 +2395,8 @@ class QuantumChemistryBase:
             except Exception:  # noqa: BLE001
                 order = 1
 
-        indices = self.make_upccgsd_indices(key=name)
+        if indices is None:
+            indices = self.make_upccgsd_indices(key=name)
 
         # check if the used qubit encoding has a hcb transformation
         have_hcb_trafo = True
@@ -2354,10 +2405,6 @@ class QuantumChemistryBase:
                 have_hcb_trafo = False
         except Exception:  # noqa: BLE001
             have_hcb_trafo = False
-        # in tapered encodings the HCB qubit of the tapered orbital is implicit (see make_spa_ansatz),
-        # but the HCB doubles excite into it, so the doubles are built from fermionic excitations instead
-        if "TAPEREDBINARY" in self.transformation.name.upper():
-            have_hcb_trafo = False
 
         # consistency checks for optimization
         if have_hcb_trafo and hcb_optimization is None and include_reference:
@@ -2365,10 +2412,6 @@ class QuantumChemistryBase:
         if "HCB" in name:
             hcb_optimization = True
         if hcb_optimization and not have_hcb_trafo and "HCB" not in name:
-            if "TAPEREDBINARY" in self.transformation.name.upper():
-                raise TequilaException(
-                    f"use_hcb={hcb_optimization} does not work with transformation={self.transformation.name}: the HCB doubles excite into the tapered orbital, which is implicit in this encoding"
-                )
             raise TequilaException(
                 f"use_hcb={hcb_optimization} but transformation={self.transformation} has no 'hcb_to_me' function. Try transformation='ReorderedJordanWigner'"
             )
@@ -2846,9 +2889,7 @@ class QuantumChemistryBase:
                 F[k, l] = tmp
         return F
 
-    def compute_mp2_amplitudes(
-        self, hf_energy=None, return_energy=False
-    ) -> ClosedShellAmplitudes:
+    def compute_mp2_amplitudes(self, return_energy=False) -> ClosedShellAmplitudes:
         """
 
         Compute closed-shell mp2 amplitudes (canonical amplitudes only)
@@ -3663,9 +3704,6 @@ class QuantumChemistryBase:
 
 
 def givens_matrix(n, p, q, theta):
-    """
-    Construct a complex Givens rotation matrix of dimension n by theta between rows/columns p and q.
-    """
     """
     Generates a Givens rotation matrix of size n x n to rotate by angle theta in the (p, q) plane. This matrix can be complex
 

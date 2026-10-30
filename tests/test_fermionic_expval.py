@@ -149,8 +149,6 @@ def test_mapped_variables(geom, backend):
     ],
 )
 def test_optimize_orbitals(geom, backend):
-    if backend == "fqe":
-        pytest.skip("Check https://github.com/quantumlib/OpenFermion-FQE/issues/142")
     snmol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="f", backend="pyscf")
     snmol, edges = snmol.use_CLPO_orbitals_and_edges()
     tqmol = sn.Molecule(

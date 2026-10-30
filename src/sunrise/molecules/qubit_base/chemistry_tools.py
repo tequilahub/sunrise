@@ -867,7 +867,7 @@ class Amplitudes:
             tIjAb=cs.tIjAb,
             tIA=cs.tIA,
             tiJaB=cs.tIjAb,
-            tia=cs.tIA,
+            tia=cs.tia,
             tijab=tijab,
             tIJAB=tijab,
         )
@@ -930,7 +930,7 @@ class Amplitudes:
             for (
                 (i, a),
                 value,
-            ) in numpy.ndenumerate(self.tIA):
+            ) in numpy.ndenumerate(self.tia):
                 if not numpy.isclose(value, 0.0, atol=threshold):
                     variables[(2 * (a + nocc) + 1, 2 * i + 1)] = value
 
