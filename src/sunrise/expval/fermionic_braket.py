@@ -232,7 +232,7 @@ def _grad_FermBraket(objective: FermBraketImpl, variable: Variable = None) -> Ob
             for shift, w in _SHIFTS:
                 Us = deepcopy(U)
                 Us.gates[i].variables = Us.gates[i].variables + shift
-                e = deepcopy(objective)
+                e = deepcopy(objective, {id(objective.molecule): objective.molecule})
                 if is_bra:
                     e.bra = Us
                 else:
