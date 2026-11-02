@@ -1930,6 +1930,7 @@ class QuantumChemistryBase:
         label=None,
         optimize=None,
         ladder=True,
+        check_edges=True,
     ):
         """
         Separable Pair Ansatz (SPA) for general molecules
@@ -1941,6 +1942,7 @@ class QuantumChemistryBase:
         label: label the variables in the circuit
         optimize: optimize the circuit construction (see article). Results in shallow circuit from Ry and CNOT gates
         ladder: if true the excitation pattern will be local. E.g. in the pair from orbitals (1,2,3) we will have the excitations 1->2 and 2->3, if set to false we will have standard coupled-cluster style excitations - in this case this would be 1->2 and 1->3
+        check_edges: default true. If False, the edges sanity is not checked. Take care.
         """
 
         def _make_spa_tapered(
@@ -2015,21 +2017,22 @@ class QuantumChemistryBase:
             raise TequilaException(
                 f"need even number of electrons for SPA ansatz.\n{self.n_electrons} active electrons"
             )
-        # making sure that enough edges are assigned
-        if len(edges) != self.n_electrons // 2:
-            raise TequilaException(
-                f"number of edges need to be equal to number of active electrons//2\n{len(edges)} edges given\n{self.n_electrons} active electrons\nfrozen core is {self.parameters.frozen_core}"
-            )
-        # making sure that orbitals are uniquely assigned to edges
-        for edge_qubits in edges:
-            for q1 in edge_qubits:
-                for edge2 in edges:
-                    if edge2 == edge_qubits:
-                        continue
-                    elif q1 in edge2:
-                        raise TequilaException(
-                            f"make_spa_ansatz: faulty list of edges, orbitals are overlapping e.g. orbital {q1} is in edge {edge_qubits} and edge {edge2}"
-                        )
+        if check_edges:
+            # making sure that enough edges are assigned
+            if len(edges) != self.n_electrons // 2:
+                raise TequilaException(
+                    f"number of edges need to be equal to number of active electrons//2\n{len(edges)} edges given\n{self.n_electrons} active electrons\nfrozen core is {self.parameters.frozen_core}"
+                )
+            # making sure that orbitals are uniquely assigned to edges
+            for edge_qubits in edges:
+                for q1 in edge_qubits:
+                    for edge2 in edges:
+                        if edge2 == edge_qubits:
+                            continue
+                        elif q1 in edge2:
+                            raise TequilaException(
+                                f"make_spa_ansatz: faulty list of edges, orbitals are overlapping e.g. orbital {q1} is in edge {edge_qubits} and edge {edge2}"
+                            )
 
         # auto assign if the circuit construction is optimized
         # depending on the current qubit encoding (if hcb_to_me is implemnented we can optimize)
