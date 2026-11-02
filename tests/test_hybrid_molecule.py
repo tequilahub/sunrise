@@ -266,6 +266,8 @@ def test_UCCSD_FER():
         ("TaperedBinary", {"select": "FFFB"}),
         ("TaperedBravyiKitaev", {"select": "FBFB"}),
         ("TaperedBravyiKitaev", {"select": "BFFB", "two_qubit": True}),
+        ("ReorderedTaperedBinary", {"select": "FBFB"}),
+        ("ReorderedTaperedBravyiKitaev", {"select": "BFFB", "condense": False}),
     ],
 )
 def test_encodings(transformation, encoding):

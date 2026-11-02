@@ -39,6 +39,12 @@ def known_encodings():
         "ReorderedBravyiKitaevTree": lambda **kwargs: BravyiKitaevTree(
             up_then_down=True, **kwargs
         ),
+        "ReorderedTaperedBinary": lambda **kwargs: TaperedBinary(
+            up_then_down=True, **kwargs
+        ),
+        "ReorderedTaperedBravyiKitaev": lambda **kwargs: TaperedBravyiKitaev(
+            up_then_down=True, **kwargs
+        ),
     }
     return {
         k.replace("_", "").replace("-", "").upper(): v for k, v in encodings.items()
@@ -230,7 +236,7 @@ class JordanWigner(EB):
             up = [state[2 * i] for i in range(self.n_orbitals)]
             down = [state[2 * i + 1] for i in range(self.n_orbitals)]
             if self.condense:
-                for i in self.select:
+                for i in [*self.select.keys()][::-1]:
                     if self.select[i] == "B":
                         down.pop(i)
             return up + down
@@ -456,20 +462,18 @@ class TaperedLinearEncoding(JordanWigner):
                 tuple((qubits[k], "Z") for k in numpy.flatnonzero(row))
             )
 
-        result = openfermion.QubitOperator()
+        projected = openfermion.QubitOperator()
         for term, coeff in qop.to_openfermion().terms.items():
             op = openfermion.QubitOperator((), coeff)
             for q, p in term:
                 op *= image(q, p)
-            result += op
-        # projection onto |0> of the tapered qubits: X and Y vanish, Z is the identity
-        projected = openfermion.QubitOperator()
-        for term, coeff in result.terms.items():
-            if any(q in tapered and p != "Z" for q, p in term):
-                continue
-            projected += openfermion.QubitOperator(
-                tuple((q, p) for q, p in term if q not in tapered), coeff
-            )
+            # projection onto |0> of the tapered qubits: X and Y vanish, Z is the identity
+            for term, coeff in op.terms.items():
+                if any(q in tapered and p != "Z" for q, p in term):
+                    continue
+                projected += openfermion.QubitOperator(
+                    tuple((q, p) for q, p in term if q not in tapered), coeff
+                )
         projected.compress()
         return QubitHamiltonian.from_openfermion(projected)
 
