@@ -1,3 +1,7 @@
+"""Fermionic backend ``"fqe"``: simulation with OpenFermion-FQE on number- and spin-conserving
+wavefunctions.
+"""
+
 from __future__ import annotations
 
 from ctypes import ArgumentError
@@ -15,6 +19,30 @@ from ..fermionic_braket import FermBraketImpl
 
 
 class FQEBraKet:
+    """Expectation value or transition element evaluated with the ``"fqe"`` backend.
+
+    Circuits are converted to products of fermionic excitation generators that
+    are applied by time evolution to an FQE wavefunction (Hartree-Fock unless the
+    circuit defines an initial state).
+
+    Parameters
+    ----------
+    braket : FermBraketImpl
+        Braket to evaluate. Its molecule is required.
+    *args, **kwargs
+        Ignored.
+
+    Raises
+    ------
+    TequilaException
+        If the operator is not "H"/"hamiltonian", "I"/"identity", a
+        FermionOperator or a float.
+
+    References
+    ----------
+    N. C. Rubin et al., Quantum 5, 568 (2021).
+    """
+
     def __init__(self, braket: FermBraketImpl, *args, **kwargs):
         self.ket_instructions = None
         self.ket_angles = None  # all variables including function objects
@@ -98,12 +126,22 @@ class FQEBraKet:
         self.bra_time_evolved = None
 
     def __call__(self, variables: dict | list | None = None, *args, **kwargs) -> float:
-        """
+        """Evaluate the braket for the given variable values.
 
-        :param variables: Variables to be used on the time evolution. Can be a list, dict or tequila.Variables object
-        :param args:
-        :param kwargs:
-        :return: Expectation value <bra|H|ket> or <ket|ket> if no Hamiltonian is provided
+        Parameters
+        ----------
+        variables : dict or list or Variables, optional
+            Values of the circuit variables used in the time evolution.
+
+        Returns
+        -------
+        float
+            ``<bra|H|ket>``, or ``<bra|ket>`` for the identity operator.
+
+        Raises
+        ------
+        TequilaException
+            If a variable value is missing.
         """
         if variables is None:
             variables = {}
@@ -188,33 +226,42 @@ class FQEBraKet:
         return result.real
 
     def print_ket(self):
+        """Print the initial ket wavefunction."""
         self.ket_wfn.print_wfn()
 
     def print_bra(self):
+        """Print the bra."""
         self.bra.print_wfn()
 
     def print_ket_time_evolved(self):
+        """Print the ket after the last evaluation."""
         self.ket_time_evolved.print_wfn()
 
     def print_bra_time_evolved(self):
+        """Print the bra after the last evaluation."""
         self.bra_time_evolved.print_wfn()
 
     def print_ket_generator(self):
+        """Print the excitation generators of the ket."""
         print(self.ket_generator)
 
     def print_bra_generator(self):
+        """Print the excitation generators of the bra."""
         if self.bra_instructions is not None:
             raise ValueError("No bra circuit provided")
         else:
             print(self.bra_generator)
 
     def extract_ket_variables(self):
+        """Return the unique variables of the ket."""
         return self.ket_extract_variables_names
 
     def extract_bra_variables(self):
+        """Return the unique variables of the bra."""
         return self.bra_extract_variables_names
 
     def extract_variables(self):
+        """Return the variables of ket and bra."""
         ket_v = self.extract_ket_variables()
 
         if self.bra_instructions is not None:
@@ -223,6 +270,7 @@ class FQEBraKet:
 
     @property
     def ket(self) -> FCircuit:
+        """FCircuit : circuit preparing the ket state. Setting it builds the excitation generators."""
         return self.ket_original_obj
 
     @ket.setter
@@ -240,6 +288,7 @@ class FQEBraKet:
 
     @property
     def bra(self) -> FCircuit:
+        """FCircuit : circuit preparing the bra state. Setting it builds the excitation generators."""
         return self.bra_original_obj
 
     @bra.setter
@@ -259,6 +308,7 @@ class FQEBraKet:
 
     @property
     def constant_dict_ket(self):
+        """dict : constants of the ket circuit."""
         return self._constant_dict_ket
 
     @constant_dict_ket.setter
@@ -267,9 +317,13 @@ class FQEBraKet:
 
     @property
     def U(self):
+        """FCircuit : the ket circuit. Needed by tequila Objectives."""
         return self.ket_original_obj
 
     def count_measurements(self) -> int:
+        """Return a cost measure of the braket: the dimension of the Hamiltonian, or 0 for the
+        identity.
+        """
         mes = 0
         if self.h_fqe is not None:
             mes = self.h_fqe.dim()
@@ -289,6 +343,7 @@ class FQEBraKet:
 
     @property
     def is_diagonal(self):
+        """bool : True if no separate bra is set, i.e. the braket is an expectation value."""
         return self.bra is None
 
 
@@ -300,6 +355,27 @@ def set_init_state(
     | QubitWaveFunction,
     bin_dict: dict,
 ) -> None:
+    """Set the initial state of an FQE wavefunction in place and normalize it.
+
+    Parameters
+    ----------
+    wfn : fqe.Wavefunction
+        Wavefunction to modify.
+    n_ele : int
+        Number of electrons.
+    n_orb : int
+        Number of spatial orbitals.
+    init_state : tuple of (str, float) or QubitWaveFunction or numpy.ndarray
+        Initial state, as (bitstring, coefficient) pairs, a wavefunction or a
+        coefficient array.
+    bin_dict : dict
+        Maps bitstrings to indices, see ``generate_of_binary_dict``.
+
+    Raises
+    ------
+    TequilaException
+        If the state has the wrong length or number of ones, or has an unknown type.
+    """
     coeff = wfn.get_coeff((n_ele, 0))
 
     if isinstance(init_state, tuple):
@@ -340,6 +416,17 @@ def set_init_state(
 
 
 def init_state_from_wavefunction(wvf: QubitWaveFunction, n_orb: int, bin_dict: dict):
+    """Return indices (via ``bin_dict``) and amplitudes of the non-negligible components of ``wvf``.
+
+    Parameters
+    ----------
+    wvf : QubitWaveFunction
+        Wavefunction to convert.
+    n_orb : int
+        Number of spatial orbitals; shorter bitstrings are padded.
+    bin_dict : dict
+        Map from bitstrings to FQE indices.
+    """
     indices = []
     values = []
     for idx, i in wvf.items():

@@ -1,5 +1,5 @@
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 
 import tequila as tq
 
@@ -9,7 +9,7 @@ import sunrise as sun
 geom_BeH2 = "H 0. 0. 0.\n Be 0. 0. 1.6\n H 0. 0. 3.2"
 snmol_BeH2 = sun.Molecule(geometry=geom_BeH2, basis_set="sto-3g", nature="f", units="a")
 
-random.seed(datetime.now().timestamp())
+random.seed(datetime.now(tz=timezone.utc).timestamp())
 snU = snmol_BeH2.make_ansatz("UpCCSD", spin_adapt_singles=False)
 
 # Plot with personalized gate styling

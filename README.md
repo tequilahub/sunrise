@@ -46,6 +46,25 @@ pip install git+https://github.com/tequilahub/sunrise.git
 pip install git+https://github.com/tequilahub/sunrise.git@devel
 ```
 
+# Modules
+Each module in [`src/sunrise`](src/sunrise) has a short README with an introduction, a code snippet and references.
+
+| Module | What it does |
+|---|---|
+| [molecules](src/sunrise/molecules) | `Molecule` object: qubit, fermionic and hybrid representations |
+| [fermionic_operations](src/sunrise/fermionic_operations) | fermionic gates and circuits (`FCircuit`) |
+| [expval](src/sunrise/expval) | expectation values, fermionic backends, orbital optimization |
+| [ADAPT](src/sunrise/ADAPT) | adaptive circuit construction (ADAPT-VQE) |
+| [CLPO](src/sunrise/CLPO) | chemically localized and hybrid atomic orbitals |
+| [graph_selection](src/sunrise/graph_selection) | choosing SPA edges |
+| [spafastprototype](src/sunrise/spafastprototype) | splits (HCB) expectation values into smaller pieces to speed up SPA |
+| [MCVBT](src/sunrise/MCVBT) | multi-configurational valence bond theory |
+| [measurement](src/sunrise/measurement) | optimized measurements with hard-core bosons |
+| [orbital_correlation](src/sunrise/orbital_correlation) | orbital entanglement and correlation measures |
+| [symmetry_adaptation](src/sunrise/symmetry_adaptation) | spin and point-group adapted states |
+| [graphical](src/sunrise/graphical) | circuit drawing |
+| [utils](src/sunrise/utils) | internal helpers |
+
 # Examples
 All the examples can be found in the folder [examples](examples/). \
 In the following we show the most relevant ones.
@@ -57,6 +76,9 @@ import sunrise as sun  # First time might take some seconds
 
 sun.show_supported_modules()
 ```
+### [spex](https://github.com/tequilahub/spex)
+Sparse fermionic simulator, installed together with sunrise (`spex-tequila`) and used by default.
+
 ### [FQE](https://github.com/quantumlib/OpenFermion-FQE)
 Install with:
 ```bash
@@ -67,7 +89,7 @@ The package's specified installation command is erroneous and deploys the prior 
 ```bash
 pip install git+https://github.com/davibinco/TenCirChem-NG.git
 ```
-Note that the link above is not the original repo but our own fork, fixing [this issue](https://github.com/tensorcircuit/TenCirChem-NG/pull/4) for parameter consistency with other backends. Furthermore, it has been extended to support excitations of more of 2 electrons. Furthermore, it has been customized to allow the phase gates action required to [sunrise/tequila gradient computation](https://arxiv.org/abs/2011.05938).
+Note that the link above is not the original repo but our own fork, fixing [this issue](https://github.com/tensorcircuit/TenCirChem-NG/pull/4) for parameter consistency with other backends. Furthermore, it has been extended to support excitations of more of 2 electrons. Furthermore, it has been customized to allow the phase gates action required to [sunrise/tequila gradient computation](https://doi.org/10.1039/D0SC06627C).
 
 ## Fermionic Circuit
 The FCircuit has been developed in order to preserve abstract fermionic layers. This circuit consists of two main parts, the `initial_state` and the circuit itself. The `initial_state` relies on a tequila `QubitWaveFunction`, whose states are checked to be particle conserving. It can be set through any way of creating a `tq.QubitWaveFunction`, either with a `FCircuit` or `QCircuit` with already mapped variables, or the options available in `QubitWaveFunction.convert_from()`. **It is important to take into account that both FQE and TCC work with `initial_states` in upthendown format, i.e., Reordered Jordan-Wigner, therefore we are keeping it here as mandatory**. In order to create the circuit itself, some gates have been already defined at sunrise.gates.

@@ -1,3 +1,5 @@
+"""Quantum chemistry base class: molecule data, orbitals, fermion-to-qubit mapping, Hamiltonians and ansatz circuits."""
+
 from __future__ import annotations
 
 import copy
@@ -61,11 +63,38 @@ OPTIMIZED_ORDERING = "Optimized"
 
 
 class QuantumChemistryBase:
-    """
-    Base Class for tequila chemistry functionality
-    This is what is initialized with sun.Molecule(...)
-    We try to define all main methods here and only implemented specializations in the derived classes
-    Derived classes interface specific backends (e.g. Psi4, PySCF and Madness). See PACKAGE_interface.py for more
+    """Base class of qubit molecules: integrals, orbitals and a fermion-to-qubit encoding.
+
+    This is what ``sunrise.Molecule(...)`` creates. Main methods (Hamiltonians, ansatz
+    circuits, orbital transformations, RDMs) are defined here, derived classes only
+    interface specific backends (e.g. Psi4, PySCF, MADNESS).
+
+    Parameters
+    ----------
+    parameters : ParametersQC
+        Molecular parameters (geometry, basis set, charge, ...).
+    transformation : str or callable, optional
+        Fermion-to-qubit encoding, e.g. "JordanWigner" or "BravyiKitaev". Default is
+        Jordan-Wigner. See ``known_encodings`` in encodings.py.
+    active_orbitals : list of int, optional
+        Active orbitals, all others are frozen. The first ``N//2`` orbitals are
+        treated as occupied when the active space is created.
+    frozen_orbitals : list of int, optional
+        Orbitals removed from the active orbitals.
+    orbital_type : str, optional
+        Type of the orbitals, e.g. "native". Default is "unknown".
+    reference_orbitals : list of int, optional
+        Orbitals considered occupied when the active space is created, as total
+        indices (frozen orbitals included). Default is the first ``N//2``.
+    orbitals : list or dict, optional
+        Orbital information in OrbitalData format.
+    *args, **kwargs
+        Passed on to ``initialize_integral_manager``. For the base class
+        ``one_body_integrals``, ``two_body_integrals`` and optionally
+        ``nuclear_repulsion`` are required. Keys starting with ``transformation__``
+        are passed to the encoding.
+        Also ``n_electrons`` (overrides the number from ``parameters``), ``point_group`` and
+        ``integral_manager`` (an existing integral manager to reuse).
     """
 
     def __init__(
@@ -80,18 +109,7 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
-        """
-        Parameters
-        ----------
-        parameters: the quantum chemistry parameters handed over as instance of the ParametersQC class (see there for content)
-        transformation: the fermion to qubit transformation (default is JordanWigner). See encodings.py for supported encodings or to extend
-        active_orbitals: list of active orbitals (others will be frozen, if we have N-electrons then the first N//2 orbitals will be considered occpied when creating the active space)
-        frozen_orbitals: convenience (will be removed from list of active orbitals)
-        reference_orbitals: give list of orbitals that shall be considered occupied when creating a possible active space (default is the first N//2). The indices are expected to be total indices (including possible frozen orbitals in the counting)
-        orbitals: information about the orbitals (should be in OrbitalData format, can be a dictionary)
-        args
-        kwargs
-        """
+        """See the class docstring."""
 
         self.parameters = parameters
         n_electrons = parameters.total_n_electrons
@@ -151,6 +169,23 @@ class QuantumChemistryBase:
 
     @classmethod
     def from_tequila(cls, molecule, transformation=None, *args, **kwargs):
+        """Create a qubit molecule from another molecule, reusing its integrals and orbitals.
+
+        Parameters
+        ----------
+        molecule : QuantumChemistryBase
+            Molecule to copy the data from.
+        transformation : str or callable, optional
+            Default is the transformation of ``molecule``.
+        **kwargs
+            Passed on to the constructor, e.g. ``active_orbitals`` (default is the
+            active orbitals of ``molecule``).
+
+        Returns
+        -------
+        QuantumChemistryBase
+            New molecule (frozen core is switched off in its parameters).
+        """
         c = molecule.integral_manager.constant_term
         h1 = molecule.integral_manager.one_body_integrals
         h2 = molecule.integral_manager.two_body_integrals
@@ -182,16 +217,26 @@ class QuantumChemistryBase:
         )
 
     def save(self, filename: str):
-        """
-        Save the molecule in an HDF5 file without pickle, so it can be opened from any sunrise installation
-        with sun.load_molecule. Like the pyscf chkfile only plain data is stored: the parameters, the integrals
-        in the basis, the orbitals, the active space, the transformation, the settings of the molecule nature
-        and the data of the backend (e.g. the psi4 reference wavefunction, see _backend_data)
+        """Save the molecule to an HDF5 file without pickle.
+
+        Like a PySCF chkfile, only plain data is stored: parameters, integrals in the basis,
+        orbitals, active space, transformation, the settings of the molecule nature and the
+        backend data (e.g. the Psi4 reference wavefunction, see ``_backend_data``). So the file
+        can be opened from any sunrise installation with ``sunrise.load_molecule``.
 
         Parameters
         ----------
-        filename
-            the HDF5 file
+        filename : str
+            Name of the HDF5 file.
+
+        See Also
+        --------
+        sunrise.load_molecule : Load the saved molecule.
+
+        Examples
+        --------
+        >>> mol.save("molecule.h5")  # doctest: +SKIP
+        >>> mol = sun.load_molecule("molecule.h5")  # doctest: +SKIP
         """
         from sunrise.molecules import NATURE_BACKENDS
 
@@ -296,37 +341,27 @@ class QuantumChemistryBase:
             f["orbital_coefficients"] = manager.orbital_coefficients
 
     def _backend_data(self) -> dict | None:
-        """
-        Data of the quantum chemistry backend that mol.save stores, so sun.load_molecule can rebuild the molecule
-        in its backend instead of the base one. It is given back as keyword arguments on init
-        Nested dictionaries, lists, tuples and numpy arrays are allowed (see to_json_data)
+        """Return the backend data that ``save`` stores, so ``load_molecule`` can rebuild the molecule in its backend.
+
+        The data is given back as keyword arguments to the backend's ``__init__``. Nested
+        dictionaries, lists, tuples and numpy arrays are allowed (see ``to_json_data``).
 
         Returns
         -------
-            None if the backend has no data of its own, then the molecule is loaded with the base backend
-            (unless the backend is rebuilt from the integrals alone, like pyscf)
+        dict or None
+            None if the backend has no data of its own: the molecule is then loaded with the base
+            backend, unless the backend can be rebuilt from the integrals alone (like PySCF).
         """
         return None
 
     def supports_ucc(self):
-        """
-        check if the current molecule supports UCC operations
-        (e.g. mol.make_excitation_gate)
-        """
+        """Return True if the encoding supports UCC-type operations (e.g. ``make_excitation_gate``)."""
         return self.transformation.supports_ucc
 
     def _initialize_transformation(self, transformation=None, *args, **kwargs):
-        """
-        Helper Function to initialize the Fermion-to-Qubit Transformation
-        Parameters
-        ----------
-        transformation: name of the transformation (passed down from __init__
-        args
-        kwargs
+        """Return the encoding object from its name (or the callable unchanged).
 
-        Returns
-        -------
-
+        Keyword arguments starting with ``transformation__`` are passed to the encoding.
         """
 
         if transformation is None:
@@ -363,16 +398,21 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
-        """
-        Initialize direclty from openfermion MolecularData object
+        """Create a molecule from an openfermion ``MolecularData`` object.
 
         Parameters
         ----------
-        molecule
-            The openfermion molecule
+        molecule : openfermion.MolecularData
+            The openfermion molecule.
+        transformation : str or callable, optional
+            Fermion-to-qubit encoding.
+        **kwargs
+            Passed on to the constructor.
+
         Returns
         -------
-            The Tequila molecule
+        QuantumChemistryBase
+            The molecule.
         """
         geometry = molecule.geometry
         if not isinstance(geometry, str):
@@ -403,29 +443,32 @@ class QuantumChemistryBase:
         form: str | None = None,
         remove_constant_term: bool = True,
     ) -> QubitHamiltonian:
-        """
-        Notes
-        ----------
-        Creates the transformed hermitian generator of UCC type unitaries:
-              M(a^\\dagger_{a_0} a_{i_0} a^\\dagger{a_1}a_{i_1} ... - h.c.)
-              where the qubit map M depends is self.transformation
+        r"""Return the generator of a UCC-type excitation as qubit operator.
+
+        The generator is :math:`M(a^\dagger_{a_0} a_{i_0} a^\dagger_{a_1} a_{i_1} \dots - h.c.)`
+        (times :math:`i`), where the qubit map :math:`M` is given by the transformation.
 
         Parameters
         ----------
-        indices : typing.Iterable[typing.Tuple[int, int]] :
-            List of tuples [(i_0, a_0), (i_1, a_1), ... ], each pair destroys i and creates a - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
-            can also be given as one big list: [i_0, a_0, i_1, a_1 ...]
-        form : str : (Default value None):
-            Manipulate the generator to involution or projector
-            set form='involution' or 'projector'
-            the default is no manipulation which gives the standard fermionic excitation operator back
-        remove_constant_term: bool: (Default value True):
-            by default the constant term in the qubit operator is removed since it has no effect on the unitary it generates
-            if the unitary is controlled this might not be true!
+        indices : iterable of tuple of int
+            Pairs ``[(i_0, a_0), (i_1, a_1), ...]``, each pair destroys ``i`` and creates
+            ``a``, in spin orbital notation. Can also be given as flat list
+            ``[i_0, a_0, i_1, a_1, ...]``.
+        form : str {"involution", "projector"}, optional
+            "involution" or "projector" to manipulate the generator. Default is the
+            standard fermionic excitation operator.
+        remove_constant_term : bool, optional
+            Remove the constant term, which does not change the generated unitary unless
+            it is controlled. Default is True.
+
         Returns
         -------
-        type
-            1j*Transformed qubit excitation operator, depends on self.transformation
+        QubitHamiltonian
+            Transformed qubit excitation operator.
+
+        Examples
+        --------
+        >>> G = mol.make_excitation_generator(indices=[(0, 2), (1, 3)])
         """
 
         if not self.supports_ucc():
@@ -541,21 +584,27 @@ class QuantumChemistryBase:
     def make_hardcore_boson_excitation_gate(
         self, indices, angle, control=None, assume_real=True, compile_options="optimize"
     ):
-        """
-        Make excitation generator in the hardcore-boson approximation (all electrons are forced to spin-pairs)
-        use only in combination with make_hardcore_boson_hamiltonian()
+        """Return an excitation gate in the hard-core boson (HCB) approximation (electrons forced
+        into spin pairs).
+
+        Use only together with ``make_hardcore_boson_hamiltonian``.
 
         Parameters
         ----------
-        indices
-        angle
-        control
-        assume_real
-        compile_options
+        indices : list of tuple of int
+            Pairs of spatial orbitals, each pair destroys the first and creates the second.
+        angle : float, hashable or tq.Objective
+            Rotation angle.
+        control : int or list of int, optional
+            Control qubits.
+        assume_real : bool, optional
+            Assume the wavefunction stays real (halves gradient costs). Default is True.
+        compile_options : str, optional
+            Passed to the excitation gate. Default is "optimize".
 
         Returns
         -------
-
+        tq.QCircuit
         """
 
         def make_hcb_exct_tapered(pair):
@@ -622,24 +671,32 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
-        """
-        Convenience function for orbital rotation circuit (rotating spatial orbital i and j) with standard naming of variables
-        See arXiv:2207.12421 Eq.6 for UR(0,1)
-        Parameters:
+        """Return the orbital rotation circuit between spatial orbitals ``i`` and ``j``.
+
+        Variables are named automatically, see ``angle`` and ``label``. See arXiv:2207.12421 (Quantum 7, 1073 (2023))
+        Eq. 6 for ``UR(0, 1)``.
+
+        Parameters
         ----------
-            indices:
-                two spatial(!) orbital indices i and j, a positive angle moves electrons from i to j
-            angle:
-                Numeric or hashable type or tequila objective. Default is None and results
-                in automatic naming as ("R",i,j)
-            label:
-                can be passed instead of angle to have auto-naming with label ("R",i,j,label)
-                useful for repreating gates with individual variables
-            control:
-                List of possible control qubits
-            assume_real:
-                Assume that the wavefunction will always stay real.
-                Will reduce potential gradient costs by a factor of 2
+        i, j : int
+            Spatial (not spin) orbital indices. A positive angle moves electrons from ``i`` to ``j``.
+        angle : float, hashable or tq.Objective, optional
+            Rotation angle. Default is the variable ``("R", i, j)`` (times pi).
+        label : hashable, optional
+            Gives the variable the name ``("R", i, j, label)``, useful for repeated gates
+            with individual variables. Ignored if ``angle`` is given.
+        control : int or list of int, optional
+            Control qubits.
+        assume_real : bool, optional
+            Assume the wavefunction stays real (halves gradient costs). Default is True.
+
+        Returns
+        -------
+        tq.QCircuit
+
+        Examples
+        --------
+        >>> U = mol.UR(0, 1, angle="a") + mol.UR(2, 3, angle="a")
         """
         if angle is None:
             if label is None:
@@ -676,25 +733,32 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
-        """
-        Convenience function for orbital correlator circuit (correlating spatial orbital i and j through a spin-paired double excitation) with standard naming of variables
-        See arXiv:2207.12421 Eq.22 for UC(1,2)
+        """Return the orbital correlator circuit between spatial orbitals ``i`` and ``j``.
 
-        Parameters:
+        It correlates the two orbitals through a spin-paired double excitation. See
+        arXiv:2207.12421 (Quantum 7, 1073 (2023)) Eq. 22 for ``UC(1, 2)``.
+
+        Parameters
         ----------
-            indices:
-                two spatial(!) orbital indices i and j, a positive angle moves electrons from i to j
-            angle:
-                Numeric or hashable type or tequila objective. Default is None and results
-                in automatic naming as ("R",i,j)
-            label:
-                can be passed instead of angle to have auto-naming with label ("R",i,j,label)
-                useful for repreating gates with individual variables
-            control:
-                List of possible control qubits
-            assume_real:
-                Assume that the wavefunction will always stay real.
-                Will reduce potential gradient costs by a factor of 2
+        i, j : int
+            Spatial (not spin) orbital indices. A positive angle moves electrons from ``i`` to ``j``.
+        angle : float, hashable or tq.Objective, optional
+            Rotation angle. Default is the variable ``("C", i, j)`` (times pi).
+        label : hashable, optional
+            Gives the variable the name ``("C", i, j, label)``, useful for repeated gates
+            with individual variables. Ignored if ``angle`` is given.
+        control : int or list of int, optional
+            Control qubits.
+        assume_real : bool, optional
+            Assume the wavefunction stays real (halves gradient costs). Default is True.
+
+        Returns
+        -------
+        tq.QCircuit
+
+        Examples
+        --------
+        >>> U = mol.UC(1, 2, angle="b")
         """
         if angle is None:
             if label is None:
@@ -726,31 +790,43 @@ class QuantumChemistryBase:
 
     def make_orbital_rotation_gate(self, indices: tuple, *args, **kwargs):
         # backward compatibility
+        """Alias of ``UR(indices[0], indices[1], ...)`` kept for backward compatibility."""
         return self.UR(indices[0], indices[1], *args, **kwargs)
 
     def make_excitation_gate(
         self, indices, angle, control=None, assume_real=True, **kwargs
     ):
-        """
-        Initialize a fermionic excitation gate defined as
+        r"""Return a fermionic excitation gate ``exp(-i a/2 G)``.
 
-        .. math::
-            e^{-i\\frac{a}{2} G}
-        with generator defines by the indices [(p0,q0),(p1,q1),...]
-        .. math::
-            G = i(\\prod_{k} a_{q_k}^\\dagger a_{p_k} - h.c.)
+        The gate is :math:`e^{-i\frac{a}{2} G}` with generator
+        :math:`G = i(\prod_{k} a_{q_k}^\dagger a_{p_k} - h.c.)` defined by the indices
+        ``[(p0, q0), (p1, q1), ...]``.
 
         Parameters
         ----------
-            indices:
-                List of tuples that define the generator, (p, q) destroys p and creates q
-            angle:
-                Numeric or hashable type or tequila objective
-            control:
-                List of possible control qubits
-            assume_real:
-                Assume that the wavefunction will always stay real.
-                Will reduce potential gradient costs by a factor of 2
+        indices : list of tuple of int
+            Pairs ``(p, q)``, each destroys ``p`` and creates ``q`` (spin orbitals).
+        angle : float, hashable or tq.Objective
+            Rotation angle.
+        control : int or list of int, optional
+            Control qubits.
+        assume_real : bool, optional
+            Assume the wavefunction stays real (halves gradient costs). Default is True.
+            Ignored if the generator has no zero eigenvalues (e.g. singles in tapered binary
+            encodings with one explicit orbital per spin).
+
+        Returns
+        -------
+        tq.QCircuit
+
+        Raises
+        ------
+        TequilaException
+            If the transformation does not support UCC operations.
+
+        Examples
+        --------
+        >>> U = mol.make_excitation_gate(indices=[(0, 4), (1, 5)], angle="a")  # pair excitation
         """
 
         if not self.supports_ucc():
@@ -793,21 +869,13 @@ class QuantumChemistryBase:
         )
 
     def make_molecule(self, *args, **kwargs) -> MolecularData:
-        """Creates a molecule in openfermion format by running psi4 and extracting the data
-        Will check for previous outputfiles before running
-        Will not recompute if a file was found
+        """Return the molecule in openfermion MolecularData format.
 
-        Parameters
-        ----------
-        parameters :
-            An instance of ParametersQC, which also holds an instance of ParametersPsi4 via parameters.psi4
-            The molecule will be saved in parameters.filename, if this file exists before the call the molecule will be imported from the file
+        The data is computed by ``do_make_molecule``, which backends implement.
 
         Returns
         -------
-        type
-            the molecule in openfermion.MolecularData format
-
+        openfermion.MolecularData
         """
         molecule = MolecularData(**self.parameters.molecular_data_param)
 
@@ -827,17 +895,12 @@ class QuantumChemistryBase:
         return molecule
 
     def initialize_integral_manager(self, *args, **kwargs):
-        """
-        Called by self.__init__() with args and kwargs passed through
-        Override this in derived class such that it returns an intitialized instance of the integral manager
+        """Return the integral manager, called by ``__init__`` with its arguments passed through.
 
-        In the BaseClass it is required to pass the following with kwargs on init:
-        - one_body_integrals as matrix
-        - two_body_integrals as NBTensor of numpy.ndarray (four indices, openfermion ordering)
-        - nuclear_repulsion (constant part of hamiltonian - optional)
-
-        Method sets:
-        - result of self.get_integrals()
+        Override this in derived classes. The base class requires the keyword arguments
+        ``one_body_integrals`` (matrix), ``two_body_integrals`` (NBodyTensor or
+        numpy.ndarray with four indices, openfermion ordering) and optionally
+        ``nuclear_repulsion`` (constant part of the Hamiltonian).
         """
 
         n_electrons = self.parameters.total_n_electrons
@@ -912,18 +975,25 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
-        """
+        """Return a new molecule with transformed orbitals.
+
         Parameters
         ----------
-        orbital_coefficients: second index is new orbital indes, first is old orbital index (summed over), indices are assumed to be defined on the active space
-        ignore_active_space: if true orbital_coefficients are not assumed to be given in the active space
-        name: str, name the new orbitals
-        args
-        kwargs
+        orbital_coefficients : numpy.ndarray
+            Transformation matrix, first index is the old orbital (summed over), second
+            the new one. By default defined on the active space.
+        ignore_active_space : bool, optional
+            If True the matrix is not assumed to be given on the active space only.
+        name : str, optional
+            Name of the new orbitals.
 
         Returns
         -------
-        New molecule with transformed orbitals
+        QuantumChemistryBase
+
+        Examples
+        --------
+        >>> mol = mol.transform_orbitals(C, ignore_active_space=True)  # C: new orbital coefficients
         """
 
         U = numpy.eye(self.integral_manager.orbital_coefficients.shape[0])
@@ -948,10 +1018,19 @@ class QuantumChemistryBase:
         return result
 
     def rotate_molecule(self, U, angles: dict | None = None):
-        """
-        U: a FCircuit with ONLY UR gates
-        angles: dictionary to map the circuit variables in case they are not mapped yet
-        Output: rotated molecule
+        """Return the molecule rotated by a circuit of orbital rotations.
+
+        Parameters
+        ----------
+        U : FCircuit
+            Circuit with only ``UR`` gates.
+        angles : dict, optional
+            Maps the circuit variables to values if they are not mapped yet.
+
+        Returns
+        -------
+        QuantumChemistryBase
+            Rotated molecule.
         """
         U = U.to_udud(norb=self.n_orbitals)
         if angles is not None:
@@ -991,34 +1070,43 @@ class QuantumChemistryBase:
 
     def orthonormalize_basis_orbitals(self):
         # backward compatibility
+        """Alias of ``use_native_orbitals`` kept for backward compatibility."""
         return self.use_native_orbitals()
 
     def use_native_orbitals(
         self, inplace=False, core: list | None = None, *args, **kwargs
     ):
-        """
+        """Return the molecule in the native (orthonormalized atomic) orbital basis.
+
+        For standard basis sets these are orthonormalized Gaussian basis functions.
+
         Parameters
         ----------
-            inplace:
-                update current molecule or return a new instance
-            core:
-                list of core orbital indices (optional) — orbitals will be frozen and treated as doubly occupied. The orbitals correspond to
-                the currently used orbitals of the molecule (default is usually canonical HF), see mol.print_basis_info() if unsure. Providing core
-                orbitals is optional; the default is inherited from the active space set in self.integral_manager. If core is provided, the
-                corresponding active native orbitals will be chosen based on their overlap with the core orbitals.
-            active(in kwargs):
-                list the active orbital indices (optional, in kwargs) - on the Native Orbital schema. Default: All orbitals, if core (see above) is provided,
-                then the default is to automatically select the active orbitals based on their overlap with the provided core orbitals (selectint the N-|core|
-                orbitals that have smallest overlap with coree).
-                As an example, Assume the input geometry was H, He, H. active=[0,1,2] is selecting the (orthonormalized) atomic 1s (left H), 1s (He), 1s (right H).
-                If core=[0] and active is not set, then active=[0,2] will be selected automatically (as the 1s He atomic orbital will have the largest overlap
-                with the lowest energy HF orbital).
-            reference_orbitals(in kwargs):
-                list of orbitals doubly occupied orbitals. Must be of len equal to number total electrons//2. Relevant for desired mol.n_electrons in active spaces.
+        inplace : bool, optional
+            Update the current molecule instead of returning a new one. Default is False.
+        core : list of int, optional
+            Core orbitals (frozen, doubly occupied), given in the currently used orbitals
+            of the molecule (see ``print_basis_info``). Default is inherited from the
+            active space of the integral manager. If given, the active native orbitals
+            are chosen by their smallest overlap with the core orbitals.
+        active : list of int, optional
+            Keyword argument. Active orbitals in the native orbital basis. Default is all
+            orbitals, or the ``N-len(core)`` orbitals with smallest overlap with ``core``
+            if ``core`` is given. For H, He, H, ``active=[0, 1, 2]`` selects the three
+            atomic 1s orbitals; with ``core=[0]`` and no ``active``, ``active=[0, 2]`` is
+            selected, since the He 1s orbital overlaps most with the lowest HF orbital.
+        reference_orbitals : list of int, optional
+            Keyword argument. Doubly occupied orbitals, ``N//2`` entries (N = total
+            number of electrons). Sets the number of electrons in the active space.
+
         Returns
         -------
-        New molecule in the native (orthonormalized) basis given
-        e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
+        QuantumChemistryBase
+            Molecule in the native basis.
+
+        Examples
+        --------
+        >>> mol = sun.Molecule(geometry=geometry, basis_set="sto-3g").use_native_orbitals()
         """
         from sunrise.utils.orbital_transformation import (
             get_active,
@@ -1128,6 +1216,7 @@ class QuantumChemistryBase:
             return result
 
     def get_xyz(self) -> str:
+        """Return the geometry as a string in xyz format."""
         geom = self.parameters.get_geometry()
         f = ""
         f += f"{len(geom)}\n"
@@ -1137,8 +1226,24 @@ class QuantumChemistryBase:
         return f
 
     def get_spa_edges(self, use_active: bool = True, **kwargs):
-        """
-        Generates SPA edges using the pure Python JANPA CLPO algorithm.
+        """Return the SPA edges determined by the pure Python JANPA CLPO algorithm.
+
+        Parameters
+        ----------
+        use_active : bool, optional
+            Restrict to the active space. Default is True.
+        **kwargs
+            Passed on to ``generate_CLPO_molecule_edges``.
+
+        Returns
+        -------
+        list
+            List of edges (pairs of orbitals).
+
+        Examples
+        --------
+        >>> edges = mol.get_spa_edges()
+        >>> U = mol.make_spa_ansatz(edges=edges)
         """
         from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
 
@@ -1150,10 +1255,23 @@ class QuantumChemistryBase:
     def use_HAO_orbitals(
         self, use_active: bool = True, inplace: bool = False, *args, **kwargs
     ):
-        """
-        Transforms the molecule to use Hybrid Atomic Orbitals (HAO) computed by the pure Python JANPA pipeline.
-        Note: `sp_list` is ignored because JANPA automatically determines the optimal hybridization
-        directly from the 3D molecular geometry.
+        """Return the molecule in Hybrid Atomic Orbitals (HAO) from the pure Python JANPA pipeline.
+
+        JANPA determines the hybridization from the 3D geometry, so ``sp_list`` is ignored.
+
+        Parameters
+        ----------
+        use_active : bool, optional
+            Restrict to the active space. Default is True.
+        inplace : bool, optional
+            Update the current molecule instead of returning a new one. Default is False.
+        **kwargs
+            Passed on to ``generate_HAO_molecule``.
+
+        Returns
+        -------
+        QuantumChemistryBase
+            Molecule in the HAO basis.
         """
         from sunrise.CLPO.orbital_transformation import generate_HAO_molecule
 
@@ -1183,19 +1301,24 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
-        """
-        Transforms the molecule to use Chemist's Localized Property-optimized Orbitals (CLPO) computed by the
-        pure Python JANPA pipeline.
-        Note: `core` is ignored because JANPA determines the orbitals directly from the 3D molecular geometry.
+        """Return the molecule in Chemist's Localized Property-optimized Orbitals (CLPO).
+
+        The orbitals come from the pure Python JANPA pipeline, which uses the 3D
+        geometry, so ``core`` is ignored.
 
         Parameters
         ----------
-        inplace: update current molecule or return a new instance
-        edges: list of edges the CLPO algorithm is restricted to. If not given, they are determined by JANPA
+        use_active : bool, optional
+            Restrict to the active space. Default is True.
+        inplace : bool, optional
+            Update the current molecule instead of returning a new one. Default is False.
+        edges : list, optional
+            Edges the CLPO algorithm is restricted to. Default is determined by JANPA.
 
         Returns
         -------
-        New molecule in the CLPO basis
+        QuantumChemistryBase
+            Molecule in the CLPO basis.
         """
         clpo_mol, _ = self.use_CLPO_orbitals_and_edges(
             *args, use_active=use_active, inplace=inplace, edges=edges, **kwargs
@@ -1210,13 +1333,28 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
-        """
-        Same as `use_CLPO_orbitals`, but the SPA edges determined by the same CLPO run are returned along
-        with the molecule, so that the JANPA pipeline is only executed once.
+        """Return the CLPO molecule together with its SPA edges.
+
+        Same as ``use_CLPO_orbitals``, but the edges found by the same run are returned
+        too, so JANPA is executed only once.
+
+        Parameters
+        ----------
+        use_active : bool, optional
+            Keep the active space of the molecule (the CLPOs are rotated into it). Default is True.
+        inplace : bool, optional
+            Change this molecule instead of returning a new one. Default is False.
+        edges : list of tuple of int, optional
+            Custom edges; by default they are taken from the CLPO bonds.
 
         Returns
         -------
-        Tuple of the molecule in the CLPO basis and the corresponding list of SPA edges
+        tuple
+            Molecule in the CLPO basis and the list of SPA edges.
+
+        Examples
+        --------
+        >>> mol, edges = mol.use_CLPO_orbitals_and_edges()  # doctest: +SKIP
         """
         from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
 
@@ -1240,8 +1378,7 @@ class QuantumChemistryBase:
 
     @property
     def point_group(self):
-        """
-        The point group of the molecule. If it is not given with the point_group keyword, it is detected from the
+        """The point group of the molecule. If it is not given with the point_group keyword, it is detected from the
         geometry as the largest point group defined in sunrise: the full point group if it is D4h, D6h, D8h or Td,
         the largest Abelian subgroup otherwise. The quantum chemistry backends compute in abelian_point_group.
         It can be set with a PointGroup or its Schoenflies label, e.g. to work in a subgroup.
@@ -1278,9 +1415,9 @@ class QuantumChemistryBase:
 
     @property
     def abelian_point_group(self):
-        """
-        The point group if it is Abelian, its largest Abelian subgroup otherwise (e.g. D2h for D4h and D6h).
-        PySCF can only label the orbitals in Abelian groups.
+        """Return the point group if it is Abelian, else its largest Abelian subgroup (e.g. D2h for D4h and D6h).
+
+        PySCF can only label orbitals in Abelian groups.
         """
         if self.point_group.schoenflies_label in pyscf.symm.param.CHARACTER_TABLE:
             return self.point_group
@@ -1294,19 +1431,22 @@ class QuantumChemistryBase:
         return PointGroup.from_pyscf(pyscf_mol.groupname)
 
     def atomic_permutation_representation(self):
-        """
-        Builds the representation of the point group where the symmetry operations are
-        represented as permutation matrices and the states are vectors where each
-        component represents an atom of the molecule.
+        """Return the point group representation that permutes the atoms.
+
+        The symmetry operations are permutation matrices acting on vectors with one
+        component per atom.
 
         Examples
         --------
-        For linear H4 and inversion:
+        For linear H4 and inversion, the 3x3 matrix ``-1`` acting on coordinates becomes
+        the permutation matrix that maps atom 0 to 3 and atom 1 to 2::
 
-            [-1,  0,  0]    [0, 0, 0, 1]
-            [ 0, -1,  0] -> [0, 0, 1, 0]
-            [ 0,  0, -1]    [0, 1, 0, 0]
-                            [1, 0, 0, 0]
+            [0, 0, 0, 1]
+            [0, 0, 1, 0]
+            [0, 1, 0, 0]
+            [1, 0, 0, 0]
+
+        >>> rep = mol.atomic_permutation_representation()
         """
         geometric_representation = (
             PointGroupRepresentation.get_geometric_representation(self.point_group)
@@ -1344,24 +1484,22 @@ class QuantumChemistryBase:
         return PointGroupRepresentation(atomic_permutation_representation_operations)
 
     def ao_permutation_representation(self):
-        """
-        Builds the representation of the point group where the symmetry operations are
-        represented as permutation matrices and the states are vectors where each
-        component represents an atomic orbital of the molecule.
+        """Return the point group representation that permutes the atomic orbitals.
 
-        This is similar to the atomic permutation representation, but with additional
-        structure within each atom's block corresponding to the orbitals on that atom.
-        For example, for a molecule with two atoms ``x`` and ``y``, where ``x`` has 3 orbitals,
-        ``y`` has 3 orbitals, and ``z`` has 2 orbitals, the state vector would have 8 components, e.g. ordered as
-        ``[x1, x2, x3, y1, y2, y3, z1, z2]``. A symmetry operation that swaps atoms ``x`` and ``y``
-        would then be represented by a permutation matrix that swaps the first 3
-        rows/columns with the last 3 rows/columns accordingly. Only atomic orbitals of the same atom can
-        be permuted with each other, so the permutation matrix will have a block-diagonal structure where
-        each block corresponds to an atom and permutes only the orbitals of that atom.
+        Operations are permutation matrices acting on vectors with one component per atomic
+        orbital: like the atomic permutation representation, with a block of orbitals per atom.
+        E.g. for atoms ``x``, ``y`` (3 orbitals each) and ``z`` (2 orbitals), the vector is
+        ``[x1, x2, x3, y1, y2, y3, z1, z2]`` and swapping ``x`` and ``y`` swaps the first 3
+        components with the next 3.
 
         Notes
         -----
-        PySCF is required as this method relies on it to determine the number of atomic orbitals on each atom.
+        Needs PySCF to determine the number of atomic orbitals on each atom.
+
+        Examples
+        --------
+        >>> rep = mol.ao_permutation_representation()
+        >>> rep.apply(rep.operations["i"], numpy.ones(mol.n_orbitals))
         """
 
         def get_number_of_core_electrons(n):
@@ -1421,9 +1559,19 @@ class QuantumChemistryBase:
         return PointGroupRepresentation(ao_permutation_representation_operations)
 
     def qcircuit_representation(self):
-        """
-        Builds the representation of the point group where the symmetry operations are compiled
-        circuits acting on QubitWaveFunctions with 2 * n_orbitals qubits
+        """Return the point group representation where the symmetry operations are compiled circuits.
+
+        The circuits act on QubitWaveFunctions with ``2 * n_orbitals`` qubits and require
+        the non-reordered Jordan-Wigner encoding (up0, down0, up1, ...).
+
+        Raises
+        ------
+        TequilaException
+            If the transformation is not that encoding.
+
+        Examples
+        --------
+        >>> rep = mol.qcircuit_representation()
         """
         # the circuits permute the spin orbitals in the non-reordered Jordan-Wigner encoding (up0, down0, up1, ...),
         # so they only fit molecules whose transformation is that encoding
@@ -1490,10 +1638,7 @@ class QuantumChemistryBase:
         )
 
     def _get_exact_ao_transformation_matrix(self, R_3x3):
-        """
-        Builds the exact AO transformation matrix U_AO for a given 3x3 rotation/reflection matrix.
-        Correctly handles sign flips of p-orbitals under rotation.
-        """
+        """Return the AO transformation matrix of a 3x3 rotation/reflection, including sign flips of p orbitals."""
         pyscf_mol = pyscf.gto.M(
             atom=str(self.parameters.geometry),
             basis=self.parameters.basis_set,
@@ -1531,12 +1676,19 @@ class QuantumChemistryBase:
         return U_AO
 
     def compute_mo_perms_and_phases(self):
-        """
-        Projects the geometric symmetry operations into the current MO basis using exact AO rotation matrices.
+        """Project the geometric symmetry operations onto the current MO basis.
+
+        Uses exact AO rotation matrices.
 
         Returns
         -------
-        Tuple of dictionaries mapping each operation label to the permutation of the orbitals and to their phases
+        tuple of dict
+            Permutations of the orbitals and their phases, each mapping the label of a
+            symmetry operation to the result.
+
+        Examples
+        --------
+        >>> perms, phases = mol.compute_mo_perms_and_phases()
         """
         geom_repr = PointGroupRepresentation.get_geometric_representation(
             self.point_group
@@ -1592,9 +1744,14 @@ class QuantumChemistryBase:
         return perms, phases
 
     def compute_orbital_irreps(self):
-        """
-        Computes the irreducible representations of the active orbitals, determined by PySCF in the Abelian point group
-        of the molecule. The orbitals have to be symmetry adapted, e.g. canonical orbitals.
+        """Return the irreducible representations of the active orbitals.
+
+        They are determined by PySCF in the Abelian point group of the molecule, so the
+        orbitals have to be symmetry adapted (e.g. canonical orbitals).
+
+        Examples
+        --------
+        >>> irreps = mol.compute_orbital_irreps()
         """
         pyscf_mol = pyscf.gto.M(
             atom=str(self.parameters.geometry),
@@ -1614,9 +1771,9 @@ class QuantumChemistryBase:
         ).tolist()
 
     def do_make_molecule(self, *args, **kwargs):
-        """
-        Called by self.make_molecule with args and kwargs passed through
-        Override this in derived class if needed
+        """Return the openfermion MolecularData built from the integrals, called by ``make_molecule``.
+
+        Override in derived classes if needed.
         """
 
         assert hasattr(self, "integral_manager") and self.integral_manager is not None
@@ -1645,63 +1802,97 @@ class QuantumChemistryBase:
 
     @property
     def orbitals(self):
+        """Active orbitals of the integral manager."""
         return self.integral_manager.active_orbitals
 
     @property
     def reference_orbitals(self):
+        """Active orbitals that are occupied in the reference state."""
         return self.integral_manager.active_reference_orbitals
 
     @property
     def n_orbitals(self) -> int:
-        """
-        Returns
-        -------
-        The number of active orbitals in this Molecule
-        """
+        """int: Number of active spatial orbitals."""
         return len(self.integral_manager.active_orbitals)
 
     @property
     def active_space(self):
+        """ActiveSpaceData of the integral manager."""
         return self.integral_manager.active_space
 
     @property
     def n_electrons(self) -> int:
-        """
-        Returns
-        -------
-        The number of active electrons in this molecule
-        """
+        """int: Number of active electrons."""
         return 2 * len(self.integral_manager.active_reference_orbitals)
 
     def make_annihilation_op(self, orbital, coefficient=1.0):
-        """
-        Compute annihilation operator on spin-orbital in qubit representation
-        Spin-orbital order is always (up,down,up,down,...)
+        """Return the annihilation operator of a spin orbital as qubit operator.
+
+        Spin orbitals are labeled ``2i`` (up) and ``2i+1`` (down) in every encoding. Supported:
+        Jordan-Wigner and (tree) Bravyi-Kitaev, also reordered, and fully fermionic hybrid
+        molecules. Not supported: ``BravyiKitaevFast``, the tapered encodings and bosonic orbitals.
+
+        Parameters
+        ----------
+        orbital : int
+            Spin orbital index.
+        coefficient : float, optional
+            Prefactor. Default is 1.0.
+
+        Returns
+        -------
+        QubitHamiltonian
         """
         assert orbital < self.n_orbitals * 2
         aop = openfermion.ops.FermionOperator(f"{orbital}", coefficient)
         return self.transformation(aop)
 
     def make_creation_op(self, orbital, coefficient=1.0):
-        """
-        Compute creation operator on spin-orbital in qubit representation
-        Spin-orbital order is always (up,down,up,down,...)
+        """Return the creation operator of a spin orbital as qubit operator.
+
+        Spin orbitals are labeled ``2i`` (up) and ``2i+1`` (down) in every encoding. Supported:
+        Jordan-Wigner and (tree) Bravyi-Kitaev, also reordered, and fully fermionic hybrid
+        molecules. Not supported: ``BravyiKitaevFast``, the tapered encodings and bosonic orbitals.
+
+        Parameters
+        ----------
+        orbital : int
+            Spin orbital index.
+        coefficient : float, optional
+            Prefactor. Default is 1.0.
+
+        Returns
+        -------
+        QubitHamiltonian
         """
         assert orbital < self.n_orbitals * 2
         cop = openfermion.ops.FermionOperator(f"{orbital}^", coefficient)
         return self.transformation(cop)
 
     def make_number_op(self, orbital):
-        """
-        Compute number operator on spin-orbital in qubit representation
-        Spin-orbital order is always (up,down,up,down,...)
+        """Return the number operator of a spin orbital as qubit operator.
+
+        Spin orbitals are labeled ``2i`` (up) and ``2i+1`` (down) in every encoding. Supported:
+        Jordan-Wigner and (tree) Bravyi-Kitaev, also reordered, and fully fermionic hybrid
+        molecules. Not supported: ``BravyiKitaevFast``, the tapered encodings and bosonic orbitals.
+
+        Parameters
+        ----------
+        orbital : int
+            Spin orbital index (interleaved, see ``make_creation_op``).
+
+        Returns
+        -------
+        QubitHamiltonian
         """
         num_op = self.make_creation_op(orbital) * self.make_annihilation_op(orbital)
         return num_op
 
     def make_sz_op(self):
-        """
-        Compute the spin_z operator of the molecule in qubit representation
+        """Return the total :math:`S_z` operator of the molecule as qubit operator.
+
+        Built from ``make_creation_op`` and ``make_annihilation_op``, so it works for the same
+        encodings (see there).
         """
         sz = QubitHamiltonian()
         for i in range(0, self.n_orbitals * 2, 2):
@@ -1711,8 +1902,10 @@ class QuantumChemistryBase:
         return sz
 
     def make_sp_op(self):
-        """
-        Compute the spin+ operator of the molecule in qubit representation
+        """Return the total :math:`S_+` operator of the molecule as qubit operator.
+
+        Built from ``make_creation_op`` and ``make_annihilation_op``, so it works for the same
+        encodings (see there).
         """
         sp = QubitHamiltonian()
         for i in range(self.n_orbitals):
@@ -1720,8 +1913,10 @@ class QuantumChemistryBase:
         return sp
 
     def make_sm_op(self):
-        """
-        Compute the spin- operator of the molecule in qubit representation
+        """Return the total :math:`S_-` operator of the molecule as qubit operator.
+
+        Built from ``make_creation_op`` and ``make_annihilation_op``, so it works for the same
+        encodings (see there).
         """
         sm = QubitHamiltonian()
         for i in range(self.n_orbitals):
@@ -1729,8 +1924,10 @@ class QuantumChemistryBase:
         return sm
 
     def make_s2_op(self):
-        """
-        Compute the spin^2 operator of the molecule in qubit representation
+        """Return the total :math:`S^2` operator of the molecule as qubit operator.
+
+        Built from ``make_creation_op`` and ``make_annihilation_op``, so it works for the same
+        encodings (see there).
         """
         s2_op = self.make_sm_op() * self.make_sp_op() + self.make_sz_op() * (
             self.make_sz_op() + 1
@@ -1738,15 +1935,18 @@ class QuantumChemistryBase:
         return s2_op
 
     def make_hamiltonian(self, *args, **kwargs) -> QubitHamiltonian:
-        """
-        Parameters
-        ----------
-        occupied_indices: will be auto-assigned according to specified active space. Can be overridden by passing specific lists (same as in open fermion)
-        active_indices: will be auto-assigned according to specified active space. Can be overridden by passing specific lists (same as in open fermion)
+        """Return the molecular Hamiltonian as qubit operator, in the encoding of this molecule.
+
+        The active space is fixed by the molecule, it cannot be changed here
+        (``active_indices`` is ignored with a warning).
 
         Returns
         -------
-        Qubit Hamiltonian in the Fermion-to-Qubit transformation defined in self.parameters
+        QubitHamiltonian
+
+        Examples
+        --------
+        >>> H = mol.make_hamiltonian()
         """
 
         # warnings for backward comp
@@ -1768,13 +1968,25 @@ class QuantumChemistryBase:
         return qop
 
     def make_hardcore_boson_hamiltonian(self, condensed=False):
-        """
+        """Return the Hamiltonian in the hard-core boson (HCB) approximation (electrons forced into
+        spin pairs).
+
+        It is independent of the fermion-to-qubit mapping.
+
+        Parameters
+        ----------
+        condensed : bool, optional
+            If True the Hamiltonian acts on qubits ``0`` to ``n_orbitals - 1``. Otherwise
+            its qubits follow the encoding, e.g. the even qubits ``0`` to ``2*n_orbitals``
+            for Jordan-Wigner. Default is False.
+
         Returns
         -------
-        Hamiltonian in Hardcore-Boson approximation (electrons are forced into spin-pairs)
-        Indepdent of Fermion-to-Qubit mapping
-        condensed: always give Hamiltonian back from qubit 0 to N where N is the number of orbitals
-        if condensed=False then JordanWigner would give back the Hamiltonian defined on even qubits between 0 to 2N
+        QubitHamiltonian
+
+        Examples
+        --------
+        >>> H = mol.make_hardcore_boson_hamiltonian()
         """
 
         def hcb_ham_tapered():
@@ -1831,26 +2043,30 @@ class QuantumChemistryBase:
         return H
 
     def make_molecular_hamiltonian(self, occupied_indices=None, active_indices=None):
-        """
-        Returns
-        -------
-        Create a MolecularHamiltonian as openfermion Class
-        (used internally here, not used in tequila)
-        """
+        """Return the Hamiltonian as openfermion MolecularHamiltonian (used internally)."""
         return self.make_molecule().get_molecular_hamiltonian(
             occupied_indices=occupied_indices, active_indices=active_indices
         )
 
     def get_integrals(self, *args, **kwargs):
-        """
-        Returns
+        """Return the constant part and the one- and two-body integrals.
 
-        options for kwargs: "ordering = ["openfermion", "chem", "phys"], ignore_active_space = [True, False]"
+        Parameters
+        ----------
+        ordering : str {"openfermion", "chem", "phys"}, optional
+            Index ordering of the two-body integrals (``two_body_ordering`` is accepted too).
+        ignore_active_space : bool, optional
+            Return the integrals of the full space.
+
+        Returns
         -------
-        Tuple with:
-        constant part (nuclear_repulsion + possible integrated parts from active-spaces)
-        one_body_integrals
-        two_body_integrals
+        tuple
+            Constant part (nuclear repulsion plus integrated frozen parts), one-body
+            integrals and two-body integrals.
+
+        Examples
+        --------
+        >>> c, h1, h2 = mol.get_integrals()
         """
 
         # backward compatibility
@@ -1860,27 +2076,32 @@ class QuantumChemistryBase:
         return self.integral_manager.get_integrals(*args, **kwargs)
 
     def compute_one_body_integrals(self):
-        """convenience function"""
+        """Return the one-body integrals."""
         _c, h1, _h2 = self.get_integrals()
         return h1
 
     def compute_two_body_integrals(self, ordering="openfermion"):
+        """Return the two-body integrals with the given ordering ("openfermion", "chem" or "phys")."""
         _c, _h1, h2 = self.get_integrals(ordering=ordering)
         return h2
 
     def compute_constant_part(self):
+        """Return the constant part of the Hamiltonian (nuclear repulsion plus frozen parts)."""
         c, _h1, _h2 = self.get_integrals()
         return c
 
     def compute_ccsd_amplitudes(self) -> ClosedShellAmplitudes:
+        """Return the closed-shell CCSD amplitudes (implemented in the backends).
+
+        Examples
+        --------
+        >>> amplitudes = mol.compute_ccsd_amplitudes()
+        >>> U = mol.make_uccsd_ansatz(trotter_steps=1, initial_amplitudes=amplitudes)
+        """
         raise TequilaException("BaseClass Method")
 
     def _reference_state(self):
-        """
-        used internally
-        gives back reference state occupation vector (in second quantization or JW notation)
-        transformation to current encoding is done in def prepare_reference
-        """
+        """Return the reference occupation vector in Jordan-Wigner notation (up, down, up, down, ...)."""
         assert self.n_electrons % 2 == 0
         state = [0] * (self.n_orbitals * 2)
         for i in self.reference_orbitals:
@@ -1889,10 +2110,22 @@ class QuantumChemistryBase:
         return state
 
     def prepare_reference(self, state=None, *args, **kwargs):
-        """
+        """Return the circuit preparing the reference (Hartree-Fock) state in the encoding of this
+        molecule.
+
+        Parameters
+        ----------
+        state : list of int, optional
+            Occupation vector of the spin orbitals (up, down, up, down, ...). Default is the
+            closed-shell Hartree-Fock reference.
+
         Returns
         -------
-        A tequila circuit object which prepares the reference of this molecule in the chosen transformation
+        tq.QCircuit
+
+        Examples
+        --------
+        >>> U = mol.prepare_reference()  # Hartree-Fock state
         """
         if state is None:
             state = self._reference_state()
@@ -1906,11 +2139,14 @@ class QuantumChemistryBase:
         return U
 
     def prepare_hardcore_boson_reference(self):
-        """
-        Prepare reference state in the Hardcore-Boson approximation (eqch qubit represents two spin-paired electrons)
+        """Return the circuit preparing the reference state in the hard-core boson (HCB)
+        approximation.
+
+        Each qubit represents two spin-paired electrons.
+
         Returns
         -------
-        tq.QCircuit that prepares the HCB reference
+        tq.QCircuit
         """
         U = gates.X(
             target=[self.transformation.up(i.idx) for i in self.reference_orbitals]
@@ -1919,17 +2155,25 @@ class QuantumChemistryBase:
         return U
 
     def hcb_to_me(self, U=None, condensed=False):
-        """
-        Transform a circuit in the hardcore-boson encoding (HCB)
-        to the encoding of this molecule
-        HCB is supposed to be encoded on the first n_orbitals qubits
+        """Map a circuit from the hard-core boson (HCB) encoding to the encoding of this molecule.
+
+        HCB is encoded on the alpha qubits of the molecule.
+
         Parameters
         ----------
-        U: HCB circuit (using the alpha qubits)
-        condensed: assume that incoming U is condensed (HCB on the first n_orbitals; and not, as for example in JW on the first n even orbitals)
+        U : tq.QCircuit, optional
+            HCB circuit. Default is an empty circuit.
+        condensed : bool, optional
+            Assume that ``U`` is condensed, i.e. HCB is on the first ``n_orbitals`` qubits
+            and not, as e.g. for Jordan-Wigner, on the even qubits. Default is False.
+
         Returns
         -------
+        tq.QCircuit
 
+        Examples
+        --------
+        >>> U = mol.hcb_to_me(U=U_hcb)  # map a hard-core boson circuit to this encoding
         """
         if U is None:
             U = QCircuit()
@@ -1961,30 +2205,28 @@ class QuantumChemistryBase:
         include_singles: bool = True,
         general_excitations: bool = True,
     ) -> list:
-        """
-         Assuming a pair-specific model, create a pair-specific index list
-         to be used in make_upccgsd_ansatz(indices = ... )
-         Excite from a set of references (i) to any pair coming from (i),
-         i.e. any (i,j)/(j,i). If general excitations are allowed, also
-         allow excitations from pairs to appendant pairs and reference.
+        """Return indices for a pair-specific ansatz.
 
-         Parameters
-         ----------
-         pair_info
-             file or list including information about pair structure
-             references single number, pair double
-             example: as file: "0,1,11,11,00,10" (hand over file name)
-                      in file, skip first row assuming some text with information
-                      as list:['0','1`','11','11','00','10']
-                      ~> two reference orbitals 0 and 1,
-                      then two orbitals from pair 11, one from 00, one mixed 10
-         include_singles
-             include single excitations
-         general_excitations
-             allow general excitations
+        Excite from a set of references ``i`` to any pair coming from ``i``, i.e. any
+        ``(i, j)``/``(j, i)``. With general excitations also from pairs to appendant
+        pairs and the reference.
+
+        Parameters
+        ----------
+        pair_info : list of str or str
+            Pair structure as list or as name of a file (first row is skipped). A single
+            number is a reference, two numbers a pair. For ``['0', '1', '11', '11', '00', '10']``
+            orbitals 0 and 1 are references, the next two orbitals belong to pair 11, one
+            to 00 and one is mixed 10. Required.
+        include_singles : bool, optional
+            Include single excitations. Default is True.
+        general_excitations : bool, optional
+            Allow general excitations. Default is True.
+
         Returns
-         -------
-             list of indices with pair-specific ansatz
+        -------
+        list
+            Spin-orbital indices for ``make_upccgsd_ansatz``.
         """
 
         if pair_info is None:
@@ -2032,12 +2274,20 @@ class QuantumChemistryBase:
         return indices
 
     def format_excitation_indices(self, idx):
-        """
-        Consistent formatting of excitation indices
-        idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: p0<p1<pn and pi<qi
-        :param idx: list of index tuples describing a single(!) fermionic excitation
-        :return: tuple-list of index tuples
+        """Return the indices of a single excitation in a consistent format.
+
+        For ``idx = [(p0, q0), (p1, q1), ..., (pn, qn)]`` each pair is first sorted so that
+        ``pi < qi``, then the pairs are reordered such that ``p0 < p1 < ... < pn``.
+
+        Parameters
+        ----------
+        idx : list of tuple of int
+            Pairs ``[(p0, q0), (p1, q1), ...]`` describing one fermionic excitation.
+
+        Returns
+        -------
+        tuple of tuple of int
+            Each pair sorted as ``p < q``, the pairs sorted by their first entry.
         """
 
         idx = [tuple(sorted(x)) for x in idx]
@@ -2045,6 +2295,22 @@ class QuantumChemistryBase:
         return tuple(idx)
 
     def make_upccgsd_indices(self, key, reference_orbitals=None, *args, **kwargs):
+        """Return the spatial orbital pairs (singles/doubles generators) of a UpCCGSD-type ansatz.
+
+        Parameters
+        ----------
+        key : str
+            "ladder" gives ``(n, n+1)``. A name without "g" (e.g. "UpCCD") gives
+            excitations from the reference orbitals into the others, a name with "g"
+            (e.g. "UpCCGSD") gives all ``(n, m)`` with ``n < m``.
+        reference_orbitals : list of int, optional
+            Default is the reference orbitals of the molecule.
+
+        Returns
+        -------
+        list
+            Formatted excitation indices, see ``format_excitation_indices``.
+        """
         if reference_orbitals is None:
             reference_orbitals = [x.idx for x in self.reference_orbitals]
         indices = []
@@ -2081,6 +2347,21 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
+        """Return one layer of hard-core boson (HCB) pair doubles (UpCCGD).
+
+        Parameters
+        ----------
+        indices : list or str, optional
+            Excitation indices, or the name of a recipe for ``make_upccgsd_indices``. Default is "UpCCGD".
+        label : hashable, optional
+            Label of the variables.
+        assume_real : bool, optional
+            Assume the wavefunction stays real. Default is True.
+
+        Returns
+        -------
+        tq.QCircuit
+        """
         if hasattr(indices, "lower"):
             indices = self.make_upccgsd_indices(key=indices.lower())
 
@@ -2102,17 +2383,45 @@ class QuantumChemistryBase:
         ladder=True,
         check_edges=True,
     ):
-        """
-        Separable Pair Ansatz (SPA) for general molecules
-        see arxiv:
-        edges: a list of tuples that contain the orbital indices for the specific pairs
-               one example: edges=[(0,), (1,2,3), (4,5)] are three pairs, one with a single orbital [0], one with three orbitals [1,2,3] and one with two orbitals [4,5]
-        hcb: spa ansatz in the hcb (hardcore-boson) space without transforming to current transformation (e.g. JordanWigner), use this for example in combination with the self.make_hardcore_boson_hamiltonian() and see the article above for more info
-        use_units_of_pi: circuit angles in units of pi
-        label: label the variables in the circuit
-        optimize: optimize the circuit construction (see article). Results in shallow circuit from Ry and CNOT gates
-        ladder: if true the excitation pattern will be local. E.g. in the pair from orbitals (1,2,3) we will have the excitations 1->2 and 2->3, if set to false we will have standard coupled-cluster style excitations - in this case this would be 1->2 and 1->3
-        check_edges: default true. If False, the edges sanity is not checked. Take care.
+        """Return the Separable Pair Ansatz (SPA) circuit.
+
+        Parameters
+        ----------
+        edges : list of tuple of int
+            Orbitals of each pair, e.g. ``[(0,), (1, 2, 3), (4, 5)]`` is one pair with a
+            single orbital, one with three and one with two.
+        hcb : bool, optional
+            Stay in the hard-core boson space without transforming to the encoding of the
+            molecule, e.g. to use with ``make_hardcore_boson_hamiltonian``. Default is False.
+        use_units_of_pi : bool, optional
+            Give the circuit angles in units of pi. Default is False.
+        label : hashable, optional
+            Label of the variables.
+        optimize : bool, optional
+            Build a shallow circuit from Ry and CNOT gates.
+        ladder : bool, optional
+            If True the excitations are local, e.g. 1->2 and 2->3 in the pair
+            ``(1, 2, 3)``. If False they are coupled-cluster-like, i.e. 1->2 and 1->3.
+            Default is True.
+        check_edges : bool, optional
+            Check that the edges are valid (number of edges, no shared orbitals). Default is True;
+            only switch it off if you are sure about the edges.
+
+        Returns
+        -------
+        tq.QCircuit
+
+        See Also
+        --------
+        make_ansatz : Build any named ansatz, e.g. "SPA" or "UpCCGSD".
+
+        References
+        ----------
+        J. S. Kottmann and A. Aspuru-Guzik, Phys. Rev. A 105, 032449 (2022), arXiv:2105.03836.
+
+        Examples
+        --------
+        >>> U = mol.make_spa_ansatz(edges=[(0, 1)])
         """
 
         def _make_spa_tapered(
@@ -2288,9 +2597,31 @@ class QuantumChemistryBase:
         return U
 
     def make_ansatz(self, name: str, *args, **kwargs):
-        """
-        Automatically calls the right subroutines to construct ansatze implemented in sunrise.chemistry
-        name: namne of the ansatz, examples are: UpCCGSD, UpCCD, SPA, UCCSD, SPA+UpCCD, SPA+GS
+        """Return the circuit of a named ansatz, calling the matching ``make_*_ansatz`` method.
+
+        Parameters
+        ----------
+        name : str
+            Name of the ansatz, e.g. "UpCCGSD", "UpCCD", "SPA", "UCCSD". Ansatzes can be
+            combined with "+", e.g. "SPA+UpCCD". Further arguments are passed on.
+        **kwargs
+            Passed to the corresponding ``make_*_ansatz`` method, e.g. ``edges`` for SPA. ``label``
+            labels the variables and ``hcb`` (bool) builds the circuit in the hard-core boson space
+            (also set by "HCB" in the name).
+
+        Returns
+        -------
+        tq.QCircuit
+
+        See Also
+        --------
+        make_spa_ansatz : Separable Pair Ansatz (SPA).
+        make_upccgsd_ansatz : (k-)UpCCGSD-type ansatz.
+        make_uccsd_ansatz : Closed-shell UCCSD ansatz.
+
+        Examples
+        --------
+        >>> U = mol.make_ansatz("SPA", edges=edges)
         """
         name = name.lower()
         if name.strip() == "":
@@ -2352,36 +2683,58 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
-        """
-        UpGCCSD Ansatz similar as described by Lee et. al.
+        """Return a (k-)UpCCGSD-type ansatz circuit, similar to Lee et al.
+
+        The name selects the excitations: "S" adds singles, "D" adds (pair) doubles, "G"
+        makes them generalized (all orbital pairs, not only occupied to virtual), "HCB"
+        works in the hard-core boson space. A leading number sets the order, e.g. "2-UpCCGD".
 
         Parameters
         ----------
-        include_reference
-            include the HF reference state as initial state
-        indices
-            pass custom defined set of indices from which the ansatz will be created
-            List of tuples of tuples spin-indices e.g. [((2*p,2*q),(2*p+1,2*q+1)), ...]
-        label
-            An additional label that is set with the variables
-            default is None and no label will be set: variables names will be
-            (x, (p,q)) for x in range(order)
-            with a label the variables will be named
-            (label, (x, (p,q)))
-        order
-            Order of the ansatz (default is 1)
-            determines how often the ordering gets repeated
-            parameters of repeating layers are independent
-        assume_real
-            assume a real wavefunction (that is always the case if the reference state is real)
-            reduces potential gradient costs from 4 to 2
-        mix_sd
-            Changes the ordering from first all doubles and then all singles excitations (DDDDD....SSSS....) to
-            a mixed order (DS-DS-DS-DS-...) where one DS pair acts on the same MOs. Useful to consider when systems
-            with high electronic correlation and system high error associated with the no Trotterized UCC.
+        include_reference : bool, optional
+            Start from the reference state. Default is True.
+        name : str, optional
+            Name of the ansatz, e.g. "UpCCD", "UpCCSD", "UpCCGSD", "HCB-UpCCGD". Default is "UpCCGSD".
+        indices : list, optional
+            Excitation indices of the layers (e.g. ``[((0, 3),), ((1, 4),)]``), replacing the ones
+            given by ``name``. Default is ``make_upccgsd_indices(name)``.
+        label : hashable, optional
+            Label of the variables, which are named ``(label, (x, (p, q)))`` with layer ``x``
+            instead of ``(x, (p, q))``.
+        order : int, optional
+            Number of repeated layers with independent parameters. Default is taken from
+            the name, else 1.
+        assume_real : bool, optional
+            Assume a real wavefunction, reduces gradient costs from 4 to 2. Default is True.
+        hcb_optimization : bool, optional
+            Build the doubles in the hard-core boson space and map back. Default is True
+            if the encoding supports it and the reference is included.
+        spin_adapt_singles : bool, optional
+            Spin-adapt the singles, i.e. share the angle between alpha and beta. Default is True.
+        neglect_z : bool, optional
+            Neglect the Z strings in the singles (needs Jordan-Wigner). Set automatically if the name
+            contains "A" (e.g. "UpCCGASD"). Default is False.
+        mix_sd : bool, optional
+            Order the excitations as doubles and singles on the same orbitals pairwise
+            (DS-DS-...) instead of all doubles then all singles. Useful for strongly correlated
+            systems with a large Trotterization error of the UCC ansatz. Not usable with the
+            hard-core boson optimization.
+
         Returns
         -------
-            UpGCCSD ansatz
+        tq.QCircuit
+
+        See Also
+        --------
+        make_ansatz : Build any named ansatz, e.g. "SPA" or "UpCCGSD".
+
+        References
+        ----------
+        J. Lee, W. J. Huggins, M. Head-Gordon and K. B. Whaley, J. Chem. Theory Comput. 15, 311 (2019), arXiv:1810.02327.
+
+        Examples
+        --------
+        >>> U = mol.make_upccgsd_ansatz(name="UpCCD")
         """
 
         name = name.upper()
@@ -2500,6 +2853,31 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
+        """Return one layer of singles and/or doubles for the given orbital-pair indices.
+
+        Parameters
+        ----------
+        indices : list
+            Orbital pairs, each given as ``[(p, q)]`` (spatial orbitals), e.g. from ``make_upccgsd_indices``.
+        include_singles, include_doubles : bool, optional
+            Which excitation types the layer contains. Default is both.
+        assume_real : bool, optional
+            Assume a real wavefunction (halves gradient costs). Default is True.
+        label : hashable, optional
+            Label of the variables.
+        spin_adapt_singles : bool, optional
+            Use spin-adapted singles. Default is True.
+        angle_transform : callable, optional
+            Function applied to the angle names of the singles.
+        mix_sd : bool, optional
+            Alternate doubles and singles on the same orbitals instead of all doubles first.
+        neglect_z : bool, optional
+            Neglect the Z strings in the singles (needs Jordan-Wigner). Default is False.
+
+        Returns
+        -------
+        tq.QCircuit
+        """
         U = QCircuit()
         for idx in indices:
             assert len(idx) == 1
@@ -2562,6 +2940,29 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ):
+        """Return the singles of a UpCCGSD-type layer for the given orbital-pair indices.
+
+        With ``neglect_z`` the Z strings are neglected, which needs Jordan-Wigner.
+
+        Parameters
+        ----------
+        indices : str or list, optional
+            Name of an ansatz (e.g. ``"UpCCGSD"``) whose orbital pairs are used, or the pairs as ``[(p, q)]`` entries.
+        spin_adapt_singles : bool, optional
+            If True one angle per pair is shared by up and down spin, otherwise separate angles.
+        label : hashable, optional
+            Label of the variables.
+        angle_transform : callable, optional
+            Function applied to the angle names.
+        assume_real : bool, optional
+            Assume a real wavefunction (halves gradient costs). Default is True.
+        neglect_z : bool, optional
+            Neglect the Z strings in the singles (needs Jordan-Wigner). Default is False.
+
+        Returns
+        -------
+        tq.QCircuit
+        """
         if neglect_z and "jordanwigner" not in self.transformation.name.lower():
             raise TequilaException(
                 "neglegt-z approximation in UpCCGSD singles needs the (Reversed)JordanWigner representation"
@@ -2654,31 +3055,44 @@ class QuantumChemistryBase:
         *args,
         **kwargs,
     ) -> QCircuit:
-        """
+        """Return a closed-shell UCCSD ansatz circuit, optionally initialized with amplitudes.
 
         Parameters
         ----------
-        initial_amplitudes :
-            initial amplitudes given as ManyBodyAmplitudes structure or as string
-            where 'mp2', 'cc2' or 'ccsd' are possible initializations
-        include_reference_ansatz :
-            Also do the reference ansatz (prepare closed-shell Hartree-Fock) (Default value = True)
-        parametrized :
-            Initialize with variables, otherwise with static numbers (Default value = True)
-        trotter_steps: int :
-
-        initial_amplitudes: typing.Union[str :
-
-        Amplitudes :
-
-        ClosedShellAmplitudes] :
-             (Default value = "cc2")
+        trotter_steps : int, optional
+            Number of Trotter steps. Default is 1.
+        initial_amplitudes : str or Amplitudes or ClosedShellAmplitudes, optional
+            Initial amplitudes, either given explicitly or computed with "mp2", "ccsd"
+            or another method of ``compute_amplitudes`` (e.g. "cc2").
+        include_reference_ansatz : bool, optional
+            Prepare the Hartree-Fock reference first. Default is True.
+        parametrized : bool, optional
+            Use variables, otherwise fixed numbers. Default is True.
+        threshold : float, optional
+            Amplitudes below this are neglected if ``screening``. Default is 1e-8.
+        add_singles : bool, optional
+            Add singles. Default is True, also for "mp2" amplitudes, which have no singles.
+        screening : bool, optional
+            Neglect small amplitudes. Default is True.
 
         Returns
         -------
-        type
-            Parametrized QCircuit
+        tq.QCircuit
+            Parametrized circuit.
 
+        Raises
+        ------
+        TequilaException
+            If the molecule is not closed shell.
+
+        See Also
+        --------
+        make_ansatz : Build any named ansatz, e.g. "SPA" or "UpCCGSD".
+
+        Examples
+        --------
+        >>> amplitudes = mol.compute_ccsd_amplitudes()
+        >>> U = mol.make_uccsd_ansatz(trotter_steps=1, initial_amplitudes=amplitudes, include_reference_ansatz=True)
         """
 
         if hasattr(initial_amplitudes, "lower"):
@@ -2807,43 +3221,41 @@ class QuantumChemistryBase:
         return Uref + UCCSD
 
     def compute_amplitudes(self, method: str, *args, **kwargs):
-        """
-        Compute closed-shell CC amplitudes
+        """Return closed-shell coupled-cluster amplitudes (implemented in the backends).
 
         Parameters
         ----------
-        method :
-            coupled-cluster methods like cc2, ccsd, cc3, ccsd(t)
-            Success might depend on backend
-            got an extra function for MP2
-        *args :
+        method : str
+            Method such as "cc2", "ccsd", "cc3" or "ccsd(t)". Which ones work depends on
+            the backend. MP2 has its own function ``compute_mp2_amplitudes``.
 
-        **kwargs :
-
-
-        Returns
-        -------
-
+        Examples
+        --------
+        >>> amplitudes = mol.compute_amplitudes("mp2")
         """
         raise TequilaException("compute amplitudes: Needs to be overwritten by backend")
 
     def compute_energy(self, method, *args, **kwargs):
-        """
-        Call classical methods over PySCF (needs to be installed) or
-        use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
+        """Compute the energy of a classical or quantum method.
+
+        Classical methods run with PySCF, quantum methods build an ansatz and minimize
+        the energy (see ``make_upccgsd_ansatz``).
 
         Parameters
         ----------
-        method: method name
-                classical: HF, MP2, CCSD, CCSD(T), FCI -- with pyscf
-                quantum: UpCCD, UpCCSD, UpCCGSD, k-UpCCGSD, UCCSD,
-                see make_upccgsd_ansatz of the this class for more information
-        args
-        kwargs: for quantum methods, keyword arguments for minimizer
+        method : str
+            Classical: "HF", "MP2", "CCSD", "CCSD(T)", "FCI". Quantum: "UpCCD", "UpCCSD",
+            "UpCCGSD", "k-UpCCGSD", "UCCSD".
+        **kwargs
+            For quantum methods, keyword arguments of the minimizer.
 
         Returns
         -------
+        float
 
+        Examples
+        --------
+        >>> e_fci = mol.compute_energy("fci")
         """
         if any(x in method.upper() for x in ["U"]):
             # simulate entirely in HCB representation if no singles are involved
@@ -2872,11 +3284,13 @@ class QuantumChemistryBase:
                 return molx.compute_energy(method=method, **kwargs)
 
     def compute_fci(self, *args, **kwargs):
+        """Raise NotImplementedError, FCI is only implemented in the PySCF backend."""
         raise NotImplementedError(
             "compute_fci only implemented for the 'pyscf' backend"
         )
 
     def compute_fock_matrix(self):
+        """Return the closed-shell Fock matrix in the current orbital basis."""
         _c, h, g = self.get_integrals()
         g = g.reorder(to="phys")
 
@@ -2893,21 +3307,23 @@ class QuantumChemistryBase:
         return F
 
     def compute_mp2_amplitudes(self, return_energy=False) -> ClosedShellAmplitudes:
-        """
+        r"""Return closed-shell MP2 amplitudes (canonical orbitals only).
 
-        Compute closed-shell mp2 amplitudes (canonical amplitudes only)
-
-        .. math::
-            t(a,i,b,j) = 0.25 * g(a,i,b,j)/(e(i) + e(j) -a(i) - b(j) )
-
-        :return:
+        :math:`t(a,i,b,j) = 0.25\, g(a,i,b,j) / (e(i) + e(j) - a(i) - b(j))`
 
         Parameters
         ----------
+        return_energy : bool, optional
+            Also return the MP2 correlation energy. Default is False.
 
         Returns
         -------
+        ClosedShellAmplitudes or tuple
+            The amplitudes, and the energy if ``return_energy``.
 
+        Examples
+        --------
+        >>> amplitudes, energy = mol.compute_mp2_amplitudes(return_energy=True)
         """
         _c, _h, g = self.get_integrals()
         fi = self.compute_fock_matrix()
@@ -2942,9 +3358,16 @@ class QuantumChemistryBase:
             return result
 
     def compute_cis_amplitudes(self):
-        """
-        Compute the CIS amplitudes of the molecule
-        Warning: Not field tested!
+        """Return the CIS excitation energies and amplitudes (not field tested).
+
+        Returns
+        -------
+        ResultCIS
+            Indexing gives the pair (excitation energy, ClosedShellAmplitudes).
+
+        Examples
+        --------
+        >>> amplitudes = mol.compute_cis_amplitudes()
         """
 
         @dataclass
@@ -3002,6 +3425,7 @@ class QuantumChemistryBase:
         return ResultCIS(omegas=list(omega), amplitudes=amplitudes)
 
     def is_closed_shell(self, verify=False):
+        """Return True if the molecule is closed shell (raise TequilaException if ``verify`` and it is not)."""
         cs = self.n_electrons % 2 == 0
         if verify and not cs:
             raise TequilaException(
@@ -3010,6 +3434,17 @@ class QuantumChemistryBase:
         return cs
 
     def is_canonical(self, verify=False, fock_matrix=None):
+        """Return True if the orbitals are canonical, i.e. the Fock matrix is diagonal and the reference orbitals come first.
+
+        Raises TequilaException if ``verify`` and they are not.
+
+        Parameters
+        ----------
+        verify : bool, optional
+            Raise an exception instead of returning False. Default is False.
+        fock_matrix : numpy.ndarray, optional
+            Fock matrix to check. Default is ``compute_fock_matrix()``.
+        """
         canonical = True
         if fock_matrix is None:
             fock_matrix = self.compute_fock_matrix()
@@ -3040,8 +3475,8 @@ class QuantumChemistryBase:
 
     @property
     def rdm1(self):
-        """
-        Returns RMD1 if computed with compute_rdms function before
+        """numpy.ndarray or None : one-particle RDM from the last ``compute_rdms`` call, None (with
+        a message) if not computed yet.
         """
         if self._rdm1 is not None:
             return self._rdm1
@@ -3051,9 +3486,8 @@ class QuantumChemistryBase:
 
     @property
     def rdm2(self):
-        """
-        Returns RMD2 if computed with compute_rdms function before
-        This is returned in Dirac (physics) notation by default (can be changed in compute_rdms with keyword)!
+        """numpy.ndarray or None : two-particle RDM from the last ``compute_rdms`` call (Dirac, i.e.
+        physics ordering by default), None (with a message) if not computed yet.
         """
         if self._rdm2 is not None:
             return self._rdm2
@@ -3073,42 +3507,57 @@ class QuantumChemistryBase:
         rdm_trafo: QubitHamiltonian = None,
         evaluate=True,
     ):
-        """
-        Computes the one- and two-particle reduced density matrices (rdm1 and rdm2) given
-        a unitary U. This method uses the standard ordering in physics as denoted below.
-        Note, that the representation of the density matrices depends on the qubit transformation
-        used. The Jordan-Wigner encoding corresponds to 'classical' second quantized density
-        matrices in the occupation picture.
+        r"""Compute the one- and two-particle reduced density matrices (RDMs) of the state ``U|0>``.
 
-        We only consider real orbitals and thus real-valued RDMs.
-        The matrices are set as private members _rdm1, _rdm2 and can be accessed via the properties rdm1, rdm2.
+        The representation depends on the qubit encoding, Jordan-Wigner gives the usual
+        second-quantized RDMs in the occupation picture. Only real orbitals and real RDMs
+        are supported. The results are stored and can be accessed with ``rdm1`` and ``rdm2``.
 
-        .. math :
-            \\text{rdm1: } \\gamma^p_q = \\langle \\psi | a^p a_q | \\psi \\rangle
-                                     = \\langle U 0 | a^p a_q | U 0 \\rangle
-            \\text{rdm2: } \\gamma^{pq}_{rs} = \\langle \\psi | a^p a^q a_s a_r | \\psi \\rangle
-                                             = \\langle U 0 | a^p a^q a_s a_r | U 0 \\rangle
+        .. math::
+            \gamma^p_q = \langle \psi | a^p a_q | \psi \rangle, \quad
+            \gamma^{pq}_{rs} = \langle \psi | a^p a^q a_s a_r | \psi \rangle, \quad
+            \psi = U|0\rangle
+
+        By default the 2-RDM is returned in the physics (Dirac) ordering,
+        ``rdm2[p, q, r, s]`` :math:`= \gamma^{pq}_{rs}`, see ``ordering``.
 
         Parameters
         ----------
-        U :
-            Quantum Circuit to achieve the desired state \\psi = U |0\\rangle, non-optional
-        variables :
-            If U is parametrized, then need to hand over a set of fixed variables
-        spin_free :
-            Set whether matrices should be spin-free (summation over spin) or defined by spin-orbitals
-        get_rdm1, get_rdm2 :
-            Set whether either one or both rdm1, rdm2 should be computed. If both are needed at some point,
-            it is recommended to compute them at once.
-        rdm_trafo :
-            The rdm operators can be transformed, e.g., a^dagger_i a_j -> U^dagger a^dagger_i a_j U,
-            where U represents the transformation. The default is set to None, implying that U equas the identity.
-        evaluate :
-            if true, the tequila expectation values are evaluated directly via the tq.simulate command.
-            the protocol is optimized to avoid repetation of wavefunction simulation
-            if false, the rdms are returned as tq.QTensors
+        U : tq.QCircuit
+            Circuit preparing the state.
+        variables : dict or tq.Variables, optional
+            Values of the variables if ``U`` is parametrized.
+        spin_free : bool, optional
+            Sum over spin (RDMs in spatial orbitals) instead of spin orbitals. Default is True.
+        get_rdm1, get_rdm2 : bool, optional
+            Which RDMs to compute and return. Computing both at once is recommended if both
+            are needed. Default is True for both.
+        ordering : str {"dirac", "phys", "chem", "openfermion"}, optional
+            Index ordering of the 2-RDM. Default is "dirac", the physics ordering
+            ``rdm2[p, q, r, s] = <psi|a^p a^q a_s a_r|psi>``; "chem" (Mulliken) and "openfermion" are
+            also possible.
+        use_hcb : bool, optional
+            Compute the spin-free RDMs from a circuit in the hard-core boson encoding. Default is False.
+        rdm_trafo : QubitHamiltonian, optional
+            Transformation ``T`` applied to the operators, ``a^dagger_i a_j -> T^dagger a^dagger_i a_j T``.
+            Default is the identity. Needs ``evaluate=True``.
+        evaluate : bool, optional
+            Evaluate the expectation values directly with ``tq.simulate``, avoiding repeated
+            wavefunction simulations. If False, the RDMs are returned as tq.QTensor. Default is True.
+
         Returns
         -------
+        numpy.ndarray or tuple of numpy.ndarray
+            ``(rdm1, rdm2)`` if both are requested, else the requested one.
+
+        Raises
+        ------
+        TequilaException
+            If ``U`` is None or the encoding is BravyiKitaevFast.
+
+        Examples
+        --------
+        >>> rdm1, rdm2 = mol.compute_rdms(U, variables=variables)
         """
         # Check whether unitary circuit is not 0
         if U is None:
@@ -3130,7 +3579,7 @@ class QuantumChemistryBase:
             raise TequilaException("Need to specify a Quantum Circuit.")
 
         def _get_hcb_op(op_tuple):
-            """Build the hardcore boson operators: b^\\dagger_ib_j + h.c. in qubit encoding"""
+            r"""Build the hard-core boson operators: :math:`b^\dagger_i b_j + \mathrm{h.c.}` in the qubit encoding"""
             if len(op_tuple) == 2:
                 return 2 * Sm(op_tuple[0][0]) * Sp(op_tuple[1][0])
             elif len(op_tuple) == 4:
@@ -3269,8 +3718,7 @@ class QuantumChemistryBase:
             return ops
 
         def _assemble_rdm1(evals, rdm1=None) -> numpy.ndarray:
-            """
-            Returns spin-ful or spin-free one-particle RDM built by symmetry conditions
+            """Returns spin-ful or spin-free one-particle RDM built by symmetry conditions
             Same symmetry with or without spin, so we can use the same function
             """
             N = n_MOs if spin_free else n_SOs
@@ -3485,18 +3933,17 @@ class QuantumChemistryBase:
             )
 
     def rdm_spinsum(self, sum_rdm1: bool = True, sum_rdm2: bool = True) -> tuple:
-        """
-        Given the spin-ful 1- and 2-particle reduced density matrices, compute the spin-free RDMs by spin summation.
+        """Return spin-free RDMs obtained by spin summation of the spin-full RDMs.
 
         Parameters
         ----------
-            sum_rdm1, sum_rdm2 :
-               If set to true, perform spin summation on rdm1, rdm2
+        sum_rdm1, sum_rdm2 : bool, optional
+            Perform the spin summation on the 1-RDM / 2-RDM. Default is True for both.
 
         Returns
         -------
-            rdm1_spinsum, rdm2_spinsum :
-                The desired spin-free matrices
+        tuple
+            ``(rdm1_spinsum, rdm2_spinsum)``, None for those not summed.
         """
         n_MOs = self.n_orbitals
         rdm1_spinsum = None
@@ -3557,33 +4004,36 @@ class QuantumChemistryBase:
         external_info: dict | None = None,
         **kwargs,
     ) -> float:
-        """
-        Computes the spin-free [2]_R12 correction, needing only the 1- and 2-RDM of a reference method
-        Requires either 1-RDM, 2-RDM or information to compute them in kwargs
+        """Return the spin-free [2]_R12 energy correction from the 1- and 2-RDM of a reference method.
+
+        Either the RDMs or the information to compute them (``U`` and ``variables`` as
+        keyword arguments, see ``compute_rdms``) must be given.
 
         Parameters
         ----------
-        rdm1 :
-            1-electron reduced density matrix
-        rdm2 :
-            2-electron reduced density matrix
-        gamma :
-            f12-exponent, for a correlation factor f_12 = -1/gamma * exp[-gamma*r_12]
-        n_ri :
-            dimensionality of RI-basis; specify only, if want to truncate available RI-basis
-            if None, then the maximum available via tensors / basis-set is used
-            must not be larger than size of available RI-basis, and not smaller than size of OBS
-            for n_ri==dim(OBS), the correction returns zero
-        external_info :
-            for usage in qc_base, need to provide information where to find one-body tensor f12-tensor <rs|f_12|pq>;
-            pass dictionary with {"f12_filename": where to find f12-tensor, "scheme": ordering scheme of tensor}
-        kwargs :
-            e.g. RDM-information via {"U": QCircuit, "variables": optimal angles}, needs to be passed if rdm1,rdm2 not
-            yet computed
+        rdm1, rdm2 : numpy.ndarray, optional
+            1- and 2-electron reduced density matrices (spin-free), the 2-RDM in the physics
+            (Dirac) ordering as returned by ``compute_rdms``.
+        gamma : float, optional
+            Exponent of the correlation factor ``f_12 = -1/gamma * exp(-gamma*r_12)``. Default is 1.4.
+        n_ri : int, optional
+            Dimension of the RI basis, to truncate the available one. Must be between the size
+            of the orbital basis (where the correction is zero) and the available RI basis.
+            Default is the maximum available.
+        external_info : dict, optional
+            Where to find the f12 tensor ``<rs|f_12|pq>``:
+            ``{"f12_filename": file name, "scheme": ordering scheme of the tensor}``.
+        **kwargs
+            E.g. ``U`` and ``variables`` if the RDMs are not computed yet.
 
         Returns
         -------
-            the f12 correction for the energy
+        float
+            The correction to the energy.
+
+        Examples
+        --------
+        >>> dE = mol.perturbative_f12_correction(cabs_type="active", rdm__psi4_method="detci")  # doctest: +SKIP
         """
         from .f12_corrections._f12_correction_base import ExplicitCorrelationCorrection
 
@@ -3599,15 +4049,22 @@ class QuantumChemistryBase:
         return correction.compute()
 
     def n_rotation(self, i, phi):
-        """
-        Creates a quantum circuit that applies a phase rotation based on phi to both components (up and down) of a given qubit.
+        """Return a phase rotation circuit on both spin orbitals of spatial orbital ``i``.
 
-        Parameters:
-        - i (int): The index of the qubit to which the rotation will be applied.
-        - phi (float): The rotation angle. The actual rotation applied will be multiplied with -2 for both components.
+        Parameters
+        ----------
+        i : int
+            Spatial orbital index.
+        phi : float
+            Rotation angle, the angle applied to the up and down number operators is ``-2 * phi``.
 
-        Returns:
-        - QCircuit: A quantum circuit object containing the sequence of rotations applied to the up and down components of the specified qubit.
+        Returns
+        -------
+        tq.QCircuit
+
+        Examples
+        --------
+        >>> U = mol.n_rotation(0, numpy.pi)
         """
 
         # Generate number operators for the up and down components of the qubit.
@@ -3627,21 +4084,32 @@ class QuantumChemistryBase:
         fix: bool = True,
         label=None,
     ) -> QCircuit:
-        """
-        Constructs a quantum circuit from a given real unitary matrix using Givens rotations.
+        """Return the circuit implementing a real orthogonal matrix with Givens and Rz rotations.
 
-        This method decomposes a unitary matrix into a series of Givens and Rz (phase) rotations,
-        then constructs and returns a quantum circuit that implements this sequence of rotations.
+        The matrix is decomposed with ``get_givens_decomposition``.
 
-        Parameters:
-        - unitary (numpy.array): A real unitary matrix representing the transformation to implement.
-        - tol (float): A tolerance threshold below which matrix elements are considered zero.
-        - ordering (list of tuples or 'Optimized'): Custom ordering of indices for Givens rotations or 'Optimized' to generate them automatically.
-        - fix (bool): whether to set the angle as fixed or as inial value as: angle=tq.Variable(idx) + value. Useful to let further relaxation to the basis change
-        - label: can be passed instead of angle to have auto-naming with label ("R",i,j,label) useful for repreating gates with individual variables
+        Parameters
+        ----------
+        unitary : numpy.ndarray
+            Real unitary matrix.
+        tol : float, optional
+            Matrix elements below this are treated as zero. Default is 1e-12.
+        ordering : list of tuple or str {"Optimized"}, optional
+            Order of the index pairs of the Givens rotations, or "Optimized" to generate it.
+        fix : bool, optional
+            If True the angles are fixed numbers, otherwise ``tq.Variable(idx) + value`` so the
+            basis change can be relaxed further. Default is True.
+        label : hashable, optional
+            Label of the variables, named ``("R", i, j, label)``.
 
-        Returns:
-        - QCircuit: A quantum circuit implementing the series of rotations decomposed from the unitary.
+        Returns
+        -------
+        tq.QCircuit
+
+        Examples
+        --------
+        >>> opt = sun.optimize_orbitals(molecule=mol, circuit=U, silent=True)
+        >>> UR = mol.get_givens_circuit(opt.mo_coeff)  # rotation to the optimized orbitals
         """
         # Decompose the unitary matrix into Givens and phase (Rz) rotations.
         theta_list, phi_list = get_givens_decomposition(unitary, tol, ordering)
@@ -3682,9 +4150,24 @@ class QuantumChemistryBase:
         return circuit
 
     def print_basis_info(self):
+        """Print information on the basis and the orbitals of the molecule.
+
+        Prints the basis name, the orbital type, whether the basis is orthogonal, the number of
+        basis functions, the active orbitals and the reference (occupied) orbitals, all as total
+        indices. Then, for every current orbital, its data (index, irrep, energy, ...) and its
+        coefficients in the basis functions.
+
+        Useful to look up orbital indices, e.g. for ``core`` in ``use_native_orbitals`` or for
+        ``active_orbitals``.
+
+        Examples
+        --------
+        >>> mol.print_basis_info()
+        """
         return self.integral_manager.print_basis_info()
 
     def __str__(self) -> str:
+        """Return a summary of the encoding, parameters and orbitals."""
         result = str(type(self)) + "\n"
         result += "Qubit Encoding\n"
         result += str(self.transformation) + "\n\n"
@@ -3707,17 +4190,21 @@ class QuantumChemistryBase:
 
 
 def givens_matrix(n, p, q, theta):
-    """
-    Generates a Givens rotation matrix of size n x n to rotate by angle theta in the (p, q) plane. This matrix can be complex
+    """Return the ``n x n`` Givens rotation matrix by angle ``theta`` in the (p, q) plane.
 
-    Parameters:
-    - n (int): The size of the Givens rotation matrix.
-    - p (int): The first index for the rotation plane.
-    - q (int): The second index for the rotation plane.
-    - theta (float): The rotation angle.
+    Parameters
+    ----------
+    n : int
+        Dimension of the matrix.
+    p, q : int
+        Indices of the rotation plane.
+    theta : float, tq.Variable or tq.Objective
+        Rotation angle.
 
-    Returns:
-    - numpy.array: The Givens rotation matrix.
+    Returns
+    -------
+    tq.QTensor
+        The matrix, which can be complex.
     """
     matrix = QTensor(
         shape=(n, n), objective_list=numpy.eye(n).reshape(n * n)
@@ -3741,19 +4228,32 @@ def givens_matrix(n, p, q, theta):
 def get_givens_decomposition(
     unitary, tol=1e-12, ordering=OPTIMIZED_ORDERING, return_diagonal=False
 ):
-    """
-    Decomposes a real unitary matrix into Givens rotations (theta) and Rz rotations (phi).
+    """Decompose a real unitary matrix into Givens rotations and Rz rotations (phases).
 
-    Parameters:
-    - unitary (numpy.array): A real unitary matrix to decompose. It cannot be complex.
-    - tol (float): Tolerance for considering matrix elements as zero. Elements with absolute value less than tol are treated as zero.
-    - ordering (list of tuples or 'Optimized'): Custom ordering of indices for Givens rotations or 'Optimized' to generate them automatically.
-    - return_diagonal (bool): If True, the function also returns the diagonal matrix as part of the output.
+    Parameters
+    ----------
+    unitary : numpy.ndarray
+        Real unitary matrix.
+    tol : float, optional
+        Matrix elements with smaller absolute value are treated as zero. Default is 1e-12.
+    ordering : list of tuple of int or str or None, optional
+        Custom ``(row, column)`` elimination order, or ``"Optimized"`` (default) for a linear-depth order.
+    return_diagonal : bool, optional
+        Also return the diagonal matrix left after all Givens rotations. Default is False.
 
-    Returns:
-    - list: A list of tuples, each representing a Givens rotation. Each tuple contains the rotation angle theta and indices (i,j) of the rotation.
-    - list: A list of tuples, each representing an Rz rotation. Each tuple contains the rotation angle phi and the index (i) of the rotation.
-    - numpy.array (optional): The diagonal matrix after applying all Givens rotations, returned if return_diagonal is True.
+    Returns
+    -------
+    theta_list : list of tuple
+        Givens rotations as ``(theta, i, j)``.
+    phi_list : list of tuple
+        Rz rotations as ``(phi, i)``.
+    diagonal : numpy.ndarray
+        Diagonal matrix left after the eliminations (only if ``return_diagonal``).
+
+    Examples
+    --------
+    >>> theta_list, phi_list = get_givens_decomposition(unitary)
+    >>> R = reconstruct_matrix_from_givens(unitary.shape[0], theta_list, phi_list)  # equals unitary
     """
     U = unitary  # no need to copy as we don't modify the original
     # U[abs(U) < tol] = 0 # Zeroing out the small elements as per the tolerance level. #comented out, its being considered latter again
@@ -3815,19 +4315,38 @@ def get_givens_decomposition(
 def reconstruct_matrix_from_givens(
     n, theta_list, phi_list, to_real_if_possible=True, tol=1e-12
 ):
-    """
-    Reconstructs a matrix from given Givens rotations and Rz diagonal rotations.
-    This function is effectively an inverse of get_givens_decomposition, and therefore only works with data in the same format as its output.
+    """Reconstruct a matrix from Givens rotations and Rz diagonal rotations.
 
-    Parameters:
-    - n (int): The size of the unitary matrix to be reconstructed.
-    - theta_list (list of tuples): Each tuple contains (angle, i, j) representing a Givens rotation of `angle` radians, applied to rows/columns `i` and `j`.
-    - phi_list (list of tuples): Each tuple contains (angle, i), representing an Rz rotation by `angle` radians applied to the `i`th diagonal element.
-    - to_real_if_possible (bool): If True, converts the matrix to real if its imaginary part is effectively zero.
-    - tol (float): The tolerance whether to swap a complex rotation for a sign change.
+    This is effectively the inverse of ``get_givens_decomposition`` and therefore only works with
+    data in the same format as its output: the phases are applied to the identity first, then the
+    Givens rotations in reverse order.
 
-    Returns:
-    - numpy.ndarray: The reconstructed complex or real matrix, depending on the `to_real_if_possible` flag and matrix composition.
+    Parameters
+    ----------
+    n : int
+        Dimension of the matrix to reconstruct.
+    theta_list : list of tuple
+        Givens rotations ``(angle, i, j)``: a rotation by ``angle`` radians acting on rows/columns
+        ``i`` and ``j``.
+    phi_list : list of tuple
+        Rz rotations ``(angle, i)``: the ``i``-th diagonal element is multiplied by
+        ``exp(1j * angle)``.
+    to_real_if_possible : bool, optional
+        If True (default), return a real matrix when its imaginary part is zero.
+    tol : float, optional
+        Tolerance to detect an angle of pi, which is applied as an exact sign change instead of a
+        complex phase. Default is 1e-12.
+
+    Returns
+    -------
+    numpy.ndarray
+        The reconstructed matrix, real or complex depending on ``to_real_if_possible`` and on
+        the rotations.
+
+    Examples
+    --------
+    >>> theta_list, phi_list = get_givens_decomposition(unitary)
+    >>> R = reconstruct_matrix_from_givens(unitary.shape[0], theta_list, phi_list)  # equals unitary
     """
     # Start with an identity matrix
     reconstructed = numpy.eye(n, dtype=complex)
@@ -3863,6 +4382,7 @@ def reconstruct_matrix_from_givens(
 
 
 def arctan2(x1, x2, *args, **kwargs):
+    """Return ``arctan2(x1, x2)``, also for tequila Variables and Objectives."""
     if isinstance(x1, (Variable, Objective)) or isinstance(x2, (Variable, Objective)):
         return Objective().binary_operator(left=1 * x1, right=1 * x2, op=numpy.arctan2)
     elif not isinstance(x1, numbers.Complex) and not isinstance(x2, numbers.Complex):

@@ -1,9 +1,19 @@
+"""Wrappers around the ``qpic`` command line tool."""
+
 import os
 import subprocess
 
 
 def qpic_to_pdf(filename, filepath=None):
-    """Calls qpic to generate a pdf from the given apic file."""
+    """Run ``qpic`` to convert ``<filename>.qpic`` into a PDF.
+
+    Parameters
+    ----------
+    filename : str
+        Name of the qpic file without the ``.qpic`` extension.
+    filepath : str, optional
+        Directory containing the file. Default is the current working directory.
+    """
     if filepath:
         subprocess.call(["qpic", f"{filename}.qpic", "-f", "pdf"], cwd=filepath)
     else:
@@ -11,8 +21,15 @@ def qpic_to_pdf(filename, filepath=None):
 
 
 def qpic_to_png(filename, filepath=None):
-    """Calls qpic to generate a png from the given apic file."""
+    """Run ``qpic`` to convert ``<filename>.qpic`` into a PNG.
 
+    Parameters
+    ----------
+    filename : str
+        Name of the qpic file without the ``.qpic`` extension.
+    filepath : str, optional
+        Directory containing the file. Default is the current working directory.
+    """
     if filepath:
         subprocess.call(["qpic", f"{filename}.qpic", "-f", "png"], cwd=filepath)
     else:

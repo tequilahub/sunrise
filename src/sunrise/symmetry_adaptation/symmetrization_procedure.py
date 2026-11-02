@@ -1,3 +1,5 @@
+"""Procedures that turn Fock-space states (determinants) into spin- and/or symmetry-adapted combinations."""
+
 from __future__ import annotations
 
 import math
@@ -21,20 +23,53 @@ if TYPE_CHECKING:
 
 @dataclass
 class SymmetrizationProcedure(ABC):
+    """Abstract base class of the symmetrization procedures.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule defining the orbitals and, where needed, the point group.
+    """
+
     mol: QuantumChemistryBase
 
     @abstractmethod
     def symmetrize(self, states: pd.DataFrame) -> pd.DataFrame:
-        """Given a state in Fock space, returns a new state that is a symmetry-adapted linear combination of the original state and its images under the symmetry operations of the point group."""
+        """Return symmetry-adapted combinations of the given states.
+
+        Parameters
+        ----------
+        states : list of FockSpaceState or pandas.DataFrame
+            States to process, e.g. from ``FockSpaceState.non_ionic_states`` (a DataFrame as made by
+            ``FockSpaceState.dataframe``).
+
+        Returns
+        -------
+        list of FockSpaceState or pandas.DataFrame
+            Same container type as the input.
+        """
 
 
 @dataclass
 class SpinSymmetrizationProcedure(SymmetrizationProcedure):
-    """A symmetrization procedure that symmetrizes states with respect to spin."""
+    """Symmetrize states with respect to spin.
+
+    The S^2 operator is diagonalized within each block of equal ``m_s``, so that the new states
+    are spin eigenfunctions. Blocks of states that do not couple through S^2 are treated apart.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+
+    Examples
+    --------
+    >>> states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
+    >>> spin_states = SpinSymmetrizationProcedure(mol).symmetrize(states)
+    """
 
     @staticmethod
     def _get_connected_components(matrix, tol=1e-10):
-        """Finds the connected components of a block-diagonal matrix."""
+        """Return the groups of indices connected by nonzero (above ``tol``) matrix elements."""
         n = matrix.shape[0]
         visited = [False] * n
         components = []
@@ -56,6 +91,19 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
     def symmetrize(
         self, states: list[FockSpaceState] | pd.DataFrame
     ) -> list[FockSpaceState] | pd.DataFrame:
+        """Return the eigenstates of S^2 within each ``m_s`` block of the input states.
+
+        Parameters
+        ----------
+        states : list of FockSpaceState or pandas.DataFrame
+            States to process, e.g. from ``FockSpaceState.non_ionic_states`` (a DataFrame as made by
+            ``FockSpaceState.dataframe``).
+
+        Returns
+        -------
+        list of FockSpaceState or pandas.DataFrame
+            Spin eigenstates with ``S2`` and ``m_s`` set. The irrep is not set.
+        """
         is_dataframe = isinstance(states, pd.DataFrame)
         if is_dataframe:
             state_list: list[FockSpaceState] = list(
@@ -136,8 +184,23 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 
 
 @dataclass
-class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
-    """A symmetrization procedure that symmetrizes states by constructing symmetry-adapted linear combinations."""
+class SymmetryAdaptedLinearCombinationSymmetrization(SymmetrizationProcedure):
+    """Symmetrize states by building symmetry-adapted linear combinations (SALCs).
+
+    Each state is projected onto every irrep of ``mol.point_group`` with the characters of the
+    symmetry operations, which act as permutations of the orbitals. The results are grouped by
+    (irrep, S^2, m_s), deduplicated and orthonormalized within each group.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule with a ``point_group``.
+
+    Examples
+    --------
+    >>> states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "loc"))
+    >>> salcs = SymmetryAdaptedLinearCombinationSymmetrization(mol).symmetrize(states)
+    """
 
     def __post_init__(self):
         # Fetch the MO-specific permutations and phases, keyed by the operations of the point group
@@ -150,9 +213,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 
     @staticmethod
     def _salc_key(wfn: tequila.QubitWaveFunction, decimals: int = 8) -> tuple:
-        """Canonical, hashable representation of a wavefunction for O(1) dedup lookups,
-        invariant to overall global phase (states differing only by an overall
-        phase factor represent the same physical state and must hash identically)."""
+        """Return a hashable key of a wavefunction that is invariant to a global phase, used to detect duplicates."""
 
         items = sorted(wfn.items())  # deterministic order by bitstring
         if not items:
@@ -183,6 +244,22 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
         n_orbitals: int,
         phases: list[float] | None = None,  # Add phase support
     ) -> tequila.QubitWaveFunction:
+        """Apply a permutation of the spatial orbitals to a wavefunction.
+
+        Parameters
+        ----------
+        wfn : tequila.QubitWaveFunction
+        perm : list of int
+            Orbital ``i`` is moved to orbital ``perm[i]``.
+        n_orbitals : int
+        phases : list of float, optional
+            Phase of each singly occupied orbital. Default is 1.
+
+        Returns
+        -------
+        tequila.QubitWaveFunction
+            Permuted state, including the fermionic sign.
+        """
         if phases is None:
             phases = [1.0] * n_orbitals
         n_qubits = 2 * n_orbitals
@@ -223,6 +300,22 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
     def symmetrize(
         self, states: list[FockSpaceState] | pd.DataFrame
     ) -> list[FockSpaceState] | pd.DataFrame:
+        """Return the symmetry-adapted combinations of the input states.
+
+        If the first state defines ``fragment_orbitals``, only the symmetry operations that map the
+        fragment onto itself are used.
+
+        Parameters
+        ----------
+        states : list of FockSpaceState or pandas.DataFrame
+            States to process, e.g. from ``FockSpaceState.non_ionic_states`` (a DataFrame as made by
+            ``FockSpaceState.dataframe``).
+
+        Returns
+        -------
+        list of FockSpaceState or pandas.DataFrame
+            Orthonormal states with ``irrep``, ``S2`` and ``m_s`` set.
+        """
         is_dataframe = isinstance(states, pd.DataFrame)
         if is_dataframe:
             state_list: list[FockSpaceState] = list(
@@ -336,10 +429,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
     def _orthonormalize_wavefunctions(
         wfns: list[tequila.QubitWaveFunction], n_qubits: int, tol: float = 1e-8
     ) -> list[tequila.QubitWaveFunction]:
-        """
-        Canonical / Löwdin-style orthonormalization of a list of wavefunctions.
-        Removes linear dependencies with overlap eigenvalues below tol.
-        """
+        """Orthonormalize wavefunctions canonically, dropping linear dependencies (overlap eigenvalues below ``tol``)."""
         if len(wfns) == 0:
             return []
 
@@ -381,15 +471,23 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
 
 @dataclass
 class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
-    """
-    Generates spin-adapted Configuration State Functions (CSFs) using
-    Clebsch-Gordan coupling.
+    """Generate spin-adapted configuration state functions (CSFs) with Clebsch-Gordan coupling.
 
-    Workflows:
-    1. `symmetrize(det_states)`: Takes a list of determinant FockSpaceStates
-       and returns a complete basis of CSFs across all occupation sectors.
-    2. `build_physical_state(...)`: Directly constructs a specific spin-coupled
-       state based on physical intuition and returns a FockSpaceState.
+    There are two uses: ``symmetrize`` returns a full basis of CSFs for the occupation sectors
+    of the given determinants, and ``build_physical_state`` builds one specific spin-coupled state.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+    irrep_provider : IrrepProviderBase, optional
+        Provider attached to the produced states, used when the input states have none.
+    fragment_orbitals : list of int, optional
+        Spatial orbitals to couple. Default is the fragment of the input state, else all orbitals.
+
+    Examples
+    --------
+    >>> cg = SpinCGSymmetrizationProcedure(mol)
+    >>> state = cg.build_physical_state(open_shell_orbitals=[0, 1], S=0, m_s=0, coupling="singlet")
     """
 
     irrep_provider: IrrepProviderBase | None = None
@@ -400,7 +498,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
     # =========================================================================
     @staticmethod
     def _cg(j12: int, m12: int, j3: int, m3: int, J2: int, M2: int) -> float:
-        """Clebsch-Gordan <j1 m1 j2 m2 | J M>, all arguments doubled (integers)."""
+        """Return the Clebsch-Gordan coefficient ``<j12 m12 j3 m3 | J M>``, with all arguments doubled (integers)."""
         if m12 + m3 != M2:
             return 0.0
         if abs(m12) > j12 or abs(m3) > j3 or abs(M2) > J2:
@@ -436,7 +534,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
 
     @classmethod
     def _coupling_paths(cls, n: int, S2: int) -> list[tuple[int, ...]]:
-        """All genealogical intermediate-spin paths (doubled values) to total S."""
+        """Return all sequences of intermediate spins (doubled values) that couple ``n`` electrons to total spin ``S2``."""
         paths: list[tuple[int, ...]] = []
 
         def rec(step: int, j: int, path: tuple[int, ...]):
@@ -452,7 +550,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
 
     @staticmethod
     def _occupation_patterns(n_orbitals: int, n_electrons: int) -> list[list[int]]:
-        """All unique occupation patterns for n_electrons in n_orbitals."""
+        """Return all occupation patterns (0, 1 or 2 per orbital) of ``n_electrons`` in ``n_orbitals``."""
         patterns: list[list[int]] = []
 
         def recurse(idx: int, remaining: int, current: list[int]):
@@ -469,7 +567,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         return patterns
 
     def _build_spin_function(self, orbitals, S2, M2, path, closed_shell_orbitals=None):
-        """Builds a CSF wavefunction using sequential genealogical coupling."""
+        """Build a normalized CSF wavefunction by sequential coupling along ``path``, with the closed-shell orbitals doubly occupied."""
         n = len(orbitals)
         n_qubits = 2 * self.mol.n_orbitals
         terms: dict[int, float] = {}
@@ -511,7 +609,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
     def _build_spin_function_from_tree(
         self, orbitals, S2, M2, coupling_tree, closed_shell_orbitals=None
     ):
-        """Builds a CSF wavefunction using an arbitrary binary coupling tree."""
+        """Build a normalized CSF wavefunction from an arbitrary binary coupling tree, with the closed-shell orbitals doubly occupied."""
         n = len(orbitals)
         n_qubits = 2 * self.mol.n_orbitals
         terms = {}
@@ -563,7 +661,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
     # =========================================================================
     @staticmethod
     def _tree_from_groups(atom_groups: list[list[int]], total_S2: int) -> tuple:
-        """Hund's rule: high spin within groups, then couple groups."""
+        """Return a coupling tree with high spin (Hund's rule) inside each group and the groups coupled to ``total_S2``. At most 2 groups are supported."""
         if len(atom_groups) > 2:
             raise NotImplementedError(
                 f"_tree_from_groups currently supports at most 2 groups, got {len(atom_groups)}. "
@@ -595,7 +693,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
 
     @staticmethod
     def _tree_singlet_pairs(n_pairs: int) -> tuple:
-        """Couples adjacent electrons into singlets, then combines them."""
+        """Return a coupling tree that couples adjacent electrons into singlets and combines them."""
         if n_pairs == 1:
             return (0, 1, 0)
         tree = ((0, 1, 0), (2, 3, 0), 0)
@@ -615,21 +713,37 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         closed_shell_orbitals: list[int] | None = None,
         symmetry_domain: list[int] | None = None,
     ) -> FockSpaceState:
-        """
-        Builds a specific spin-coupled state and returns a FockSpaceState.
+        """Build one spin-coupled state.
 
-        Parameters:
-        - open_shell_orbitals: Orbitals with 1 electron.
-        - closed_shell_orbitals: Orbitals with 2 electrons.
-        - S, m_s: Target total spin and projection.
-        - coupling:
-            • "singlet_pairs" (pairs coupled to singlets)
-            • {"type": "high_spin", "groups": [[0,1,2], [3,4,5]]} (Hund's rule)
-            • A raw tree tuple ((0,1,0), (2,3,0), 0)
-        - symmetry_domain: The subset of orbitals over which spatial symmetry
-          operations are allowed to act. If None, the full molecular point group
-          is used (excitations can delocalize). If a list is provided, only
-          operations preserving that subset are used (fragment embedding).
+        Parameters
+        ----------
+        open_shell_orbitals : list of int
+            Singly occupied spatial orbitals. Electron ``k`` of the coupling is the one in ``open_shell_orbitals[k]``.
+        S : float
+            Total spin.
+        m_s : float
+            Spin projection.
+        coupling : str or dict or tuple
+            How the open-shell electrons are coupled. ``"singlet"`` or ``"triplet"`` (two electrons),
+            ``"singlet_pairs"`` (adjacent electrons paired into singlets),
+            ``{"type": "high_spin", "groups": [[0, 1, 2], [3, 4, 5]]}`` (high spin in each group, Hund's
+            rule, at most two groups) or an explicit coupling tree such as ``((0, 1, 0), (2, 3, 0), 0)``,
+            whose nodes are ``(left, right, doubled spin)``.
+        closed_shell_orbitals : list of int, optional
+            Doubly occupied spatial orbitals.
+        symmetry_domain : list of int, optional
+            Orbitals on which the symmetry operations may act. Default is all orbitals of the state
+            (open and closed shell).
+
+        Returns
+        -------
+        FockSpaceState
+
+        Raises
+        ------
+        ValueError
+            For orbital indices out of range, an empty ``open_shell_orbitals``, a coupling that does
+            not match the number of electrons, or an unknown coupling.
         """
         # --- Validation ---
         n_orb = self.mol.n_orbitals
@@ -710,9 +824,21 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
     def symmetrize(
         self, states: list[FockSpaceState] | pd.DataFrame
     ) -> list[FockSpaceState] | pd.DataFrame:
-        """
-        Generates all spin-adapted CSFs across every occupation sector
-        of the provided determinant states.
+        """Return a complete basis of CSFs for every occupation sector of the input states.
+
+        The number of electrons and the orbitals are taken from the first state. Each CSF carries its
+        coupling path as ``coupling_path``.
+
+        Parameters
+        ----------
+        states : list of FockSpaceState or pandas.DataFrame
+            States to process, e.g. from ``FockSpaceState.non_ionic_states`` (a DataFrame as made by
+            ``FockSpaceState.dataframe``).
+
+        Returns
+        -------
+        list of FockSpaceState or pandas.DataFrame
+            CSFs with ``S2`` and ``m_s`` set.
         """
         is_dataframe = isinstance(states, pd.DataFrame)
         state_list = (

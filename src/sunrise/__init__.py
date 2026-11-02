@@ -1,5 +1,15 @@
 # Import order matters here (circular imports, e.g. ADAPT needs FCircuit): do not sort.
 # ruff: noqa: I001
+"""Sunrise: state-preparation circuits for quantum chemistry, built on tequila.
+
+Re-exports the main user-facing classes and functions (molecules, fermionic
+circuits, expectation values, orbital optimization, plotting).
+
+References
+----------
+J. S. Kottmann et al., Quantum Sci. Technol. 6, 024009 (2021), arXiv:2011.03057.
+"""
+
 from sunrise import molecules
 from sunrise.molecules import qubit_base
 from sunrise.molecules import qubit_base as chemistry  # shortcut

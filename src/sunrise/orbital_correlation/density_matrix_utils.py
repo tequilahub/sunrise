@@ -1,3 +1,7 @@
+"""Reduced density matrices of one or two orbitals (and of one spin orbital) from a circuit or wavefunction,
+plus utilities to build and classify bipartite density matrices.
+"""
+
 import numpy as np
 import tequila as tq
 from tequila import QCircuit, QubitWaveFunction
@@ -7,9 +11,18 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as tqMolec
 
 
 class Input_State:
-    """
-    Wrapper class to hold the input state to measure the operators
-    The input state can be a quantum circuit or a wavefunction
+    """Hold the state to measure, given either as a circuit or as a wavefunction.
+
+    Parameters
+    ----------
+    circuit : tequila.QCircuit, optional
+    variables : tequila.objective.objective.Variables, optional
+    wavefunction : tequila.QubitWaveFunction, optional
+
+    Raises
+    ------
+    ValueError
+        If neither or both of circuit and wavefunction are given.
     """
 
     circuit = None
@@ -27,9 +40,7 @@ class Input_State:
         self.wavefunction = wavefunction
 
     def get_circuit(self):
-        """
-        Get the circuit from the wavefunction or the circuit
-        """
+        """Return the circuit, or an empty placeholder circuit if only a wavefunction was given."""
         if self.wavefunction is not None and self.circuit is None:
             self.circuit = tq.gates.Rz(
                 angle=0, target=range(self.wavefunction.n_qubits)
@@ -37,9 +48,7 @@ class Input_State:
         return self.circuit
 
     def get_wavefunction(self, variables=None):
-        """
-        Get the wavefunction from the circuit or the wavefunction
-        """
+        """Return the wavefunction, simulating the circuit (with ``variables``, or the stored ones) if needed."""
         if self.circuit is not None and self.wavefunction is None:
             if variables is None:
                 variables = self.variables
@@ -54,6 +63,40 @@ def compute_one_orb_rdm(
     initial_state: QubitWaveFunction = None,
     one_orb: int = 0,
 ) -> np.ndarray:
+    """Compute the one-orbital reduced density matrix (4x4) of a spatial orbital.
+
+    The basis is the occupation of the orbital: empty, spin-down, spin-up, doubly occupied
+    (Eq. 27 of https://doi.org/10.1088/2058-9565/aca4ee). Elements are measured as expectation
+    values of fermionic operators.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule defining the orbitals and the fermion-to-qubit encoding.
+    circuit : tequila.QCircuit, optional
+        Circuit preparing the state. Provide it or ``initial_state``.
+    variables : tequila.objective.objective.Variables, optional
+        Values of the circuit variables.
+    initial_state : tequila.QubitWaveFunction, optional
+        Wavefunction to measure when no circuit is given (or to start the circuit from).
+    one_orb : int
+        Index of the spatial orbital.
+
+    Returns
+    -------
+    numpy.ndarray
+        Diagonal-block density matrix of shape (4, 4).
+
+    Raises
+    ------
+    ValueError
+        If neither a circuit nor a wavefunction is given.
+
+    Examples
+    --------
+    >>> from sunrise.orbital_correlation.density_matrix_utils import compute_one_orb_rdm
+    >>> rho = compute_one_orb_rdm(mol, U, one_orb=0)
+    """
 
     # Initialize the input state in a wrapper class
     state = Input_State(
@@ -145,6 +188,47 @@ def compute_two_orb_rdm(
     PSSR: bool = False,
     NSSR: bool = False,
 ) -> np.ndarray:
+    """Compute the two-orbital reduced density matrix (16x16) of spatial orbitals p and q.
+
+    The basis is ordered by particle number (the "molecular basis"), see Figure 4 of
+    https://doi.org/10.1021/acs.jctc.0c00559. Only the elements allowed by particle-number
+    conservation are measured, the others are zero. Use ``change_basis`` to go to the
+    tensor-product basis of the two orbitals.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule defining the orbitals and the fermion-to-qubit encoding.
+    circuit : tequila.QCircuit, optional
+        Circuit preparing the state. Provide it or ``initial_state``.
+    variables : tequila.objective.objective.Variables, optional
+        Values of the circuit variables.
+    initial_state : tequila.QubitWaveFunction, optional
+        Wavefunction to measure when no circuit is given (or to start the circuit from).
+    p_orb : int
+        Index of the first spatial orbital.
+    q_orb : int
+        Index of the second spatial orbital.
+    PSSR : bool
+        If True, apply the parity superselection rule (drop RDM elements between states of different particle-number parity).
+    NSSR : bool
+        If True, apply the particle-number superselection rule (drop RDM elements between states with different particle numbers).
+
+    Returns
+    -------
+    numpy.ndarray
+        Density matrix of shape (16, 16).
+
+    Raises
+    ------
+    ValueError
+        If neither a circuit nor a wavefunction is given.
+
+    Examples
+    --------
+    >>> from sunrise.orbital_correlation.density_matrix_utils import compute_two_orb_rdm
+    >>> rho = compute_two_orb_rdm(mol, U, p_orb=0, q_orb=1)
+    """
 
     # Initialize the input state in a wrapper class
     state = Input_State(
@@ -283,6 +367,33 @@ def compute_one_spin_rdm(
     one_orb: int = 0,
     spin: str = "up",
 ) -> np.ndarray:
+    """Compute the 2x2 reduced density matrix of a single spin orbital (empty, occupied).
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule defining the orbitals and the fermion-to-qubit encoding.
+    circuit : tequila.QCircuit, optional
+        Circuit preparing the state. Provide it or ``initial_state``.
+    variables : tequila.objective.objective.Variables, optional
+        Values of the circuit variables.
+    initial_state : tequila.QubitWaveFunction, optional
+        Wavefunction to measure when no circuit is given (or to start the circuit from).
+    one_orb : int
+        Index of the spatial orbital.
+    spin : str {"up", "down"}
+        Spin of the orbital.
+
+    Returns
+    -------
+    numpy.ndarray
+        Density matrix of shape (2, 2).
+
+    Raises
+    ------
+    ValueError
+        If ``spin`` is not "up" or "down", or if neither a circuit nor a wavefunction is given.
+    """
 
     # Initialize the input state in a wrapper class
     state = Input_State(
@@ -360,12 +471,12 @@ def compute_one_spin_rdm(
 
 
 def outer(psi):
-    """Helper: Computes |psi><psi|."""
+    r"""Return the projector :math:`|\psi\rangle\langle\psi|`."""
     return np.outer(psi, psi.conj())
 
 
 def normalize_vector(psi):
-    """Helper: Normalizes a vector if needed."""
+    """Return ``psi`` normalized to 1 (unchanged if already normalized or about zero)."""
     norm = np.linalg.norm(psi)
     if norm > 1e-9 and not np.isclose(norm, 1.0):
         return psi / norm
@@ -373,10 +484,7 @@ def normalize_vector(psi):
 
 
 def create_product_state(psi_A, psi_B):
-    """
-    Returns the density matrix for a pure product state:
-    rho = |psi_A><psi_A| (tensor) |psi_B><psi_B|
-    """
+    r"""Return the density matrix of the pure product state :math:`|\psi_A\rangle\langle\psi_A| \otimes |\psi_B\rangle\langle\psi_B|`."""
     # Normalize inputs
     psi_A = normalize_vector(psi_A)
     psi_B = normalize_vector(psi_B)
@@ -387,15 +495,26 @@ def create_product_state(psi_A, psi_B):
 
 
 def create_separable_mixed_state(components, reorder_indices=None):
-    """
-    Returns a Separable Mixed State (convex sum of products).
+    r"""Return a separable mixed state, the convex sum of product states.
 
-    Args:
-        components: List of tuples (probability, psi_A, psi_B)
-        reorder_indices: (Optional) List of indices to permute the final matrix.
+    :math:`\rho = \sum_i p_i |\psi^A_i\rangle\langle\psi^A_i| \otimes |\psi^B_i\rangle\langle\psi^B_i|`. Probabilities and vectors are normalized.
 
-    Formula:
-        rho = Sum( p_i * (|psiA_i><psiA_i| tensor |psiB_i><psiB_i|) )
+    Parameters
+    ----------
+    components : list of tuple
+        Tuples ``(p_i, psi_A_i, psi_B_i)`` with the probability and the vectors of the two subsystems.
+    reorder_indices : list of int, optional
+        Permutation applied to the rows and columns of the result.
+
+    Returns
+    -------
+    numpy.ndarray
+
+    Raises
+    ------
+    ValueError
+        If components is empty, the probabilities do not sum to a positive number, or
+        ``reorder_indices`` has the wrong length.
     """
     if not components:
         raise ValueError("Components list is empty.")
@@ -448,18 +567,32 @@ def create_separable_mixed_state(components, reorder_indices=None):
 
 
 def create_general_mixed_state(components, reorder_indices=None):
-    """
-    Returns a General Mixed State (sum of global pure states).
-    This allows for mixing Entangled states.
+    r"""Return a general mixed state, the sum of pure states on the whole space (which may be entangled).
 
-    Args:
-        components: List of tuples (probability, psi_AB)
-        reorder_indices: (Optional) List of indices to permute the final matrix.
-                         Useful for changing basis (e.g., to particle number basis).
-        Note: psi_AB is a vector in the FULL Hilbert space.
+    :math:`\rho = \sum_i p_i |\psi_i\rangle\langle\psi_i|`. Probabilities and vectors are normalized.
 
-    Formula:
-        rho = Sum( p_i * |psiAB_i><psiAB_i| )
+    Parameters
+    ----------
+    components : list of tuple
+        Tuples ``(p_i, psi_i)`` with the probability and the vector in the full Hilbert space.
+    reorder_indices : list of int, optional
+        Permutation applied to the rows and columns of the result, e.g. to change to the
+        particle-number basis.
+
+    Returns
+    -------
+    numpy.ndarray
+
+    Raises
+    ------
+    ValueError
+        If components is empty, the probabilities do not sum to a positive number, or
+        ``reorder_indices`` has the wrong length.
+
+    Examples
+    --------
+    >>> from sunrise.orbital_correlation.density_matrix_utils import create_general_mixed_state
+    >>> sigma = create_general_mixed_state([(0.5, numpy.kron(up, down)), (0.5, numpy.kron(down, up))])
     """
     if not components:
         raise ValueError("Components list is empty.")
@@ -503,13 +636,28 @@ def create_general_mixed_state(components, reorder_indices=None):
 
 
 def change_basis(rho, direction="to_molecular"):
-    """
-    Switches matrix between Computational Kronecker Basis and Molecular Particle-Number Basis.
+    """Convert a 16x16 two-orbital density matrix between the tensor-product (computational) basis and the particle-number (molecular) basis.
 
-    Args:
-        rho: The density matrix (16x16)
-        direction: 'to_molecular' (Computational -> Molecular)
-                   'to_computational'  (Molecular -> Computational)
+    Parameters
+    ----------
+    rho : numpy.ndarray
+        Density matrix of shape (16, 16).
+    direction : str {"to_molecular", "to_computational"}
+        Target basis.
+
+    Returns
+    -------
+    numpy.ndarray
+
+    Raises
+    ------
+    ValueError
+        If ``direction`` is not valid.
+
+    Examples
+    --------
+    >>> from sunrise.orbital_correlation.density_matrix_utils import change_basis
+    >>> sigma = change_basis(sigma, "to_molecular")
     """
     MOLECULAR_PERM_ORDER = [0, 1, 4, 2, 8, 5, 3, 6, 9, 12, 10, 7, 13, 11, 14, 15]
     if direction == "to_molecular":
@@ -524,7 +672,15 @@ def change_basis(rho, direction="to_molecular"):
 
 
 def get_reduced_states(rho, d_A, d_B):
-    """Calculates reduced density matrices rho_A and rho_B."""
+    """Return the reduced density matrices (rho_A, rho_B) of a bipartite state.
+
+    Parameters
+    ----------
+    rho : numpy.ndarray
+        Density matrix of dimension d_A * d_B.
+    d_A, d_B : int
+        Dimensions of the two subsystems.
+    """
     # Reshape to (dim_A, dim_B, dim_A, dim_B)
     rho_tensor = rho.reshape(d_A, d_B, d_A, d_B)
     rho_A = np.trace(rho_tensor, axis1=1, axis2=3)
@@ -533,7 +689,19 @@ def get_reduced_states(rho, d_A, d_B):
 
 
 def is_entangled_ppt(rho, d_A, d_B, tol=1e-9):
-    """Peres-Horodecki Criterion (Partial Transpose)."""
+    """Return True if the state is entangled according to the Peres-Horodecki (partial transpose) criterion.
+
+    The state is flagged when the partially transposed matrix has an eigenvalue below ``-tol``.
+
+    Parameters
+    ----------
+    rho : numpy.ndarray
+        Density matrix of the bipartite system, shape ``(d_A * d_B, d_A * d_B)``.
+    d_A, d_B : int
+        Dimensions of the two subsystems.
+    tol : float, optional
+        Tolerance for negative eigenvalues. Default is 1e-9.
+    """
     # Transpose B indices (1 and 3)
     rho_tensor = rho.reshape(d_A, d_B, d_A, d_B)
     rho_pt = rho_tensor.transpose(0, 3, 2, 1).reshape(d_A * d_B, d_A * d_B)
@@ -542,6 +710,23 @@ def is_entangled_ppt(rho, d_A, d_B, tol=1e-9):
 
 
 def classify_7_categories(rho, tol=1e-7):
+    """Classify a bipartite state, split in two equal halves, into one of seven categories.
+
+    The categories are pure product, pure entangled, mixed entangled, mixed product,
+    classically correlated, classical-quantum and discordant (separable but quantum).
+
+    Parameters
+    ----------
+    rho : array_like
+        Density matrix of dimension d^2.
+    tol : float
+        Tolerance of the purity, product and commutation tests.
+
+    Returns
+    -------
+    str
+        Name of the category.
+    """
     rho = np.array(rho)
     dim = rho.shape[0]
     # Assume equal partition for molecular orbitals (e.g., 4x4 -> 2x2, 16x16 -> 4x4)
@@ -592,9 +777,21 @@ def classify_7_categories(rho, tol=1e-7):
 
 
 def classify_hierarchy(rho, tol=1e-7):
-    """
-    Classifies according to the nested sets in Figure 1:
-    D0 (Black) subset D_cl (Red) subset D_sep (Blue) subset All
+    """Classify a bipartite state, split in two equal halves, in the nested sets entangled > D_sep > D_cl > D_0.
+
+    D_0 are product states, D_cl classically correlated states, D_sep separable states.
+
+    Parameters
+    ----------
+    rho : array_like
+        Density matrix of dimension d^2.
+    tol : float
+        Tolerance of the product and commutation tests.
+
+    Returns
+    -------
+    str
+        Name of the smallest set containing the state, or "Entangled (Outside D_sep)".
     """
     rho = np.array(rho)
     d = int(np.sqrt(rho.shape[0]))

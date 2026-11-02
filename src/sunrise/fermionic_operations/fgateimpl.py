@@ -1,3 +1,5 @@
+"""Implementation classes of the fermionic gates stored in an ``FCircuit``, including their drawing routines."""
+
 from __future__ import annotations
 
 import numbers
@@ -15,6 +17,22 @@ SPIN_SHAPES = {0: Polygon(3), 1: Polygon(-3)}
 
 
 class FGateImpl:
+    """Base class of fermionic gates.
+
+    A gate is a list of excitations; each excitation is a list of ``(from, to)``
+    spin orbital pairs sharing one angle.
+
+    Parameters
+    ----------
+    indices : list or tuple
+        Either one pair ``(0, 2)``, a list of pairs ``[(0, 2), (1, 3)]`` (one excitation)
+        or a list of such lists (several excitations).
+    variables : str or float or tq.Variable, optional
+        One angle per excitation.
+    reordered : bool, optional
+        True if indices use up-then-down ordering, False (default) for interleaved ordering.
+    """
+
     def __init__(
         self,
         indices: list | tuple | None,
@@ -33,12 +51,15 @@ class FGateImpl:
 
     @property
     def name(self):
+        """Name of the gate type."""
         return self._name
 
     def is_controlled(self):
+        """Return False; controlled fermionic gates are not supported yet."""
         return False  # TODO: at some point we should
 
     def to_upthendown(self, norb: int):
+        """Convert the indices in place to up-then-down ordering for ``norb`` spatial orbitals and return the gate."""
         if not self.reordered:
             self._indices = [
                 [
@@ -54,6 +75,7 @@ class FGateImpl:
         return self
 
     def to_udud(self, norb: int):
+        """Convert the indices in place to interleaved up/down ordering for ``norb`` spatial orbitals and return the gate."""
         if self.reordered:
             self._indices = [
                 [
@@ -84,10 +106,12 @@ class FGateImpl:
         return self.indices == other.indices
 
     def is_parameterized(self) -> bool:
+        """Return True if the angle is not a fixed number."""
         return not isinstance(self.variables, (FixedVariable, numbers.Number))
 
     @property
     def indices(self):
+        """Excitation indices as a list (one entry per excitation) of lists of ``(from, to)`` pairs."""
         return self._indices
 
     @indices.setter
@@ -95,6 +119,7 @@ class FGateImpl:
         self._indices = indices
 
     def extract_variables(self) -> list[Variable]:
+        """Return the variables of the gate as a list (empty if the angle is fixed)."""
         if self.is_parameterized() and hasattr(self.variables, "extract_variables"):
             return self.variables.extract_variables()
         else:
@@ -102,6 +127,7 @@ class FGateImpl:
 
     @property
     def variables(self) -> Variable:
+        """Angle(s) of the gate."""
         return self._variables
 
     @variables.setter
@@ -112,6 +138,7 @@ class FGateImpl:
         self._variables: Variable = assign_variable(variable=variables)
 
     def verify(self):
+        """Normalize the format of ``indices`` and check it matches the number of variables."""
         assert isinstance(
             self._variables, (typing.Hashable, numbers.Real, Variable, FixedVariable)
         )
@@ -136,6 +163,7 @@ class FGateImpl:
 
     @property
     def qubits(self):
+        """Sorted list of the qubits (spin orbitals) the gate acts on."""
         if self._indices is not None:
             q = []
             for gate in self._indices:
@@ -147,9 +175,11 @@ class FGateImpl:
 
     @property
     def n_qubits(self) -> int:
+        """Number of qubits the gate acts on."""
         return len(self.qubits)
 
     def map_qubits(self, qubit_map: dict | None = None):
+        """Relabel the qubits in place with ``qubit_map`` (old to new) and return the gate."""
         if qubit_map is None:
             qubit_map = {}
         self._indices = [
@@ -159,6 +189,7 @@ class FGateImpl:
         return self
 
     def map_variables(self, var_map: dict | None = None):
+        """Replace variables in place using ``var_map`` and return the gate."""
         if var_map is None:
             var_map = {}
         if self.is_parameterized() and hasattr(self.variables, "extract_variables"):
@@ -166,6 +197,7 @@ class FGateImpl:
         return self
 
     def dagger(self):
+        """Return the adjoint gate (indices reversed in each pair)."""
         indinces = []
         cir = deepcopy(self)
         for gate in reversed(cir._indices):
@@ -175,6 +207,7 @@ class FGateImpl:
 
     @property
     def max_qubit(self):
+        """Highest qubit index used by the gate."""
         if self.qubits:
             return self.qubits[-1]
         else:
@@ -193,7 +226,7 @@ class FGateImpl:
         return result + " G G "
 
     def render_angle(self, style, gcol, tcol):
-        """Color symbolic gates with parametrized_marking, or numeric gates with color_range."""
+        """Return the ``(gate_color, text_color)`` for drawing, depending on the angle and the style."""
         # Inlined numeric extraction
         try:
             value = float(self.variables)
@@ -215,6 +248,8 @@ class FGateImpl:
 
 
 class FermionicExcitationImpl(FGateImpl):
+    """Generic n-excitation gate. See ``FGateImpl`` for the parameters."""
+
     def __init__(
         self,
         indices: list | tuple | None,
@@ -322,6 +357,16 @@ class FermionicExcitationImpl(FGateImpl):
 
 
 class URImpl(FGateImpl):
+    """Orbital rotation: paired single excitations ``(2i, 2j)`` and ``(2i+1, 2j+1)``.
+
+    Parameters
+    ----------
+    i, j : int
+        Spatial orbital indices.
+    variables : str or float or tq.Variable, optional
+        Angle of the rotation.
+    """
+
     def __init__(
         self,
         i: int,
@@ -336,6 +381,7 @@ class URImpl(FGateImpl):
         self._name = "UR"
 
     def verify(self):
+        """Normalize ``indices`` and check that there are two excitations per variable."""
         assert isinstance(
             self._variables, (typing.Hashable, numbers.Real, Variable, FixedVariable)
         )
@@ -395,6 +441,16 @@ class URImpl(FGateImpl):
 
 
 class UCImpl(FGateImpl):
+    """Orbital correlator: paired double excitation ``[(2i, 2j), (2i+1, 2j+1)]``.
+
+    Parameters
+    ----------
+    i, j : int
+        Spatial orbital indices.
+    variables : str or float or tq.Variable, optional
+        Angle of the excitation.
+    """
+
     def __init__(
         self,
         i,
@@ -443,6 +499,18 @@ class UCImpl(FGateImpl):
 
 
 class PhaseImpl(FGateImpl):
+    """Phase gate ``exp(-i * theta / 2 * n_i)`` on a single spin orbital.
+
+    Parameters
+    ----------
+    i : int
+        Spin-orbital index.
+    variables : str or float or tq.Variable, optional
+        Phase angle.
+    reordered : bool, optional
+        True if ``i`` uses up-then-down ordering. Default is False.
+    """
+
     def __init__(
         self,
         i,

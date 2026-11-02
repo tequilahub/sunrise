@@ -1,3 +1,5 @@
+"""Heuristics that pair up atoms (perfect matchings, i.e. the edges used by SPA circuits), mostly minimizing the total edge length."""
+
 import math
 import random
 
@@ -7,15 +9,23 @@ from scipy.spatial.distance import pdist, squareform
 
 
 def generate_min_local_distance_edges(vertices: np.ndarray):
-    """A locally optimal solution to the edge generation problem where it always considers the next possible shortest edge.
+    """Pair atoms greedily by repeatedly taking the shortest edge between unpaired atoms.
 
-    Warning: This always depends on the order of the vertices, so the result may vary.
+    The result depends on the order of the vertices.
 
-    Args:
-        vertices: All vertices in the graph
+    Parameters
+    ----------
+    vertices : numpy.ndarray
+        Atom coordinates, shape ``(n, 3)``.
 
     Returns
-        A list of edges that make sure each vertex is connected to another vertex with the shortest possible edge.
+    -------
+    list of tuple of int
+        Edges ``(i, j)`` with ``i < j``, one per pair.
+
+    Examples
+    --------
+    >>> edges = generate_min_local_distance_edges(coordinates)
     """
     all_edges = []
     done = set()
@@ -45,10 +55,25 @@ def generate_min_local_distance_edges(vertices: np.ndarray):
 
 
 def generate_min_global_distance_edges(vertices: np.ndarray, nth_best=0):
-    """
-    input: vertices: np.ndarray
-    A globally optimal solution to the edge generation problem.
-    It will consider all possible start points for the optimization and return the one with the total minimum edge length.
+    """Pair atoms by running the greedy nearest-neighbour search from every start vertex and keeping the shortest result.
+
+    Default heuristic of ``run_spa_optimization``.
+
+    Parameters
+    ----------
+    vertices : numpy.ndarray
+        Atom coordinates, shape ``(n, 3)``.
+    nth_best : int, optional
+        Return the n-th best result instead of the best one (0). Default is 0.
+
+    Returns
+    -------
+    list of tuple of int
+        Edges ``(i, j)`` with ``i < j``, one per pair.
+
+    Examples
+    --------
+    >>> edges = generate_min_global_distance_edges(coordinates)
     """
     all_edges = []
     all_edge_lengths = []
@@ -71,7 +96,22 @@ def generate_min_global_distance_edges(vertices: np.ndarray, nth_best=0):
 
 
 def generate_local_optimal_edges_from_vertices(vertices: np.ndarray, start=0):
-    """this is a locally optimal solution to the edge generation problem, when inputting the start parameter, the greedy search will start from that index"""
+    """Pair atoms greedily with the nearest unpaired atom, starting the search from vertex ``start``.
+
+    Parameters
+    ----------
+    vertices : numpy.ndarray
+        Atom coordinates, shape ``(n, 3)``.
+    start : int, optional
+        Index of the vertex where the greedy search begins. Default is 0.
+
+    Returns
+    -------
+    edges : list of tuple of int
+        Edges ``(i, j)`` with ``i < j``.
+    edge_length_sum : float
+        Total length of the edges.
+    """
     first_vertice = vertices[start]
     our_vertices = np.delete(vertices, start, axis=0)
     our_vertices = np.insert(our_vertices, 0, first_vertice, axis=0)
@@ -105,10 +145,33 @@ def generate_local_optimal_edges_from_vertices(vertices: np.ndarray, start=0):
 
 # helper functions
 def total_distance(edges: list[tuple[int, int]], coordinates: np.ndarray):
+    """Return the summed distance of the ``(i, j)`` pairs in ``edges`` for the given coordinates.
+
+    Parameters
+    ----------
+    edges : list of tuple of int
+        Pairs ``(i, j)`` of atom indices.
+    coordinates : numpy.ndarray
+        Atomic coordinates, one row per atom.
+
+    Returns
+    -------
+    float
+
+    Examples
+    --------
+    >>> d = total_distance(edges, coordinates)
+    """
     return sum(np.linalg.norm(coordinates[i] - coordinates[j]) for i, j in edges)
 
 
 def random_matching(num_atoms: int):
+    """Return a random perfect matching of ``num_atoms`` atoms as a list of ``(i, j)`` pairs.
+
+    Examples
+    --------
+    >>> edges = random_matching(num_atoms)
+    """
     atoms = list(range(num_atoms))
     random.shuffle(atoms)
     random_edges = [(atoms[i], atoms[i + 1]) for i in range(0, num_atoms, 2)]
@@ -116,7 +179,13 @@ def random_matching(num_atoms: int):
 
 
 def matrix_scaling(distance_matrix: np.ndarray):
+    """Return the distance matrix scaled element-wise as ``tanh(pi * d / 2)``.
 
+    Parameters
+    ----------
+    distance_matrix : numpy.ndarray
+        Pairwise distances.
+    """
     scaled_matrix = np.tanh(distance_matrix * np.pi / 2)
     return scaled_matrix
 
@@ -125,19 +194,21 @@ def matrix_scaling(distance_matrix: np.ndarray):
 
 
 def generate_all_possible_edges(atoms: list[int]):
-    """
-    Generate all perfect matchings of atoms.
+    """Generate all perfect matchings of the given atoms.
 
     Parameters
     ----------
-    atoms : list[int]
-        Atom indices (must have even length).
+    atoms : list of int
+        Atom indices; the length must be even.
 
     Returns
     -------
-    list[list[tuple[int, int]]]
-        All possible pairings of atoms. Each pairing is a list of edges (i, j).
-        Returns an empty list if the number of atoms is odd.
+    list of list of tuple of int
+        All pairings; each pairing is a list of edges ``(i, j)``. Empty if the number of atoms is odd.
+
+    Examples
+    --------
+    >>> list(generate_all_possible_edges([0, 1, 2, 3]))  # three perfect matchings
     """
     edges = []
     partial_edges = [([], atoms)]
@@ -174,18 +245,31 @@ def generate_all_possible_edges(atoms: list[int]):
 
 
 def brute_force(num_atoms: int, coordinates: np.ndarray):
-    """
-    Find optimal pairing via exhaustive search (minimum total distance).
+    """Find the pairing with minimum total distance by exhaustive search.
 
     Parameters
     ----------
     num_atoms : int
-    coordinates : np.ndarray
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Best edge configuration.
+    list of tuple of int
+        Best pairing.
+
+    See Also
+    --------
+    minimum_weight_perfect_performance : Exact, with the Blossom algorithm.
+    blossom_scaled : Exact Blossom on the scaled distance matrix.
+    simulated_annealing : Heuristic, simulated annealing.
+    two_opt : Heuristic, 2-opt local search.
+    genetic_algorithm : Heuristic, genetic algorithm.
+
+    Examples
+    --------
+    >>> edges = brute_force(len(coordinates), coordinates)  # coordinates: (n_atoms, 3) array
     """
 
     distance_matrix = squareform(pdist(coordinates))
@@ -216,17 +300,23 @@ def brute_force(num_atoms: int, coordinates: np.ndarray):
 
 
 def nearest_insertion(coordinates: np.ndarray):
-    """
-    Build pairing using nearest insertion heuristic.
+    """Build a pairing from a tour constructed with the nearest-insertion heuristic.
+
+    The tour is cut into consecutive pairs.
 
     Parameters
     ----------
-    coordinates : np.ndarray
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(n, 3)``.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Edge pairs from constructed tour.
+    list of tuple of int
+        Edges ``(i, j)``.
+
+    Examples
+    --------
+    >>> edges = nearest_insertion(coordinates)
     """
 
     distance_matrix = squareform(pdist(coordinates))
@@ -257,19 +347,33 @@ def nearest_insertion(coordinates: np.ndarray):
 
 # 2-opt
 def two_opt(num_atoms: int, coordinates: np.ndarray, max_iter=200):
-    """
-    Improve pairing using 2-opt local search.
+    """Improve a random pairing with a 2-opt local search (swapping partners of two edges).
 
     Parameters
     ----------
     num_atoms : int
-    coordinates : np.ndarray
-    max_iter : int
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
+    max_iter : int, optional
+        Maximum number of improvement sweeps. Default is 200.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Improved edge configuration.
+    list of tuple of int
+        Improved pairing.
+
+    See Also
+    --------
+    brute_force : Exact, by exhaustive search (small systems only).
+    minimum_weight_perfect_performance : Exact, with the Blossom algorithm.
+    blossom_scaled : Exact Blossom on the scaled distance matrix.
+    simulated_annealing : Heuristic, simulated annealing.
+    genetic_algorithm : Heuristic, genetic algorithm.
+
+    Examples
+    --------
+    >>> edges = two_opt(len(coordinates), coordinates)
     """
 
     edges = random_matching(num_atoms=num_atoms)
@@ -318,13 +422,7 @@ def two_opt(num_atoms: int, coordinates: np.ndarray, max_iter=200):
 
 
 def random_neighbour(edges: list[tuple[int, int]]):
-    """
-    Generate neighboring solution via edge swap.
-
-    Returns
-    -------
-    list[tuple[int, int]]
-    """
+    """Return a neighbouring pairing obtained by swapping the partners of two randomly chosen edges."""
 
     new_edges = edges[:]
     i, j = random.sample(range(len(new_edges)), 2)
@@ -351,22 +449,42 @@ def simulated_annealing(
     alpha=0.95,
     max_iter=1000,
 ):
-    """
-    Optimize pairing using simulated annealing.
+    """Find a short pairing by simulated annealing.
+
+    Starts from a random pairing and moves to neighbouring pairings, accepting worse ones
+    with a probability that decreases as the temperature drops.
 
     Parameters
     ----------
     num_atoms : int
-    coordinates : np.ndarray
-    start : float
-    end : float
-    alpha : float
-    max_iter : int
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
+    start : float, optional
+        Initial temperature. Default is 1.0.
+    end : float, optional
+        Final temperature. Default is 0.001.
+    alpha : float, optional
+        Cooling factor applied each step. Default is 0.95.
+    max_iter : int, optional
+        Maximum number of steps. Default is 1000.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Best found configuration.
+    list of tuple of int
+        Best pairing found.
+
+    See Also
+    --------
+    brute_force : Exact, by exhaustive search (small systems only).
+    minimum_weight_perfect_performance : Exact, with the Blossom algorithm.
+    blossom_scaled : Exact Blossom on the scaled distance matrix.
+    two_opt : Heuristic, 2-opt local search.
+    genetic_algorithm : Heuristic, genetic algorithm.
+
+    Examples
+    --------
+    >>> edges = simulated_annealing(len(coordinates), coordinates)
     """
 
     starting_edges = random_matching(num_atoms)
@@ -410,22 +528,27 @@ def simulated_annealing(
 def crossover(
     parent_a: list[tuple[int, int]], parent_b: list[tuple[int, int]], num_atoms: int
 ):
-    """
-    Combine two parent solutions into a child.
+    """Combine two parent pairings into a child pairing.
+
+    Parameters
+    ----------
+    parent_a, parent_b : list of tuple of int
+        Parent pairings.
+    num_atoms : int
+        Number of atoms.
 
     Returns
     -------
-    list[tuple[int, int]]
+    list of tuple of int
 
     Notes
     -----
-    **Crossover Strategy (Three-Phase Inheritance):**
+    **Crossover strategy (three-phase inheritance):**
 
-    1. Common edges: Edges that appear in BOTH parents are always inherited
-
-    2. Compatible parent edges: From remaining atoms, inherit edges where
-
-    3. Random completion: Any remaining unpaired atoms are randomly paired
+    1. Common edges: edges that appear in BOTH parents are always inherited.
+    2. Compatible parent edges: from the remaining atoms, inherit the edges of ``parent_a``,
+       then of ``parent_b``, whose two atoms are both still unpaired.
+    3. Random completion: any remaining unpaired atoms are paired randomly.
     """
 
     child_edges = []
@@ -454,13 +577,7 @@ def crossover(
 
 
 def mutation(edges: list):
-    """
-    Mutate solution by swapping edges.
-
-    Returns
-    -------
-    list[tuple[int, int]]
-    """
+    """Return a mutated copy of the pairing, obtained by recombining the atoms of two randomly chosen edges."""
 
     new_edges = edges[:]
     i, j = random.sample(range(len(new_edges)), 2)
@@ -487,22 +604,39 @@ def genetic_algorithm(
     mutation_rate=0.2,
     elite_size=2,
 ):
-    """
-    Solve using genetic algorithm.
+    """Find a short pairing with a genetic algorithm.
 
     Parameters
     ----------
     num_atoms : int
-    coordinates : np.ndarray
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
     pop_size : int, optional
+        Population size. Default is 50.
     max_iter : int, optional
+        Number of generations. Default is 200.
     mutation_rate : float, optional
+        Probability that a child is mutated. Default is 0.2.
     elite_size : int, optional
+        Number of best pairings copied unchanged to the next generation. Default is 2.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Best solution found.
+    list of tuple of int
+        Best pairing found.
+
+    See Also
+    --------
+    brute_force : Exact, by exhaustive search (small systems only).
+    minimum_weight_perfect_performance : Exact, with the Blossom algorithm.
+    blossom_scaled : Exact Blossom on the scaled distance matrix.
+    simulated_annealing : Heuristic, simulated annealing.
+    two_opt : Heuristic, 2-opt local search.
+
+    Examples
+    --------
+    >>> edges = genetic_algorithm(len(coordinates), coordinates)
     """
 
     population = [random_matching(num_atoms=num_atoms) for i in range(pop_size)]
@@ -537,18 +671,31 @@ def genetic_algorithm(
 
 
 def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
-    """
-    Solve optimal matching using Blossom algorithm.
+    """Find the pairing with minimum total distance with the Blossom algorithm (exact).
 
     Parameters
     ----------
     num_atoms : int
-    coordinates : np.ndarray
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Optimal matching.
+    list of tuple of int
+        Optimal pairing.
+
+    See Also
+    --------
+    brute_force : Exact, by exhaustive search (small systems only).
+    blossom_scaled : Exact Blossom on the scaled distance matrix.
+    simulated_annealing : Heuristic, simulated annealing.
+    two_opt : Heuristic, 2-opt local search.
+    genetic_algorithm : Heuristic, genetic algorithm.
+
+    Examples
+    --------
+    >>> edges = minimum_weight_perfect_performance(len(coordinates), coordinates)
     """
 
     distance_matrix = squareform(pdist(coordinates))
@@ -563,18 +710,32 @@ def minimum_weight_perfect_performance(num_atoms: int, coordinates: np.ndarray):
 
 
 def blossom_scaled(num_atoms: int, coordinates: np.ndarray):
-    """
-    Solve optimal matching using Blossom algorithm based on a scaled distance matrix.
+    """Find the minimum-weight pairing with the Blossom algorithm on the scaled distance matrix (see
+    ``matrix_scaling``).
 
     Parameters
     ----------
     num_atoms : int
-    coordinates : np.ndarray
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Optimal matching.
+    list of tuple of int
+        Optimal pairing for the scaled distances.
+
+    See Also
+    --------
+    brute_force : Exact, by exhaustive search (small systems only).
+    minimum_weight_perfect_performance : Exact, with the Blossom algorithm.
+    simulated_annealing : Heuristic, simulated annealing.
+    two_opt : Heuristic, 2-opt local search.
+    genetic_algorithm : Heuristic, genetic algorithm.
+
+    Examples
+    --------
+    >>> edges = blossom_scaled(len(coordinates), coordinates)
     """
     distance_matrix = squareform(pdist(coordinates))
     scaled_matrix = matrix_scaling(distance_matrix)

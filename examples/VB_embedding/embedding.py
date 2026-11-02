@@ -283,7 +283,7 @@ def orbital_refinement():
     integrals = fe.Integrals(world)
     orbitals = integrals.transform(
         basis, mo_coeff_madness
-    )  # transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+    )  # transforms orbitals according to: orbitals[i] = sum[j] basis[j]*C[j,i]
     orbitals = integrals.orthonormalize(orbitals=orbitals)
     core = [
         orbitals[i.idx_total] for i in mol.integral_manager.orbitals if i.idx is None
@@ -470,7 +470,7 @@ def spa_refined():
         rot = sn.measurement.gates_to_orb_rot(mUR, len(active), core=0)
         trans = integrals.transform(
             active, rot
-        )  # transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+        )  # transforms orbitals according to: orbitals[i] = sum[j] basis[j]*C[j,i]
         for i in [2, 3, 10, 11]:
             world.cube_plot(f"back_to_native{i}", trans[i], geo, zoom=5)
 
@@ -479,7 +479,7 @@ def spa_refined():
         rot = sn.measurement.gates_to_orb_rot(mUR, len(active), core=0)
         trans = integrals.transform(
             active, rot
-        )  # transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+        )  # transforms orbitals according to: orbitals[i] = sum[j] basis[j]*C[j,i]
         for i in [2, 3, 10, 11]:
             world.cube_plot(f"2nd_graph{i}", trans[i], geo, zoom=5)
 

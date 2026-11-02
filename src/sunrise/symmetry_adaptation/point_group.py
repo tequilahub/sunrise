@@ -1,3 +1,5 @@
+"""Point groups, their character tables and their representations by 3x3 matrices, used to label and symmetrize states."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,36 +20,47 @@ from pandas import DataFrame
 
 
 def _rot_z(theta: float) -> NDArray[numpy.float64]:
-    """Proper rotation by `theta` about z."""
+    """Return the proper rotation by ``theta`` about z."""
     c, s = numpy.cos(theta), numpy.sin(theta)
     return numpy.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
 
 
 def _improper_z(theta: float) -> NDArray[numpy.float64]:
-    """S_n: rotation by `theta` about z followed by the horizontal mirror."""
+    """Return S_n, the rotation by ``theta`` about z followed by the horizontal mirror."""
     c, s = numpy.cos(theta), numpy.sin(theta)
     return numpy.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, -1.0]])
 
 
 def _c2_in_plane(phi: float) -> NDArray[numpy.float64]:
-    """C2 about the in-plane axis at angle `phi` from +x."""
+    """Return the C2 about the in-plane axis at angle ``phi`` from +x."""
     c, s = numpy.cos(2 * phi), numpy.sin(2 * phi)
     return numpy.array([[c, s, 0.0], [s, -c, 0.0], [0.0, 0.0, -1.0]])
 
 
 def _mirror_v(phi: float) -> NDArray[numpy.float64]:
-    """Mirror plane containing z and the in-plane direction `phi`."""
+    """Return the mirror plane containing z and the in-plane direction ``phi``."""
     c, s = numpy.cos(2 * phi), numpy.sin(2 * phi)
     return numpy.array([[c, s, 0.0], [s, -c, 0.0], [0.0, 0.0, 1.0]])
 
 
 def _expand_class_table(class_chars: dict[str, list], class_sizes: list[int]) -> list:
-    """Repeat each class's character once per operation in that class.
+    """Expand a table with one character per class to one character per operation.
 
-    Published character tables list one column per CLASS, but
-    SymmetryAdaptedLinearCombintationSymmetrization sums over individual
-    OPERATIONS. Every operation in a class carries that class's character, so
-    expanding by the class sizes gives the correct projector."""
+    Published character tables list one column per class, but
+    ``SymmetryAdaptedLinearCombinationSymmetrization`` sums over individual operations. Every
+    operation in a class carries the character of the class.
+
+    Parameters
+    ----------
+    class_chars : dict of str to list
+        Characters of each irrep for every class.
+    class_sizes : list of int
+        Number of operations in each class.
+
+    Returns
+    -------
+    list of IrreducibleRepresentation
+    """
     return [
         IrreducibleRepresentation(
             name,
@@ -66,7 +79,15 @@ def _expand_class_table(class_chars: dict[str, list], class_sizes: list[int]) ->
 
 @dataclass(frozen=True)
 class IrreducibleRepresentation:
-    """An irreducible representation of a group."""
+    """An irreducible representation of a group, given by its characters.
+
+    Parameters
+    ----------
+    mulliken_symbol : str
+        Name of the irrep, e.g. ``"B1g"``.
+    characters : numpy.ndarray
+        Character of the irrep for each symmetry operation, in the order of the character table.
+    """
 
     mulliken_symbol: str
     characters: NDArray[numpy.complex128]
@@ -74,20 +95,28 @@ class IrreducibleRepresentation:
 
 @dataclass(frozen=True)
 class CharacterTable:
-    """The character table of a point group."""
+    """The character table of a point group.
+
+    Parameters
+    ----------
+    irrep_data : list of IrreducibleRepresentation
+        Rows of the table.
+    operation_symbols : list of str
+        Labels of the symmetry operations (columns of the table).
+    """
 
     irrep_data: list[IrreducibleRepresentation]
     operation_symbols: list[str]
 
     @property
     def dict(self) -> dict[str, NDArray[numpy.complex128]]:
-        """A dictionary mapping Mulliken symbols to irreducible representations."""
+        """dict of str to numpy.ndarray : Mulliken symbol mapped to the characters of the irrep."""
 
         return {irrep.mulliken_symbol: irrep.characters for irrep in self.irrep_data}
 
     @property
     def dataframe(self) -> DataFrame:
-        """A pandas DataFrame representation of the character table."""
+        """pandas.DataFrame : The table, with irreps as rows and operations as columns."""
 
         return DataFrame(
             data=[irrep.characters for irrep in self.irrep_data],
@@ -97,18 +126,24 @@ class CharacterTable:
 
     @property
     def matrix(self) -> NDArray[numpy.complex128]:
-        """A NumPy array representation of the character table."""
+        """numpy.ndarray : The characters as a matrix, one row per irrep."""
 
         return numpy.array([irrep.characters for irrep in self.irrep_data])
 
     @property
     def irreps(self) -> list[str]:
-        """A list of the irreducible representations of the character table."""
+        """list of str : Mulliken symbols of the irreps."""
 
         return [irrep.mulliken_symbol for irrep in self.irrep_data]
 
     def vec_to_str(self, vec: NDArray[numpy.complex128]) -> str | None:
-        """Given a vector of characters, return the corresponding Mulliken symbol."""
+        """Return the Mulliken symbol whose characters equal ``vec``, None if there is none.
+
+        Parameters
+        ----------
+        vec : numpy.ndarray
+            Characters, one per operation.
+        """
 
         for irrep in self.irrep_data:
             if numpy.allclose(irrep.characters, vec):
@@ -119,18 +154,42 @@ class CharacterTable:
 
 @dataclass
 class PointGroup:
+    """A point group, with its Schoenflies label and character table.
+
+    The predefined groups are class attributes: ``PointGroup.D2h``, ``D4h``, ``D6h``, ``D8h``, ``Td``, ``C2h``, ``C2v``,
+    ``D2``, ``Cs``, ``Ci``, ``C2`` and ``C1``. Other groups known to PySCF can be built with
+    ``PointGroup.from_pyscf``.
+
+    Parameters
+    ----------
+    schoenflies_label : str
+        Name of the group, e.g. ``"D2h"``.
+    character_table : CharacterTable
+    """
+
     schoenflies_label: str
     character_table: CharacterTable
 
     @property
     def order(self) -> int:
-        """The order of the point group, i.e. the number of symmetry operations."""
+        """int : Order of the group, i.e. the number of symmetry operations."""
 
         return len(self.character_table.operation_symbols)
 
     @classmethod
     def from_pyscf(cls, point_group_name: str) -> PointGroup:
-        """Construct a PointGroup from with PySCF as source of truth."""
+        """Construct a PointGroup using PySCF as the source of the character table.
+
+        Parameters
+        ----------
+        point_group_name : str
+            Schoenflies label of an Abelian group known to PySCF, e.g. ``"D2h"``.
+
+        Examples
+        --------
+        >>> pg = PointGroup.from_pyscf("D2h")
+        >>> pg.character_table.matrix
+        """
 
         from pyscf.symm import param
 
@@ -184,7 +243,7 @@ PointGroup.D2h = PointGroup(
 
 # D4h is non-Abelian, so PySCF cannot supply it - it is defined here in full.
 # The table is written out one column PER OPERATION rather than per class, which
-# is what SymmetryAdaptedLinearCombintationSymmetrization expects: it forms
+# is what SymmetryAdaptedLinearCombinationSymmetrization expects: it forms
 #     |psi_irrep> = sum_operations chi_irrep(op) . O_op |psi>
 # and every operation in a class carries that class's character, so summing over
 # operations gives the correct projector.
@@ -538,6 +597,18 @@ S = TypeVar(
 
 @dataclass(frozen=True)
 class PointGroupRepresentation(Generic[T, S]):
+    """A representation of a point group: how each symmetry operation acts on a kind of state.
+
+    Parameters
+    ----------
+    operations : dict of str to T
+        Representation of each operation (e.g. a 3x3 matrix), keyed by its label.
+    application_function : callable
+        ``f(op, state)`` applying an operation to a state. Default is ``op @ state``.
+    is_close_function : callable
+        ``f(state1, state2)`` telling whether two states are equal. Default is ``numpy.isclose(...).all()``.
+    """
+
     operations: dict[str, T]
     application_function: Callable[[T, S], S] = lambda op, state: op @ state
     is_close_function: Callable[[S, S], bool] = lambda state1, state2: numpy.isclose(
@@ -545,14 +616,32 @@ class PointGroupRepresentation(Generic[T, S]):
     ).all()
 
     def apply(self, operation: T, state: S) -> S:
-        """Apply a symmetry operation to a state."""
+        """Apply a symmetry operation to a state and return the new state.
+
+        Parameters
+        ----------
+        operation : T
+            Symmetry operation, e.g. a value of ``operations``.
+        state : S
+            State the operation acts on.
+
+        Returns
+        -------
+        S
+
+        Examples
+        --------
+        >>> rep = mol.ao_permutation_representation()
+        >>> rep.apply(rep.operations["i"], numpy.ones(mol.n_orbitals))  # same as rep.operations["i"] @ ...
+        """
 
         return self.application_function(operation, state)
 
     def character_vector(self, state: S) -> NDArray[numpy.complex128]:
-        """
-        Returns the character vector of the representation, i.e. the characters of the symmetry
-        operations in the representation. These are assumed to be either 1 or -1 here.
+        """Return the characters of the state, one per operation.
+
+        Each character is ``<state|op|state>`` rounded to an integer, so it is only valid for states
+        spanning one-dimensional irreps (characters 1 or -1).
         """
 
         # Compute the expectation value <state | op | state> for each operation.
@@ -569,7 +658,21 @@ class PointGroupRepresentation(Generic[T, S]):
     def get_geometric_representation(
         cls, pg: PointGroup
     ) -> PointGroupRepresentation[NDArray[numpy.complex128], NDArray[numpy.complex128]]:
-        """Returns the geometric representation of a point group, i.e. where the symmetry operations are represented as 3x3 matrices and the states are 3D vectors."""
+        """Return the geometric representation of a point group.
+
+        The operations are 3x3 matrices acting on 3D vectors, with the principal axis along z and, for
+        planar molecules, the molecule in the xy-plane. For ``Td`` the C3 axes lie along the cube body
+        diagonals, e.g. (1, 1, 1), and the S4 axes along x, y and z.
+
+        Parameters
+        ----------
+        pg : PointGroup
+
+        Raises
+        ------
+        ValueError
+            If an operation of ``pg`` is not supported.
+        """
 
         operation_dict: dict[str, NDArray[numpy.float64]] = {
             "E": numpy.eye(3),

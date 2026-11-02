@@ -1,3 +1,5 @@
+"""Civector-based energy and gradient routines, extending tencirchem's evolve_civector to handle a bra different from the ket."""
+
 from __future__ import annotations
 
 import tensorcircuit as tc
@@ -25,6 +27,36 @@ def get_expval_and_grad_civector(
     init_state_bra=None,
 ):
     # Fist check bra
+    """Return the expectation value, its gradient and the bra-ket overlap using the cached civector engine.
+
+    Parameters
+    ----------
+    angles : array_like
+        Values of ``total_variables`` (tcc angles).
+    hamiltonian : callable
+        Operator applied to the states.
+    n_qubits : int
+        Number of spin orbitals.
+    n_elec_s : int or tuple of int
+        Number of electrons (per spin).
+    total_variables : list of Variable
+        All variables, in the order of ``angles``.
+    params : list
+        Gate parameters of the ket (Variables, Objectives or numbers).
+    ex_ops : tuple
+        Excitation operators of the ket.
+    mode : str
+        Fermion encoding mode of tencirchem. Default is "fermion".
+    init_state : array_like, optional
+        Initial ket state.
+    params_bra, ex_ops_bra, init_state_bra : optional
+        Same as the ket quantities, for the bra. Default is the ket ones.
+
+    Returns
+    -------
+    tuple
+        (<bra|H|ket>, gradient, <bra|ket>).
+    """
     if ex_ops_bra is None:
         ex_ops_bra = ex_ops
     if params_bra is None:
@@ -110,7 +142,34 @@ def get_energy_and_grad_civector(
     mode: str = "fermion",
     init_state=None,
 ):
+    """Return the energy and its gradient using the cached civector engine.
 
+    Parameters
+    ----------
+    angles : array_like
+        Values of ``total_variables`` (tcc angles).
+    hamiltonian : callable
+        Operator applied to the states.
+    n_qubits : int
+        Number of spin orbitals.
+    n_elec_s : int or tuple of int
+        Number of electrons (per spin).
+    total_variables : list of Variable
+        All variables, in the order of ``angles``.
+    params : list
+        Gate parameters of the ket (Variables, Objectives or numbers).
+    ex_ops : tuple
+        Excitation operators of the ket.
+    mode : str
+        Fermion encoding mode of tencirchem. Default is "fermion".
+    init_state : array_like, optional
+        Initial ket state.
+
+    Returns
+    -------
+    tuple
+        (energy, gradient).
+    """
     assert len(angles) == len(total_variables)
     dangles = {total_variables[i].name: angles[i] for i in range(len(angles))}
     pa = []
@@ -152,7 +211,36 @@ def get_expval_and_grad_civector_nocache(
     ex_ops_bra: Tuple = None,
     init_state_bra=None,
 ):
+    """Return the expectation value, its gradient and the bra-ket overlap using the uncached civector engine (less memory, for large systems).
 
+    Parameters
+    ----------
+    angles : array_like
+        Values of ``total_variables`` (tcc angles).
+    hamiltonian : callable
+        Operator applied to the states.
+    n_qubits : int
+        Number of spin orbitals.
+    n_elec_s : int or tuple of int
+        Number of electrons (per spin).
+    total_variables : list of Variable
+        All variables, in the order of ``angles``.
+    params : list
+        Gate parameters of the ket (Variables, Objectives or numbers).
+    ex_ops : tuple
+        Excitation operators of the ket.
+    mode : str
+        Fermion encoding mode of tencirchem. Default is "fermion".
+    init_state : array_like, optional
+        Initial ket state.
+    params_bra, ex_ops_bra, init_state_bra : optional
+        Same as the ket quantities, for the bra. Default is the ket ones.
+
+    Returns
+    -------
+    tuple
+        (<bra|H|ket>, gradient, <bra|ket>).
+    """
     if ex_ops_bra is None:
         ex_ops_bra = ex_ops
     if params_bra is None:
@@ -235,7 +323,34 @@ def get_energy_and_grad_civector_nocache(
     mode: str = "fermion",
     init_state=None,
 ):
+    """Return the energy and its gradient using the uncached civector engine (less memory, for large systems).
 
+    Parameters
+    ----------
+    angles : array_like
+        Values of ``total_variables`` (tcc angles).
+    hamiltonian : callable
+        Operator applied to the states.
+    n_qubits : int
+        Number of spin orbitals.
+    n_elec_s : int or tuple of int
+        Number of electrons (per spin).
+    total_variables : list of Variable
+        All variables, in the order of ``angles``.
+    params : list
+        Gate parameters of the ket (Variables, Objectives or numbers).
+    ex_ops : tuple
+        Excitation operators of the ket.
+    mode : str
+        Fermion encoding mode of tencirchem. Default is "fermion".
+    init_state : array_like, optional
+        Initial ket state.
+
+    Returns
+    -------
+    tuple
+        (energy, gradient).
+    """
     assert len(angles) == len(total_variables)
     dangles = {total_variables[i].name: angles[i] for i in range(len(angles))}
     pa = []
@@ -266,6 +381,7 @@ def get_energy_and_grad_civector_nocache(
 
 
 def map_variables(x: Variable | Objective | None, dvariables: dict):
+    """Return the value of x, evaluating it with dvariables if it is a Variable or Objective."""
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):

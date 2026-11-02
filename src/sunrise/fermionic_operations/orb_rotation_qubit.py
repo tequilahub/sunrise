@@ -1,3 +1,5 @@
+"""Qubit-level orbital rotation gate that is compiled to Givens rotations."""
+
 from __future__ import annotations
 
 import tequila as tq
@@ -9,12 +11,33 @@ from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 
 
 def OR(*args, **kwargs):
+    """Create a ``tq.QCircuit`` containing one ``OrbitalRotation`` gate; arguments as in ``OrbitalRotation``.
+
+    Examples
+    --------
+    >>> U = OR(orbitals=[0, 1, 2], matrix=rotation)  # rotation: 3x3 orthogonal matrix
+    """
     gate = OrbitalRotation(*args, **kwargs)
     return tq.QCircuit.wrap_gate(gate)
 
 
 # gate impl
 class OrbitalRotation(QGateImpl):
+    """Rotation of a set of spatial orbitals by a (unitary) matrix.
+
+    Two rotations can be added; the result is a single rotation on the union of the orbitals.
+    Use ``compile`` to obtain the circuit.
+
+    Parameters
+    ----------
+    orbitals : list of int
+        Spatial orbitals the rotation acts on.
+    matrix : tq.QTensor or numpy.ndarray
+        Square unitary matrix of size ``len(orbitals)``.
+    molecule : QuantumChemistryBase, optional
+        Molecule used to build the circuit. A dummy hydrogen chain is created if not given.
+    """
+
     def __init__(
         self,
         orbitals: list[int] | None = None,
@@ -51,12 +74,15 @@ class OrbitalRotation(QGateImpl):
         # assert allclose(eye(len(self.coeff)), self.coeff.dot(self.coeff.T.conj())) #not normalization can be enforced, let to the user
 
     def is_parametrized(self) -> bool:
+        """Return True (the gate is always considered parametrized)."""
         return True
 
     def extract_variables(self):
+        """Return the variables contained in the rotation matrix."""
         return self.coeff.extract_variables()
 
     def __add__(self, other):
+        """Compose with another rotation (merged on the union of orbitals) or prepend to a ``tq.QCircuit`` after compiling."""
         if isinstance(other, QCircuit):
             return self.compile() + other
         else:
@@ -72,6 +98,7 @@ class OrbitalRotation(QGateImpl):
             return OrbitalRotation(matrix=bp.dot(ap), orbitals=ndx)
 
     def __iadd__(self, other):
+        """Compose in place with another rotation on the union of the orbitals."""
         ndx = list(set(self.orbital + other.orbital))
         pos_idx = [ndx.index(i) for i in self.orbital]
         pos_jdx = [ndx.index(i) for i in other.orbital]
@@ -89,6 +116,20 @@ class OrbitalRotation(QGateImpl):
         return self.__add__(other)
 
     def compile(self, **kwargs) -> QCircuit:
+        """Compile the rotation into a circuit of Givens rotations.
+
+        Parameters
+        ----------
+        tol : float, optional
+            Angles below this are dropped. Default is 1e-12.
+        ordering : list or str, optional
+            Givens elimination order. Default is ``"Optimized"``.
+
+        Returns
+        -------
+        tq.QCircuit
+            Circuit acting on the qubits of ``orbitals``.
+        """
         if "tol" in kwargs:
             tol = kwargs["tol"]
             kwargs.pop("tol")
@@ -110,6 +151,7 @@ class OrbitalRotation(QGateImpl):
     # def __eq__(self, other):
     #     return self.orbital==other.orbital and allclose(self.coeff,other.coeff)
     def _rot_mat(self, n: int, pos_dx):
+        """Return the permutation matrix that moves ``pos_dx`` to the leading positions."""
         m = QTensor(shape=(n, n), objective_list=zeros(shape=(n, n)).reshape(n * n))
         for i in range(len(pos_dx)):
             m[i, pos_dx[i]] = 1
@@ -128,9 +170,17 @@ class OrbitalRotation(QGateImpl):
         return self.__str__()
 
     def pad_eye(self, matrix: QTensor, size) -> QTensor:
-        """
-        Increases the square Qtensor size to (size,size) setting new diag entries to one.
-        Useful for Qtensor  tensor product.
+        """Enlarge a square matrix to ``(size, size)`` filling new diagonal entries with one.
+
+        Parameters
+        ----------
+        matrix : tq.QTensor
+        size : int
+            New dimension.
+
+        Returns
+        -------
+        tq.QTensor
         """
         new = QTensor(shape=(size, size), objective_list=eye(size).reshape(size**2))
         for i in range(len(matrix)):

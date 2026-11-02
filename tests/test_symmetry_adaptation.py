@@ -10,7 +10,7 @@ from sunrise.symmetry_adaptation import (
     PointGroup,
     SpinCGSymmetrizationProcedure,
     SpinSymmetrizationProcedure,
-    SymmetryAdaptedLinearCombintationSymmetrization,
+    SymmetryAdaptedLinearCombinationSymmetrization,
 )
 from sunrise.utils.transformation_helpers import FermionicSWAP
 
@@ -308,7 +308,7 @@ def test_SALC_symmetrization(molecule_pointgroup) -> None:
     provider_localized = IrrepProvider(mol, "loc")
     states_list = FockSpaceState.non_ionic_states(mol, provider_localized)
 
-    symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(
+    symm_list = SymmetryAdaptedLinearCombinationSymmetrization(mol).symmetrize(
         states_list
     )
     for state in symm_list:
@@ -326,7 +326,7 @@ def test_SALC_symmetrization_correctness() -> None:
     provider_localized = IrrepProvider(mol, "loc")
     states_list = FockSpaceState.non_ionic_states(mol, provider_localized)
 
-    symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(
+    symm_list = SymmetryAdaptedLinearCombinationSymmetrization(mol).symmetrize(
         states_list
     )
     rep_qcircuit = mol.qcircuit_representation()

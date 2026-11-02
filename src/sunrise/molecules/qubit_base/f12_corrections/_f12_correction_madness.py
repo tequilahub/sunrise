@@ -1,3 +1,5 @@
+"""F12 correction using the tensors computed by MADNESS."""
+
 from __future__ import annotations
 
 import numpy
@@ -7,8 +9,33 @@ from ._f12_correction_base import ExplicitCorrelationCorrection
 
 
 class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
-    """
-    Class for computation of explicitly correlated correction, using PNO-orbitals from madness
+    """Explicitly correlated correction using PNO orbitals and integrals from MADNESS.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryMadness
+        The molecule.
+    rdm1 : numpy.ndarray, optional
+        One-electron reduced density matrix.
+    rdm2 : numpy.ndarray, optional
+        Two-electron reduced density matrix (spin-free), in the physics (Dirac) ordering as
+        returned by ``compute_rdms``.
+    n_ri : int, optional
+        Dimension of the RI basis. By default the largest available one is used.
+    gamma : float, optional
+        Exponent of the correlation factor f_12 = -1/gamma * exp(-gamma*r_12). Default is 1.4.
+    f12_filename : str, optional
+        File with the f12 tensor <rs|f_12|pq> in Mulliken ordering, either ``.bin``
+        (from MADNESS, converted to ``.npy`` on the fly) or ``.npy``.
+        Default is "molecule_f12tensor.bin".
+    **kwargs
+        Same as for ``ExplicitCorrelationCorrection``, e.g. ``U`` and ``variables``
+        to compute the RDMs.
+
+    Raises
+    ------
+    TequilaException
+        If ``f12_filename`` is neither a ``.bin`` nor a ``.npy`` file.
     """
 
     def __init__(
@@ -21,26 +48,7 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
         f12_filename: str = "molecule_f12tensor.bin",
         **kwargs,
     ):
-        """
-        Parameters
-        ----------
-        mol :
-            the molecule given by a QuantumChemistryMadness
-        rdm1 :
-            1-electron reduced density matrix
-        rdm2 :
-            2-electron reduced density matrix
-        gamma :
-            f12-exponent, for a correlation factor f_12 = -1/gamma * exp[-gamma*r_12]
-        n_ri :
-            dimensionality of RI-basis; if None, then the maximum available via tensors / basis-set is used
-        f12_filename :
-            when using madness_interface, <q|h|p> and <rs|1/r_12|pq> already available;
-            need to provide f12-tensor <rs|f_12|pq> as ".bin" from madness or ".npy", assuming Mulliken ordering
-        kwargs :
-            e.g. RDM-information via {"U": QCircuit, "variables": optimal angles}, needs to be passed if rdm1,rdm2 not
-            yet computed
-        """
+        """See the class docstring for the parameters."""
         # Set up known external info for madness
         if f12_filename.endswith(".bin"):
             try:
@@ -67,18 +75,16 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
         )
 
     def setup_tensors_madness(self):
-        """
-        Setup tensors with integrals provided externally
-        Pretty much equivalent to super().setup_tensors_external
+        """Set up the tensors from the MADNESS integrals.
 
-        This assumes the f12-integrals r_PQrs = < rs | f_12 | pq > with f_12 = exp(-gamma*r_12),
-        while for the correction, we want f_12 = -1/gamma * exp(-gamma*r_12)
-        Also, assumes, that f12-integrals are provided in Mulliken ("chem") - ordering
+        Like ``setup_tensors_external``, but the f12 integrals <rs|f_12|pq> in the file are
+        assumed to be in Mulliken ("chem") ordering and to use f_12 = exp(-gamma*r_12);
+        they are rescaled by -1/gamma to obtain the factor used in the correction.
 
         Returns
         -------
-        NBodyTensor
-            one-body tensor h, Coulomb tensor g, f_12 tensor r
+        tuple of NBodyTensor
+            One-body tensor ``h``, Coulomb tensor ``g`` and f12 tensor ``r``.
         """
 
         h, g, r = super().setup_tensors_external()
@@ -88,13 +94,12 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
         return h, g, r
 
     def compute(self) -> float:
-        """
-        Computes universal explicitly correlated correction based on parameters of class instance
-        Uses madness-tensors read from an external file
+        """Compute the correction using the MADNESS tensors read from the external file.
 
         Returns
         -------
-            the explicitly correlated correction
+        float
+            The explicitly correlated correction.
         """
         print("Set up universal f12-correction using external integrals from madness.")
         # Prepare tensors

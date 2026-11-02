@@ -1,3 +1,5 @@
+"""Export molecular orbitals, density and electrostatic potential as cube files."""
+
 from __future__ import annotations
 
 import sys
@@ -21,18 +23,41 @@ def plot_MO(
     rdm1: ndarray | None = None,
     exclude_core: bool = False,
 ):
-    """
-    Small function to save the MOs into Cube files
+    """Save molecular orbitals, electron density or electrostatic potential as cube files.
+
+    Orbitals are written to ``<label>_<filename>_MO.cube``, the density to
+    ``<filename>_density.cube`` and the potential to ``<filename>_mep.cube``.
+
     Parameters
     ----------
-    filename : Cube file will be saved as name+orb_index
-    orbital: index of the orbitals to save
-    use_active: Wether to plot only the active orbitals, if orbital list passed and true, its assumed that the indices are w.r.t. active orbitals (mol.integral_manager.active_orbitals[x].idx instead of ...[x].idx_total).
-    molecule: molecule to plot the orbitals from
-    print_orbital: whether to print the MOs
-    density: whether to print the electron density
-    mep: whether to plot the molecular electrostatic potential
-    exclude_core: if custom rdm1 provided with active space shape, whether to include the frozen occupied orbitals on the total space rdm1
+    molecule : QuantumChemistryBase
+        Molecule to take the orbitals from.
+    filename : str, optional
+        Base name of the cube files. Default is ``<name>-<basis>-<orbital type>``.
+    orbital : list of int, optional
+        Orbital indices to save. Default is all active orbitals if ``use_active``
+        else all orbitals. With ``use_active`` the indices refer to the active
+        orbitals (``active_orbitals[x].idx``), otherwise to all orbitals (``idx_total``).
+    use_active : bool, optional
+        Plot only the active orbitals. If ``orbital`` is given, its indices refer to the
+        active orbitals (``mol.integral_manager.active_orbitals[x].idx`` instead of
+        ``idx_total``). Default is True.
+    print_orbital : bool, optional
+        Whether to write the orbital cube files. Default is True.
+    density : bool, optional
+        Whether to write the electron density. Default is False.
+    mep : bool, optional
+        Whether to write the molecular electrostatic potential. Default is False.
+    rdm1 : numpy.ndarray, optional
+        Custom 1-RDM in the MO basis, of active-space or full size, used for the
+        density and potential. Default is the RHF density.
+    exclude_core : bool, optional
+        If ``rdm1`` has active-space size, whether to leave out the frozen occupied
+        orbitals (otherwise they are added with occupation 2). Default is False.
+
+    Examples
+    --------
+    >>> sun.plot_MO(molecule=mol, filename="N2_CLPO")  # doctest: +SKIP
     """
 
     if filename is None:

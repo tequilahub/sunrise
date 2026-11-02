@@ -1,3 +1,5 @@
+"""Decomposition of orbital-basis changes (real orthogonal matrices) into Givens rotations (``UR`` gates) and phases, and the inverse reconstruction."""
+
 from __future__ import annotations
 
 import numbers
@@ -13,15 +15,18 @@ OPTIMIZED_ORDERING = "Optimized"
 
 
 def n_rotation(i: int, phi) -> fe.FCircuit:
-    """
-    Creates a quantum circuit that applies a phase rotation based on phi to both components (up and down) of a given spatial orbital.
+    """Create the phase gates on the up and down spin orbitals of spatial orbital ``i``.
 
-    Parameters:
-    - i (int): The index of the qubit to which the rotation will be applied.
-    - phi (float): The rotation angle. The actual rotation applied will be multiplied with -2 for both components.
+    Parameters
+    ----------
+    i : int
+        Spatial orbital index.
+    phi : float or tq.Variable
+        Rotation angle; the gates use the angle ``-2 * phi``.
 
-    Returns:
-    - FCircuit: A quantum circuit object containing the sequence of rotations applied to the up and down components of the specified spatial orbital.
+    Returns
+    -------
+    FCircuit
     """
 
     # Start a new circuit and apply rotations to each component.
@@ -37,21 +42,33 @@ def get_givens_circuit(
     fix: bool = True,
     label=None,
 ) -> fe.FCircuit:
-    """
-    Constructs a quantum circuit from a given real unitary matrix using Givens rotations.
+    """Build the FCircuit implementing a real unitary matrix with Givens rotations.
 
-    This method decomposes a unitary matrix into a series of Givens and Phase rotations,
-    then constructs and returns a quantum circuit that implements this sequence of rotations.
+    The matrix is decomposed with ``get_givens_decomposition`` into ``UR`` and ``Phase`` gates.
 
-    Parameters:
-        - unitary (numpy.array): A real unitary matrix representing the transformation to implement.
-        - tol (float): A tolerance threshold below which matrix elements are considered zero.
-        - ordering (list of tuples or 'Optimized'): Custom ordering of indices for Givens rotations or 'Optimized' to generate them automatically.
-        - fix (bool): whether to set the angle as fixed or as inial value as: angle=tq.Variable(idx) + value. Useful to let further relaxation to the basis change
-        - label: can be passed instead of angle to have auto-naming with label ("R",i,j,label) useful for repreating gates with individual variables
+    Parameters
+    ----------
+    unitary : numpy.ndarray
+        Real unitary matrix to implement.
+    tol : float, optional
+        Elements and angles below this value are treated as zero. Default is 1e-6.
+    ordering : list of tuple of int or str or None, optional
+        Custom ``(row, column)`` elimination order, or ``"Optimized"`` (default) for a linear-depth order.
+    fix : bool, optional
+        If True (default) the angles are fixed numbers. If False each angle is a
+        variable ``UR(i,j[,label])`` / ``Ph(i[,label])`` with the decomposition value as offset,
+        so the basis change can be relaxed later.
+    label : optional
+        Label added to the variable names when ``fix`` is False.
 
-    Returns:
-    - FCircuit: A quantum circuit implementing the series of rotations decomposed from the unitary.
+    Returns
+    -------
+    FCircuit
+
+    Examples
+    --------
+    >>> from sunrise.fermionic_operations.givens_rotations import get_givens_circuit
+    >>> UR = get_givens_circuit(mo_coeff)  # mo_coeff: real orthogonal matrix
     """
     # Decompose the unitary matrix into Givens and phase (Rz) rotations.
     theta_list, phi_list = get_givens_decomposition(unitary, tol, ordering)
@@ -101,17 +118,21 @@ def get_givens_circuit(
 
 
 def givens_matrix(n, p, q, theta) -> QTensor:
-    """
-    Generates a Givens rotation matrix of size n x n to rotate by angle theta in the (p, q) plane. This matrix can be complex
+    """Return the ``n x n`` Givens rotation matrix by angle ``theta`` in the (p, q) plane.
 
-    Parameters:
-    - n (int): The size of the Givens rotation matrix.
-    - p (int): The first index for the rotation plane.
-    - q (int): The second index for the rotation plane.
-    - theta (float): The rotation angle.
+    Parameters
+    ----------
+    n : int
+        Dimension of the matrix.
+    p, q : int
+        Indices of the rotation plane.
+    theta : float, tq.Variable or tq.Objective
+        Rotation angle.
 
-    Returns:
-    - numpy.array: The Givens rotation matrix.
+    Returns
+    -------
+    tq.QTensor
+        The matrix, which can be complex.
     """
     matrix = QTensor(
         shape=(n, n), objective_list=numpy.eye(n).reshape(n * n)
@@ -139,19 +160,32 @@ def get_givens_decomposition(
     ordering: list | tuple | str | None = OPTIMIZED_ORDERING,
     return_diagonal: bool = False,
 ):
-    """
-    Decomposes a real unitary matrix into Givens rotations (theta) and Rz rotations (phi).
+    """Decompose a real unitary matrix into Givens rotations and phases.
 
-    Parameters:
-    - unitary (numpy.array): A real unitary matrix to decompose. It cannot be complex.
-    - tol (float): Tolerance for considering matrix elements as zero. Elements with absolute value less than tol are treated as zero.
-    - ordering (list of tuples or 'Optimized'): Custom ordering of indices for Givens rotations or 'Optimized' to generate them automatically.
-    - return_diagonal (bool): If True, the function also returns the diagonal matrix as part of the output.
+    Parameters
+    ----------
+    unitary : numpy.ndarray
+        Real unitary matrix.
+    tol : float, optional
+        Elements and angles with absolute value below this are treated as zero. Default is 1e-6.
+    ordering : list of tuple of int or str or None, optional
+        Custom ``(row, column)`` elimination order, or ``"Optimized"`` (default) for a linear-depth order.
+    return_diagonal : bool, optional
+        Also return the remaining diagonal matrix. Default is False.
 
-    Returns:
-    - list: A list of tuples, each representing a Givens rotation. Each tuple contains the rotation angle theta and indices (i,j) of the rotation.
-    - list: A list of tuples, each representing an Rz rotation. Each tuple contains the rotation angle phi and the index (i) of the rotation.
-    - numpy.array (optional): The diagonal matrix after applying all Givens rotations, returned if return_diagonal is True.
+    Returns
+    -------
+    theta_list : list of tuple
+        Givens rotations ``(theta, i, j)``.
+    phi_list : list of tuple
+        Phase rotations ``(phi, i)``.
+    diagonal : numpy.ndarray
+        Diagonal matrix left after the eliminations (only if ``return_diagonal``).
+
+    Examples
+    --------
+    >>> theta_list, phi_list = get_givens_decomposition(unitary)
+    >>> R = reconstruct_matrix_from_givens(unitary.shape[0], theta_list, phi_list)  # equals unitary
     """
     U = unitary  # no need to copy as we don't modify the original
     # U[abs(U) < tol] = 0 # Zeroing out the small elements as per the tolerance level. #comented out, its being considered latter again
@@ -221,19 +255,38 @@ def reconstruct_matrix_from_givens(
     to_real_if_possible: bool = True,
     tol: float = 1e-12,
 ) -> numpy.ndarray:
-    """
-    Reconstructs a matrix from given Givens rotations and Phase diagonal rotations.
-    This function is effectively an inverse of get_givens_decomposition, and therefore only works with data in the same format as its output.
+    """Reconstruct a matrix from Givens rotations and Phase diagonal rotations.
 
-    Parameters:
-    - n (int): The size of the unitary matrix to be reconstructed.
-    - theta_list (list of tuples): Each tuple contains (angle, i, j) representing a Givens rotation of `angle` radians, applied to rows/columns `i` and `j`.
-    - phi_list (list of tuples): Each tuple contains (angle, i), representing an Rz rotation by `angle` radians applied to the `i`th diagonal element.
-    - to_real_if_possible (bool): If True, converts the matrix to real if its imaginary part is effectively zero.
-    - tol (float): The tolerance whether to swap a complex rotation for a sign change.
+    This is effectively the inverse of ``get_givens_decomposition`` and therefore only works with
+    data in the same format as its output: the phases are applied to the identity first, then the
+    Givens rotations in reverse order.
 
-    Returns:
-    - numpy.ndarray: The reconstructed complex or real matrix, depending on the `to_real_if_possible` flag and matrix composition.
+    Parameters
+    ----------
+    n : int
+        Dimension of the matrix to reconstruct.
+    theta_list : list of tuple
+        Givens rotations ``(angle, i, j)``: a rotation by ``angle`` radians acting on rows/columns
+        ``i`` and ``j``. Angles may be variables.
+    phi_list : list of tuple
+        Phase rotations ``(angle, i)``: the ``i``-th diagonal element is multiplied by
+        ``exp(1j * angle)``. Angles may be variables.
+    to_real_if_possible : bool, optional
+        If True (default), return a real matrix when its imaginary part is zero.
+    tol : float, optional
+        Tolerance to detect an angle of pi, which is applied as an exact sign change instead of a
+        complex phase. Default is 1e-12.
+
+    Returns
+    -------
+    numpy.ndarray or tq.QTensor
+        The reconstructed matrix, real or complex depending on ``to_real_if_possible`` and on
+        the rotations; a QTensor if some angles are variables.
+
+    Examples
+    --------
+    >>> theta_list, phi_list = get_givens_decomposition(unitary)
+    >>> R = reconstruct_matrix_from_givens(unitary.shape[0], theta_list, phi_list)  # equals unitary
     """
     # Start with an identity matrix
     # reconstructed = numpy.eye(norb, dtype=complex)
@@ -280,18 +333,38 @@ def reconstruct_matrix_from_circuit(
     to_real_if_possible: bool = True,
     tol: float = 1e-12,
 ) -> QTensor:  # numpy.ndarray:
-    """
-    Reconstructs a matrix from a UR + Phase FCircuit.
-    This function is effectively an inverse of get_givens_circuit.
+    """Reconstruct the matrix implemented by a circuit of ``UR`` and ``Phase`` gates.
 
-    Parameters:
-    - norb (int): The size of the unitary matrix to be reconstructed. If None, the number of qubits//2 in U is used.
-    - U (FCircuit): The quantum circuit containing only UR (optionally Excitations gates) and Phase rotations.
-    - to_real_if_possible (bool): If True, converts the matrix to real if its imaginary part is effectively zero.
-    - tol (float): The tolerance whether to swap a complex rotation for a sign change.
+    This is effectively the inverse of ``get_givens_circuit``: the gates are translated back into
+    Givens rotations and phases, which ``reconstruct_matrix_from_givens`` turns into a matrix.
+    ``Phase`` gates must come in pairs acting on both spin orbitals of the same spatial orbital
+    with the same angle; single-excitation ``FermionicExcitation`` gates are accepted in the
+    same paired form instead of ``UR`` gates.
 
-    Returns:
-    - numpy.ndarray: The reconstructed complex or real matrix, depending on the `to_real_if_possible` flag and matrix composition.
+    Parameters
+    ----------
+    U : FCircuit
+        Circuit containing only ``UR`` (optionally paired excitation) and ``Phase`` gates.
+    norb : int, optional
+        Dimension of the matrix, i.e. the number of spatial orbitals. Default is
+        ``U.n_qubits // 2``.
+    to_real_if_possible : bool, optional
+        If True (default), return a real matrix when its imaginary part is zero.
+    tol : float, optional
+        Tolerance to compare the angles of paired gates and to detect an angle of pi, which is
+        applied as an exact sign change instead of a complex phase. Default is 1e-12.
+
+    Returns
+    -------
+    numpy.ndarray or tq.QTensor
+        The reconstructed matrix, real or complex depending on ``to_real_if_possible`` and on
+        the rotations; a QTensor if some angles are variables.
+
+    Raises
+    ------
+    TequilaException
+        If the circuit contains other gates, or ``Phase`` or excitation gates do not come in
+        matching pairs.
     """
     U = U.to_udud(norb)
     if norb is None:
@@ -394,6 +467,13 @@ def reconstruct_matrix_from_circuit(
 
 
 def arctan2(x1, x2, *args, **kwargs):
+    """Element-wise ``arctan2`` that also accepts tequila variables/objectives and complex numbers.
+
+    Parameters
+    ----------
+    x1, x2 : float, complex, tq.Variable or tq.Objective
+        Arguments as in ``numpy.arctan2(x1, x2)``.
+    """
     if isinstance(x1, (Variable, Objective)) or isinstance(x2, (Variable, Objective)):
         return Objective().binary_operator(left=1 * x1, right=1 * x2, op=numpy.arctan2)
     elif not isinstance(x1, numbers.Complex) and not isinstance(x2, numbers.Complex):
@@ -404,16 +484,26 @@ def arctan2(x1, x2, *args, **kwargs):
 
 # This one copied from tequila.grouping.fermionic_functions, same date and patch as above
 def depth_eff_order_mf(N: int) -> list:
-    """
-    Returns index ordering for linear depth circuit
+    """Return the elimination order of a linear-depth Givens network.
 
-    For example N = 6 gives elimination order
-    [ 0.  0.  0.  0.  0.  0.]
-    [ 7.  0.  0.  0.  0.  0.]
-    [ 5. 10.  0.  0.  0.  0.]
-    [ 3.  8. 12.  0.  0.  0.]
-    [ 2.  6. 11. 14.  0.  0.]
-    [ 1.  4.  9. 13. 15.  0.]
+    For example N = 6 gives the elimination order (numbers show the step)::
+
+        [ 0.  0.  0.  0.  0.  0.]
+        [ 7.  0.  0.  0.  0.  0.]
+        [ 5. 10.  0.  0.  0.  0.]
+        [ 3.  8. 12.  0.  0.  0.]
+        [ 2.  6. 11. 14.  0.  0.]
+        [ 1.  4.  9. 13. 15.  0.]
+
+    Parameters
+    ----------
+    N : int
+        Dimension of the matrix.
+
+    Returns
+    -------
+    list of tuple of int
+        ``(row, column)`` pairs in elimination order.
     """
     l = []
     for c in range(N - 1):

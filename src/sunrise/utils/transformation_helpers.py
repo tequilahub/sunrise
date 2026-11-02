@@ -1,3 +1,5 @@
+"""Helpers for symmetry transformations of molecules and for fermionic swap circuits."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -13,15 +15,25 @@ if TYPE_CHECKING:
 
 
 class GeometricTransformationHelper:
-    """A helper class for transformations from symmetry operations in 3D space on molecules around a given center."""
+    """Static helpers to apply 3D symmetry operations (rotations, reflections) to molecules via permutations of atoms and orbitals."""
 
     # This function is specific to the STO-3g base
     @classmethod
     def num_active_spatial_orbitals(cls, charges: list[int]) -> list[int]:
-        """
-        Returns an ordered list of active spin orbital counts, given only
-        the list of atomic charges (atomic numbers) of the molecule's atoms.
+        """Return the number of active spatial orbitals per atom in the STO-3G basis.
 
+        The active count is the number of minimal-basis orbitals minus the
+        core orbitals of the atom's period.
+
+        Parameters
+        ----------
+        charges : list of int
+            Atomic numbers of the atoms.
+
+        Returns
+        -------
+        list of int
+            Active spatial orbitals of each atom, in the order of ``charges``.
         """
         core_per_period = {1: 0, 2: 1, 3: 5, 4: 9, 5: 18}
 
@@ -39,8 +51,7 @@ class GeometricTransformationHelper:
             return 6
 
         def minimal_basis_ao_count(charge):
-            """
-            Number of spatial AOs in the minimal (STO-3G) basis for a given element.
+            """Number of spatial AOs in the minimal (STO-3G) basis for a given element.
             Equals the number of occupied shells in the neutral ground-state atom.
             """
             if charge <= 2:
@@ -75,8 +86,7 @@ class GeometricTransformationHelper:
     def homogeneous_operation(
         cls, M: NDArray[numpy.float64], center: NDArray[numpy.float64] | None = None
     ) -> NDArray[numpy.float64]:
-        """
-        Construct the homogeneous representation of a linear operation.
+        """Construct the homogeneous representation of a linear operation.
 
         Homogeneous coordinates embed a 3D affine transformation in a
         higher-dimensional linear space by representing points as
@@ -86,10 +96,10 @@ class GeometricTransformationHelper:
 
         Parameters
         ----------
-        M
-                3×3 matrix representing a linear operation in Cartesian space.
-        center
-                Point about which the operation is applied.
+        M : numpy.ndarray
+            3×3 matrix representing a linear operation in Cartesian space.
+        center : numpy.ndarray, optional
+            Point about which the operation is applied.
         """
         if center is None:
             center = numpy.zeros(3)
@@ -102,8 +112,7 @@ class GeometricTransformationHelper:
     def homogeneous_coordinates(
         cls, v: NDArray[numpy.float64], is_row_vector: bool = True
     ) -> NDArray[numpy.float64]:
-        """
-        Convert Cartesian coordinates to homogeneous coordinates.
+        """Convert Cartesian coordinates to homogeneous coordinates.
 
         Homogeneous coordinates represent a point ``[x, y, z]`` as
         ``[x, y, z, 1]``, embedding 3D affine geometry in a 4D linear
@@ -113,11 +122,11 @@ class GeometricTransformationHelper:
 
         Parameters
         ----------
-        v
-                A single 3-vector or an array of 3-vectors.
-        is_row_vector
-                If ``True``, vectors are stored as rows ``(N, 3)``; otherwise
-                vectors are stored as columns ``(3, N)``.
+        v : numpy.ndarray
+            A single 3-vector or an array of 3-vectors.
+        is_row_vector : bool, optional
+            If ``True``, vectors are stored as rows ``(N, 3)``; otherwise
+            vectors are stored as columns ``(3, N)``.
         """
 
         v = numpy.asarray(v)
@@ -149,8 +158,7 @@ class GeometricTransformationHelper:
     def to_col_permutation(
         cls, A: NDArray[numpy.float64], B: NDArray[numpy.float64], tol: float = 1e-8
     ) -> NDArray[numpy.int_]:
-        """
-        Compute the column permutation mapping from ``A`` to ``B``.
+        """Compute the column permutation mapping from ``A`` to ``B``.
 
         For each column in ``B``, this method finds the index of the matching
         column in ``A`` (within absolute tolerance ``tol``), and returns those
@@ -159,26 +167,24 @@ class GeometricTransformationHelper:
         Parameters
         ----------
         A : NDArray[numpy.float64]
-                Reference matrix whose columns define the source ordering.
+            Reference matrix whose columns define the source ordering.
         B : NDArray[numpy.float64]
-                Target matrix whose columns are matched against columns of ``A``.
+            Target matrix whose columns are matched against columns of ``A``.
         tol : float, optional
-                Absolute tolerance used for element-wise column comparison, by default
-                ``1e-8``.
+            Absolute tolerance used for element-wise column comparison, by default
+            ``1e-8``.
 
         Returns
         -------
-        NDArray[numpy.int_]
-                Integer permutation vector ``p`` such that, column-wise,
-                ``B[:, j] == A[:, p[j]]`` up to tolerance.
+        numpy.ndarray of int
+            Integer permutation vector ``p`` such that, column-wise,
+            ``B[:, j] == A[:, p[j]]`` up to tolerance.
 
         Notes
         -----
         - This implementation assumes each column of ``B`` has at least one match
           in ``A`` within ``tol``.
-        - In the special case where either ``A`` or ``B`` is the identity matrix
-          (and the other is a compatible permutation matrix), this acts as the
-          inverse relation of ``to_col_permutation``.
+        - Raises ``ValueError`` if a column of ``B`` has no match in ``A``.
         """
         result = []
         for col in B.T:
@@ -194,24 +200,23 @@ class GeometricTransformationHelper:
 
     @classmethod
     def to_permutation_matrix(cls, perm: list[int]) -> NDArray[numpy.int_]:
-        """
-        Convert a permutation vector to a permutation matrix.
+        """Convert a permutation vector to a permutation matrix.
 
-        This is the inverse operation of :meth:`to_col_permutation`: given the
+        This is the inverse operation of ``to_col_permutation``: given the
         column-index permutation returned by ``to_col_permutation``, this method
         builds the corresponding permutation matrix.
 
         Parameters
         ----------
         perm : list[int]
-                Permutation vector of length ``n`` where ``perm[i]`` is the target
-                column index for row ``i``.
+            Permutation vector of length ``n`` where ``perm[i]`` is the column
+            index of the 1 in row ``i``.
 
         Returns
         -------
-        NDArray[numpy.int_]
-                Permutation matrix ``P`` of shape ``(n, n)`` with exactly one ``1`` in
-                each row and zeros elsewhere.
+        numpy.ndarray of int
+            Permutation matrix ``P`` of shape ``(n, n)`` with exactly one ``1`` in
+            each row and zeros elsewhere.
         """
         n = len(perm)
         P = numpy.zeros((n, n), dtype=int)
@@ -227,32 +232,32 @@ class GeometricTransformationHelper:
         In a block-wise permutation, elements are grouped into blocks by label, and
         entire blocks are reordered while preserving order within each block.
 
-        Examples
-        --------
-        Given AO basis functions grouped by atom::
-
-                labels = [0,0,0,0,0, 1,1,1,1,1, 2, 3]
-                perm = [1, 0, 3, 2]
-
-        the resulting matrix reorders rows so atom 1's block comes first, then
-        atom 0, then atom 3, then atom 2.
-
         Parameters
         ----------
         element_labels : array-like
-                Label per element indicating block membership, e.g.
-                ``[0,0,0,0,0,1,1,1,1,1,2,3]``. Blocks are expected to be contiguous.
+            Label per element indicating block membership, e.g.
+            ``[0,0,0,0,0,1,1,1,1,1,2,3]``. Blocks are expected to be contiguous.
         label_perm : array-like
-                Permutation of unique block labels, e.g. ``[1, 0, 3, 2]``.
-                ``label_perm[i] = k`` means output block position ``i`` is filled by
-                inumpyut block label ``k``.
+            Permutation of unique block labels, e.g. ``[1, 0, 3, 2]``.
+            ``label_perm[i] = k`` means output block position ``i`` is filled by
+            input block label ``k``.
 
         Returns
         -------
         numpy.ndarray
-                Integer permutation matrix ``P`` with shape ``(n, n)``.
-                Applying ``P @ v`` reorders a vector, and ``P @ C`` reorders matrix rows
-                according to the block-wise permutation.
+            Integer permutation matrix ``P`` with shape ``(n, n)``.
+            Applying ``P @ v`` reorders a vector, and ``P @ C`` reorders matrix rows
+            according to the block-wise permutation.
+
+        Examples
+        --------
+        Given AO basis functions grouped by atom::
+
+            labels = [0,0,0,0,0, 1,1,1,1,1, 2, 3]
+            perm = [1, 0, 3, 2]
+
+        the resulting matrix reorders rows so atom 1's block comes first, then
+        atom 0, then atom 3, then atom 2.
         """
         element_labels = numpy.asarray(element_labels)
         n = len(element_labels)
@@ -276,20 +281,19 @@ class GeometricTransformationHelper:
 
     @classmethod
     def perm_matrix_to_swaps(cls, P: NDArray[numpy.int_]) -> list[tuple[int, int]]:
-        """
-        Decompose an n×n permutation matrix into an ordered list of swaps.
+        """Decompose an n×n permutation matrix into an ordered list of swaps.
 
         Parameters
         ----------
         P : numpy.ndarray
-                P[i][j] = 1 -> output slot i draws from inumpyut slot j.
+            P[i][j] = 1 -> output slot i draws from input slot j.
 
         Returns
         -------
         list[tuple[int, int]]
-                [(i0, j0), (i1, j1), ...] such that applying the swaps in
-                that order to [0, 1, ..., n-1] reproduces the permutation of P.
-                Produces exactly n − (number of cycles) swaps — the minimum possible.
+            [(i0, j0), (i1, j1), ...] such that applying the swaps in
+            that order to [0, 1, ..., n-1] reproduces the permutation of P.
+            Produces exactly n − (number of cycles) swaps — the minimum possible.
         """
         n = P.shape[0]
         assert P.shape == (n, n)
@@ -319,26 +323,46 @@ class GeometricTransformationHelper:
 # This is really inefficient but will work for now
 @dataclass
 class FermionicSWAP:
+    """Build fermionic swap circuits for a molecule with qubits ordered as [up0, down0, up1, down1, ...].
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule the circuits are built for.
+
+    Examples
+    --------
+    >>> fswap = FermionicSWAP(mol)
+    >>> U = fswap.f_swap(0, 3)
+    """
+
     mol: QuantumChemistryBase
 
     def f(self, i: int, j: int) -> tequila.QCircuit:
-        """
-        This is a helper function for fermionic_swap.
+        """Return the exact fermionic swap of two adjacent qubit modes, the building block of ``f_swap``.
 
-        The fermionic swap (SWAP followed by CZ) of the two adjacent qubit
-        modes (i, j), built from 2 CNOTs:
-                |00> -> |00>, |01> -> |10>, |10> -> |01>, |11> -> -|11>
+        The gate is a SWAP followed by a CZ, built from 2 CNOTs (and 2 Hadamards)::
+
+            |00> -> |00>, |01> -> |10>, |10> -> |01>, |11> -> -|11>
 
         Parameters
         ----------
         i : int
-                First qubit index.
+            First qubit index.
         j : int
-                Second qubit index.
+            Second qubit index.
 
-        Author
-        ------
-        Francisco Javier Del Arco Santos
+        Returns
+        -------
+        tq.QCircuit
+
+        Notes
+        -----
+        Written by Francisco Javier Del Arco Santos.
+
+        Examples
+        --------
+        >>> U = FermionicSWAP(mol).f(0, 1)
         """
         return (
             tequila.gates.H(target=i)
@@ -348,36 +372,33 @@ class FermionicSWAP:
         )
 
     def f_swap(self, i: int, j: int) -> tequila.QCircuit:
-        """
-        A function that swaps two orbitals (i, j) while accounting for fermionic antisymmetry.
-
-        Note
-        ----
-        This implementation assumes that the orbitals are ordered as
-        [up0, down0, up1, down1, ...] so that the spin-up and spin-down qubits
-        for each orbital are adjacent.
+        """Swap orbitals ``i`` and ``j`` (both spin components) with fermionic antisymmetry.
 
         Parameters
         ----------
         i : int
-                Index of the first orbital.
+            Index of the first orbital.
         j : int
-                Index of the second orbital.
+            Index of the second orbital.
 
         Returns
         -------
-        tequila.QCircuit
-                A circuit that will perform the specified fermionic swap.
+        tq.QCircuit
+            A circuit that performs the fermionic swap.
+
+        Notes
+        -----
+        Assumes the qubits are ordered as [up0, down0, up1, down1, ...], so that the spin-up and
+        spin-down qubits of each orbital are adjacent. Written by Francisco Javier Del Arco Santos.
 
         Examples
         --------
-        For example fermionic_swap(0,1) would perform the following transformations:
-                +|0011> -> +|1100>
-                +|0101> -> -|0101>
+        ``f_swap(0, 1)`` performs the following transformations::
 
-        Author
-        ------
-        Francisco Javier Del Arco Santos
+            +|0011> -> +|1100>
+            +|0101> -> -|0101>
+
+        >>> U = FermionicSWAP(mol).f_swap(0, 3)
         """
         U = tequila.QCircuit()
         for k in range(i, j):

@@ -1,3 +1,5 @@
+"""Irrep providers: objects that assign a point-group irreducible representation to a Fock-space state."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -13,18 +15,44 @@ if TYPE_CHECKING:
 
 @dataclass
 class IrrepProviderBase(ABC):
+    """Abstract base class of the irrep providers.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule whose point group defines the irreps.
+    """
+
     mol: QuantumChemistryBase
 
     @abstractmethod
     def get_irrep(self, state) -> str:
-        pass
+        """Return the irrep label of a state.
+
+        Parameters
+        ----------
+        state : FockSpaceState
+            State to classify.
+
+        Returns
+        -------
+        str or None
+            Irrep name, None if it cannot be determined.
+        """
 
 
 class LocalizedIrrepProvider(IrrepProviderBase):
-    """
-    An irrep provider that determines the irreducible representation of a state by directly
-    comparing the effect of the symmetry operations on the state to the character table.
-    This assumes a representation that is based on localized occupancies.
+    """Irrep provider based on the characters of the symmetry operations.
+
+    The operations of the point group are applied to the state as permutations (with phases) of
+    the localized orbitals, and the resulting character vector is compared to the character
+    table. If the state defines ``fragment_orbitals``, only operations that map the fragment
+    onto itself are used.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule with a ``point_group``.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
@@ -35,8 +63,15 @@ class LocalizedIrrepProvider(IrrepProviderBase):
         self._spatial_perms, self._spatial_phases = mol.compute_mo_perms_and_phases()
 
     def get_irrep(self, state) -> str | None:
+        """Return the irrep of ``state`` from its character vector, None if it matches no irrep.
+
+        Parameters
+        ----------
+        state : FockSpaceState
+            State to classify, possibly a superposition.
+        """
         from .symmetrization_procedure import (
-            SymmetryAdaptedLinearCombintationSymmetrization,
+            SymmetryAdaptedLinearCombinationSymmetrization,
         )
 
         n_orbitals = self.mol.n_orbitals
@@ -61,7 +96,7 @@ class LocalizedIrrepProvider(IrrepProviderBase):
             perm = self._spatial_perms[label]
             phases = self._spatial_phases[label]
 
-            transformed = SymmetryAdaptedLinearCombintationSymmetrization._apply_spatial_permutation_bitstring(
+            transformed = SymmetryAdaptedLinearCombinationSymmetrization._apply_spatial_permutation_bitstring(
                 state.wavefunction, perm, n_orbitals, phases
             )
             expectation = state.wavefunction.inner(transformed).real
@@ -80,10 +115,16 @@ class LocalizedIrrepProvider(IrrepProviderBase):
 
 
 class PySCFCanonicalIrrepProvider(IrrepProviderBase):
-    """
-    An irrep provider that uses PySCF to determine the irreducible representation of a state in the canonical molecular orbital basis.
-    PySCF only labels orbitals in Abelian groups, so the states are labelled in mol.abelian_point_group,
-    e.g. in D2h for a molecule with D4h symmetry.
+    """Irrep provider based on the canonical molecular orbitals labelled by PySCF.
+
+    PySCF only labels orbitals in Abelian groups, so the states are labelled in
+    ``mol.abelian_point_group``, e.g. in D2h for a molecule with D4h symmetry. The irrep of a
+    state is the product of the irreps of the occupied orbitals.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule built with the PySCF backend.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
@@ -93,9 +134,28 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 
     @property
     def mol_irreps(self) -> list[str]:
+        """list of str : Irrep label of each molecular orbital."""
         return self._mol_irreps
 
     def get_irrep(self, state) -> str | None:
+        """Return the irrep of ``state`` as the product of the irreps of its occupied orbitals.
+
+        Parameters
+        ----------
+        state : FockSpaceState
+            State with integer orbital occupations.
+
+        Returns
+        -------
+        str or None
+            Irrep name. None if the state has no ``mo_occ`` or the character product matches no irrep.
+
+        Raises
+        ------
+        ValueError
+            If an orbital occupation is fractional, e.g. for a superposition of different occupation
+            sectors. Use the ``"loc"`` provider in that case.
+        """
         if state.mo_occ is None:
             return None
 
@@ -124,9 +184,15 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 
 
 class MEAOIrrepProvider(LocalizedIrrepProvider):
-    """
-    An irrep provider for MEAOs.
-    Inherits from LocalizedIrrepProvider but uses MO-basis permutations and phases.
+    """Irrep provider for MEAO orbitals.
+
+    Same as ``LocalizedIrrepProvider`` but the permutations and phases are those of the
+    molecular-orbital basis of ``mol``.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule with a ``point_group``.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
@@ -146,12 +212,14 @@ INSTALLED_IRREP_PROVIDERS = {
 
 
 def show_available_modules():
+    """Print the names of the irrep providers installed on this system."""
     print("Available Irrep Providers")
     for k in INSTALLED_IRREP_PROVIDERS:
         print(k)
 
 
 def show_supported_modules():
+    """Print the names of the supported irrep providers."""
     print(SUPPORTED_IRREP_PROVIDERS)
 
 
@@ -159,8 +227,26 @@ def show_supported_modules():
 def IrrepProvider(
     mol: QuantumChemistryBase, provider: str = "canon", *args, **kwargs
 ) -> IrrepProviderBase:
-    r"""
-    ADD SOMETHING
+    """Create an irrep provider by name.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule whose point group defines the irreps.
+    provider : str {"canon", "loc", "meao"}
+        ``"canon"`` uses the PySCF-labelled canonical orbitals (Abelian groups only), ``"loc"`` the
+        characters of the symmetry operations on localized orbitals, ``"meao"`` the same for MEAOs.
+    *args, **kwargs
+        Passed to the provider class.
+
+    Returns
+    -------
+    IrrepProviderBase
+
+    Examples
+    --------
+    >>> provider = IrrepProvider(mol, "canon")
+    >>> states = FockSpaceState.non_ionic_states(mol, provider)
     """
     # any kwargs and circuit form should be managed inside each class
     return INSTALLED_IRREP_PROVIDERS[provider.lower()](*args, mol=mol, **kwargs)

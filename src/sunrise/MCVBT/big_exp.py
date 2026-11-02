@@ -1,3 +1,5 @@
+"""Energy objective of a linear combination of non-orthogonal circuits (``<H> / <S>``)."""
+
 from __future__ import annotations
 
 from numpy import sign
@@ -16,6 +18,31 @@ def BigExpVal(
     mol: QuantumChemistryBase,
     **kwargs,
 ) -> Objective:
+    """Return the energy objective of the state ``sum_i c_i |U_i>`` built from several circuits.
+
+    The result is ``E / S`` with ``E = sum_ij c_i c_j <U_i|H|U_j>`` and ``S = sum_ij c_i c_j <U_i|U_j>``.
+    The overlap ``S`` is clipped to at least 1e-6 in absolute value.
+
+    Parameters
+    ----------
+    circuits : list of QCircuit or list of FCircuit
+        Circuits preparing the basis states; all of the same type.
+    coefficcents : list of float or tq.Variable
+        Coefficients ``c_i`` (the argument name is spelled ``coefficcents``).
+    mol : QuantumChemistryBase
+        Molecule defining the Hamiltonian.
+    **kwargs
+        ``H`` : Hamiltonian for qubit circuits. Default is ``mol.make_hamiltonian()``.
+
+    Returns
+    -------
+    tq.Objective
+
+    Raises
+    ------
+    TequilaException
+        If fermionic and qubit circuits are mixed.
+    """
     n = len(circuits)
     SS = 0.0
     EE = 0.0
