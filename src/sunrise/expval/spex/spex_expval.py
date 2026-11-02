@@ -6,7 +6,7 @@ from numbers import Number
 from typing import Callable
 
 import spex_tequila as spex
-from numpy import array, ceil, complex128, exp, real
+from numpy import ceil, exp, real
 from openfermion import FermionOperator, normal_ordered
 from tequila import QubitHamiltonian, QubitWaveFunction, TequilaException, Variable
 from tequila.objective.objective import Objective, Variables
@@ -79,8 +79,7 @@ class SpexExpval:
         # the gradient deep-copies the brakets (molecule included), and a molecule whose
         # orbitals were rotated must not reuse the old terms.
         c, h, g = self.molecule.get_integrals()
-        h = array(h, dtype=complex128)
-        g = array(g.reorder("chem").elems, dtype=complex128)
+        g = g.reorder("chem").elems
         digest = sha1(h.tobytes())
         digest.update(g.tobytes())
         key = (name, self.norb, complex(c), digest.hexdigest())
