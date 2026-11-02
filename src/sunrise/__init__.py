@@ -14,6 +14,7 @@ from sunrise.molecules import (
     MoleculeToPyscf,
     load_molecule,
 )
+from sunrise.molecules import load_molecule as open_molecule
 from sunrise.molecules.qubit_base import QuantumChemistryBase, ParametersQC, NBodyTensor
 from sunrise.plot_mo import plot_MO
 from sunrise.graphical.qpic_visualization import qpic_to_pdf, qpic_to_png
@@ -87,6 +88,7 @@ __all__ = [
     "measurement",
     "minimize",
     "molecules",
+    "open_molecule",
     "optimize_orbitals",
     "pick_backend",
     "plot_MO",
