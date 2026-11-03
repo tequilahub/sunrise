@@ -12,7 +12,7 @@ from sunrise.expval import pick_backend
 from sunrise.fermionic_operations import FCircuit
 from sunrise.molecules.qubit_base import Molecule
 
-SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR = ["fqe", "tcc", "spex"]
+SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR = ["fqe", "tcc", "spex", "ffsim"]
 INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR = {}
 
 try:
@@ -33,6 +33,12 @@ try:
 
     INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR["spex"] = spex_circuit_simulator
 except (ImportError, AttributeError):
+    pass
+try:
+    from .ffsim.ffsim_expval import ffsim_circuit_simulator
+
+    INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR["ffsim"] = ffsim_circuit_simulator
+except ImportError:
     pass
 
 

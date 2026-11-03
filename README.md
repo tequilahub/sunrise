@@ -84,6 +84,11 @@ Install with:
 ```bash
 pip install fqe
 ```
+### [ffsim](https://github.com/qiskit-community/ffsim)
+Install with:
+```bash
+pip install ffsim
+```
 ### [TenCirChem - Next Generation](https://github.com/tensorcircuit/tensorcircuit-ng) (TCC-NG)
 The package's specified installation command is erroneous and deploys the prior version (plain TCC). However, the implementation on sunrise has been built over the existing ng package, waiting to be fixed. In the meantime, we recommend to install it as:
 ```bash
@@ -131,7 +136,7 @@ U = U.to_qcircuit(mol)
 
 
 ## Fermionic Expectation Value
-Fermionic Expectation Value, interface with FQE, TCC and TQ. Created in a similar form to tequila BraKet. 
+Fermionic Expectation Value, interface with Spex, FQE, TCC, ffsim and TQ. Created in a similar form to tequila BraKet. 
 
 ```python
 # If not specified, the default operator is the molecular Hamiltonian

@@ -17,7 +17,7 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from .fermionic_braket import FermBraketImpl
 
 # in order of preference when no backend is chosen: spex is sunrise's own simulator
-SUPPORTED_FERMIONIC_BACKENDS = ["spex", "tcc", "fqe", "tequila"]
+SUPPORTED_FERMIONIC_BACKENDS = ["spex", "tcc", "fqe", "ffsim", "tequila"]
 INSTALLED_FERMIONIC_BACKENDS = {}
 
 try:
@@ -38,6 +38,12 @@ try:
 
     INSTALLED_FERMIONIC_BACKENDS["spex"] = SpexExpval
 except (ImportError, AttributeError):
+    pass
+try:
+    from .ffsim.ffsim_expval import FFS_EXPVAL
+
+    INSTALLED_FERMIONIC_BACKENDS["ffsim"] = FFS_EXPVAL
+except ImportError:
     pass
 
 from .tequila_expval import TequilaBraket
