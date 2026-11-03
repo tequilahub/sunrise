@@ -31,18 +31,12 @@ class PointGroupRepresentation(Generic[T, S]):
 
     def character_vector(self, state: S) -> NDArray[numpy.complex128]:
         """
-        Returns the character vector of the representation, i.e. the characters of the symmetry
-        operations in the representation. These are assumed to be either 1 or -1 here.
+        Returns the character vector of the representation, i.e. the expectation values <state|op|state> of the
+        symmetry operations. For a state of a one-dimensional irrep these are its characters, either 1 or -1.
         """
 
-        # Compute the expectation value <state | op | state> for each operation.
-        # For 1D irreps the eigenvalues are ±1, so rounding cleanly handles
-        # numerical noise and global phases.
         return numpy.array(
-            [
-                numpy.round(state.inner(self.apply(op, state)).real)
-                for op in self.operations.values()
-            ]
+            [state.inner(self.apply(op, state)).real for op in self.operations.values()]
         )
 
     @classmethod

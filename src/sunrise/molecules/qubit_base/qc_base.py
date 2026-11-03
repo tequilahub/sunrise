@@ -1241,8 +1241,8 @@ class QuantumChemistryBase:
         """
         The point group of the molecule. If it is not given with the point_group keyword, it is detected from the
         geometry as the largest point group defined in sunrise: the full point group if it is C3v, C4v, D2d, D3h,
-        D3d, D4h, D6h, D8h, Td or Oh, the largest Abelian subgroup otherwise. The quantum chemistry backends compute
-        in abelian_point_group.
+        D3d, D4h, D6h, D8h, Td or Oh, the largest Abelian subgroup otherwise. PySCF labels the orbitals in
+        abelian_point_group.
         It can be set with a PointGroup or its Schoenflies label, e.g. to work in a subgroup.
         """
         if self._point_group is None:
@@ -1278,19 +1278,26 @@ class QuantumChemistryBase:
     @property
     def abelian_point_group(self):
         """
-        The point group if it is Abelian, its largest Abelian subgroup otherwise (e.g. D2h for D4h and D6h).
-        PySCF can only label the orbitals in Abelian groups.
+        The point group if it is Abelian, its largest Abelian subgroup otherwise (e.g. D2h for D4h and D6h, C2v for
+        C4v). PySCF can only label the orbitals in Abelian groups.
         """
-        if self.point_group.schoenflies_label in pyscf.symm.param.CHARACTER_TABLE:
+        label = self.point_group.schoenflies_label
+        if label in pyscf.symm.param.CHARACTER_TABLE:
             return self.point_group
-        pyscf_mol = pyscf.gto.M(
-            atom=str(self.parameters.geometry),
-            charge=self.parameters.charge,
-            unit=self.parameters.units,
-            symmetry=True,
-            verbose=0,
+        return PointGroup.from_pyscf(
+            {
+                "C3v": "Cs",
+                "C4v": "C2v",
+                "D2d": "D2",
+                "D3h": "C2v",
+                "D3d": "C2h",
+                "D4h": "D2h",
+                "D6h": "D2h",
+                "D8h": "D2h",
+                "Td": "D2",
+                "Oh": "D2h",
+            }[label]
         )
-        return PointGroup.from_pyscf(pyscf_mol.groupname)
 
     def mo_representation(self):
         """

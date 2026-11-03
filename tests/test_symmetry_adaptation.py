@@ -207,6 +207,10 @@ def test_canonical_abelian_fallback() -> None:
     for state in states:
         assert state.irrep in mol.abelian_point_group.character_table.irreps
 
+    # in a non-Abelian subgroup the states are labelled in its own largest Abelian subgroup
+    mol.point_group = "C4v"
+    assert mol.abelian_point_group.schoenflies_label == "C2v"
+
 
 # Tests the symmetry of charged molecules, atoms and geometries in bohr
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
@@ -292,6 +296,12 @@ def test_orbital_order() -> None:
             assert state.mo_occ == mo_occ
             assert state.irrep == irrep
 
+    # a superposition of the two is no eigenstate of the inversion and belongs to no irrep
+    wfn = 0.9 * tq.QubitWaveFunction.from_string(
+        "|1000>"
+    ) + 0.4359 * tq.QubitWaveFunction.from_string("|0010>")
+    assert FockSpaceState(mol, wfn, IrrepProvider(mol, "loc")).irrep is None
+
     mol4 = sun.Molecule(
         geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.",
         basis_set="sto-3g",
@@ -373,8 +383,13 @@ def test_SALC_symmetrization(molecule_pointgroup) -> None:
     symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(
         states_list
     )
+    s2_op = mol.make_s2_op()
     for state in symm_list:
         assert state.irrep is not None
+        # the SALCs of open-shell determinants are no S^2 eigenstates, their S2 is their own <S^2>
+        assert np.isclose(
+            state.S2, state.wavefunction.inner(s2_op(state.wavefunction)).real
+        )
 
 
 # Statically tests the values for H2 with localized MOs
@@ -478,6 +493,11 @@ def test_spin_CG_build_physical_state_correctness() -> None:
         open_shell_orbitals=[0, 1], S=0, m_s=0, coupling="singlet"
     )
     assert abs(s.S2) < 1e-6 and s.spin_multiplicity == "singlet"
+    # a singlet has no state with m_s = 1
+    with pytest.raises(ValueError, match="gives no state"):
+        cg2.build_physical_state(
+            open_shell_orbitals=[0, 1], S=0, m_s=1, coupling="singlet"
+        )
 
     # H4: O_{4,2}^{0,0} two singlet pairs (Eq A4)
     mol4 = sun.Molecule(

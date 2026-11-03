@@ -53,15 +53,35 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
         # Create an empty dataframe with the same columns as df
         diagonalised_states: list[FockSpaceState] = []
 
-        # Group by and m_s/⟨S_z⟩
+        # Group by and m_s/⟨S_z⟩: a single determinant has m_s = (n_up - n_down) / 2, other states need the
+        # operator, which is built once for all of them
         # an additional grouping by mo_occ could be added however mo_occ does not always exist
-        state_list_sorted = sorted(state_list, key=lambda s: s.m_s)
-        grouped = groupby(state_list_sorted, key=lambda s: s.m_s)
+        n_qubits = 2 * self.mol.n_orbitals
+        sz_op = self.mol.make_sz_op()
+        m_s_values = []
+        for state in state_list:
+            terms = list(state.wavefunction.items())
+            if not isinstance(state, FockSpaceState) or state._m_s is not None:
+                m_s_values.append(state.m_s)
+            elif len(terms) == 1:
+                bs_str = format(int(terms[0][0]), f"0{n_qubits}b")
+                m_s_values.append(
+                    (bs_str[0::2].count("1") - bs_str[1::2].count("1")) / 2
+                )
+            else:
+                m_s_values.append(
+                    numpy.round(
+                        state.wavefunction.inner(sz_op(state.wavefunction)).real,
+                        decimals=10,
+                    )
+                )
+        order = sorted(range(len(state_list)), key=lambda k: m_s_values[k])
+        grouped = groupby(order, key=lambda k: m_s_values[k])
 
         # Iterate over each group
         s2_op = self.mol.make_s2_op()
         for ms_val, group in grouped:
-            sub_states: list[FockSpaceState] = list(group)
+            sub_states: list[FockSpaceState] = [state_list[k] for k in group]
             mini_matrix = numpy.zeros((len(sub_states), len(sub_states)), dtype=complex)
 
             s2_applied = [
@@ -167,18 +187,21 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
             block = block.pop()
 
             # Extract spin quantum numbers from the seed state, m_s follows from the block. A single determinant has
-            # <S^2> = m_s (m_s + 1) + n_down - (number of doubly occupied orbitals), other seeds need the operator
+            # <S^2> = m_s (m_s + 1) + n_down - (number of doubly occupied orbitals) and is an S^2 eigenstate if its
+            # open shells all have the same spin, other seeds need the operator. The SALCs of a seed that is no S^2
+            # eigenstate are no S^2 eigenstates either, so they get no S2 (it is computed when it is needed)
             ms_val = (block[0] - block[1]) / 2
             if not isinstance(state, FockSpaceState) or state._S2 is not None:
-                s2_val = state.S2
+                s2_val, is_eigenstate = state.S2, True
             elif len(terms) == 1:
                 up, down, _ = terms[0]
                 s2_val = ms_val * (ms_val + 1) + len(down) - len(set(up) & set(down))
+                is_eigenstate = not (set(up) - set(down)) or not (set(down) - set(up))
             else:
-                s2_val = numpy.round(
-                    state.wavefunction.inner(s2_op(state.wavefunction)).real,
-                    decimals=10,
-                )
+                s2_wfn = s2_op(state.wavefunction)
+                s2_val = numpy.round(state.wavefunction.inner(s2_wfn).real, decimals=10)
+                residual = s2_wfn + (-s2_val) * state.wavefunction
+                is_eigenstate = abs(residual.inner(residual)) < 1e-10
 
             if block not in blocks:
                 strings = [list(combinations(range(n_orbitals), n)) for n in block]
@@ -222,7 +245,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
                 )
                 norm = numpy.linalg.norm(state_SALC)
                 if norm**2 > 1e-10:
-                    sector = (irrep, s2_val, ms_val, block)
+                    sector = (irrep, s2_val, is_eigenstate, ms_val, block)
                     if sector not in SALC_by_sector:
                         SALC_by_sector[sector] = []
                     SALC_by_sector[sector].append((state_SALC / norm).ravel())
@@ -231,7 +254,13 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
         # the states already kept for each (irrep, m_s, block), as rows
         kept_wfns: dict[tuple, numpy.ndarray] = {}
 
-        for (irrep, s2_val, ms_val, block), wfn_list in SALC_by_sector.items():
+        for (
+            irrep,
+            s2_val,
+            is_eigenstate,
+            ms_val,
+            block,
+        ), wfn_list in SALC_by_sector.items():
             strings = blocks[block][0]
 
             # Deduplicate copies within this sector, also when they differ by a global phase:
@@ -283,7 +312,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
                         wavefunction=new_wfn,
                         provider=irrep_provider,
                         irrep=irrep,
-                        S2=s2_val,
+                        S2=s2_val if is_eigenstate else None,
                         m_s=ms_val,
                     )
                 )
@@ -426,6 +455,11 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
                 det = "".join(det)
                 terms[det] = terms.get(det, 0.0) + coef
 
+        if not terms:
+            raise ValueError(
+                f"The coupling {coupling} gives no state with S = {S} and m_s = {m_s} "
+                f"for {n_open} open-shell electrons."
+            )
         wfn = tequila.QubitWaveFunction(n_qubits=n_qubits)
         for det, coef in terms.items():
             wfn += coef * tequila.QubitWaveFunction.from_string(f"|{det}>")
@@ -456,12 +490,19 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         n_electrons = round(sum(state_list[0].mo_occ))
 
         all_states: list[FockSpaceState] = []
-        # all occupation patterns (0, 1 or 2 electrons per orbital) with n_electrons
-        for mo_occ in iproduct(range(3), repeat=self.mol.n_orbitals):
-            if sum(mo_occ) != n_electrons:
-                continue
-            open_shell = [i for i, occ in enumerate(mo_occ) if occ == 1]
-            closed_shell = [i for i, occ in enumerate(mo_occ) if occ == 2]
+        # all occupation patterns (0, 1 or 2 electrons per orbital) with n_electrons: the doubly occupied
+        # orbitals, and the singly occupied ones among the others
+        n_orb = self.mol.n_orbitals
+        patterns = [
+            (list(closed_shell), list(open_shell))
+            for n_closed in range(n_electrons // 2 + 1)
+            for closed_shell in combinations(range(n_orb), n_closed)
+            for open_shell in combinations(
+                [i for i in range(n_orb) if i not in closed_shell],
+                n_electrons - 2 * n_closed,
+            )
+        ]
+        for closed_shell, open_shell in patterns:
             n_open = len(open_shell)
 
             if not open_shell:

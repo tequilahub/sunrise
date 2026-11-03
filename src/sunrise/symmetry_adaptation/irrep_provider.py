@@ -27,8 +27,8 @@ class LocalizedIrrepProvider(IrrepProviderBase):
     An irrep provider that determines the irreducible representation of a state by directly
     comparing the effect of the symmetry operations on the state to the character table.
     The operations act on the orbitals of the molecule (see mol.mo_representation), which can be any orbitals
-    the operations map onto themselves as a set, e.g. canonical, native or hybrid orbitals. The characters
-    <psi|O|psi> are rounded to +/-1, so only states of one-dimensional irreps are labelled.
+    the operations map onto themselves as a set, e.g. canonical, native or hybrid orbitals. Only states of
+    one-dimensional irreps are labelled: <psi|O|psi> = +/-1 for every operation O, otherwise the irrep is None.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
@@ -43,7 +43,10 @@ class LocalizedIrrepProvider(IrrepProviderBase):
 
     def get_irrep(self, state) -> str | None:
         character_vector = self.representation.character_vector(state.wavefunction)
-        irrep = self.pg.character_table.vec_to_str(character_vector)
+        # a state that is not an eigenstate of every operation belongs to no one-dimensional irrep
+        if not numpy.allclose(numpy.abs(character_vector), 1.0, atol=1e-4):
+            return None
+        irrep = self.pg.character_table.vec_to_str(numpy.round(character_vector))
         return irrep if irrep is not None else None
 
 
@@ -64,9 +67,6 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
         return self._mol_irreps
 
     def get_irrep(self, state) -> str | None:
-        if state.mo_occ is None:
-            return None
-
         # Canonical irrep assignment only works for states with integer occupations
         # (single determinants or superpositions within the same occupation sector).
         # Fractional occupations indicate a superposition across sectors, which
@@ -113,7 +113,18 @@ def IrrepProvider(
     mol: QuantumChemistryBase, provider: str = "canon", *args, **kwargs
 ) -> IrrepProviderBase:
     r"""
-    ADD SOMETHING
+    Returns the irrep provider that assigns irreducible representations to the FockSpaceStates of a molecule.
+
+    Parameters
+    ----------
+    mol
+        The molecule, its point group is mol.point_group.
+    provider
+        "canon" (PySCFCanonicalIrrepProvider): from the irreps PySCF assigns to the canonical orbitals, in
+        mol.abelian_point_group, for states with integer occupations.
+        "loc" (LocalizedIrrepProvider): by applying the symmetry operations to the state, in mol.point_group, for
+        any orbitals the operations map onto themselves (e.g. native or hybrid orbitals), and only for states of
+        one-dimensional irreps.
     """
     # any kwargs and circuit form should be managed inside each class
     return INSTALLED_IRREP_PROVIDERS[provider.lower()](*args, mol=mol, **kwargs)
