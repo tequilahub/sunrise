@@ -6,15 +6,15 @@ import warnings
 from tequila import ExpectationValue, QCircuit, TequilaException, TequilaWarning, gates
 
 from sunrise.molecules.qubit_base import ParametersQC
-from sunrise.molecules.qubit_base.madness_interface import (
-    MadnessPNOMixin,
+from sunrise.molecules.qubit_base.frayedends_interface import (
+    FrayedEndsMixin,
     TequilaMadnessException,
 )
 
 from .hybridbase import HybridBase
 
 
-class QuantumChemistryMadness(MadnessPNOMixin, HybridBase):
+class QuantumChemistryFrayed(FrayedEndsMixin, HybridBase):
     """
     Hybrid molecule with MRA-PNO orbitals computed by madness
     The madness calculation (or the read-in of name_htensor.npy, name_gtensor.npy and name_pnoinfo.txt with n_pno="read")

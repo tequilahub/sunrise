@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import typing
 import warnings
@@ -33,7 +34,7 @@ class TequilaMadnessException(TequilaException):
         return "Error in madness backend:" + self.message
 
 
-class MadnessPNOMixin:
+class FrayedEndsMixin:
     """
     MRA-PNO functionality shared by the qubit, fermionic and hybrid madness molecules
     Only needs self.orbitals and self.integral_manager (with the pair information of the PNOs)
@@ -42,46 +43,16 @@ class MadnessPNOMixin:
 
     def plot2cube(self, orbital, filename=None, *args, **kwargs):
         """
-        plot orbitals to cube file (needs madtequila backend installed)
+        plot orbitals to cube file
         Parameters
         ----------
-        method: orbital, the orbital index (starting from 0 on the active orbitals)
-                if you want to plot frozen orbitals you can hand in a Tequila Orbital structure with idx_total defined
         filename: name of the cubefile (default: mra_orbital_X.cube where X is the total index of the active orbital)
+        zoom: #TODO
+        datapoints: #TODO
+        origin: #TODO
         args: further arguments for plot2cube
         kwargs further keyword arguments for plot2cube
-
-        see here for more https://github.com/kottmanj/madness/tree/tequila/src/apps/plot
         """
-
-        plot2cube = shutil.which("plot2cube")
-        if plot2cube is None:
-            raise TequilaMadnessException(
-                "can't plot to cube file. Couldn't find plot2cube executable.\n\nTry installing\n\t conda install madtequila -c kottmann\nand assure the version is >2.3"
-            )
-
-        if hasattr(orbital, "idx"):
-            idx = orbital.idx
-        else:
-            idx = self.orbitals[orbital].idx_total
-
-        callist = [plot2cube, f"file=mra_orbital_{idx}"]
-
-        if filename is not None:
-            callist.append(f"outfile={filename}")
-        for k, v in kwargs.items():
-            callist.append(f"{k}={v}")
-        for k in args:
-            callist.append(f"{k}")
-
-        import subprocess
-
-        try:
-            with open(f"plot2cube_{orbital}.log", "w") as logfile:
-                subprocess.call(callist, stdout=logfile)
-        except Exception:  # noqa: BLE001
-            print("plotting failed ....")
-            print(f"see plot2cube_{orbital}.log")
 
     def get_pair_orbitals(
         self, i: OrbitalData, j: OrbitalData, exclude: list[OrbitalData] | None = None
@@ -669,8 +640,12 @@ class MadnessPNOMixin:
 
         return h, g, pnoinfo
 
+    def __del__(self): ...
 
-class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
+    def __deepcopy__(self): ...
+
+
+class QuantumChemistryFrayed(FrayedEndsMixin, QuantumChemistryBase):
     def __init__(
         self,
         parameters: ParametersQC,
@@ -1103,3 +1078,34 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
                                 indices.append((a.idx, b.idx))
 
         return self.make_upccgsd_ansatz(indices=indices, **kwargs)
+
+
+def get_madness_sort_key(item):
+    _original_idx, label_str = item
+    parts = label_str.split()
+    atom_idx = int(parts[0])
+    orbital_part = parts[2]
+
+    match = re.match(r"(\d+)([spdfgh])(.*)", orbital_part)
+    n = int(match.group(1))
+    l_str = match.group(2)
+    comp = match.group(3)
+
+    l_map = {"s": 0, "p": 1, "d": 2, "f": 3, "g": 4}
+    l = l_map[l_str]
+
+    comp_order = {
+        "x": 0,
+        "y": 1,
+        "z": 2,
+        "xx": 0,
+        "xy": 1,
+        "xz": 2,
+        "yy": 3,
+        "yz": 4,
+        "zz": 5,
+        "": 0,
+    }
+    c_idx = comp_order.get(comp, 0)
+
+    return (atom_idx, n, l, c_idx)
