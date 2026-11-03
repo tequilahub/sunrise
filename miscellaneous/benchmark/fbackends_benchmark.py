@@ -241,6 +241,7 @@ def plot(workload):
                     )
     ax.axhline(LIMIT, color="k", lw=0.6, ls="--")
     ax.set_yscale("log")
+    ax.set_xticks(sorted({r["n"] for rows in results.values() for r in rows}))
     ax.set_xlabel("number of H atoms")
     ax.set_ylabel("time to reach the minimum [s]")
     ax.set_title(
