@@ -27,6 +27,10 @@ mol.save("lih.h5")
 mol2 = sun.load_molecule("lih.h5")
 ```
 
+The qubit nature is the quantum chemistry module formerly in tequila (`tequila.quantumchemistry`), also available as `sun.chemistry`.
+A hybrid molecule can also be created with `HyMolecule(geometry=..., basis_set=..., select={2: "F", 4: "F"})` (unlisted orbitals are bosonic).
+Its circuits can be built gate by gate with `mol.UR`, `mol.UC` and `mol.make_excitation_gate`, which follow the encoding of each orbital.
+
 Converters: `MoleculeFromPyscf`, `MoleculeToPyscf`, `MoleculeFromOpenFermion`, `MoleculeFromSunrise`.
 
 **See also:** [hybrid example](../../../examples/hybrid_molecule/README_example.py) · [tests](../../../tests/test_chemistry.py), [hybrid tests](../../../tests/test_hybrid_molecule.py)

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import tequila as tq
 
-import sunrise as sn
+import sunrise as sun
 from sunrise.graph_selection import (
     ant_colony_opt,
     blossom_scaled,
@@ -157,7 +157,7 @@ def test_run_spa_optimization():
         [[0.0, 0.0, 0.0], [0.8, 0.1, 0.0], [1.1, 1.5, 0.2], [-0.2, 1.3, 0.4]]
     )
     geometry = "".join(f"h {x} {y} {z}\n" for x, y, z in coordinates)
-    mol = sn.Molecule(geometry=geometry, basis_set="sto-3g")
+    mol = sun.Molecule(geometry=geometry, basis_set="sto-3g")
     result = run_spa_optimization(
         mol, coordinates=coordinates, key_heuristic=minimum_weight_perfect_performance
     )

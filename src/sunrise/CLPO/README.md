@@ -16,6 +16,8 @@ Because each bond becomes an orbital *pair*, CLPOs also give a natural graph of 
 | `generate_CLPO_molecule(mol)` | molecule in CLPO basis |
 | `generate_CLPO_molecule_edges(mol, edges=None)` | molecule + suggested SPA edges |
 
+The same is available as molecule methods for all natures: `mol.use_HAO_orbitals()`, `mol.use_CLPO_orbitals()`, `mol.use_CLPO_orbitals_and_edges()` and `mol.get_spa_edges()`.
+
 ```python
 import sunrise as sun
 from sunrise.CLPO import generate_CLPO_molecule_edges

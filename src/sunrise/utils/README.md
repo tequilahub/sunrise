@@ -1,4 +1,4 @@
-# utils
+# utils – internal helpers
 
 Internal helpers used across sunrise (not part of the main user API):
 

@@ -1,4 +1,4 @@
-# ADAPT
+# ADAPT – adaptive circuit construction
 
 Adaptive circuit construction ([ADAPT-VQE](https://doi.org/10.1038/s41467-019-10988-2)): instead of fixing the ansatz up front, the circuit is grown one operator at a time. At each step the operator from a *pool* with the largest energy gradient is appended and the parameters are re-optimized.
 

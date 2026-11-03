@@ -15,9 +15,7 @@ from sunrise.symmetry_adaptation import (
     SpinSymmetrizationProcedure,
 )
 
-mol = sun.chemistry.Molecule(
-    geometry="H 0 0 0\nH 0 0 0.748", basis_set="sto-3g", backend="pyscf"
-)
+mol = sun.Molecule(geometry="H 0 0 0\nH 0 0 0.748", basis_set="sto-3g", backend="pyscf")
 states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
 print(FockSpaceState.dataframe(SpinSymmetrizationProcedure(mol).symmetrize(states)))
 ```

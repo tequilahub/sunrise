@@ -2,7 +2,7 @@
 
 A single pair-ansatz circuit (e.g. SPA) describes one "bonding pattern" of a molecule. MCVBT combines **several graphs** (several valence-bond structures, like resonance structures) into one wavefunction
 
-32469|\Psi\rangle = \sum_k c_k\, U_k |0\rangle32469
+$$|\Psi\rangle = \sum_k c_k\, U_k |0\rangle$$
 
 and finds the coefficients $c_k$ by solving a small generalized eigenvalue problem (`gem.py`) built from the overlaps and Hamiltonian matrix elements between the circuits (`big_exp.py`).
 
@@ -10,7 +10,7 @@ and finds the coefficients $c_k$ by solving a small generalized eigenvalue probl
 import sunrise as sun
 from sunrise.MCVBT.gnm import mcvbt
 
-mol = sun.chemistry.Molecule(
+mol = sun.Molecule(
     geometry="H 1.5 0 0\nH 0 0 0\nH 1.5 0 1.5\nH 0 0 1.5", basis_set="sto-6g"
 ).use_native_orbitals()
 graphs = [[(0, 1), (2, 3)], [(0, 3), (1, 2)], [(0, 2), (1, 3)]]

@@ -9,6 +9,24 @@ Circuits written directly in terms of **fermionic gates** on spatial/spin orbita
 - `UX`, `Givens`, `Phase`
 - `FCircuit` – container; `FCircuit.from_edges(n_orb, edges)` builds an SPA-type circuit.
 
+An `FCircuit` has an `initial_state` (a tequila `QubitWaveFunction`, checked to conserve the particle number) and its gates.
+The initial state can be given as a string such as `"1*|11001100>"`, an array, an `FCircuit` or `QCircuit` without free variables, or anything `QubitWaveFunction.convert_from` accepts.
+**It must be in up-then-down ordering (reordered Jordan-Wigner)**, the format of the fermionic backends.
+Without one, the backends start from Hartree-Fock. `U.to_qcircuit(mol)` compiles the circuit to a tequila `QCircuit` for a qubit molecule.
+
+```python
+import sunrise as sun
+from sunrise import gates
+
+U = sun.FCircuit()
+U.initial_state = "1*|11001100>"  # up-then-down: orbitals 0 and 1 doubly occupied
+U += gates.UR(0, 1, "a") + gates.UR(2, 3, "b")
+U += gates.UC(1, 2, "c") + gates.UC(0, 3, "d")
+U += gates.FermionicExcitation(
+    [(0, 4), (1, 5)], "e"
+)  # interleaved indices: pair from orbital 0 to 2
+```
+
 Orbital rotations can be compiled into Givens-rotation networks (`givens_rotations.py`), following [Kivlichan et al., PRL 2018](https://doi.org/10.1103/PhysRevLett.120.110501).
 
 ```python
