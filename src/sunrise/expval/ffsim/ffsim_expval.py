@@ -501,7 +501,7 @@ def _qwvf_to_ffsim(wvf: QubitWaveFunction, norb: int, nelec: tuple) -> ndarray:
 
 
 def _linear_operator(op: FermionOperator, norb: int, nelec: tuple) -> LinearOperator:
-    """Return ``ffsim.linear_operator(op)``, raising a TequilaException if ``op`` does not conserve N and S_z."""
+    """Return ``ffsim.linear_operator(op)``, raising a TequilaException if ``op`` does not conserve N and :math:`S_z`."""
     if not (op.conserves_particle_number() and op.conserves_spin_z()):
         raise TequilaException(
             f"FFSim BraKet: ffsim only supports operators conserving N and S_z, received {op}"

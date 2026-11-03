@@ -677,7 +677,7 @@ def get_reduced_states(rho, d_A, d_B):
     Parameters
     ----------
     rho : numpy.ndarray
-        Density matrix of dimension d_A * d_B.
+        Density matrix of dimension :math:`d_A d_B`.
     d_A, d_B : int
         Dimensions of the two subsystems.
     """
@@ -718,7 +718,7 @@ def classify_7_categories(rho, tol=1e-7):
     Parameters
     ----------
     rho : array_like
-        Density matrix of dimension d^2.
+        Density matrix of dimension :math:`d^2`.
     tol : float
         Tolerance of the purity, product and commutation tests.
 
@@ -784,7 +784,7 @@ def classify_hierarchy(rho, tol=1e-7):
     Parameters
     ----------
     rho : array_like
-        Density matrix of dimension d^2.
+        Density matrix of dimension :math:`d^2`.
     tol : float
         Tolerance of the product and commutation tests.
 

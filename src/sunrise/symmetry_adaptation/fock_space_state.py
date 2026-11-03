@@ -36,7 +36,7 @@ class FockSpaceState:
     provider : IrrepProviderBase
         Provider used to compute the irrep.
     S2 : float, optional
-        Precomputed value of S^2, otherwise computed from the wavefunction.
+        Precomputed value of :math:`S^2`, otherwise computed from the wavefunction.
     irrep : str, optional
         Precomputed irrep, otherwise computed with ``provider``.
     m_s : float, optional
@@ -116,7 +116,7 @@ class FockSpaceState:
 
     @cached_property
     def m_s(self) -> numpy.float64:
-        """float : spin projection <S_z> of the state (as given at construction, or computed and rounded to 10 decimals)."""
+        r"""float : spin projection :math:`\langle :math:`S_z` \rangle` of the state (as given at construction, or computed and rounded to 10 decimals)."""
         if self._m_s is not None:
             return self._m_s
         return numpy.round(
@@ -126,7 +126,7 @@ class FockSpaceState:
 
     @cached_property
     def S2(self) -> numpy.float64:
-        """float : expectation value of S^2 (as given at construction, or computed and rounded to 10 decimals)."""
+        """float : expectation value of :math:`S^2` (as given at construction, or computed and rounded to 10 decimals)."""
         if self._S2 is not None:
             return self._S2
         return numpy.round(
@@ -305,7 +305,7 @@ class FockSpaceState:
         m_s : float, optional
             Required spin projection.
         S2 : float, optional
-            Required value of S^2.
+            Required value of :math:`S^2`.
         spin_multiplicity : str, optional
             Required multiplicity name, e.g. ``"triplet"``.
         irrep : str, optional

@@ -3426,7 +3426,7 @@ class QuantumChemistryBase:
             raise TequilaException("Need to specify a Quantum Circuit.")
 
         def _get_hcb_op(op_tuple):
-            r"""Build the hard-core boson operators: :math:`b^\dagger_i b_j + \mathrm{h.c.}` in the qubit encoding"""
+            r"""Build the hard-core boson operators :math:`b^\dagger_i b_j + \mathrm{h.c.}` in the qubit encoding."""
             if len(op_tuple) == 2:
                 return 2 * Sm(op_tuple[0][0]) * Sp(op_tuple[1][0])
             elif len(op_tuple) == 4:
@@ -3565,9 +3565,7 @@ class QuantumChemistryBase:
             return ops
 
         def _assemble_rdm1(evals, rdm1=None) -> numpy.ndarray:
-            """Return spin-ful or spin-free one-particle RDM built by symmetry conditions
-            Same symmetry with or without spin, so we can use the same function
-            """
+            """Return the spin-ful or spin-free 1-RDM built from the expectation values with the symmetry pq = qp."""
             N = n_MOs if spin_free else n_SOs
             if rdm1 is None:
                 rdm1 = numpy.zeros([N, N])

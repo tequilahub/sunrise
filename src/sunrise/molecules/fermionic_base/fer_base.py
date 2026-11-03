@@ -1602,7 +1602,7 @@ class FermionicBase(QuantumChemistryBase):
             return op
 
         def _get_of_hcb_op(op_tuple):
-            r"""Build the hard-core boson operators: b^\dagger_ib_j + h.c. in qubit encoding"""
+            r"""Build the hard-core boson operators :math:`b^\dagger_i b_j + \mathrm{h.c.}` as OpenFermion FermionOperators."""
             if len(op_tuple) == 2:
                 return openfermion.FermionOperator(op_tuple, 2)
             elif len(op_tuple) == 4:
@@ -1631,7 +1631,7 @@ class FermionicBase(QuantumChemistryBase):
                 return 0
 
         def _get_qop_hermitian(of_operator):
-            """Return the Hermitian part (O + O^dagger) / 2 of a FermionOperator (numbers are returned as they are)."""
+            r"""Return the Hermitian part :math:`(O + O^\dagger)/2` of a FermionOperator (numbers are returned as they are)."""
             if isinstance(of_operator, Number):
                 return of_operator
             return 0.5 * (of_operator + hermitian_conjugated(of_operator))

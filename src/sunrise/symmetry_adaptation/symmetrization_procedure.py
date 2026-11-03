@@ -57,8 +57,8 @@ class SymmetrizationProcedure(ABC):
 class SpinSymmetrizationProcedure(SymmetrizationProcedure):
     """Symmetrize states with respect to spin.
 
-    The S^2 operator is diagonalized within each block of equal ``m_s``, so that the new states
-    are spin eigenfunctions. Blocks of states that do not couple through S^2 are treated apart, so
+    The :math:`S^2` operator is diagonalized within each block of equal ``m_s``, so that the new states
+    are spin eigenfunctions. Blocks of states that do not couple through :math:`S^2` are treated apart, so
     degenerate states of different spatial irreps do not mix.
 
     Parameters
@@ -74,7 +74,7 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
     def symmetrize(
         self, states: list[FockSpaceState] | pd.DataFrame
     ) -> list[FockSpaceState] | pd.DataFrame:
-        """Return the eigenstates of S^2 within each ``m_s`` block of the input states.
+        """Return the eigenstates of :math:`S^2` within each ``m_s`` block of the input states.
 
         Parameters
         ----------
@@ -185,7 +185,7 @@ class SymmetryAdaptedLinearCombinationSymmetrization(SymmetrizationProcedure):
 
     Each state is projected onto every irrep of ``mol.point_group`` with the characters of the
     symmetry operations, which act on the orbitals as given by ``mol.mo_representation`` (they may
-    mix orbitals). The results are grouped by (irrep, S^2, m_s), deduplicated and orthonormalized
+    mix orbitals). The results are grouped by (irrep, :math:`S^2`, m_s), deduplicated and orthonormalized
     within each group.
 
     Parameters
@@ -223,7 +223,7 @@ class SymmetryAdaptedLinearCombinationSymmetrization(SymmetrizationProcedure):
         Returns
         -------
         list of FockSpaceState or pandas.DataFrame
-            Orthonormal states with ``irrep`` and ``m_s`` set, and ``S2`` if the input state is an S^2
+            Orthonormal states with ``irrep`` and ``m_s`` set, and ``S2`` if the input state is an :math:`S^2`
             eigenstate.
 
         Raises
