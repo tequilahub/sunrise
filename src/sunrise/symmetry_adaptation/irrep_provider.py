@@ -126,5 +126,5 @@ def IrrepProvider(
         any orbitals the operations map onto themselves (e.g. native or hybrid orbitals), and only for states of
         one-dimensional irreps.
     """
-    # any kwargs and circuit form should be managed inside each class
+    # any kwargs should be managed inside each class
     return INSTALLED_IRREP_PROVIDERS[provider.lower()](*args, mol=mol, **kwargs)
