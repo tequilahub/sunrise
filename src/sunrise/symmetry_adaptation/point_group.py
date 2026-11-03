@@ -1,80 +1,12 @@
-"""Point groups, their character tables and their representations by 3x3 matrices, used to label and symmetrize states."""
+"""Point groups and their character tables, used to label and symmetrize states (representations in ``point_group_representation``)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Generic, TypeVar
 
 import numpy
 from numpy.typing import NDArray
 from pandas import DataFrame
-
-# =====================================================================
-# Geometric primitives for the higher-order axes (D4h, D6h)
-#
-# All are 3x3 matrices acting on (x, y, z) with the principal axis along z,
-# so the molecule is expected to lie in the xy-plane. `_c2_in_plane` and
-# `_mirror_v` take the in-plane angle of the C2 axis / of the direction the
-# mirror plane contains, measured from +x.
-# =====================================================================
-
-
-def _rot_z(theta: float) -> NDArray[numpy.float64]:
-    """Return the proper rotation by ``theta`` about z."""
-    c, s = numpy.cos(theta), numpy.sin(theta)
-    return numpy.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
-
-
-def _improper_z(theta: float) -> NDArray[numpy.float64]:
-    """Return S_n, the rotation by ``theta`` about z followed by the horizontal mirror."""
-    c, s = numpy.cos(theta), numpy.sin(theta)
-    return numpy.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, -1.0]])
-
-
-def _c2_in_plane(phi: float) -> NDArray[numpy.float64]:
-    """Return the C2 about the in-plane axis at angle ``phi`` from +x."""
-    c, s = numpy.cos(2 * phi), numpy.sin(2 * phi)
-    return numpy.array([[c, s, 0.0], [s, -c, 0.0], [0.0, 0.0, -1.0]])
-
-
-def _mirror_v(phi: float) -> NDArray[numpy.float64]:
-    """Return the mirror plane containing z and the in-plane direction ``phi``."""
-    c, s = numpy.cos(2 * phi), numpy.sin(2 * phi)
-    return numpy.array([[c, s, 0.0], [s, -c, 0.0], [0.0, 0.0, 1.0]])
-
-
-def _expand_class_table(class_chars: dict[str, list], class_sizes: list[int]) -> list:
-    """Expand a table with one character per class to one character per operation.
-
-    Published character tables list one column per class, but
-    ``SymmetryAdaptedLinearCombinationSymmetrization`` sums over individual operations. Every
-    operation in a class carries the character of the class.
-
-    Parameters
-    ----------
-    class_chars : dict of str to list
-        Characters of each irrep for every class.
-    class_sizes : list of int
-        Number of operations in each class.
-
-    Returns
-    -------
-    list of IrreducibleRepresentation
-    """
-    return [
-        IrreducibleRepresentation(
-            name,
-            numpy.array(
-                [c for c, size in zip(chars, class_sizes) for _ in range(size)]
-            ),
-        )
-        for name, chars in class_chars.items()
-    ]
-
-
-# =====================================================================
-# Irreps, character tables, point groups
-# =====================================================================
 
 
 @dataclass(frozen=True)
@@ -116,7 +48,7 @@ class CharacterTable:
 
     @property
     def dataframe(self) -> DataFrame:
-        """pandas.DataFrame : The table, with irreps as rows and operations as columns."""
+        """pandas.DataFrame : the table, with irreps as rows and operations as columns."""
 
         return DataFrame(
             data=[irrep.characters for irrep in self.irrep_data],
@@ -126,7 +58,7 @@ class CharacterTable:
 
     @property
     def matrix(self) -> NDArray[numpy.complex128]:
-        """numpy.ndarray : The characters as a matrix, one row per irrep."""
+        """numpy.ndarray : the characters as a matrix, one row per irrep."""
 
         return numpy.array([irrep.characters for irrep in self.irrep_data])
 
@@ -156,9 +88,9 @@ class CharacterTable:
 class PointGroup:
     """A point group, with its Schoenflies label and character table.
 
-    The predefined groups are class attributes: ``PointGroup.D2h``, ``D4h``, ``D6h``, ``D8h``, ``Td``, ``C2h``, ``C2v``,
-    ``D2``, ``Cs``, ``Ci``, ``C2`` and ``C1``. Other groups known to PySCF can be built with
-    ``PointGroup.from_pyscf``.
+    The non-Abelian groups, which PySCF does not provide, are class attributes: ``PointGroup.C3v``,
+    ``C4v``, ``D2d``, ``D3h``, ``D3d``, ``D4h``, ``D6h``, ``D8h``, ``Td`` and ``Oh``. The Abelian groups
+    are built from PySCF with ``PointGroup.from_pyscf``, e.g. ``PointGroup.from_pyscf("D2h")``.
 
     Parameters
     ----------
@@ -172,7 +104,7 @@ class PointGroup:
 
     @property
     def order(self) -> int:
-        """int : Order of the group, i.e. the number of symmetry operations."""
+        """int : order of the group, i.e. the number of symmetry operations."""
 
         return len(self.character_table.operation_symbols)
 
@@ -209,75 +141,45 @@ class PointGroup:
         )
 
 
-# These point group definitions follow the database given at
-# http://gernot-katzers-spice-pages.com/character_tables/.
-# There are differences in the ordering of the operations (columns)
-# and the following differences in notations
-# 	DB	PySCF
-# 	C2	C2z
-# 	C2'	C2x
-# 	C2"	C2y
-# 	sh	sz
-# 	sv	sy
-# 	sd	sx
-
-PointGroup.D2h = PointGroup(
-    schoenflies_label="D2h",
-    character_table=CharacterTable(
-        [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                ("Ag", [1, 1, 1, 1, 1, 1, 1, 1]),
-                ("B1g", [1, 1, -1, -1, 1, 1, -1, -1]),
-                ("B2g", [1, -1, -1, 1, 1, -1, 1, -1]),
-                ("B3g", [1, -1, 1, -1, 1, -1, -1, 1]),
-                ("Au", [1, 1, 1, 1, -1, -1, -1, -1]),
-                ("B1u", [1, 1, -1, -1, -1, -1, 1, 1]),
-                ("B2u", [1, -1, -1, 1, -1, 1, -1, 1]),
-                ("B3u", [1, -1, 1, -1, -1, 1, 1, -1]),
-            ]
-        ],
-        operation_symbols=["E", "C2", "C2'", 'C2"', "i", "sh", "sv", "sd"],
-    ),
-)
-
-# D4h is non-Abelian, so PySCF cannot supply it - it is defined here in full.
-# The table is written out one column PER OPERATION rather than per class, which
-# is what SymmetryAdaptedLinearCombinationSymmetrization expects: it forms
+# The Abelian point groups are taken from PySCF with PointGroup.from_pyscf, the
+# non-Abelian ones below are not in PySCF and are defined here. They are written as
+# the published class table plus the class sizes, and expanded to one column per
+# operation, which is what SymmetryAdaptedLinearCombinationSymmetrization expects:
+# it forms
 #     |psi_irrep> = sum_operations chi_irrep(op) . O_op |psi>
-# and every operation in a class carries that class's character, so summing over
-# operations gives the correct projector.
+# and every operation in a class carries that class's character.
 #
-# The two-dimensional irreps Eg and Eu work here too - the character projector
-# lands on the whole carrier space of the irrep rather than a single vector, and
-# the symmetrizer orthonormalizes within each irrep sector afterwards. Note that
-# `PointGroupRepresentation.character_vector` rounds <psi|O|psi> assuming +/-1,
-# so it can only LABEL one-dimensional irreps; degenerate Eg/Eu states will not
-# be labelled correctly by that path.
-#
-# Convention: the C4 axis is z, the molecule lies in the xy-plane. C2' are taken
+# The degenerate irreps (E, T) work there too - the character projector lands on
+# the whole carrier space of the irrep, and the symmetrizer orthonormalizes within
+# each irrep sector afterwards. Note that LocalizedIrrepProvider only labels states
+# with <psi|O|psi> = +/-1 for every operation, i.e. states of one-dimensional irreps.
+
+# D4h. Convention: the C4 axis is z, the molecule lies in the xy-plane. C2' are taken
 # along x and y, C2'' along the diagonals y = +/- x. For a square whose atoms sit
 # on the diagonals the usual convention is the opposite assignment, which swaps
 # the B1g/B2g and B1u/B2u labels - the projected states are the same either way,
 # only the names differ.
+_D4H_CLASS_SIZES = [1, 2, 1, 2, 2, 1, 2, 1, 2, 2]
+#                     E 2C4 C2 2C2' 2C2'' i 2S4 sh 2sv 2sd
+_D4H_CLASS_CHARACTERS = {
+    "A1g": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "A2g": [1, 1, 1, -1, -1, 1, 1, 1, -1, -1],
+    "B1g": [1, -1, 1, 1, -1, 1, -1, 1, 1, -1],
+    "B2g": [1, -1, 1, -1, 1, 1, -1, 1, -1, 1],
+    "Eg": [2, 0, -2, 0, 0, 2, 0, -2, 0, 0],
+    "A1u": [1, 1, 1, 1, 1, -1, -1, -1, -1, -1],
+    "A2u": [1, 1, 1, -1, -1, -1, -1, -1, 1, 1],
+    "B1u": [1, -1, 1, 1, -1, -1, 1, -1, -1, 1],
+    "B2u": [1, -1, 1, -1, 1, -1, 1, -1, 1, -1],
+    "Eu": [2, 0, -2, 0, 0, -2, 0, 2, 0, 0],
+}
 PointGroup.D4h = PointGroup(
     schoenflies_label="D4h",
     character_table=CharacterTable(
         [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                #       E  C4 C4³ C2  C2x C2y C2a C2b   i  S4 S4³ sh  sv  sv' sda sdb
-                ("A1g", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
-                ("A2g", [1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1]),
-                ("B1g", [1, -1, -1, 1, 1, 1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1]),
-                ("B2g", [1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1, 1, -1, -1, 1, 1]),
-                ("Eg", [2, 0, 0, -2, 0, 0, 0, 0, 2, 0, 0, -2, 0, 0, 0, 0]),
-                ("A1u", [1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1]),
-                ("A2u", [1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1]),
-                ("B1u", [1, -1, -1, 1, 1, 1, -1, -1, -1, 1, 1, -1, -1, -1, 1, 1]),
-                ("B2u", [1, -1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, 1, 1, -1, -1]),
-                ("Eu", [2, 0, 0, -2, 0, 0, 0, 0, -2, 0, 0, 2, 0, 0, 0, 0]),
-            ]
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D4H_CLASS_SIZES))
+            for (x, y) in _D4H_CLASS_CHARACTERS.items()
         ],
         operation_symbols=[
             "E",
@@ -300,10 +202,7 @@ PointGroup.D4h = PointGroup(
     ),
 )
 
-# D6h, also non-Abelian and also absent from PySCF. Written as the published
-# class table plus class sizes, and expanded to one column per operation.
-#
-# Convention: the C6 axis is z and the atoms lie at 0, 60, ... 300 degrees in
+# D6h. Convention: the C6 axis is z and the atoms lie at 0, 60, ... 300 degrees in
 # the xy-plane, which is what `vbsetup.ring(6, R)` produces. C2' then passes
 # through opposite atoms and C2'' through opposite edge midpoints; sigma_v
 # contains the atoms and sigma_d bisects them. Choosing the opposite convention
@@ -330,7 +229,11 @@ _D6H_CLASS_CHARACTERS = {
 PointGroup.D6h = PointGroup(
     schoenflies_label="D6h",
     character_table=CharacterTable(
-        _expand_class_table(_D6H_CLASS_CHARACTERS, _D6H_CLASS_SIZES),
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D6H_CLASS_SIZES))
+            for (x, y) in _D6H_CLASS_CHARACTERS.items()
+        ],
         operation_symbols=[
             "E",
             "C6",
@@ -360,10 +263,7 @@ PointGroup.D6h = PointGroup(
     ),
 )
 
-# D8h, also non-Abelian and also absent from PySCF. Written as the published
-# class table plus class sizes, and expanded to one column per operation.
-#
-# Convention: the C8 axis is z and the atoms lie at 0, 45, ... 315 degrees in
+# D8h. Convention: the C8 axis is z and the atoms lie at 0, 45, ... 315 degrees in
 # the xy-plane. C2' then passes through opposite atoms (along x, y and the
 # diagonals) and C2'' through opposite edge midpoints (22.5, 67.5, ... degrees);
 # sigma_v contains the atoms and sigma_d bisects them. Choosing the opposite
@@ -390,7 +290,11 @@ _D8H_CLASS_CHARACTERS = {
 PointGroup.D8h = PointGroup(
     schoenflies_label="D8h",
     character_table=CharacterTable(
-        _expand_class_table(_D8H_CLASS_CHARACTERS, _D8H_CLASS_SIZES),
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D8H_CLASS_SIZES))
+            for (x, y) in _D8H_CLASS_CHARACTERS.items()
+        ],
         operation_symbols=[
             "E",
             "C8",
@@ -428,10 +332,7 @@ PointGroup.D8h = PointGroup(
     ),
 )
 
-# Td (e.g. CH4), also non-Abelian and also absent from PySCF, written in the same
-# way as D6h and D8h.
-#
-# Convention: the three C2 (and S4) axes are x, y and z, so the four outer atoms
+# Td (e.g. CH4). Convention: the three C2 (and S4) axes are x, y and z, so the four outer atoms
 # sit on alternating corners of a cube, e.g. (1, 1, 1), (-1, -1, 1), (-1, 1, -1)
 # and (1, -1, -1). The C3 axes are then the body diagonals through these four
 # corners (a, b, c, d in this order) and the six mirror planes contain one axis
@@ -449,7 +350,11 @@ _TD_CLASS_CHARACTERS = {
 PointGroup.Td = PointGroup(
     schoenflies_label="Td",
     character_table=CharacterTable(
-        _expand_class_table(_TD_CLASS_CHARACTERS, _TD_CLASS_SIZES),
+        [
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _TD_CLASS_SIZES))
+            for (x, y) in _TD_CLASS_CHARACTERS.items()
+        ],
         operation_symbols=[
             "E",
             "C3a",
@@ -479,307 +384,231 @@ PointGroup.Td = PointGroup(
     ),
 )
 
-PointGroup.C2h = PointGroup(
-    schoenflies_label="C2h",
+# Oh (e.g. SF6). Oh = Td x Ci, so its operations are the ones of Td and their
+# products with the inversion.
+#
+# Convention: the C4 axes are x, y and z, so the six outer atoms of an octahedron
+# sit on the axes. The C3 axes are the body diagonals of Td, the C2 axes in the
+# 6C2 class are the face diagonals (C2a, C2b in the xy-plane and the axes
+# perpendicular to the Td mirror planes sdy1, sdy2, sdx1, sdx2).
+_OH_CLASS_SIZES = [1, 8, 6, 6, 3, 1, 6, 8, 3, 6]
+#                  E 8C3 6C2 6C4 3C2  i 6S4 8S6 3sh 6sd
+_OH_CLASS_CHARACTERS = {
+    "A1g": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "A2g": [1, 1, -1, -1, 1, 1, -1, 1, 1, -1],
+    "Eg": [2, -1, 0, 0, 2, 2, 0, -1, 2, 0],
+    "T1g": [3, 0, -1, 1, -1, 3, 1, 0, -1, -1],
+    "T2g": [3, 0, 1, -1, -1, 3, -1, 0, -1, 1],
+    "A1u": [1, 1, 1, 1, 1, -1, -1, -1, -1, -1],
+    "A2u": [1, 1, -1, -1, 1, -1, 1, -1, -1, 1],
+    "Eu": [2, -1, 0, 0, 2, -2, 0, 1, -2, 0],
+    "T1u": [3, 0, -1, 1, -1, -3, -1, 0, 1, 1],
+    "T2u": [3, 0, 1, -1, -1, -3, 1, 0, 1, -1],
+}
+PointGroup.Oh = PointGroup(
+    schoenflies_label="Oh",
     character_table=CharacterTable(
         [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                ("Ag", [1, 1, 1, 1]),
-                ("Bg", [1, -1, 1, -1]),
-                ("Au", [1, 1, -1, -1]),
-                ("Bu", [1, -1, -1, 1]),
-            ]
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _OH_CLASS_SIZES))
+            for (x, y) in _OH_CLASS_CHARACTERS.items()
         ],
-        operation_symbols=["E", "C2", "i", "sh"],
+        operation_symbols=[
+            "E",
+            "C3a",
+            "C3a^2",
+            "C3b",
+            "C3b^2",
+            "C3c",
+            "C3c^2",
+            "C3d",
+            "C3d^2",
+            "C2a",
+            "C2b",
+            "C2dy1",
+            "C2dy2",
+            "C2dx1",
+            "C2dx2",
+            "C4",
+            "C4^3",
+            "C4x",
+            "C4x^3",
+            "C4y",
+            "C4y^3",
+            "C2z",
+            "C2x",
+            "C2y",
+            "i",
+            "S4",
+            "S4^3",
+            "S4x",
+            "S4x^3",
+            "S4y",
+            "S4y^3",
+            "S6a",
+            "S6a^5",
+            "S6b",
+            "S6b^5",
+            "S6c",
+            "S6c^5",
+            "S6d",
+            "S6d^5",
+            "sz",
+            "sy",
+            "sx",
+            "sda",
+            "sdb",
+            "sdy1",
+            "sdy2",
+            "sdx1",
+            "sdx2",
+        ],
     ),
 )
 
-PointGroup.C2v = PointGroup(
-    schoenflies_label="C2v",
+# C3v (e.g. NH3, CH3Cl), D3h (e.g. BF3, H3+, PF5) and D3d (e.g. staggered ethane,
+# chair cyclohexane) reuse the threefold operations of D6h.
+#
+# Convention: the C3 axis is z and the atoms lie at 0, 120 and 240 degrees around it
+# (seen from above), so one sigma_v is the xz-plane. For D3h the C2' axes then pass
+# through the atoms. For D3d the upper atoms sit at 0, 120, 240 degrees and the lower
+# ones at 60, 180, 300 degrees: the sigma_d contain the atoms (sv1, sv2, sv3 of D6h)
+# and the C2' axes lie between them (C2''1, C2''2, C2''3 of D6h).
+_C3V_CLASS_SIZES = [1, 2, 3]
+#                  E 2C3 3sv
+_C3V_CLASS_CHARACTERS = {
+    "A1": [1, 1, 1],
+    "A2": [1, 1, -1],
+    "E": [2, -1, 0],
+}
+PointGroup.C3v = PointGroup(
+    schoenflies_label="C3v",
     character_table=CharacterTable(
         [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                ("A1", [1, 1, 1, 1]),
-                ("A2", [1, 1, -1, -1]),
-                ("B1", [1, -1, 1, -1]),
-                ("B2", [1, -1, -1, 1]),
-            ]
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _C3V_CLASS_SIZES))
+            for (x, y) in _C3V_CLASS_CHARACTERS.items()
         ],
-        operation_symbols=["E", "C2", "sv", "sd"],
+        operation_symbols=["E", "C3", "C3^2", "sv1", "sv2", "sv3"],
     ),
 )
 
-PointGroup.D2 = PointGroup(
-    schoenflies_label="D2",
+_D3H_CLASS_SIZES = [1, 2, 3, 1, 2, 3]
+#                    E 2C3 3C2' sh 2S3 3sv
+_D3H_CLASS_CHARACTERS = {
+    "A1'": [1, 1, 1, 1, 1, 1],
+    "A2'": [1, 1, -1, 1, 1, -1],
+    "E'": [2, -1, 0, 2, -1, 0],
+    "A1''": [1, 1, 1, -1, -1, -1],
+    "A2''": [1, 1, -1, -1, -1, 1],
+    "E''": [2, -1, 0, -2, 1, 0],
+}
+PointGroup.D3h = PointGroup(
+    schoenflies_label="D3h",
     character_table=CharacterTable(
         [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                ("A", [1, 1, 1, 1]),
-                ("B1", [1, 1, -1, -1]),
-                ("B2", [1, -1, -1, 1]),
-                ("B3", [1, -1, 1, -1]),
-            ]
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D3H_CLASS_SIZES))
+            for (x, y) in _D3H_CLASS_CHARACTERS.items()
         ],
-        operation_symbols=["E", "C2", "C2'", 'C2"'],
+        operation_symbols=[
+            "E",
+            "C3",
+            "C3^2",
+            "C2'1",
+            "C2'2",
+            "C2'3",
+            "sz",
+            "S3",
+            "S3^5",
+            "sv1",
+            "sv2",
+            "sv3",
+        ],
     ),
 )
 
-PointGroup.Cs = PointGroup(
-    schoenflies_label="Cs",
+_D3D_CLASS_SIZES = [1, 2, 3, 1, 2, 3]
+#                    E 2C3 3C2'  i 2S6 3sd
+_D3D_CLASS_CHARACTERS = {
+    "A1g": [1, 1, 1, 1, 1, 1],
+    "A2g": [1, 1, -1, 1, 1, -1],
+    "Eg": [2, -1, 0, 2, -1, 0],
+    "A1u": [1, 1, 1, -1, -1, -1],
+    "A2u": [1, 1, -1, -1, -1, 1],
+    "Eu": [2, -1, 0, -2, 1, 0],
+}
+PointGroup.D3d = PointGroup(
+    schoenflies_label="D3d",
     character_table=CharacterTable(
         [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                ("A'", [1, 1]),
-                ('A"', [1, -1]),
-            ]
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D3D_CLASS_SIZES))
+            for (x, y) in _D3D_CLASS_CHARACTERS.items()
         ],
-        operation_symbols=["E", "sh"],
+        operation_symbols=[
+            "E",
+            "C3",
+            "C3^2",
+            "C2''1",
+            "C2''2",
+            "C2''3",
+            "i",
+            "S6",
+            "S6^5",
+            "sv1",
+            "sv2",
+            "sv3",
+        ],
     ),
 )
 
-PointGroup.Ci = PointGroup(
-    schoenflies_label="Ci",
+# C4v (e.g. BrF5, XeOF4) and D2d (e.g. allene) are subgroups of D4h and Td built
+# from their operations.
+#
+# Convention for C4v: the C4 axis is z, sigma_v are the xz- and yz-planes and
+# sigma_d the planes x = +/-y, as in D4h.
+# Convention for D2d: the S4 axis is z, the C2' axes are x and y and sigma_d the
+# planes x = +/-y, so for allene the CH2 groups lie in the sigma_d planes. Choosing
+# the opposite convention swaps the B1/B2 labels.
+_C4V_CLASS_SIZES = [1, 2, 1, 2, 2]
+#                  E 2C4 C2 2sv 2sd
+_C4V_CLASS_CHARACTERS = {
+    "A1": [1, 1, 1, 1, 1],
+    "A2": [1, 1, 1, -1, -1],
+    "B1": [1, -1, 1, 1, -1],
+    "B2": [1, -1, 1, -1, 1],
+    "E": [2, 0, -2, 0, 0],
+}
+PointGroup.C4v = PointGroup(
+    schoenflies_label="C4v",
     character_table=CharacterTable(
         [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                ("Ag", [1, 1]),
-                ("Au", [1, -1]),
-            ]
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _C4V_CLASS_SIZES))
+            for (x, y) in _C4V_CLASS_CHARACTERS.items()
         ],
-        operation_symbols=["E", "i"],
+        operation_symbols=["E", "C4", "C4^3", "C2z", "sy", "sx", "sda", "sdb"],
     ),
 )
 
-PointGroup.C2 = PointGroup(
-    schoenflies_label="C2",
+_D2D_CLASS_SIZES = [1, 2, 1, 2, 2]
+#                  E 2S4 C2 2C2' 2sd
+_D2D_CLASS_CHARACTERS = {
+    "A1": [1, 1, 1, 1, 1],
+    "A2": [1, 1, 1, -1, -1],
+    "B1": [1, -1, 1, 1, -1],
+    "B2": [1, -1, 1, -1, 1],
+    "E": [2, 0, -2, 0, 0],
+}
+PointGroup.D2d = PointGroup(
+    schoenflies_label="D2d",
     character_table=CharacterTable(
         [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                ("A", [1, 1]),
-                ("B", [1, -1]),
-            ]
+            # every operation of a class has the character of the class
+            IrreducibleRepresentation(x, numpy.repeat(y, _D2D_CLASS_SIZES))
+            for (x, y) in _D2D_CLASS_CHARACTERS.items()
         ],
-        operation_symbols=["E", "C2"],
+        operation_symbols=["E", "S4", "S4^3", "C2z", "C2x", "C2y", "sda", "sdb"],
     ),
 )
-
-PointGroup.C1 = PointGroup(
-    schoenflies_label="C1",
-    character_table=CharacterTable(
-        [
-            IrreducibleRepresentation(x, numpy.array(y))
-            for (x, y) in [
-                ("A", [1]),
-            ]
-        ],
-        operation_symbols=["E"],
-    ),
-)
-
-
-# =====================================================================
-# Representations of a point group
-# =====================================================================
-
-T = TypeVar(
-    "T"
-)  # The type of the symmetry operation representation, e.g. a 3x3 matrix.
-S = TypeVar(
-    "S"
-)  # The corresponding state that the symmetry operation acts on, e.g. a 3D vector.
-
-
-@dataclass(frozen=True)
-class PointGroupRepresentation(Generic[T, S]):
-    """A representation of a point group: how each symmetry operation acts on a kind of state.
-
-    Parameters
-    ----------
-    operations : dict of str to T
-        Representation of each operation (e.g. a 3x3 matrix), keyed by its label.
-    application_function : callable
-        ``f(op, state)`` applying an operation to a state. Default is ``op @ state``.
-    is_close_function : callable
-        ``f(state1, state2)`` telling whether two states are equal. Default is ``numpy.isclose(...).all()``.
-    """
-
-    operations: dict[str, T]
-    application_function: Callable[[T, S], S] = lambda op, state: op @ state
-    is_close_function: Callable[[S, S], bool] = lambda state1, state2: numpy.isclose(
-        state1, state2
-    ).all()
-
-    def apply(self, operation: T, state: S) -> S:
-        """Apply a symmetry operation to a state and return the new state.
-
-        Parameters
-        ----------
-        operation : T
-            Symmetry operation, e.g. a value of ``operations``.
-        state : S
-            State the operation acts on.
-
-        Returns
-        -------
-        S
-
-        Examples
-        --------
-        >>> rep = mol.ao_permutation_representation()
-        >>> rep.apply(rep.operations["i"], numpy.ones(mol.n_orbitals))  # same as rep.operations["i"] @ ...
-        """
-
-        return self.application_function(operation, state)
-
-    def character_vector(self, state: S) -> NDArray[numpy.complex128]:
-        """Return the characters of the state, one per operation.
-
-        Each character is ``<state|op|state>`` rounded to an integer, so it is only valid for states
-        spanning one-dimensional irreps (characters 1 or -1).
-        """
-
-        # Compute the expectation value <state | op | state> for each operation.
-        # For 1D irreps the eigenvalues are ±1, so rounding cleanly handles
-        # numerical noise and global phases from compiled circuits.
-        return numpy.array(
-            [
-                numpy.round(state.inner(self.apply(op, state)).real)
-                for op in self.operations.values()
-            ]
-        )
-
-    @classmethod
-    def get_geometric_representation(
-        cls, pg: PointGroup
-    ) -> PointGroupRepresentation[NDArray[numpy.complex128], NDArray[numpy.complex128]]:
-        """Return the geometric representation of a point group.
-
-        The operations are 3x3 matrices acting on 3D vectors, with the principal axis along z and, for
-        planar molecules, the molecule in the xy-plane. For ``Td`` the C3 axes lie along the cube body
-        diagonals, e.g. (1, 1, 1), and the S4 axes along x, y and z.
-
-        Parameters
-        ----------
-        pg : PointGroup
-
-        Raises
-        ------
-        ValueError
-            If an operation of ``pg`` is not supported.
-        """
-
-        operation_dict: dict[str, NDArray[numpy.float64]] = {
-            "E": numpy.eye(3),
-            "i": -1 * numpy.eye(3),
-            **dict.fromkeys(
-                ["C2", "C2z"], numpy.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
-            ),
-            **dict.fromkeys(
-                ["C2'", "C2x"], numpy.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
-            ),
-            **dict.fromkeys(
-                ['C2"', "C2y"], numpy.array([[-1, 0, 0], [0, 1, 0], [0, 0, -1]])
-            ),
-            **dict.fromkeys(
-                ["sh", "sz"], numpy.array([[1, 0, 0], [0, 1, 0], [0, 0, -1]])
-            ),
-            **dict.fromkeys(
-                ["sv", "sy"], numpy.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]])
-            ),
-            **dict.fromkeys(
-                ["sd", "sx"], numpy.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]])
-            ),
-            # --- operations beyond the Abelian groups, needed for D4h ---
-            # Fourfold rotations about z, and the S4 improper rotations.
-            "C4": numpy.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]]),
-            "C4^3": numpy.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]]),
-            "S4": numpy.array([[0, -1, 0], [1, 0, 0], [0, 0, -1]]),
-            "S4^3": numpy.array([[0, 1, 0], [-1, 0, 0], [0, 0, -1]]),
-            # Twofold axes along the diagonals y = x and y = -x.
-            "C2a": numpy.array([[0, 1, 0], [1, 0, 0], [0, 0, -1]]),
-            "C2b": numpy.array([[0, -1, 0], [-1, 0, 0], [0, 0, -1]]),
-            # Mirror planes containing z and the diagonals.
-            "sda": numpy.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]]),
-            "sdb": numpy.array([[0, -1, 0], [-1, 0, 0], [0, 0, 1]]),
-            # --- D6h: sixfold and threefold axes about z ---
-            "C6": _rot_z(numpy.pi / 3),
-            "C6^5": _rot_z(-numpy.pi / 3),
-            "C3": _rot_z(2 * numpy.pi / 3),
-            "C3^2": _rot_z(-2 * numpy.pi / 3),
-            "S6": _improper_z(numpy.pi / 3),
-            "S6^5": _improper_z(-numpy.pi / 3),
-            "S3": _improper_z(2 * numpy.pi / 3),
-            "S3^5": _improper_z(-2 * numpy.pi / 3),
-            # C2' through opposite vertices (0, 60, 120 degrees) and C2''
-            # through opposite edge midpoints (30, 90, 150 degrees), for a
-            # hexagon whose atoms sit at 0, 60, ... 300 degrees.
-            "C2'1": _c2_in_plane(0.0),
-            "C2'2": _c2_in_plane(numpy.pi / 3),
-            "C2'3": _c2_in_plane(2 * numpy.pi / 3),
-            "C2''1": _c2_in_plane(numpy.pi / 6),
-            "C2''2": _c2_in_plane(numpy.pi / 2),
-            "C2''3": _c2_in_plane(5 * numpy.pi / 6),
-            # sigma_v contains the atoms; sigma_d bisects them.
-            "sv1": _mirror_v(0.0),
-            "sv2": _mirror_v(numpy.pi / 3),
-            "sv3": _mirror_v(2 * numpy.pi / 3),
-            "sd1": _mirror_v(numpy.pi / 6),
-            "sd2": _mirror_v(numpy.pi / 2),
-            "sd3": _mirror_v(5 * numpy.pi / 6),
-            # --- D8h: eightfold axis about z ---
-            "C8": _rot_z(numpy.pi / 4),
-            "C8^7": _rot_z(-numpy.pi / 4),
-            "C8^3": _rot_z(3 * numpy.pi / 4),
-            "C8^5": _rot_z(-3 * numpy.pi / 4),
-            "S8": _improper_z(numpy.pi / 4),
-            "S8^7": _improper_z(-numpy.pi / 4),
-            "S8^3": _improper_z(3 * numpy.pi / 4),
-            "S8^5": _improper_z(-3 * numpy.pi / 4),
-            # For an octagon whose atoms sit at 0, 45, ... 315 degrees, C2' and
-            # sigma_v are C2x, C2a, C2y, C2b and sy, sda, sx, sdb from D4h;
-            # C2'' and sigma_d lie between the atoms (22.5, 67.5, 112.5, 157.5 degrees).
-            "C2c": _c2_in_plane(numpy.pi / 8),
-            "C2d": _c2_in_plane(3 * numpy.pi / 8),
-            "C2e": _c2_in_plane(5 * numpy.pi / 8),
-            "C2f": _c2_in_plane(7 * numpy.pi / 8),
-            "sdc": _mirror_v(numpy.pi / 8),
-            "sdd": _mirror_v(3 * numpy.pi / 8),
-            "sde": _mirror_v(5 * numpy.pi / 8),
-            "sdf": _mirror_v(7 * numpy.pi / 8),
-            # --- Td: threefold axes along the body diagonals (1, 1, 1), (-1, -1, 1),
-            # (-1, 1, -1) and (1, -1, -1), S4 about x and y ---
-            # Mirror planes containing y (x = z, x = -z) and x (y = z, y = -z).
-            "C3a": numpy.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]]),
-            "C3a^2": numpy.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]]),
-            "C3b": numpy.array([[0, 0, -1], [1, 0, 0], [0, -1, 0]]),
-            "C3b^2": numpy.array([[0, 1, 0], [0, 0, -1], [-1, 0, 0]]),
-            "C3c": numpy.array([[0, 0, 1], [-1, 0, 0], [0, -1, 0]]),
-            "C3c^2": numpy.array([[0, -1, 0], [0, 0, -1], [1, 0, 0]]),
-            "C3d": numpy.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]]),
-            "C3d^2": numpy.array([[0, -1, 0], [0, 0, 1], [-1, 0, 0]]),
-            "S4x": numpy.array([[-1, 0, 0], [0, 0, -1], [0, 1, 0]]),
-            "S4x^3": numpy.array([[-1, 0, 0], [0, 0, 1], [0, -1, 0]]),
-            "S4y": numpy.array([[0, 0, 1], [0, -1, 0], [-1, 0, 0]]),
-            "S4y^3": numpy.array([[0, 0, -1], [0, -1, 0], [1, 0, 0]]),
-            "sdy1": numpy.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]]),
-            "sdy2": numpy.array([[0, 0, -1], [0, 1, 0], [-1, 0, 0]]),
-            "sdx1": numpy.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]]),
-            "sdx2": numpy.array([[1, 0, 0], [0, 0, -1], [0, -1, 0]]),
-        }
-
-        operations: dict[str, NDArray[numpy.complex128]] = {}
-        for op in pg.character_table.operation_symbols:
-            if op not in operation_dict:
-                raise ValueError(
-                    f"Operation {op} not found. The supported operations are {list(operation_dict.keys())}."
-                )
-
-            operations[op] = operation_dict[op]
-
-        return PointGroupRepresentation(operations)

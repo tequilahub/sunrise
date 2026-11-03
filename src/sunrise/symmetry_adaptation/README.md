@@ -20,4 +20,4 @@ states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
 print(FockSpaceState.dataframe(SpinSymmetrizationProcedure(mol).symmetrize(states)))
 ```
 
-**See also:** [canonical H₂](../../../examples/symmetry_adaptation/canonical_H2.py) · [localized H₂](../../../examples/symmetry_adaptation/localized_H2.py) · [point groups](../../../examples/symmetry_adaptation/point_group_representations.py) · [tests](../../../tests/test_symmetry_adaptation.py)
+**See also:** [canonical H₂](../../../examples/symmetry_adaptation/canonical_H2.py) · [localized H₂](../../../examples/symmetry_adaptation/localized_H2.py) · [tests](../../../tests/test_symmetry_adaptation.py)

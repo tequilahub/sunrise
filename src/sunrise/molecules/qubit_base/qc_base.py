@@ -9,14 +9,13 @@ import numbers
 import typing
 from copy import deepcopy
 from dataclasses import asdict, dataclass
-from itertools import product
+from itertools import combinations, product
 
 import h5py
 import numpy
 import pyscf
 import tequila
 import tequila.grouping.fermionic_functions as ff
-from scipy.optimize import linear_sum_assignment
 from tequila import BitString, QTensor, TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
@@ -25,10 +24,9 @@ from tequila.objective.objective import ExpectationValue, Objective, Variable, V
 from tequila.simulators.simulator_api import simulate
 from tequila.utils import to_float
 
-from sunrise.symmetry_adaptation.point_group import PointGroup, PointGroupRepresentation
-from sunrise.utils.transformation_helpers import (
-    FermionicSWAP,
-    GeometricTransformationHelper,
+from sunrise.symmetry_adaptation.point_group import PointGroup
+from sunrise.symmetry_adaptation.point_group_representation import (
+    PointGroupRepresentation,
 )
 
 from .chemistry_tools import (
@@ -1378,10 +1376,13 @@ class QuantumChemistryBase:
 
     @property
     def point_group(self):
-        """PointGroup : the point group of the molecule. If it is not given with the point_group keyword, it is detected from the
-        geometry as the largest point group defined in sunrise: the full point group if it is D4h, D6h, D8h or Td,
-        the largest Abelian subgroup otherwise. The quantum chemistry backends compute in abelian_point_group.
-        It can be set with a PointGroup or its Schoenflies label, e.g. to work in a subgroup.
+        """PointGroup : point group of the molecule.
+
+        If it is not given with the ``point_group`` keyword, it is detected from the geometry as the
+        largest point group defined in sunrise: the full point group if it is C3v, C4v, D2d, D3h, D3d,
+        D4h, D6h, D8h, Td or Oh, the largest Abelian subgroup otherwise. PySCF labels the orbitals in
+        ``abelian_point_group``. It can be set with a PointGroup or its Schoenflies label, e.g. to work in
+        a subgroup.
         """
         if self._point_group is None:
             # the point group only depends on the nuclei, so the basis is not needed (it can be custom)
@@ -1415,283 +1416,64 @@ class QuantumChemistryBase:
 
     @property
     def abelian_point_group(self):
-        """PointGroup : the point group if it is Abelian, else its largest Abelian subgroup (e.g. D2h for D4h and D6h).
+        """PointGroup : the point group if it is Abelian, its largest Abelian subgroup otherwise.
 
-        PySCF can only label orbitals in Abelian groups.
+        For example D2h for D4h and D6h, C2v for C4v. PySCF can only label the orbitals in Abelian groups.
         """
-        if self.point_group.schoenflies_label in pyscf.symm.param.CHARACTER_TABLE:
+        label = self.point_group.schoenflies_label
+        if label in pyscf.symm.param.CHARACTER_TABLE:
             return self.point_group
-        pyscf_mol = pyscf.gto.M(
-            atom=str(self.parameters.geometry),
-            charge=self.parameters.charge,
-            unit=self.parameters.units,
-            symmetry=True,
-            verbose=0,
-        )
-        return PointGroup.from_pyscf(pyscf_mol.groupname)
-
-    def atomic_permutation_representation(self):
-        """Return the point group representation that permutes the atoms.
-
-        The symmetry operations are permutation matrices acting on vectors with one
-        component per atom.
-
-        Examples
-        --------
-        For linear H4 and inversion, the 3x3 matrix ``-1`` acting on coordinates becomes
-        the permutation matrix that maps atom 0 to 3 and atom 1 to 2::
-
-            [0, 0, 0, 1]
-            [0, 0, 1, 0]
-            [0, 1, 0, 0]
-            [1, 0, 0, 0]
-
-        >>> rep = mol.atomic_permutation_representation()
-        """
-        geometric_representation = (
-            PointGroupRepresentation.get_geometric_representation(self.point_group)
+        return PointGroup.from_pyscf(
+            {
+                "C3v": "Cs",
+                "C4v": "C2v",
+                "D2d": "D2",
+                "D3h": "C2v",
+                "D3d": "C2h",
+                "D4h": "D2h",
+                "D6h": "D2h",
+                "D8h": "D2h",
+                "Td": "D2",
+                "Oh": "D2h",
+            }[label]
         )
 
-        # This can be presumed as an NDArray
-        operations = geometric_representation.operations
+    def mo_representation(self):
+        r"""Return the representation of the point group on the active orbitals.
 
-        mol_atom_coordinates = numpy.array(
-            [atom[1] for atom in self.parameters.get_geometry()]
-        )
-        mol_center = numpy.mean(mol_atom_coordinates, axis=0)
-        mol_hom_atom_coordinates = (
-            GeometricTransformationHelper.homogeneous_coordinates(
-                mol_atom_coordinates, is_row_vector=True
-            ).T
-        )
+        The symmetry operations are matrices acting on the active orbitals and the states are
+        QubitWaveFunctions with ``2 * n_orbitals`` qubits. The geometric operations are projected into
+        the basis of the active orbitals with exact AO rotation matrices (s and p orbitals): the operation
+        :math:`g` transforms the orbitals as
 
-        atomic_permutation_representation_operations = {}
-        for l, op in operations.items():
-            # Apply the homogeneous operation to the homogeneous coordinates
-            op_effect = (
-                GeometricTransformationHelper.homogeneous_operation(
-                    op, center=mol_center
-                )
-                @ mol_hom_atom_coordinates
-            )
-            op_permutations = GeometricTransformationHelper.to_col_permutation(
-                mol_hom_atom_coordinates, op_effect
-            )
-            atomic_permutation_representation_operations[l] = (
-                GeometricTransformationHelper.to_permutation_matrix(op_permutations)
-            )
+        .. math::
+            g \phi_j = \sum_i D_{ij} \phi_i, \qquad D_{ij} = \langle \phi_i | g \phi_j \rangle.
 
-        return PointGroupRepresentation(atomic_permutation_representation_operations)
-
-    def ao_permutation_representation(self):
-        """Return the point group representation that permutes the atomic orbitals.
-
-        Operations are permutation matrices acting on vectors with one component per atomic
-        orbital: like the atomic permutation representation, with a block of orbitals per atom.
-        E.g. for atoms ``x``, ``y`` (3 orbitals each) and ``z`` (2 orbitals), the vector is
-        ``[x1, x2, x3, y1, y2, y3, z1, z2]`` and swapping ``x`` and ``y`` swaps the first 3
-        components with the next 3.
-
-        Notes
-        -----
-        Needs PySCF to determine the number of atomic orbitals on each atom.
-
-        Examples
-        --------
-        >>> rep = mol.ao_permutation_representation()
-        >>> rep.apply(rep.operations["i"], numpy.ones(mol.n_orbitals))
-        """
-
-        def get_number_of_core_electrons(n):
-            result = 0
-            if n > 2:
-                result += 2
-            if n > 10:
-                result += 10 - 2
-            if n > 18:
-                result += 18 - 10
-            if n > 36:
-                result += 36 - 18
-            if n > 54:
-                result += 54 - 36
-            if n > 86:
-                result += 86 - 54
-            return result
-
-        # This can be presumed as an NDArray
-        operations = self.atomic_permutation_representation().operations
-
-        # This finds out the number of active spatial orbitals by constructing a one-atom PySCF molecule
-        atom_num_aos = []
-        for atom in self.parameters.get_atoms():
-            # Build a one-atom pyscf molecule with automatic spin
-            pyscf_mol = pyscf.gto.M(
-                atom=f"{atom} 0 0 0",
-                basis=self.parameters.basis_set,
-                spin=None,
-                verbose=0,
-            )
-            mf = pyscf.scf.UHF(pyscf_mol).run()  # NOTE: check if RHF works equally well
-
-            atom_num_aos.append(
-                mf.mo_coeff.shape[1]
-                - get_number_of_core_electrons(pyscf_mol.atom_charges()[0]) // 2
-            )
-
-        # Alternative: statically determine the number of active spatial orbitals for STO-3G based on num_active_spatial_orbitals
-        # atom_num_aos = GeometricTransformationHelper.num_active_spatial_orbitals([pyscf.gto.charge(atom) for atom in self.parameters.get_atoms()])
-
-        ao_blocks = []
-        for i in range(len(atom_num_aos)):
-            ao_blocks.extend([i] * atom_num_aos[i])
-
-        ao_permutation_representation_operations = {}
-        for l, op in operations.items():
-            atomic_permutation_op = GeometricTransformationHelper.to_col_permutation(
-                numpy.eye(len(op)), op
-            )
-            ao_permutation_representation_operations[l] = (
-                GeometricTransformationHelper.build_blockwise_permutation_matrix(
-                    ao_blocks, atomic_permutation_op
-                )
-            )
-
-        return PointGroupRepresentation(ao_permutation_representation_operations)
-
-    def qcircuit_representation(self):
-        """Return the point group representation where the symmetry operations are compiled circuits.
-
-        The circuits act on QubitWaveFunctions with ``2 * n_orbitals`` qubits and require
-        the non-reordered Jordan-Wigner encoding (up0, down0, up1, ...).
-
-        Raises
-        ------
-        TequilaException
-            If the transformation is not that encoding.
-
-        Examples
-        --------
-        >>> rep = mol.qcircuit_representation()
-        """
-        # the circuits permute the spin orbitals in the non-reordered Jordan-Wigner encoding (up0, down0, up1, ...),
-        # so they only fit molecules whose transformation is that encoding
-        if self.transformation is None or not all(
-            self.transformation(openfermion.FermionOperator(f"{k}^"))
-            == QubitHamiltonian.from_openfermion(
-                openfermion.jordan_wigner(openfermion.FermionOperator(f"{k}^"))
-            )
-            for k in range(2 * self.n_orbitals)
-        ):
-            raise TequilaException(
-                "The QCircuit representation needs the non-reordered Jordan-Wigner encoding (up0, down0, up1, ...): "
-                "use a qubit molecule with transformation='JordanWigner' or a hybrid molecule with only fermionic orbitals"
-            )
-
-        # This can be presumed as an NDArray
-        operations = self.ao_permutation_representation().operations
-
-        # For each operation, we need to convert the permutation matrix into a sequence of swaps,
-        # and then convert those swaps into a QCircuit while maintaining fermionic antisymmetry.
-        qcircuit_representation_operations = {}
-        for l, op in operations.items():
-            swaps = GeometricTransformationHelper.perm_matrix_to_swaps(op)
-
-            if swaps == []:
-                U = QCircuit()  # Identity operation, no swaps needed
-                U += gates.I(target=list(range(self.n_orbitals * 2)))
-                qcircuit_representation_operations[l] = U
-                continue
-
-            max_qubit_index = max(max(max(swap) for swap in swaps), self.n_orbitals * 2)
-
-            U = QCircuit()
-            U += gates.I(
-                target=list(range(max_qubit_index))
-            )  # self.n_orbitals*2 might not be enough for the fermionic swaps
-            for i, j in swaps:
-                assert i < U.n_qubits and j < U.n_qubits, (
-                    f"Mismatch between the AO permutation representation and the number of qubits in the circuit: swap indices ({i}, {j}) exceed current circuit qubits {U.n_qubits}. This likely indicates an error in the AO permutation representation construction."
-                )
-                # alternative method with FSWAP
-                # U += FSWAP(i=i, j=j, n_orbitals=self.n_electrons, up_then_down=True).construct_circuit()
-                U += FermionicSWAP(self).f_swap(i, j)
-
-            qcircuit_representation_operations[l] = U
-
-        def _is_close(state1, state2):
-            if numpy.allclose((state1 + state2).to_array(), 0):
-                return False
-            return tequila.QubitWaveFunction.isclose(state1, state2)
-
-        def _apply(compiled_op, state):
-            return compiled_op(initial_state=state)
-
-        # Compile each operation's circuit ONCE here, not per-state in _apply.
-        compiled_operations = {
-            l: tequila.compile(U) for l, U in qcircuit_representation_operations.items()
-        }
-
-        return PointGroupRepresentation(
-            application_function=_apply,
-            is_close_function=_is_close,
-            operations=compiled_operations,
-        )
-
-    def _get_exact_ao_transformation_matrix(self, R_3x3):
-        """Return the AO transformation matrix of a 3x3 rotation/reflection, including sign flips of p orbitals."""
-        pyscf_mol = pyscf.gto.M(
-            atom=str(self.parameters.geometry),
-            basis=self.parameters.basis_set,
-            charge=self.parameters.charge,
-            unit=self.parameters.units,
-            verbose=0,
-        )
-        coords = pyscf_mol.atom_coords()
-        center = numpy.mean(coords, axis=0)
-        coords_rot = (coords - center) @ R_3x3.T + center
-        aoslice = pyscf_mol.aoslice_by_atom()
-        n_ao = pyscf_mol.nao_nr()
-        U_AO = numpy.zeros((n_ao, n_ao))
-
-        for i, c_rot in enumerate(coords_rot):
-            dists = numpy.linalg.norm(coords - c_rot, axis=1)
-            j = numpy.argmin(dists)
-            if dists[j] > 1e-4:
-                raise ValueError(f"Atom {i} does not map to any atom under rotation.")
-
-            sh0_A, sh1_A, _, _ = aoslice[i]
-            sh0_B, sh1_B, _, _ = aoslice[j]
-
-            for sh_A, sh_B in zip(range(sh0_A, sh1_A), range(sh0_B, sh1_B)):
-                l = pyscf_mol.bas_angular(sh_A)
-                ao_s_A, ao_e_A = pyscf_mol.ao_loc[sh_A], pyscf_mol.ao_loc[sh_A + 1]
-                ao_s_B, ao_e_B = pyscf_mol.ao_loc[sh_B], pyscf_mol.ao_loc[sh_B + 1]
-
-                if l == 0:
-                    U_AO[ao_s_B:ao_e_B, ao_s_A:ao_e_A] = 1.0
-                elif l == 1:
-                    U_AO[ao_s_B:ao_e_B, ao_s_A:ao_e_A] = R_3x3
-                else:
-                    raise NotImplementedError(f"Angular momentum l={l} not supported.")
-        return U_AO
-
-    def compute_mo_perms_and_phases(self):
-        """Project the geometric symmetry operations onto the current MO basis.
-
-        Uses exact AO rotation matrices.
+        :math:`D` is a signed permutation if :math:`g` maps every orbital onto another one (e.g. localized
+        orbitals in the standard orientation); in general it mixes orbitals (e.g. degenerate canonical
+        orbitals or p orbitals under C3). The operations act directly on the bitstrings of the states, no
+        circuits are needed.
 
         Returns
         -------
-        tuple of dict
-            Permutations of the orbitals and their phases, each mapping the label of a
-            symmetry operation to the result.
+        PointGroupRepresentation
+
+        Raises
+        ------
+        ValueError
+            If an atom is not mapped onto an atom, or an operation maps the active orbitals out of the
+            active space (choose active orbitals that the operations map onto each other, e.g. all
+            orbitals of a degenerate set).
+        NotImplementedError
+            For basis functions beyond p orbitals.
 
         Examples
         --------
-        >>> perms, phases = mol.compute_mo_perms_and_phases()
+        >>> rep = mol.use_native_orbitals().mo_representation()
+        >>> rep.character_vector(wfn)  # characters of a state of a one-dimensional irrep
         """
         geom_repr = PointGroupRepresentation.get_geometric_representation(
-            self.point_group
+            self.point_group, self.parameters.get_geometry()
         )
         pyscf_mol = pyscf.gto.M(
             atom=str(self.parameters.geometry),
@@ -1701,47 +1483,112 @@ class QuantumChemistryBase:
             verbose=0,
         )
         S_ao = pyscf_mol.intor("int1e_ovlp")
+        coords = pyscf_mol.atom_coords()
+        center = numpy.mean(coords, axis=0)
+        aoslice = pyscf_mol.aoslice_by_atom()
+        n_ao = pyscf_mol.nao_nr()
 
-        try:
-            C_all = numpy.asarray(self.integral_manager.orbital_coefficients)
-            n_active = self.n_orbitals
+        # the matrices are written in the orbitals the states are written in, signs included
+        C_mo = numpy.asarray(self.integral_manager.orbital_coefficients)[
+            :, [orbital.idx_total for orbital in self.orbitals]
+        ]
 
-            # Slicing assumption: This grabs the last `n_active` columns.
-            # This works perfectly if the injected matrix is ordered [active, virtual]
-            # or if the active orbitals happen to be at the end.
-            # If you inject a full matrix ordered as [core, active, virtual],
-            # you may need to adjust this slice to C_all[:, n_core : n_core + n_active].
-            C_mo = C_all[:, -n_active:].copy()
-
-        except Exception:  # noqa: BLE001
-            C_mo = pyscf.scf.RHF(pyscf_mol).run().mo_coeff[:, : self.n_orbitals].copy()
-
-        # Canonicalize global signs to prevent arbitrary sign flips
-        for i in range(C_mo.shape[1]):
-            max_idx = numpy.argmax(numpy.abs(C_mo[:, i]))
-            if C_mo[max_idx, i] < 0:
-                C_mo[:, i] *= -1.0
-
-        perms, phases = {}, {}
+        operations = {}
         for label, R_3x3 in geom_repr.operations.items():
-            U_AO = self._get_exact_ao_transformation_matrix(R_3x3)
-            S_mo = C_mo.T @ S_ao @ U_AO @ C_mo
+            # exact AO transformation matrix: atom A is moved onto atom B, its s orbitals
+            # keep their sign and its p orbitals transform like x, y, z
+            coords_rot = (coords - center) @ R_3x3.T + center
+            U_AO = numpy.zeros((n_ao, n_ao))
+            for A, c_rot in enumerate(coords_rot):
+                dists = numpy.linalg.norm(coords - c_rot, axis=1)
+                B = numpy.argmin(dists)
+                if dists[B] > 1e-4:
+                    raise ValueError(
+                        f"Atom {A} does not map to any atom under {label}."
+                    )
+                for sh_A, sh_B in zip(range(*aoslice[A][:2]), range(*aoslice[B][:2])):
+                    l = pyscf_mol.bas_angular(sh_A)
+                    ao_A = slice(pyscf_mol.ao_loc[sh_A], pyscf_mol.ao_loc[sh_A + 1])
+                    ao_B = slice(pyscf_mol.ao_loc[sh_B], pyscf_mol.ao_loc[sh_B + 1])
+                    if l == 0:
+                        U_AO[ao_B, ao_A] = 1.0
+                    elif l == 1:
+                        U_AO[ao_B, ao_A] = R_3x3
+                    else:
+                        raise NotImplementedError(
+                            f"Angular momentum l={l} not supported."
+                        )
 
-            # Hungarian algorithm for guaranteed 1-to-1 mapping
-            row_ind, col_ind = linear_sum_assignment(-numpy.abs(S_mo))
-            perm = [0] * self.n_orbitals
-            for r, c in zip(row_ind, col_ind):
-                perm[c] = r
-            perms[label] = perm
+            D = C_mo.T @ S_ao @ U_AO @ C_mo
 
-            phases_list = []
-            for j in range(self.n_orbitals):
-                i = perm[j]
-                phase = numpy.sign(S_mo[i, j])
-                phases_list.append(float(phase if phase != 0 else 1.0))
-            phases[label] = phases_list
+            # D is orthogonal only if the operation maps the active orbitals onto themselves
+            if not numpy.allclose(D.T @ D, numpy.eye(self.n_orbitals), atol=1e-4):
+                raise ValueError(
+                    f"The operation {label} maps the active orbitals out of the active space: choose active "
+                    f"orbitals that the operations of {self.point_group.schoenflies_label} map onto each other, "
+                    f"e.g. all orbitals of a degenerate set."
+                )
+            operations[label] = D
 
-        return perms, phases
+        def _apply(D, state):
+            r"""Apply the orbital transformation :math:`a_j^\dagger \to \sum_i D_{ij} a_i^\dagger` (both spins) to the bitstrings of ``state``.
+
+            With the up operators written before the down ones, a determinant with up orbitals :math:`I` and
+            down orbitals :math:`J` goes to :math:`\sum_{I', J'} \det(D_{I'I}) \det(D_{J'J}) |I', J'\rangle`.
+            """
+            n_orbitals = self.n_orbitals
+            n_qubits = 2 * n_orbitals
+            result_terms = {}
+            # expansions of the up and down orbital sets, shared by all determinants of the state
+            expansions = {}
+
+            for bitstring, coef in state.items():
+                bs_str = format(int(bitstring), f"0{n_qubits}b")
+                up = tuple(i for i in range(n_orbitals) if bs_str[2 * i] == "1")
+                down = tuple(i for i in range(n_orbitals) if bs_str[2 * i + 1] == "1")
+
+                for occupied in (up, down):
+                    if occupied not in expansions:
+                        targets = list(combinations(range(n_orbitals), len(occupied)))
+                        targets = numpy.array(targets, dtype=int).reshape(
+                            len(targets), len(occupied)
+                        )
+                        dets = numpy.linalg.det(
+                            D[targets[:, :, None], numpy.array(occupied, dtype=int)]
+                        )
+                        expansions[occupied] = [
+                            (target, det)
+                            for target, det in zip(targets, dets)
+                            if abs(det) > 1e-12
+                        ]
+
+                # fermionic sign of moving the down operators behind the up ones, and back
+                sign = (-1) ** sum(j < i for i in up for j in down)
+                for new_up, det_up in expansions[up]:
+                    for new_down, det_down in expansions[down]:
+                        new_sign = (-1) ** sum(j < i for i in new_up for j in new_down)
+                        new_bits = ["0"] * n_qubits
+                        for i in new_up:
+                            new_bits[2 * i] = "1"
+                        for j in new_down:
+                            new_bits[2 * j + 1] = "1"
+                        new_bs_int = int("".join(new_bits), 2)
+                        result_terms[new_bs_int] = (
+                            result_terms.get(new_bs_int, 0)
+                            + sign * new_sign * det_up * det_down * coef
+                        )
+
+            result = tequila.QubitWaveFunction(n_qubits=n_qubits)
+            for bs_int, c in result_terms.items():
+                if abs(c) > 1e-15:
+                    result[bs_int] = c
+            return result
+
+        return PointGroupRepresentation(
+            operations=operations,
+            application_function=_apply,
+            is_close_function=tequila.QubitWaveFunction.isclose,
+        )
 
     def compute_orbital_irreps(self):
         """Return the irreducible representations of the active orbitals.

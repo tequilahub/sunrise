@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 import numpy
 
+from .point_group_representation import PointGroupRepresentation
+
 if TYPE_CHECKING:
     # only for type hints, importing it at runtime would be circular
     from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
@@ -42,76 +44,50 @@ class IrrepProviderBase(ABC):
 
 
 class LocalizedIrrepProvider(IrrepProviderBase):
-    """Irrep provider based on the characters of the symmetry operations.
+    r"""Irrep provider that applies the symmetry operations to the state and compares with the character table.
 
-    The operations of the point group are applied to the state as permutations (with phases) of
-    the localized orbitals, and the resulting character vector is compared to the character
-    table. If the state defines ``fragment_orbitals``, only operations that map the fragment
-    onto itself are used.
+    The operations act on the orbitals of the molecule (see ``mol.mo_representation``), which can be
+    any orbitals the operations map onto themselves as a set, e.g. canonical, native or hybrid
+    orbitals. Only states of one-dimensional irreps are labelled: :math:`\langle\psi|O|\psi\rangle = \pm 1`
+    for every operation :math:`O`, otherwise the irrep is None.
 
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule with a ``point_group``.
+        Molecule whose ``point_group`` defines the irreps.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
         super().__init__(mol)
+        self.pg = mol.point_group
+        # the operations as orbital transformations acting on the bitstrings, see mol.mo_representation
+        self._representation = mol.mo_representation()
 
-        # Fetch the MO-specific permutations and phases, keyed by the operations of the point group
-        self._pg = mol.point_group
-        self._spatial_perms, self._spatial_phases = mol.compute_mo_perms_and_phases()
+    @property
+    def representation(self) -> PointGroupRepresentation:
+        """PointGroupRepresentation : the symmetry operations as orbital transformations, see ``mol.mo_representation``."""
+        return self._representation
 
     def get_irrep(self, state) -> str | None:
-        """Return the irrep of ``state`` from its character vector, None if it matches no irrep.
+        """Return the irrep of ``state`` from its character vector.
 
         Parameters
         ----------
         state : FockSpaceState
             State to classify, possibly a superposition.
+
+        Returns
+        -------
+        str or None
+            Irrep name, None if the state is not an eigenstate of every operation (characters other
+            than +1 or -1) or matches no irrep.
         """
-        from .symmetrization_procedure import (
-            SymmetryAdaptedLinearCombinationSymmetrization,
-        )
-
-        n_orbitals = self.mol.n_orbitals
-        pg = self._pg
-
-        fragment_orbitals = getattr(state, "fragment_orbitals", None)
-        if fragment_orbitals is not None:
-            fragment_set = set(fragment_orbitals)
-            selected_ops = [
-                label
-                for label in pg.character_table.operation_symbols
-                if all(
-                    self._spatial_perms[label][i] in fragment_set
-                    for i in fragment_orbitals
-                )
-            ]
-        else:
-            selected_ops = pg.character_table.operation_symbols
-
-        chars = []
-        for label in selected_ops:
-            perm = self._spatial_perms[label]
-            phases = self._spatial_phases[label]
-
-            transformed = SymmetryAdaptedLinearCombinationSymmetrization._apply_spatial_permutation_bitstring(
-                state.wavefunction, perm, n_orbitals, phases
-            )
-            expectation = state.wavefunction.inner(transformed).real
-            chars.append(numpy.round(expectation))
-
-        character_vector = numpy.array(chars)
-        for irrep_name, irrep_chars in pg.character_table.dict.items():
-            expected = [
-                irrep_chars[pg.character_table.operation_symbols.index(label)]
-                for label in selected_ops
-            ]
-            if all(abs(c - e) < 0.5 for c, e in zip(character_vector, expected)):
-                return irrep_name
-
-        return None
+        character_vector = self.representation.character_vector(state.wavefunction)
+        # a state that is not an eigenstate of every operation belongs to no one-dimensional irrep
+        if not numpy.allclose(numpy.abs(character_vector), 1.0, atol=1e-4):
+            return None
+        irrep = self.pg.character_table.vec_to_str(numpy.round(character_vector))
+        return irrep if irrep is not None else None
 
 
 class PySCFCanonicalIrrepProvider(IrrepProviderBase):
@@ -129,15 +105,19 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
 
     def __init__(self, mol: QuantumChemistryBase):
         super().__init__(mol)
-        self._pg = mol.abelian_point_group
+        self.pg = mol.abelian_point_group
         self._mol_irreps = mol.compute_orbital_irreps()
 
     @property
     def mol_irreps(self) -> list[str]:
-        """list of str : Irrep label of each molecular orbital."""
+        """list of str : irrep label of each molecular orbital."""
         return self._mol_irreps
 
     def get_irrep(self, state) -> str | None:
+        # Canonical irrep assignment only works for states with integer occupations
+        # (single determinants or superpositions within the same occupation sector).
+        # Fractional occupations indicate a superposition across sectors, which
+        # requires the LocalizedIrrepProvider's character-vector approach instead.
         """Return the irrep of ``state`` as the product of the irreps of its occupied orbitals.
 
         Parameters
@@ -148,7 +128,7 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
         Returns
         -------
         str or None
-            Irrep name. None if the state has no ``mo_occ`` or the character product matches no irrep.
+            Irrep name, None if the character product matches no irrep.
 
         Raises
         ------
@@ -156,13 +136,6 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
             If an orbital occupation is fractional, e.g. for a superposition of different occupation
             sectors. Use the ``"loc"`` provider in that case.
         """
-        if state.mo_occ is None:
-            return None
-
-        # Canonical irrep assignment only works for states with integer occupations
-        # (single determinants or superpositions within the same occupation sector).
-        # Fractional occupations indicate a superposition across sectors, which
-        # requires the LocalizedIrrepProvider's character-vector approach instead.
         for i, occ in enumerate(state.mo_occ):
             if abs(occ - round(occ)) > 1e-4:
                 raise ValueError(
@@ -172,42 +145,21 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
                     f"sectors. Use IrrepProvider(mol, 'loc') instead."
                 )
 
-        pg = self._pg
-        character_vector = numpy.ones(pg.order)
+        character_vector = numpy.ones(self.pg.order)
         for occ, irrep in zip(state.mo_occ, self.mol_irreps):
             chars = numpy.asarray(
-                pg.character_table.dict[irrep], dtype=numpy.complex128
+                self.pg.character_table.dict[irrep], dtype=numpy.complex128
             )
             character_vector = character_vector * numpy.power(chars, round(occ))
-        irrep = pg.character_table.vec_to_str(character_vector)
+
+        irrep = self.pg.character_table.vec_to_str(character_vector)
         return irrep if irrep is not None else None
 
 
-class MEAOIrrepProvider(LocalizedIrrepProvider):
-    """Irrep provider for MEAO orbitals.
-
-    Same as ``LocalizedIrrepProvider`` but the permutations and phases are those of the
-    molecular-orbital basis of ``mol``.
-
-    Parameters
-    ----------
-    mol : QuantumChemistryBase
-        Molecule with a ``point_group``.
-    """
-
-    def __init__(self, mol: QuantumChemistryBase):
-        # Skip parent __init__'s AO permutation logic
-        IrrepProviderBase.__init__(self, mol)
-
-        self._pg = mol.point_group
-        self._spatial_perms, self._spatial_phases = mol.compute_mo_perms_and_phases()
-
-
-SUPPORTED_IRREP_PROVIDERS = ["loc", "canon", "meao"]
+SUPPORTED_IRREP_PROVIDERS = ["loc", "canon"]
 INSTALLED_IRREP_PROVIDERS = {
     "loc": LocalizedIrrepProvider,
     "canon": PySCFCanonicalIrrepProvider,
-    "meao": MEAOIrrepProvider,
 }
 
 
@@ -227,15 +179,18 @@ def show_supported_modules():
 def IrrepProvider(
     mol: QuantumChemistryBase, provider: str = "canon", *args, **kwargs
 ) -> IrrepProviderBase:
-    """Create an irrep provider by name.
+    """Create the irrep provider that assigns irreducible representations to the FockSpaceStates of a molecule.
 
     Parameters
     ----------
     mol : QuantumChemistryBase
         Molecule whose point group defines the irreps.
-    provider : str {"canon", "loc", "meao"}
-        ``"canon"`` uses the PySCF-labelled canonical orbitals (Abelian groups only), ``"loc"`` the
-        characters of the symmetry operations on localized orbitals, ``"meao"`` the same for MEAOs.
+    provider : str {"canon", "loc"}
+        ``"canon"`` (``PySCFCanonicalIrrepProvider``) uses the irreps PySCF assigns to the canonical
+        orbitals, in ``mol.abelian_point_group``, for states with integer occupations. ``"loc"``
+        (``LocalizedIrrepProvider``) applies the symmetry operations to the state, in
+        ``mol.point_group``, for any orbitals the operations map onto themselves (e.g. native or
+        hybrid orbitals), and only for states of one-dimensional irreps.
     *args, **kwargs
         Passed to the provider class.
 
@@ -248,5 +203,5 @@ def IrrepProvider(
     >>> provider = IrrepProvider(mol, "canon")
     >>> states = FockSpaceState.non_ionic_states(mol, provider)
     """
-    # any kwargs and circuit form should be managed inside each class
+    # any kwargs should be managed inside each class
     return INSTALLED_IRREP_PROVIDERS[provider.lower()](*args, mol=mol, **kwargs)

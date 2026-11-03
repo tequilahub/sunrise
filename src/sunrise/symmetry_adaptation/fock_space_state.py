@@ -8,6 +8,7 @@ from functools import cached_property
 from itertools import combinations, product
 from typing import TYPE_CHECKING, Any
 
+import numpy
 import tequila
 from pandas import DataFrame
 
@@ -16,58 +17,6 @@ from sunrise.symmetry_adaptation.irrep_provider import IrrepProviderBase
 if TYPE_CHECKING:
     # only for type hints, importing it at runtime would be circular
     from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-
-
-def _fixed_popcount_bitstrings(
-    n_qubits: int, n_ones: int
-) -> Generator[str, None, None]:
-    """Yield all bitstrings of length n_qubits with exactly n_ones bits set (the non-ionic Fock space)."""
-    for ones_positions in combinations(range(n_qubits), n_ones):
-        val = 0
-        for p in ones_positions:
-            val |= 1 << p
-        yield format(val, f"0{n_qubits}b")
-
-
-def _fragment_bitstrings(
-    mol: QuantumChemistryBase,
-    fragment_orbitals: list[int],
-    fragment_electrons: int | str | None = None,
-) -> Generator[str, None, None]:
-    """Yield full-space bitstrings for the states of a fragment, leaving the other orbitals empty.
-
-    ``fragment_electrons`` is None for one electron per fragment orbital, an int for a fixed
-    electron number, or ``"all"`` for every electron number.
-    """
-    n_spatial = mol.n_orbitals
-    n_fragment_qubits = 2 * len(fragment_orbitals)
-
-    if fragment_electrons is None:
-        fragment_electrons = len(fragment_orbitals)  # one electron per orbital
-        electron_counts = [fragment_electrons]
-    elif fragment_electrons == "all":
-        # Special keyword to generate the full Fock space of the fragment (all possible electron numbers)
-        electron_counts = range(n_fragment_qubits + 1)
-    else:
-        electron_counts = [fragment_electrons]
-
-    if fragment_electrons != "all" and (
-        fragment_electrons < 0 or fragment_electrons > n_fragment_qubits
-    ):
-        raise ValueError(
-            f"Invalid fragment space: {fragment_electrons} electrons cannot fit into {len(fragment_orbitals)} orbitals."
-        )
-
-    for n_e in electron_counts:
-        for fragment_bs in _fixed_popcount_bitstrings(n_fragment_qubits, n_e):
-            frag_int = int(fragment_bs, 2)
-            full_int = 0
-            for idx, sp in enumerate(fragment_orbitals):
-                if (frag_int >> (2 * idx)) & 1:
-                    full_int |= 1 << (2 * sp)
-                if (frag_int >> (2 * idx + 1)) & 1:
-                    full_int |= 1 << (2 * sp + 1)
-            yield format(full_int, f"0{2 * n_spatial}b")
 
 
 @dataclass
@@ -90,9 +39,6 @@ class FockSpaceState:
         Precomputed value of S^2, otherwise computed from the wavefunction.
     irrep : str, optional
         Precomputed irrep, otherwise computed with ``provider``.
-    fragment_orbitals : list of int, optional
-        Spatial orbitals of the fragment the state lives on. Used for the ``fragment_*`` properties
-        and to restrict the symmetry operations.
     m_s : float, optional
         Precomputed spin projection, otherwise computed from the wavefunction.
     """
@@ -110,7 +56,6 @@ class FockSpaceState:
         provider: IrrepProviderBase,
         S2=None,
         irrep=None,
-        fragment_orbitals: list[int] | None = None,
         m_s=None,
     ):
         self.mol = mol
@@ -123,7 +68,6 @@ class FockSpaceState:
         self.irrep_provider = provider
         self._S2 = S2
         self._irrep = irrep
-        self._fragment_orbitals = fragment_orbitals
         self._m_s = m_s
 
     @property
@@ -132,128 +76,67 @@ class FockSpaceState:
         return len([x for x in self.wavefunction.items()]) != 1
 
     @cached_property
-    def fragment_wavefunction(self) -> str:
-        """str : Readable state restricted to the fragment orbitals, ``|bitstring>`` for a single determinant or the sum of its terms."""
-        if not self.is_superposition:
-            return f"|{self.fragment_bitstring}>"
-        parts = []
-        for bs, coef in self.wavefunction.items():
-            if abs(coef) < 1e-6:
-                continue
-            bs_int = int(bs)
-            if self._fragment_orbitals is not None:
-                frag_bits = []
-                for i in self._fragment_orbitals:
-                    frag_bits.append(str((bs_int >> (2 * i)) & 1))
-                    frag_bits.append(str((bs_int >> (2 * i + 1)) & 1))
-                fragment_bs = "".join(frag_bits)
-            else:
-                frag_bits = []
-                for i in range(self.mol.n_orbitals):
-                    frag_bits.append(str((bs_int >> (2 * i)) & 1))
-                    frag_bits.append(str((bs_int >> (2 * i + 1)) & 1))
-                fragment_bs = "".join(frag_bits)
-
-            c = complex(coef)
-            coef_str = (
-                f"{c.real:+.4f}"
-                if abs(c.imag) < 1e-10
-                else f"({c.real:+.4f}{c.imag:+.4f}j)"
-            )
-            parts.append(f"{coef_str}|{fragment_bs}>")
-        return " ".join(parts)
-
-    @cached_property
     def bitstring(self) -> str | None:
-        """str or None : Occupation bitstring in (alpha, beta) pairs per orbital, None for a superposition."""
+        """str or None : occupation bitstring in (alpha, beta) pairs per orbital, None for a superposition."""
         if self.is_superposition:
             return None
-        bs_int = int(next(iter(self.wavefunction.keys())))
-        bits = []
-        for i in range(self.mol.n_orbitals):
-            bits.append(str((bs_int >> (2 * i)) & 1))
-            bits.append(str((bs_int >> (2 * i + 1)) & 1))
-        return "".join(bits)
-
-    @cached_property
-    def fragment_bitstring(self) -> str | None:
-        """str or None : Bitstring restricted to the fragment orbitals, None for a superposition."""
-        if self.is_superposition:
-            return None
-        if self._fragment_orbitals is None:
-            return self.bitstring
-        bs_int = int(next(iter(self.wavefunction.keys())))
-        bits = []
-        for i in self._fragment_orbitals:
-            bits.append(str((bs_int >> (2 * i)) & 1))
-            bits.append(str((bs_int >> (2 * i + 1)) & 1))
-        return "".join(bits)
-
-    @property
-    def fragment_orbitals(self) -> list[int] | None:
-        """list of int or None : Spatial orbitals of the fragment, None if the whole molecule is used."""
-        return getattr(self, "_fragment_orbitals", None)
+        return format(
+            int(next(iter(self.wavefunction.keys()))), f"0{2 * self.mol.n_orbitals}b"
+        )
 
     @cached_property
     def mo_occ(self) -> list[float]:
-        """list of float : Expectation value of the occupation (0 to 2) of each spatial orbital, rounded to 4 digits."""
+        """list of float : occupation (0 to 2) of each spatial orbital.
+
+        For a superposition it is the expectation value, rounded to 4 digits.
+        """
+
         n_orbitals = self.mol.n_orbitals
         mo_occ = [0.0] * n_orbitals
 
-        for bs, coef in self.wavefunction.items():
-            bs_int = int(bs)
-            weight = abs(coef) ** 2
+        if not self.is_superposition:
             for i in range(n_orbitals):
-                alpha = (bs_int >> (2 * i)) & 1
-                beta = (bs_int >> (2 * i + 1)) & 1
-                mo_occ[i] += weight * (alpha + beta)
+                # Each MO has two qubits: qubit 2*i (alpha) and qubit 2*i+1 (beta)
+                mo_occ[i] = float(
+                    int(self.bitstring[2 * i]) + int(self.bitstring[2 * i + 1])
+                )
+            return mo_occ
+
+        # For superpositions, compute the weighted average (expectation value)
+        n_qubits = 2 * n_orbitals
+        for bs, coef in self.wavefunction.items():
+            # Format the bitstring to ensure it has the correct leading zeros
+            bs_str = format(int(bs), f"0{n_qubits}b")
+            weight = abs(coef) ** 2
+
+            for i in range(n_orbitals):
+                mo_occ[i] += weight * (int(bs_str[2 * i]) + int(bs_str[2 * i + 1]))
 
         return [round(x, 4) for x in mo_occ]
 
     @cached_property
-    def fragment_mo_occ(self) -> list[float]:
-        """list of float : ``mo_occ`` restricted to the fragment orbitals."""
-        if self._fragment_orbitals is None:
-            return self.mo_occ
-        return [self.mo_occ[i] for i in self._fragment_orbitals]
-
-    @cached_property
-    def m_s(self) -> float:
-        """float : Spin projection <S_z> of the state, snapped to a multiple of 0.5 when close."""
+    def m_s(self) -> numpy.float64:
+        """float : spin projection <S_z> of the state (as given at construction, or computed and rounded to 10 decimals)."""
         if self._m_s is not None:
-            val = float(self._m_s)
-        else:
-            val = float(
-                self.wavefunction.inner(self.mol.make_sz_op()(self.wavefunction)).real
-            )
-
-        # m_s must be an integer or half-integer (multiple of 0.5)
-        snapped = round(val * 2) / 2
-        if abs(val - snapped) < 1e-4:
-            val = snapped
-
-        return 0.0 if abs(val) < 1e-10 else val
+            return self._m_s
+        return numpy.round(
+            self.wavefunction.inner(self.mol.make_sz_op()(self.wavefunction)).real,
+            decimals=10,
+        )
 
     @cached_property
-    def S2(self) -> float:
-        """float : Expectation value of S^2, snapped to S(S+1) multiples of 0.25 when close."""
+    def S2(self) -> numpy.float64:
+        """float : expectation value of S^2 (as given at construction, or computed and rounded to 10 decimals)."""
         if self._S2 is not None:
-            val = float(self._S2)
-        else:
-            val = float(
-                self.wavefunction.inner(self.mol.make_s2_op()(self.wavefunction)).real
-            )
-
-        # S^2 must be S(S+1), which are multiples of 0.25 (0, 0.75, 2.0, 3.75, 6.0...)
-        snapped = round(val * 4) / 4
-        if abs(val - snapped) < 1e-4:
-            val = snapped
-
-        return 0.0 if abs(val) < 1e-10 else val
+            return self._S2
+        return numpy.round(
+            self.wavefunction.inner(self.mol.make_s2_op()(self.wavefunction)).real,
+            decimals=10,
+        )
 
     @cached_property
     def spin_multiplicity(self) -> int:
-        """str : Spin multiplicity name derived from S2 ("singlet", "doublet", ... "nonet"), "mixed" if S2 matches none."""
+        """str : spin multiplicity name derived from S2 ("singlet", "doublet", ... "nonet"), "mixed" if S2 matches none."""
 
         rounded_eigval = round(self.S2 * 4) / 4
         spin_type = {
@@ -269,48 +152,26 @@ class FockSpaceState:
         }.get(rounded_eigval, "mixed")
         return spin_type
 
-    @staticmethod
-    def _seniority_of_bitstring(bs_int: int, n_orbitals: int) -> int:
-        """Return the number of singly occupied spatial orbitals of a determinant."""
-        return sum(
-            1
-            for i in range(n_orbitals)
-            if ((bs_int >> (2 * i)) & 1) + ((bs_int >> (2 * i + 1)) & 1) == 1
-        )
-
     @cached_property
     def seniority(self) -> int | None:
-        """int or None : Number of singly occupied orbitals, in the orbital basis of the wavefunction.
+        """int or None : number of singly occupied orbitals, in the orbital basis of the wavefunction.
 
         None if the determinants have different seniorities.
         """
-        n = self.mol.n_orbitals
-        values = {
-            self._seniority_of_bitstring(int(bs), n)
-            for bs, coef in self.wavefunction.items()
-            if abs(coef) > 1e-12
-        }
+        # an orbital is singly occupied if its two qubits 2*i and 2*i+1 differ
+        n_qubits = 2 * self.mol.n_orbitals
+        values = set()
+        for bs, coef in self.wavefunction.items():
+            if abs(coef) > 1e-12:
+                bs_str = format(int(bs), f"0{n_qubits}b")
+                values.add(
+                    sum(bs_str[i] != bs_str[i + 1] for i in range(0, n_qubits, 2))
+                )
         return values.pop() if len(values) == 1 else None
 
     @cached_property
-    def seniority_expectation(self) -> float:
-        """float : Expectation value of the seniority, sum of :math:`|c|^2` times the seniority of each determinant. Can be non-integer."""
-        n = self.mol.n_orbitals
-        return float(
-            sum(
-                abs(coef) ** 2 * self._seniority_of_bitstring(int(bs), n)
-                for bs, coef in self.wavefunction.items()
-            )
-        )
-
-    @cached_property
-    def n_determinants(self):
-        """int : Number of determinants with non-negligible coefficient (above 1e-8)."""
-        return sum(1 for _, c in self.wavefunction.items() if abs(c) > 1e-8)
-
-    @cached_property
     def irrep(self):
-        """str or None : Irrep label of the state, the given one or computed with the irrep provider.
+        """str or None : irrep label of the state, the given one or computed with the irrep provider.
 
         Raises
         ------
@@ -394,8 +255,6 @@ class FockSpaceState:
         cls,
         mol: QuantumChemistryBase,
         provider: IrrepProviderBase,
-        fragment_orbitals: list[int] | None = None,
-        fragment_electrons: int | None = None,
     ) -> list[FockSpaceState]:
         """Generate all non-ionic states, i.e. with the electron number of the molecule.
 
@@ -403,10 +262,6 @@ class FockSpaceState:
         ----------
         mol : QuantumChemistryBase
         provider : IrrepProviderBase
-        fragment_orbitals : list of int, optional
-            Restrict the states to these spatial orbitals (the others stay empty).
-        fragment_electrons : int, optional
-            Electron number of the fragment. Default is one per fragment orbital.
 
         Returns
         -------
@@ -417,16 +272,13 @@ class FockSpaceState:
         >>> states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
         >>> [s.irrep for s in states]
         """
-        if fragment_orbitals is None:
-            n_qubits = 2 * mol.n_orbitals
-            gen = _fixed_popcount_bitstrings(n_qubits, mol.n_electrons)
-            return cls.by_filter(mol, provider, bitstring_generator=gen)
-        return cls.by_filter(
-            mol,
-            provider,
-            fragment_orbitals=fragment_orbitals,
-            fragment_electrons=fragment_electrons,
+        n_qubits = 2 * mol.n_orbitals
+        # exactly the bitstrings with n_electrons bits set, with no wasted candidates
+        gen = (
+            "".join("1" if p in ones_positions else "0" for p in range(n_qubits))
+            for ones_positions in combinations(range(n_qubits), mol.n_electrons)
         )
+        return cls.by_filter(mol, provider, bitstring_generator=gen)
 
     @classmethod
     def by_filter(
@@ -441,8 +293,6 @@ class FockSpaceState:
         non_ionic: bool = False,
         max_count: int | None = None,
         bitstring_generator: Generator[str, None, None] | None = None,
-        fragment_orbitals: list[int] | None = None,
-        fragment_electrons: int | None = None,
     ) -> list[FockSpaceState]:
         """Generate Fock-space states of a molecule, keeping only those that satisfy the given filters.
 
@@ -466,11 +316,7 @@ class FockSpaceState:
             Stop after this many states.
         bitstring_generator : generator of str, optional
             Candidate bitstrings to use instead of the whole Fock space. Takes precedence over
-            ``mo_occ`` and the fragment options.
-        fragment_orbitals : list of int, optional
-            Generate only states on these spatial orbitals.
-        fragment_electrons : int or str, optional
-            Electron number of the fragment, or ``"all"`` for every number.
+            ``mo_occ``.
 
         Returns
         -------
@@ -484,25 +330,22 @@ class FockSpaceState:
         # import pyscf
 
         def mo_occ_bitstring_generator(values: list[int]) -> Generator[str, Any, None]:
-            """Yield the bitstrings for an occupation list of 0s, 1s and 2s (a 1 gives both spin placements)."""
+            """Yield the bitstrings for an occupation list of 0s, 1s and 2s: 0 is "00", 2 is "11" and 1 gives both "01" and "10"."""
             TWO_ONE_COMBOS = ["01", "10"]
             ones_count = values.count(1)
             one_options = [TWO_ONE_COMBOS] * ones_count
 
             for combo in product(*one_options):
-                result_int = 0
+                result = []
                 one_iter = iter(combo)
-                for i, v in enumerate(values):
-                    if v == 2:
-                        result_int |= 1 << (2 * i)
-                        result_int |= 1 << (2 * i + 1)
-                    elif v == 1:
-                        pair = next(one_iter)
-                        if pair[0] == "1":
-                            result_int |= 1 << (2 * i)
-                        if pair[1] == "1":
-                            result_int |= 1 << (2 * i + 1)
-                yield format(result_int, f"0{2 * mol.n_orbitals}b")
+                for v in values:
+                    if v == 0:
+                        result.append("00")
+                    elif v == 2:
+                        result.append("11")
+                    else:  # v == 1
+                        result.append(next(one_iter))
+                yield "".join(result)
 
         n_qubits: int = 2 * mol.n_orbitals
 
@@ -510,18 +353,17 @@ class FockSpaceState:
         # otherwise the search is optimized for mo_occ. If neither is provided,
         # all states are considered.
         generator = None
-        if bitstring_generator is not None:
-            generator = bitstring_generator
-        elif fragment_orbitals is not None:
-            generator = _fragment_bitstrings(mol, fragment_orbitals, fragment_electrons)
-        elif mo_occ is None:
-            generator = range(2**n_qubits)
+        if bitstring_generator is None:
+            if mo_occ is None:
+                generator = range(2**n_qubits)
+            else:
+                if len(mo_occ) != mol.n_orbitals:
+                    raise ValueError(
+                        f"Length of mo_occ list must match the number of orbitals in the molecule ({mol.n_orbitals}), but got {len(mo_occ)}."
+                    )
+                generator = mo_occ_bitstring_generator(mo_occ)
         else:
-            if len(mo_occ) != mol.n_orbitals:
-                raise ValueError(
-                    f"Length of mo_occ list must match the number of orbitals in the molecule ({mol.n_orbitals}), but got {len(mo_occ)}."
-                )
-            generator = mo_occ_bitstring_generator(mo_occ)
+            generator: Generator[str, None, None] = bitstring_generator
 
         states: list[FockSpaceState] = []
         for i in generator:
@@ -531,7 +373,7 @@ class FockSpaceState:
 
             # if generator delivers a range of integers, convert to bitstring, otherwise assume it's already a bitstring
             bitstring = i if isinstance(i, str) else format(i, f"0{n_qubits}b")
-            state = cls(mol, bitstring, provider, fragment_orbitals=fragment_orbitals)
+            state = cls(mol, bitstring, provider)
             if non_ionic and sum(state.mo_occ) != mol.n_electrons:
                 continue
             if mo_occ is not None and state.mo_occ != mo_occ:
