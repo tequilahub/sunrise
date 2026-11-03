@@ -15,7 +15,7 @@ from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
-from ..fermionic_braket import FermBraketImpl
+from ..fermionic_braket import _SHIFTS, FermBraketImpl, _grad_phase
 
 _ZERO_TOL = 1e-12
 
@@ -49,6 +49,7 @@ class SpexExpval:
         ket = braket.ket
         self.molecule = braket.molecule
         operator = braket.operator
+        self.grad_variable = braket.grad_variable
         run_hf = (bra is None or bra.initial_state is None) and (
             ket is None or ket.initial_state is None
         )
@@ -318,9 +319,28 @@ class SpexExpval:
     ) -> float:
         if variables is None:
             variables = {}
+        if self.grad_variable is not None:
+            # the shift rule of _grad_FermBraket, each term with one gate shifted
+            gradient = 0.0
+            for is_bra, U in [(True, self.bra), (False, self.ket)]:
+                for i, gate in enumerate(U.gates):
+                    if self.grad_variable not in gate.extract_variables():
+                        continue
+                    inner = _grad_phase(gate.variables, self.grad_variable)
+                    if isinstance(inner, Objective):
+                        inner = inner(variables)
+                    for shift, w in _SHIFTS:
+                        gradient += (
+                            w * inner * self.simulate(variables, (is_bra, i, shift))
+                        )
+            return gradient
         return self.simulate(variables=variables)
 
-    def simulate(self, variables: list | dict | Variables = None) -> float:
+    def simulate(
+        self, variables: list | dict | Variables = None, shift: tuple | None = None
+    ) -> float:
+        # shift=(is_bra, gate index, angle) adds the angle to one gate of the bra or of the
+        # ket, the other side keeps its circuit (used by the shift rule of the gradient)
         variables = {} if variables is None else variables
         check_variables = {k: k in variables for k in self.extract_variables()}
         if not all(list(check_variables.values())):
@@ -358,25 +378,24 @@ class SpexExpval:
                 f"Objective did not receive all variables: {variables} given, missing {missing}"
             )
 
-        # the states are kept for the next call with the same values,
+        # the unshifted states are kept for the next call with the same values,
         # e.g. the operators of compute_rdms
         key = tuple(
             float(dvars[k] if k in dvars else dvars[k.name])
             for k in self.extract_variables()
         )
-        if self._states_cache and self._states_cache[0] == key:
+        if shift is None and self._states_cache and self._states_cache[0] == key:
             bra_state, ket_state = self._states_cache[1:]
         else:
-            ket_state = self._apply_circuit(
-                self._init_state_ket, self._compiled_ket, dvars
-            )
-            if self.is_diagonal:
+            bra_shift = shift[1:] if shift is not None and shift[0] else None
+            ket_shift = shift[1:] if shift is not None and not shift[0] else None
+            ket_state = self._compiled_ket(self._init_state_ket, dvars, ket_shift)
+            if self.is_diagonal and shift is None:
                 bra_state = ket_state
             else:
-                bra_state = self._apply_circuit(
-                    self._init_state_bra, self._compiled_bra, dvars
-                )
-            self._states_cache = (key, bra_state, ket_state)
+                bra_state = self._compiled_bra(self._init_state_bra, dvars, bra_shift)
+            if shift is None:
+                self._states_cache = (key, bra_state, ket_state)
 
         if callable(self.operator):
             ket_state = self.operator(ket_state)
@@ -479,8 +498,6 @@ class _CompiledCircuit:
             return
         # each gate maps to FermionTerm(creation_idx=[to...], annihilation_idx=[from...], 1j): (p, q) destroys p and creates q
         for gate in circuit.gates:
-            if not gate.indices:
-                continue
             ops = []
             for term_pairs in gate.indices:
                 creation = [p[1] for p in term_pairs]
@@ -494,18 +511,23 @@ class _CompiledCircuit:
                 ops.append((None, spex.FermionTerm(creation, annihilation, weight)))
             self.gates.append((gate.variables, ops))
 
-    def __call__(self, state: dict, dvars: dict) -> dict:
+    def __call__(self, state: dict, dvars: dict, shift: tuple | None = None) -> dict:
+        # shift=(gate index, angle) adds the angle to that gate
         from sunrise import simulate
 
         state = {} if state is None else state
         result = {int(k): complex(v) for k, v in state.items() if abs(v) > _ZERO_TOL}
-        for parameter, ops in self.gates:
+        for i, (parameter, ops) in enumerate(self.gates):
+            if not ops:
+                continue
             if isinstance(parameter, Variable):
                 theta = float(parameter.map_variables(dvars))
             elif isinstance(parameter, Objective):
                 theta = float(simulate(parameter, dvars))
             else:
                 theta = parameter
+            if shift is not None and shift[0] == i:
+                theta += shift[1]
             for mask, term in ops:
                 if term is None:
                     phase = exp(-0.5j * theta)

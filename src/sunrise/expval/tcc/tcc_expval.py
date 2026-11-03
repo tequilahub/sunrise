@@ -75,6 +75,7 @@ class TCCBraket:
         ket = braket.ket
         molecule = braket.molecule
         operator = braket.operator
+        self.grad_variable = braket.grad_variable
         if bra is not None:
             bra = bra.to_upthendown(molecule)
         if ket is not None:
@@ -174,6 +175,23 @@ class TCCBraket:
                 v.update(variables)
             tvars: list = deepcopy(self.BK.total_variables)
             variables: list = [map_variables(x, v) for x in tvars]
+        if self.grad_variable is not None:
+            # tcc's analytic gradient with respect to its total variables, the angles are
+            # -0.5 times the tequila values
+            if self.grad_variable not in self.BK.total_variables:
+                return 0.0
+            hamiltonian = self.operator
+            factor = 1.0
+            if isinstance(hamiltonian, Number):
+                # expval_and_grad has no number operator: the overlap times the number
+                hamiltonian, factor = (lambda ket: ket), hamiltonian
+            angles = [] if variables is None else [-0.5 * i for i in variables]
+            _, g = self.BK.expval_and_grad(angles=angles, hamiltonian=hamiltonian)
+            return (
+                -0.5
+                * factor
+                * g[list(self.BK.total_variables).index(self.grad_variable)]
+            )
         if variables is None:
             return self.BK.expval(hamiltonian=self.operator)
         return self.BK.expval(

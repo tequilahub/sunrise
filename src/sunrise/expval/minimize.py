@@ -21,6 +21,7 @@ from sunrise.expval import (
 )
 
 from ..fermionic_operations import FCircuit
+from .fermionic_braket import _grad_FermBraket
 from .simulate_circuit import simulate_fcircuit
 
 
@@ -274,6 +275,38 @@ def compile(
             expectationvalues = {}
             for arg in argset:
                 if type(arg).__name__ == "FermBraketImpl":
+                    if (
+                        arg.grad_variable is not None
+                        and fbackend in ["tcc", "tequila"]
+                        and (
+                            arg._bra is not None
+                            or any(
+                                all(p == q for p, q in term)
+                                for gate in arg.ket.gates
+                                for term in gate.indices
+                            )
+                        )
+                    ):
+                        # the gradients of tcc and tequila are only right for expectation
+                        # values without Phase gates (number operators): the others go
+                        # through the shifted brakets
+                        compiled_args.append(
+                            compile(
+                                *args,
+                                objective=_grad_FermBraket(
+                                    arg, arg.grad_variable, expand=True
+                                ),
+                                variables=variables,
+                                samples=samples,
+                                simulate_density=simulate_density,
+                                backend=backend,
+                                noise=noise,
+                                device=device,
+                                fbackend=fbackend,
+                                **kwargs,
+                            )
+                        )
+                        continue
                     if id(arg) not in expectationvalues:
                         compiled_expval = compile_fexpval(
                             *args, objective=arg, backend=fbackend, **kwargs
@@ -289,7 +322,9 @@ def compile(
                                 noise=noise,
                                 device=device,
                                 **kwargs,
-                            ).args[0]
+                            )
+                            if arg.grad_variable is None:
+                                compiled_expval = compiled_expval.args[0]
                         expectationvalues[id(arg)] = compiled_expval
                     else:
                         compiled_expval = expectationvalues[id(arg)]

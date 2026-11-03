@@ -1,5 +1,5 @@
 from openfermion import FermionOperator
-from tequila import BraKet, ExpectationValue, Objective
+from tequila import BraKet, ExpectationValue, Objective, grad
 from tequila.hamiltonian.paulis import I, from_string
 
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
@@ -43,5 +43,10 @@ def TequilaBraket(braket: FermBraketImpl, *args, **kwargs) -> Objective:
         return ExpectationValue(*args, U=ket, H=operators, shape=[len(operators)])
     operator = operators[0]
     if braket.is_diagonal:
-        return ExpectationValue(*args, U=ket, H=operator, **kwargs)
-    return BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)
+        result = ExpectationValue(*args, U=ket, H=operator, **kwargs)
+    else:
+        result = BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)
+    if braket.grad_variable is not None:
+        # tequila's own gradient of the qubit objective
+        return grad(result, braket.grad_variable)
+    return result

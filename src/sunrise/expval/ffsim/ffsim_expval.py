@@ -39,7 +39,7 @@ from tequila.objective.objective import Variables
 from sunrise.molecules.qubit_base import qc_base
 
 from ...fermionic_operations.circuit import FCircuit
-from ..fermionic_braket import FermBraketImpl
+from ..fermionic_braket import _SHIFTS, FermBraketImpl, _grad_phase
 from ..fqe.fermionic_utils import make_excitation_generator_op
 from ..spex.spex_expval import _civect_to_qwvf, _qwvf_to_civect
 
@@ -67,6 +67,7 @@ class FFS_EXPVAL:
         ket = braket.ket
         molecule = braket.molecule
         operator = braket.operator
+        self.grad_variable = braket.grad_variable
 
         run_hf = (bra is None or bra.initial_state is None) and (
             ket is None or ket.initial_state is None
@@ -135,18 +136,39 @@ class FFS_EXPVAL:
     ) -> float:
         if variables is None:
             variables = {}
+        if self.grad_variable is not None:
+            # the shift rule of _grad_FermBraket, each term with one gate shifted
+            gradient = 0.0
+            for is_bra, U in [(True, self.bra), (False, self.ket)]:
+                for i, gate in enumerate(U.gates):
+                    if self.grad_variable not in gate.extract_variables():
+                        continue
+                    inner = _grad_phase(gate.variables, self.grad_variable)
+                    if isinstance(inner, Objective):
+                        inner = inner(variables)
+                    for shift, w in _SHIFTS:
+                        gradient += (
+                            w * inner * self.simulate(variables, (is_bra, i, shift))
+                        )
+            return gradient
         return self.simulate(variables=variables)
 
-    def simulate(self, variables: list | dict | None = None) -> float:
-        bra, ket = self.states(variables)
+    def simulate(
+        self, variables: list | dict | None = None, shift: tuple | None = None
+    ) -> float:
+        bra, ket = self.states(variables, shift)
         # no operator: overlap <bra|ket>
         if self.operator is not None:
             ket = self.operator @ ket
         return float(real(vdot(bra, ket)))
 
-    def states(self, variables: list | dict | None = None) -> tuple[ndarray, ndarray]:
+    def states(
+        self, variables: list | dict | None = None, shift: tuple | None = None
+    ) -> tuple[ndarray, ndarray]:
         """
         The CI vectors of bra and ket after applying their circuits.
+        shift=(is_bra, gate index, angle) adds the angle to one gate of the bra or of the ket,
+        the other side keeps its circuit (used by the shift rule of the gradient).
         """
         if variables is None:
             variables = {}
@@ -173,21 +195,24 @@ class FFS_EXPVAL:
                 f" {[k for k, c in check_variables.items() if not c]}"
             )
 
-        # the states are kept for the next call with the same values,
+        # the unshifted states are kept for the next call with the same values,
         # e.g. the operators of compute_rdms
         key = tuple(float(map_variables(k, v)) for k in self.extract_variables())
-        if self._states_cache and self._states_cache[0] == key:
+        if shift is None and self._states_cache and self._states_cache[0] == key:
             return self._states_cache[1:]
+        bra_shift = shift[1:] if shift is not None and shift[0] else None
+        ket_shift = shift[1:] if shift is not None and not shift[0] else None
         ket = _apply_circuit_to_state(
-            self._init_state_ket, self.ket, self._ket_generators, v
+            self._init_state_ket, self.ket, self._ket_generators, v, ket_shift
         )
-        if self.is_diagonal:
+        if self.is_diagonal and shift is None:
             bra = ket
         else:
             bra = _apply_circuit_to_state(
-                self._init_state_bra, self.bra, self._bra_generators, v
+                self._init_state_bra, self.bra, self._bra_generators, v, bra_shift
             )
-        self._states_cache = (key, bra, ket)
+        if shift is None:
+            self._states_cache = (key, bra, ket)
         return bra, ket
 
     def extract_variables(self) -> list[Variable]:
@@ -468,15 +493,22 @@ def _build_generators(circuit: FCircuit, norb: int, nelec: tuple) -> list:
 
 
 def _apply_circuit_to_state(
-    state: ndarray, circuit: FCircuit, generators: list, dvariables: dict
+    state: ndarray,
+    circuit: FCircuit,
+    generators: list,
+    dvariables: dict,
+    shift: tuple | None = None,
 ) -> ndarray:
+    # shift=(gate index, angle) adds the angle to that gate
     result = state.astype(complex128)
     if circuit is None:
         return result
-    for gate, terms in zip(circuit.gates, generators):
+    for i, (gate, terms) in enumerate(zip(circuit.gates, generators)):
         if not terms:
             continue
         theta = float(map_variables(gate.variables, dvariables))
+        if shift is not None and shift[0] == i:
+            theta += shift[1]
         for is_number, G in terms:
             if is_number:
                 # number operators (Phase gates) as spex: exp(-i*theta/2*N), N a projector

@@ -7,12 +7,12 @@ import fqe
 import tequila as tq
 from fqe.hamiltonians.diagonal_coulomb import DiagonalCoulomb
 from fqe.hamiltonians.sparse_hamiltonian import SparseHamiltonian
-from tequila import QubitWaveFunction, TequilaException
+from tequila import Objective, QubitWaveFunction, TequilaException
 
 from sunrise.expval.fqe.fermionic_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
 
-from ..fermionic_braket import FermBraketImpl
+from ..fermionic_braket import _SHIFTS, FermBraketImpl, _grad_phase
 
 
 class FQEBraKet:
@@ -28,13 +28,14 @@ class FQEBraKet:
         self.bra_original_obj = None
         self.bra_generator = None
         self.fermion_operator = None
-        # (angles, ket, bra) of the last call, see __call__
+        # (angles, ket, bra) of the last simulate call, see simulate
         self._states_cache: tuple = None
 
         ket = braket.ket
         bra = braket.bra
         self.molecule = braket.molecule
         mol = self.molecule
+        self.grad_variable = braket.grad_variable
         self.n_ele = mol.n_electrons
         self.n_orbitals = mol.n_orbitals
 
@@ -114,6 +115,34 @@ class FQEBraKet:
         """
         if variables is None:
             variables = {}
+        if self.grad_variable is not None:
+            # the shift rule of _grad_FermBraket, each term with one gate shifted
+            gradient = 0.0
+            for is_bra, U in [(True, self.bra), (False, self.ket)]:
+                if U is None:
+                    continue
+                for i, gate in enumerate(U.gates):
+                    if self.grad_variable not in gate.extract_variables():
+                        continue
+                    inner = _grad_phase(gate.variables, self.grad_variable)
+                    if isinstance(inner, Objective):
+                        inner = inner(variables)
+                    for shift, w in _SHIFTS:
+                        gradient += (
+                            w * inner * self.simulate(variables, (is_bra, i, shift))
+                        )
+            return gradient
+        return self.simulate(variables)
+
+    def simulate(
+        self, variables: dict | list | None = None, shift: tuple | None = None
+    ) -> float:
+        """
+        shift=(is_bra, gate index, angle) adds the angle to one gate of the bra or of the ket,
+        the other side keeps its circuit (used by the shift rule of the gradient).
+        """
+        if variables is None:
+            variables = {}
         if self.is_diagonal:
             parameters = self.ket_extract_variables_names
         else:
@@ -143,10 +172,19 @@ class FQEBraKet:
         angle_internal_bra = []
         if not self.is_diagonal:
             angle_internal_bra = [x(internal_variables) for x in self.bra_angles]
-        # the states are kept for the next call with the same angles,
+        # the unshifted states are kept for the next call with the same angles,
         # e.g. the operators of compute_rdms
         key = (tuple(angle_internal_ket), tuple(angle_internal_bra))
-        if self._states_cache and self._states_cache[0] == key:
+        if shift is not None:
+            is_bra, i, angle = shift
+            angles = angle_internal_bra if is_bra else angle_internal_ket
+            gates = (self.bra if is_bra else self.ket).gates
+            # a UR gate has two angles, see FCircuit.variables
+            start = sum(2 if g._name == "UR" else 1 for g in gates[:i])
+            for j in range(start, start + (2 if gates[i]._name == "UR" else 1)):
+                angles[j] = angles[j] + angle
+
+        if shift is None and self._states_cache and self._states_cache[0] == key:
             ket_t, bra_t = self._states_cache[1:]
         else:
             list_gen_vals_ket = []
@@ -182,7 +220,8 @@ class FQEBraKet:
 
         self.ket_time_evolved = ket_t
         self.bra_time_evolved = bra_t
-        self._states_cache = (key, ket_t, bra_t)
+        if shift is None:
+            self._states_cache = (key, ket_t, bra_t)
         if self.operator is not None:
             try:
                 result = fqe.expectationValue(
