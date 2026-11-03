@@ -3,21 +3,21 @@
   {
    "n": 2,
    "energy": -1.1205602812999877,
-   "seconds": 0.11331870593130589,
+   "seconds": 0.14544114097952843,
    "iterations": 4,
    "converged": true
   },
   {
    "n": 4,
    "energy": -2.156268138175748,
-   "seconds": 1.4180416220333427,
+   "seconds": 0.6017011400545016,
    "iterations": 25,
    "converged": true
   },
   {
    "n": 6,
    "energy": -3.195842895865572,
-   "seconds": 106.85946763295215,
+   "seconds": 96.43942379695363,
    "iterations": 88,
    "converged": true
   },
@@ -29,22 +29,22 @@
  "tcc": [
   {
    "n": 2,
-   "energy": -1.1205602812999886,
-   "seconds": 0.4526079590432346,
+   "energy": -1.1205602812999884,
+   "seconds": 0.29154476698022336,
    "iterations": 4,
    "converged": true
   },
   {
    "n": 4,
-   "energy": -2.1562681381757574,
-   "seconds": 33.059161191107705,
+   "energy": -2.156268138175759,
+   "seconds": 12.926060245023109,
    "iterations": 25,
    "converged": true
   },
   {
    "n": 6,
    "energy": -3.1958428958655665,
-   "seconds": 867.6198093639687,
+   "seconds": 525.7219445189694,
    "iterations": 88,
    "converged": true
   },
@@ -57,26 +57,33 @@
   {
    "n": 2,
    "energy": -1.120560281299988,
-   "seconds": 0.41849335201550275,
+   "seconds": 0.32227373495697975,
    "iterations": 4,
    "converged": true
   },
   {
    "n": 4,
    "energy": -2.156268138175756,
-   "seconds": 31.023723748978227,
+   "seconds": 27.533095751074143,
    "iterations": 25,
    "converged": true
   },
   {
    "n": 6,
    "energy": -3.195842895865574,
-   "seconds": 753.1468442090554,
+   "seconds": 575.4462906999979,
    "iterations": 88,
    "converged": true
   },
   {
    "n": 8,
+   "energy": -4.2378632532146625,
+   "seconds": 3020.873055960983,
+   "iterations": 116,
+   "converged": true
+  },
+  {
+   "n": 10,
    "timeout": true
   }
  ],
@@ -84,28 +91,28 @@
   {
    "n": 2,
    "energy": -1.1205602812999884,
-   "seconds": 0.14733924204483628,
+   "seconds": 0.15771696099545807,
    "iterations": 4,
    "converged": true
   },
   {
    "n": 4,
    "energy": -2.156268138175758,
-   "seconds": 2.4799078560899943,
+   "seconds": 1.5827927310019732,
    "iterations": 25,
    "converged": true
   },
   {
    "n": 6,
    "energy": -3.1958428958655727,
-   "seconds": 42.63665967795532,
+   "seconds": 31.79921295098029,
    "iterations": 88,
    "converged": true
   },
   {
    "n": 8,
    "energy": -4.237863253191403,
-   "seconds": 456.5148914270103,
+   "seconds": 389.1561164490413,
    "iterations": 120,
    "converged": true
   },
@@ -118,21 +125,21 @@
   {
    "n": 2,
    "energy": -1.1205602812999829,
-   "seconds": 0.4931445550173521,
+   "seconds": 0.5102175769861788,
    "iterations": 4,
    "converged": true
   },
   {
    "n": 4,
    "energy": -2.1562681381757183,
-   "seconds": 7.902760734083131,
+   "seconds": 8.07220514700748,
    "iterations": 25,
    "converged": true
   },
   {
    "n": 6,
    "energy": -3.1958428958653693,
-   "seconds": 328.34115051093977,
+   "seconds": 324.6159778999863,
    "iterations": 88,
    "converged": true
   },
