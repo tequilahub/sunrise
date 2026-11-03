@@ -77,12 +77,12 @@ class EncodingBase(metaclass=abc.ABCMeta):
 
     @property
     def supports_ucc(self):
-        """bool: True if the encoding is consistent with general UCC gates, False if it only supports special things like building the Hamiltonian."""
+        """bool : True if the encoding is consistent with general UCC gates, False if it only supports special things like building the Hamiltonian."""
         return self._ucc_support
 
     @property
     def name(self):
-        """str: Name of the encoding, prefixed with "Reordered" if ``up_then_down``."""
+        """str : name of the encoding, prefixed with "Reordered" if ``up_then_down``."""
         prefix = ""
         if self.up_then_down:
             prefix = "Reordered"

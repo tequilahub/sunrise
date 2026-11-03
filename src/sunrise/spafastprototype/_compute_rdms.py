@@ -181,12 +181,12 @@ def compute_rdms_hybrid(
         )
 
     def _get_of_op(operator_tuple):
-        """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
+        """Return operator given by a operator tuple as OpenFermion - Fermion operator."""
         op = openfermion.FermionOperator(operator_tuple)
         return op
 
     def _get_qop_hermitian(of_operator) -> QubitHamiltonian:
-        """Returns Hermitian part of Fermion operator as QubitHamiltonian"""
+        """Return the Hermitian part of a FermionOperator as QubitHamiltonian."""
         qop = self.transformation(of_operator)
         # qop = QubitHamiltonian(self.transformation(of_operator))
         real, _imag = qop.split(hermitian=True)
@@ -198,7 +198,7 @@ def compute_rdms_hybrid(
             )
 
     def _build_1bdy_operators_mix() -> list:
-        """Returns BOS one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return BOS one-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetry pq = qp (not changed by spin-summation)
         ops = []
         for p in range(self.n_orbitals):
@@ -228,7 +228,7 @@ def compute_rdms_hybrid(
         return ops
 
     def __case_2bdy(i: int, j: int, k: int, l: int) -> int:
-        """Returns 1 if allowed term all in J, 2 if all H, 3 mixed, 0 else"""
+        """Return 1 if allowed term all in J, 2 if all H, 3 mixed, 0 else."""
         list = [self.select[i], self.select[j], self.select[k], self.select[l]]
         b = list.count("B")
         f = list.count("F")
@@ -242,7 +242,7 @@ def compute_rdms_hybrid(
             return 0
 
     def _build_2bdy_operators_mix() -> list:
-        """Returns BOS two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return BOS two-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
         #                and      = rspq
         ops = []
@@ -756,7 +756,7 @@ def compute_rdms_hybrid(
         return ops
 
     def _assemble_rdm1_mix(evals) -> numpy.ndarray:
-        """Returns BOS one-particle RDM built by symmetry conditions"""
+        """Return BOS one-particle RDM built by symmetry conditions."""
         N = self.n_orbitals
         rdm1 = numpy.zeros([N, N])
         ctr: int = 0
@@ -769,7 +769,7 @@ def compute_rdms_hybrid(
         return rdm1
 
     def _assemble_rdm2_mix(evals) -> numpy.ndarray:
-        """Returns spin-free two-particle RDM built by symmetry conditions"""
+        """Return spin-free two-particle RDM built by symmetry conditions."""
         ctr: int = 0
         rdm2 = numpy.zeros(
             [self.n_orbitals, self.n_orbitals, self.n_orbitals, self.n_orbitals]
@@ -974,12 +974,12 @@ def compute_rdms_tequila(
             return Zero()
 
     def _get_of_op(operator_tuple):
-        """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
+        """Return operator given by a operator tuple as OpenFermion - Fermion operator."""
         op = openfermion.FermionOperator(operator_tuple)
         return op
 
     def _get_qop_hermitian(of_operator) -> QubitHamiltonian:
-        """Returns Hermitian part of Fermion operator as QubitHamiltonian"""
+        """Return the Hermitian part of a FermionOperator as QubitHamiltonian."""
         qop = self.transformation(of_operator)
         # qop = QubitHamiltonian(self.transformation(of_operator))
         real, _imag = qop.split(hermitian=True)
@@ -991,7 +991,7 @@ def compute_rdms_tequila(
             )
 
     def _build_1bdy_operators_spinful() -> list:
-        """Returns spinful one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return spinful one-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetry pq = qp
         ops = []
         for p in range(n_SOs):
@@ -1003,7 +1003,7 @@ def compute_rdms_tequila(
         return ops
 
     def _build_2bdy_operators_spinful() -> list:
-        """Returns spinful two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return spinful two-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
         #                and      =  rspq
         ops = []
@@ -1019,7 +1019,7 @@ def compute_rdms_tequila(
         return ops
 
     def _build_1bdy_operators_spinfree() -> list:
-        """Returns spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetry pq = qp (not changed by spin-summation)
         ops = []
         for p in range(n_MOs):
@@ -1035,7 +1035,7 @@ def compute_rdms_tequila(
         return ops
 
     def _build_2bdy_operators_spinfree() -> list:
-        """Returns spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
         #                and      = rspq
         ops = []
@@ -1073,7 +1073,7 @@ def compute_rdms_tequila(
         return ops
 
     def _assemble_rdm1(evals, rdm1=None) -> numpy.ndarray:
-        """Returns spin-ful or spin-free one-particle RDM built by symmetry conditions
+        """Return spin-ful or spin-free one-particle RDM built by symmetry conditions
         Same symmetry with or without spin, so we can use the same function
         """
         N = n_MOs if spin_free else n_SOs
@@ -1090,7 +1090,7 @@ def compute_rdms_tequila(
         return rdm1
 
     def _assemble_rdm2_spinful(evals, rdm2=None) -> numpy.ndarray:
-        """Returns spin-ful two-particle RDM built by symmetry conditions"""
+        """Return spin-ful two-particle RDM built by symmetry conditions."""
         ctr: int = 0
         if rdm2 is None:
             rdm2 = numpy.zeros([n_SOs, n_SOs, n_SOs, n_SOs])
@@ -1116,7 +1116,7 @@ def compute_rdms_tequila(
         return rdm2
 
     def _assemble_rdm2_spinfree(evals, rdm2=None) -> numpy.ndarray:
-        """Returns spin-free two-particle RDM built by symmetry conditions"""
+        """Return spin-free two-particle RDM built by symmetry conditions."""
         ctr: int = 0
         if rdm2 is None:
             rdm2 = numpy.zeros([n_MOs, n_MOs, n_MOs, n_MOs])
@@ -1135,7 +1135,7 @@ def compute_rdms_tequila(
         return rdm2
 
     def _build_1bdy_operators_hcb() -> list:
-        """Returns hcb one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return hcb one-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetry pq = qp (not changed by spin-summation)
         ops = []
         for p in range(n_MOs):
@@ -1153,7 +1153,7 @@ def compute_rdms_tequila(
         return ops
 
     def _build_2bdy_operators_hcb() -> list:
-        """Returns hcb two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return hcb two-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
         #                and      = rspq
         ops = []

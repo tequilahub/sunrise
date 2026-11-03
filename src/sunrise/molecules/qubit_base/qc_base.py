@@ -1378,7 +1378,7 @@ class QuantumChemistryBase:
 
     @property
     def point_group(self):
-        """The point group of the molecule. If it is not given with the point_group keyword, it is detected from the
+        """PointGroup : the point group of the molecule. If it is not given with the point_group keyword, it is detected from the
         geometry as the largest point group defined in sunrise: the full point group if it is D4h, D6h, D8h or Td,
         the largest Abelian subgroup otherwise. The quantum chemistry backends compute in abelian_point_group.
         It can be set with a PointGroup or its Schoenflies label, e.g. to work in a subgroup.
@@ -1415,7 +1415,7 @@ class QuantumChemistryBase:
 
     @property
     def abelian_point_group(self):
-        """Return the point group if it is Abelian, else its largest Abelian subgroup (e.g. D2h for D4h and D6h).
+        """PointGroup : the point group if it is Abelian, else its largest Abelian subgroup (e.g. D2h for D4h and D6h).
 
         PySCF can only label orbitals in Abelian groups.
         """
@@ -1802,27 +1802,27 @@ class QuantumChemistryBase:
 
     @property
     def orbitals(self):
-        """Active orbitals of the integral manager."""
+        """list of OrbitalData : active orbitals of the integral manager."""
         return self.integral_manager.active_orbitals
 
     @property
     def reference_orbitals(self):
-        """Active orbitals that are occupied in the reference state."""
+        """list of OrbitalData : active orbitals that are occupied in the reference state."""
         return self.integral_manager.active_reference_orbitals
 
     @property
     def n_orbitals(self) -> int:
-        """int: Number of active spatial orbitals."""
+        """int : number of active spatial orbitals."""
         return len(self.integral_manager.active_orbitals)
 
     @property
     def active_space(self):
-        """ActiveSpaceData of the integral manager."""
+        """ActiveSpaceData : active space of the integral manager."""
         return self.integral_manager.active_space
 
     @property
     def n_electrons(self) -> int:
-        """int: Number of active electrons."""
+        """int : number of active electrons."""
         return 2 * len(self.integral_manager.active_reference_orbitals)
 
     def make_annihilation_op(self, orbital, coefficient=1.0):
@@ -3619,12 +3619,12 @@ class QuantumChemistryBase:
                 return Zero()
 
         def _get_of_op(operator_tuple):
-            """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
+            """Return operator given by a operator tuple as OpenFermion - Fermion operator."""
             op = openfermion.FermionOperator(operator_tuple)
             return op
 
         def _get_qop_hermitian(of_operator) -> QubitHamiltonian:
-            """Returns Hermitian part of Fermion operator as QubitHamiltonian"""
+            """Return the Hermitian part of a FermionOperator as QubitHamiltonian."""
             qop = self.transformation(of_operator)
             # qop = QubitHamiltonian(self.transformation(of_operator))
             real, _imag = qop.split(hermitian=True)
@@ -3636,7 +3636,7 @@ class QuantumChemistryBase:
                 )
 
         def _build_1bdy_operators_spinful() -> list:
-            """Returns spinful one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinful one-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetry pq = qp
             ops = []
             for p in range(n_SOs):
@@ -3648,7 +3648,7 @@ class QuantumChemistryBase:
             return ops
 
         def _build_2bdy_operators_spinful() -> list:
-            """Returns spinful two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinful two-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
             #                and      =  rspq
             ops = []
@@ -3664,7 +3664,7 @@ class QuantumChemistryBase:
             return ops
 
         def _build_1bdy_operators_spinfree() -> list:
-            """Returns spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetry pq = qp (not changed by spin-summation)
             ops = []
             for p in range(n_MOs):
@@ -3680,7 +3680,7 @@ class QuantumChemistryBase:
             return ops
 
         def _build_2bdy_operators_spinfree() -> list:
-            """Returns spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
             #                and      = rspq
             ops = []
@@ -3718,7 +3718,7 @@ class QuantumChemistryBase:
             return ops
 
         def _assemble_rdm1(evals, rdm1=None) -> numpy.ndarray:
-            """Returns spin-ful or spin-free one-particle RDM built by symmetry conditions
+            """Return spin-ful or spin-free one-particle RDM built by symmetry conditions
             Same symmetry with or without spin, so we can use the same function
             """
             N = n_MOs if spin_free else n_SOs
@@ -3735,7 +3735,7 @@ class QuantumChemistryBase:
             return rdm1
 
         def _assemble_rdm2_spinful(evals, rdm2=None) -> numpy.ndarray:
-            """Returns spin-ful two-particle RDM built by symmetry conditions"""
+            """Return spin-ful two-particle RDM built by symmetry conditions."""
             ctr: int = 0
             if rdm2 is None:
                 rdm2 = numpy.zeros([n_SOs, n_SOs, n_SOs, n_SOs])
@@ -3761,7 +3761,7 @@ class QuantumChemistryBase:
             return rdm2
 
         def _assemble_rdm2_spinfree(evals, rdm2=None) -> numpy.ndarray:
-            """Returns spin-free two-particle RDM built by symmetry conditions"""
+            """Return spin-free two-particle RDM built by symmetry conditions."""
             ctr: int = 0
             if rdm2 is None:
                 rdm2 = numpy.zeros([n_MOs, n_MOs, n_MOs, n_MOs])
@@ -3780,7 +3780,7 @@ class QuantumChemistryBase:
             return rdm2
 
         def _build_1bdy_operators_hcb() -> list:
-            """Returns hcb one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return hcb one-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetry pq = qp (not changed by spin-summation)
             ops = []
             for p in range(n_MOs):
@@ -3798,7 +3798,7 @@ class QuantumChemistryBase:
             return ops
 
         def _build_2bdy_operators_hcb() -> list:
-            """Returns hcb two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return hcb two-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
             #                and      = rspq
             ops = []

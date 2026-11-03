@@ -88,12 +88,11 @@ class FCircuit:
 
     @property
     def initial_state(self) -> QubitWaveFunction:
-        """Reference state of the circuit as a ``tq.QubitWaveFunction`` in up-then-down ordering."""
+        """QubitWaveFunction or None : reference state of the circuit, in up-then-down ordering."""
         return self._initial_state
 
     @initial_state.setter
     def initial_state(self, initial_state=None):
-        """IT MUST BE UPTHENDOWN"""
         if initial_state is None or isinstance(initial_state, QubitWaveFunction):
             pass
         elif isinstance(initial_state, (QCircuit, FCircuit)):
@@ -119,12 +118,12 @@ class FCircuit:
 
     @property
     def depth(self):
-        """Return the number of gates (int)."""
+        """int : number of gates."""
         return len(self.gates)
 
     @property
     def gates(self) -> list[sunrise.fermionic_excitation.fgateimpl.FGateImpl]:
-        """List of the gates in the circuit."""
+        """list of FGateImpl : gates of the circuit."""
         if self._gates is None:
             return []
         else:
@@ -136,7 +135,7 @@ class FCircuit:
 
     @property
     def qubits(self):
-        """Sorted list of qubits acted upon by the gates or covered by the initial state."""
+        """list of int : sorted qubits acted upon by the gates or covered by the initial state."""
         accumulate = []
         for g in self.gates:
             accumulate += list(g.qubits)
@@ -146,14 +145,14 @@ class FCircuit:
 
     @property
     def n_qubits(self):
-        """Number of qubits of the circuit; the setter raises if the value is smaller than the highest qubit used."""
+        """int : number of qubits of the circuit. Setting it raises if the value is smaller than the highest qubit used."""
         idx = max(self.max_qubit() + 1, self._min_n_qubits)
         wvf = self._initial_state.n_qubits if self._initial_state is not None else 0
         return max(idx, wvf)
 
     @property
     def n_electrons(self):
-        """Number of electrons in the initial state, or None if there is no initial state."""
+        """int or None : number of electrons in the initial state, None if there is no initial state."""
         if self.initial_state is None:
             return None
         elif isinstance(self.initial_state._state, dict):
@@ -177,7 +176,7 @@ class FCircuit:
 
     @property
     def variables(self) -> list:
-        """List of the variables of each gate, one entry per gate (two for ``UR`` gates)."""
+        """list : variables of each gate, one entry per gate (two for ``UR`` gates)."""
         v = []
         for gate in self.gates:
             if gate._name == "UR":

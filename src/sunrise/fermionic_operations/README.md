@@ -3,7 +3,7 @@
 Circuits written directly in terms of **fermionic gates** on spatial/spin orbitals, without fixing a qubit encoding. This keeps circuits compact and lets them run on fermionic simulators (see [`expval`](../expval)).
 
 **Gates**
-- `FermionicExcitation` – generic excitation $e^{-i\theta/2 (a^\dagger_p a_q - h.c.)}$
+- `FermionicExcitation` – generic excitation $e^{-i\frac{\theta}{2} G}$ with $G = i(\prod_k a^\dagger_{q_k} a_{p_k} - \mathrm{h.c.})$ for the pairs $(p_k, q_k)$
 - `UR(i, j)` – orbital rotation between spatial orbitals *i, j* (a Givens rotation)
 - `UC(i, j)` – pair (electron-pair) excitation between *i, j*
 - `UX`, `Givens`, `Phase`

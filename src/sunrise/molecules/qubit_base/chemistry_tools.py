@@ -59,12 +59,12 @@ class ActiveSpaceData:
 
     @property
     def frozen_reference_orbitals(self):
-        """Reference orbitals outside the active space (frozen, doubly occupied)."""
+        """list of int : reference orbitals outside the active space (frozen, doubly occupied)."""
         return [i for i in self.reference_orbitals if i not in self.active_orbitals]
 
     @property
     def active_reference_orbitals(self):
-        """Reference orbitals inside the active space."""
+        """list of int : reference orbitals inside the active space."""
         return [i for i in self.reference_orbitals if i in self.active_orbitals]
 
 
@@ -512,7 +512,7 @@ class ParametersQC:
 
     @property
     def total_n_electrons(self):
-        """Total number of electrons (nuclear charge minus the molecular charge)."""
+        """int : total number of electrons (nuclear charge minus the molecular charge)."""
         return self.get_nuc_charge() - self.charge
 
     def get_nuc_charge(self):
@@ -632,12 +632,12 @@ class ParametersQC:
 
     @property
     def filename(self):
-        """Base name for files of this molecule, ``{name}_{basis_set}``."""
+        """str : base name for files of this molecule, ``{name}_{basis_set}``."""
         return f"{self.name}_{self.basis_set}"
 
     @property
     def molecular_data_param(self) -> dict:
-        """Return the parameters as dictionary in the format of openfermion's ``MolecularData``."""
+        """dict : the parameters in the format of openfermion's ``MolecularData``."""
         return {
             "basis": self.basis_set,
             "geometry": self.get_geometry(desired_units="angstrom", ghost="of"),
@@ -1331,7 +1331,7 @@ class NBodyTensor:
 
     @property
     def shape(self):
-        """Shape of the tensor."""
+        """tuple of int : shape of the tensor."""
         return self.elems.shape
 
     def sub_lists(self, idx_lists: list | None = None) -> numpy.ndarray:
@@ -1656,17 +1656,17 @@ class IntegralManager:
 
     @property
     def active_orbitals(self):
-        """Orbital data of the active orbitals."""
+        """list of OrbitalData : the active orbitals."""
         return [self._orbitals[i] for i in self._active_space.active_orbitals]
 
     @property
     def orbitals(self):
-        """Orbital data of all orbitals."""
+        """list of OrbitalData : all orbitals."""
         return self._orbitals
 
     @property
     def active_space(self):
-        """Active space data; setting it updates the active-space index of each orbital."""
+        """ActiveSpaceData : active space data. Setting it updates the active-space index of each orbital."""
         return self._active_space
 
     @active_space.setter
@@ -1679,12 +1679,12 @@ class IntegralManager:
 
     @property
     def reference_orbitals(self):
-        """Orbital data of the reference orbitals."""
+        """list of OrbitalData : the reference orbitals."""
         return [self._orbitals[i] for i in self.active_space.reference_orbitals]
 
     @property
     def active_reference_orbitals(self):
-        """Orbital data of the reference orbitals that are in the active space."""
+        """list of OrbitalData : the reference orbitals that are in the active space."""
         return [
             self._orbitals[i]
             for i in self.active_space.active_orbitals
@@ -1693,29 +1693,30 @@ class IntegralManager:
 
     @property
     def overlap_integrals(self):
-        """Overlap integrals of the basis functions (not molecular orbitals; no active space)."""
+        """numpy.ndarray : overlap integrals of the basis functions (not molecular orbitals; no active space)."""
         return self._overlap_integrals
 
     @property
     def one_body_integrals(self):
-        """One-body integrals of the basis functions (not molecular orbitals; no active space)."""
+        """numpy.ndarray : one-body integrals of the basis functions (not molecular orbitals; no active space)."""
         return self._one_body_integrals
 
     @property
     def two_body_integrals(self):
-        """Two-body integrals of the basis functions in "chem" (Mulliken) ordering (not molecular orbitals; no active space).
+        """numpy.ndarray : two-body integrals of the basis functions in "chem" (Mulliken) ordering (not molecular orbitals; no active space).
 
-        ``integrals[a, b, c, d] = (ab|cd) = <ac|g|bd>``."""
+        ``integrals[a, b, c, d] = (ab|cd) = <ac|g|bd>``.
+        """
         return self._two_body_integrals
 
     @property
     def constant_term(self):
-        """Constant energy term, usually the nuclear repulsion (no active space considered)."""
+        """float : constant energy term, usually the nuclear repulsion (no active space considered)."""
         return self._constant_term
 
     @property
     def orbital_coefficients(self):
-        """Orbital coefficient matrix C[basis function, orbital].
+        """numpy.ndarray : orbital coefficient matrix ``C[basis function, orbital]``.
 
         Setting it checks that the orbitals are orthonormal and resets the orbital
         data (irrep, energy, ...) except for the indices.

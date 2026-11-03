@@ -125,7 +125,7 @@ class Psi4Mixin:
 
             @property
             def psi4_representable(self):
-                """Whether Psi4 can represent the active space with frozen_docc and frozen_uocc (needs the standard reference orbitals)."""
+                """bool : whether Psi4 can represent the active space with frozen_docc and frozen_uocc (needs the standard reference orbitals)."""
                 standard_ref = [self.reference_orbitals[0] == 0] + [
                     self.reference_orbitals[i] == self.reference_orbitals[i + 1] - 1
                     for i in range(len(self.reference_orbitals) - 1)
@@ -391,7 +391,7 @@ class Psi4Mixin:
 
     @property
     def nirrep(self):
-        """Number of irreps of the point group used by Psi4."""
+        """int : number of irreps of the point group used by Psi4."""
         return self.ref_wfn.nirrep()
 
     def orbital_energies(
@@ -847,12 +847,12 @@ class Psi4Mixin:
 
     @property
     def rdm1(self) -> tuple:
-        """One-electron reduced density matrix, see ``QuantumChemistryBase.rdm1``."""
+        """numpy.ndarray or tuple : one-electron reduced density matrix, see ``QuantumChemistryBase.rdm1``."""
         return super().rdm1
 
     @property
     def rdm2(self) -> tuple:
-        """Two-electron reduced density matrix, see ``QuantumChemistryBase.rdm2``."""
+        """numpy.ndarray or tuple : two-electron reduced density matrix, see ``QuantumChemistryBase.rdm2``."""
         return super().rdm2
 
     def compute_rdms(

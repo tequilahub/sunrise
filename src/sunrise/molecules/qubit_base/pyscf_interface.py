@@ -155,7 +155,7 @@ class PySCFMixin:
 
     @property
     def _up_then_down(self) -> bool:
-        """Return whether the wavefunctions are ordered up then down (always True for fermionic molecules, which have no qubit encoding)."""
+        """bool : whether the wavefunctions are ordered up then down (always True for fermionic molecules, which have no qubit encoding)."""
         # the fermionic molecules have no qubit encoding, their wavefunctions are ordered up then down
         if self.transformation is None:
             return True

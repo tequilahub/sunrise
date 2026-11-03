@@ -257,7 +257,7 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         # Compute and assemble tensors
         # Helper functions
         def get_irange(i: int):
-            """Returns indexing range for OBS and CABS part"""
+            """Return indexing range for OBS and CABS part."""
             irange = None
             if i == 0:  # OBS
                 irange = range(self.n_obs)
@@ -266,7 +266,7 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
             return irange
 
         def ind(i: int, p: int):
-            """Translates CBS to CABS indices for CABS-integrals"""
+            """Translate CBS to CABS indices for CABS-integrals."""
             if i == 0:  # OBS -> leave as is
                 return p
             elif i == 1:  # CABS -> translate to range [0,...,|CABS|]

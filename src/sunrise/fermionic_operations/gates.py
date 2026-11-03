@@ -18,7 +18,12 @@ def FermionicExcitation(
     variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
     reordered: bool = False,
 ) -> FCircuit:
-    """Create a generic fermionic excitation gate.
+    r"""Create a generic fermionic excitation gate.
+
+    For the pairs :math:`(p_k, q_k)` of ``indices`` it applies
+
+    .. math::
+        e^{-i \frac{\theta}{2} G}, \qquad G = i \left(\prod_k a^\dagger_{q_k} a_{p_k} - \mathrm{h.c.}\right)
 
     Parameters
     ----------

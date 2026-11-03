@@ -210,7 +210,6 @@ class FermBraketImpl(QuantumArg):
 
     @bra.setter
     def bra(self, bra: FCircuit):
-        """Expected FCircuit."""
         assert bra is None or isinstance(bra, FCircuit), (
             f"FCircuit expected, received {type(bra).__name__}"
         )
@@ -225,7 +224,6 @@ class FermBraketImpl(QuantumArg):
 
     @ket.setter
     def ket(self, ket: FCircuit):
-        """Expected FCircuit"""
 
         assert isinstance(ket, FCircuit), (
             f"FCircuit expected, received {type(ket).__name__}"

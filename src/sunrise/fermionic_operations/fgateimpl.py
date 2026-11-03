@@ -51,7 +51,7 @@ class FGateImpl:
 
     @property
     def name(self):
-        """Name of the gate type."""
+        """str : name of the gate type."""
         return self._name
 
     def is_controlled(self):
@@ -111,7 +111,7 @@ class FGateImpl:
 
     @property
     def indices(self):
-        """Excitation indices as a list (one entry per excitation) of lists of ``(from, to)`` pairs."""
+        """list of list of tuple of int : excitation indices, one list of ``(from, to)`` pairs per excitation."""
         return self._indices
 
     @indices.setter
@@ -127,7 +127,7 @@ class FGateImpl:
 
     @property
     def variables(self) -> Variable:
-        """Angle(s) of the gate."""
+        """Variable or Objective or float : angle(s) of the gate."""
         return self._variables
 
     @variables.setter
@@ -163,7 +163,7 @@ class FGateImpl:
 
     @property
     def qubits(self):
-        """Sorted list of the qubits (spin orbitals) the gate acts on."""
+        """list of int : sorted qubits (spin orbitals) the gate acts on."""
         if self._indices is not None:
             q = []
             for gate in self._indices:
@@ -175,7 +175,7 @@ class FGateImpl:
 
     @property
     def n_qubits(self) -> int:
-        """Number of qubits the gate acts on."""
+        """int : number of qubits the gate acts on."""
         return len(self.qubits)
 
     def map_qubits(self, qubit_map: dict | None = None):
@@ -207,7 +207,7 @@ class FGateImpl:
 
     @property
     def max_qubit(self):
-        """Highest qubit index used by the gate."""
+        """int : highest qubit index used by the gate."""
         if self.qubits:
             return self.qubits[-1]
         else:

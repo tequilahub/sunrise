@@ -884,7 +884,7 @@ class EXPVAL(UCC):
 
     @property
     def init_state_bra(self) -> Tensor:
-        """Tensor : initial state of the bra before the excitations, usually RHF.
+        """Tensor : initial state of the bra before the excitations, usually Hartree-Fock.
 
         See Also
         --------
@@ -894,7 +894,7 @@ class EXPVAL(UCC):
 
     @property
     def init_state_ket(self) -> Tensor:
-        """Tensor : initial state of the ket before the excitations, usually RHF.
+        """Tensor : initial state of the ket before the excitations, usually Hartree-Fock.
 
         See Also
         --------

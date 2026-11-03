@@ -2,7 +2,8 @@ r"""Fermionic backend ``"ffsim"``: dense CI vectors simulated with ffsim.
 
 The states are dense ffsim CI vectors of one :math:`(n_\alpha, n_\beta)` sector, in up-then-down
 spin orbital ordering. Every FCircuit gate :math:`e^{i \frac{\theta}{2} G}` acts through
-``ffsim.linear_operator(G)``.
+``ffsim.linear_operator(G)``, with ``G`` from ``make_excitation_generator_op`` (minus the generator
+of ``FermionicExcitation``, so it is the same gate).
 
 Limits compared to spex, which keeps only the determinants it reaches:
 

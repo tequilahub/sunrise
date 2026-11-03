@@ -1597,7 +1597,7 @@ class FermionicBase(QuantumChemistryBase):
         n_MOs = self.n_orbitals
 
         def _get_of_op(operator_tuple):
-            """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
+            """Return operator given by a operator tuple as OpenFermion - Fermion operator."""
             op = openfermion.FermionOperator(operator_tuple)
             return op
 
@@ -1631,13 +1631,13 @@ class FermionicBase(QuantumChemistryBase):
                 return 0
 
         def _get_qop_hermitian(of_operator):
-            """Returns Hermitian"""
+            """Return the Hermitian part (O + O^dagger) / 2 of a FermionOperator (numbers are returned as they are)."""
             if isinstance(of_operator, Number):
                 return of_operator
             return 0.5 * (of_operator + hermitian_conjugated(of_operator))
 
         def _build_1bdy_operators_spinful() -> list:
-            """Returns spinful one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinful one-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetry pq = qp
             ops = []
             for p in range(n_SOs):
@@ -1649,7 +1649,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_2bdy_operators_spinful() -> list:
-            """Returns spinful two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinful two-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
             #                and      =  rspq
             ops = []
@@ -1665,7 +1665,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_1bdy_operators_spinfree() -> list:
-            """Returns spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetry pq = qp (not changed by spin-summation)
             ops = []
             for p in range(n_MOs):
@@ -1681,7 +1681,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_2bdy_operators_spinfree() -> list:
-            """Returns spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
             #                and      = rspq
             ops = []
@@ -1734,7 +1734,7 @@ class FermionicBase(QuantumChemistryBase):
             return rdm1
 
         def _assemble_rdm2_spinful(evals, rdm2=None) -> numpy.ndarray:
-            """Returns spin-ful two-particle RDM built by symmetry conditions"""
+            """Return spin-ful two-particle RDM built by symmetry conditions."""
             ctr: int = 0
             if rdm2 is None:
                 rdm2 = numpy.zeros([n_SOs, n_SOs, n_SOs, n_SOs])
@@ -1760,7 +1760,7 @@ class FermionicBase(QuantumChemistryBase):
             return rdm2
 
         def _assemble_rdm2_spinfree(evals, rdm2=None) -> numpy.ndarray:
-            """Returns spin-free two-particle RDM built by symmetry conditions"""
+            """Return spin-free two-particle RDM built by symmetry conditions."""
             ctr: int = 0
             if rdm2 is None:
                 rdm2 = numpy.zeros([n_MOs, n_MOs, n_MOs, n_MOs])
@@ -1779,7 +1779,7 @@ class FermionicBase(QuantumChemistryBase):
             return rdm2
 
         def _build_1bdy_hcb_operators_spinfree() -> list:
-            """Returns spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetry pq = qp (not changed by spin-summation)
             ops = []
             for p in range(n_MOs):
@@ -1797,7 +1797,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_1bdy_hcb_operators_spinful() -> list:
-            """Returns spinful one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinful one-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetry pq = qp
             ops = []
             for p in range(n_SOs):
@@ -1811,7 +1811,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_2bdy_hcb_operators_spinful() -> list:
-            """Returns spinful two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinful two-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
             #                and      =  rspq
             ops = []
@@ -1854,7 +1854,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_2bdy_hcb_operators_spinfree() -> list:
-            """Returns spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
             #                and      = rspq
             ops = []

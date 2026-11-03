@@ -534,7 +534,7 @@ class HybridBase(qc_base):
 
     @property
     def select(self):
-        """Return the encoding of each orbital as dict ``{orbital: "F" or "B"}``."""
+        """dict : encoding of each orbital, ``{orbital: "F" or "B"}``."""
         if self._select is not None:
             return self._select
         else:
@@ -546,7 +546,7 @@ class HybridBase(qc_base):
 
     @property
     def condense(self):
-        """Return whether the unused beta qubit of bosonic orbitals is dropped."""
+        """bool : whether the unused beta qubit of bosonic orbitals is dropped."""
         if self._condense is not None:
             return self._condense
         else:
@@ -558,7 +558,7 @@ class HybridBase(qc_base):
 
     @property
     def two_qubit(self):
-        """Return whether bosonic orbitals use two qubits."""
+        """bool : whether bosonic orbitals use two qubits."""
         if self._two_qubit is not None:
             return self._two_qubit
         else:

@@ -261,15 +261,11 @@ class TCCBraket:
     def bra(self):
         """list of list of tuple of int : excitation operators of the bra, in tequila format. Can be
         set from an FCircuit or from indices ``[[(0, 2), (1, 3)], ...]`` in up-then-down order.
-
-        Set with an FCircuit or with excitation indices
-        ``[[(0, 2), (1, 3), ...], ...]`` in up-then-down order.
         """
         return indices_tcc_to_tq(self.BK.ex_ops_bra)
 
     @bra.setter
     def bra(self, bra: list[list[tuple[int]]] | FCircuit | None):
-        """Expected FCircuit or indices in [[(0,2),(1,3),...],[(a,b),(c,d),...],...] Format (Upthendown order)"""
         if isinstance(bra, FCircuit):
             if bra.initial_state is not None:
                 ini_bra = init_state_from_wavefunction(bra.initial_state)
@@ -292,15 +288,11 @@ class TCCBraket:
     def ket(self):
         """list of list of tuple of int : excitation operators of the ket, in tequila format. Can be
         set from an FCircuit or from indices ``[[(0, 2), (1, 3)], ...]`` in up-then-down order.
-
-        Set with an FCircuit or with excitation indices
-        ``[[(0, 2), (1, 3), ...], ...]`` in up-then-down order.
         """
         return indices_tcc_to_tq(self.BK.ex_ops_ket)
 
     @ket.setter
     def ket(self, ket: list[list[tuple[int]]] | FCircuit | None):
-        """Expected FCircuit or indices in [[(0,2),(1,3),...],[(a,b),(c,d),...],...] Format (Upthendown order)"""
         if isinstance(ket, FCircuit):
             if ket.initial_state is not None:
                 ini_ket = init_state_from_wavefunction(ket.initial_state)
@@ -344,7 +336,6 @@ class TCCBraket:
 
     @variables_bra.setter
     def variables_bra(self, variables_bra):
-        """See TCC variables"""
         for idx, i in enumerate(variables_bra):
             if isinstance(assign_variable(i), (Number, FixedVariable)):
                 variables_bra[idx] = assign_variable(-0.5 * (i % (2 * pi)))
@@ -373,7 +364,6 @@ class TCCBraket:
 
     @variables_ket.setter
     def variables_ket(self, variables_ket):
-        """See TCC variables"""
         for idx, i in enumerate(variables_ket):
             if isinstance(assign_variable(i), (Number, FixedVariable)):
                 variables_ket[idx] = assign_variable(-0.5 * (i % (2 * pi)))
@@ -399,7 +389,6 @@ class TCCBraket:
 
     @variables.setter
     def variables(self, variables):
-        """Tequila circuit variables."""
         for idx, i in enumerate(variables):
             if isinstance(assign_variable(i), (Number, FixedVariable)):
                 variables[idx] = assign_variable(-0.5 * (i % (2 * pi)))
@@ -407,7 +396,7 @@ class TCCBraket:
 
     @property
     def init_state_bra(self):
-        """Initial state of the bra before the excitations, usually Hartree-Fock.
+        """Tensor : initial state of the bra before the excitations, usually Hartree-Fock.
 
         See ``BK.get_init_state_dataframe`` for a readable form.
         """
@@ -415,7 +404,7 @@ class TCCBraket:
 
     @property
     def init_state_ket(self):
-        """Initial state of the ket before the excitations, usually Hartree-Fock.
+        """Tensor : initial state of the ket before the excitations, usually Hartree-Fock.
 
         See ``BK.get_init_state_dataframe`` for a readable form.
         """
