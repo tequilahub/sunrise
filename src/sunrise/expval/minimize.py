@@ -285,11 +285,19 @@ def compile(
                                 for gate in arg.ket.gates
                                 for term in gate.indices
                             )
+                            or (
+                                fbackend == "tcc"
+                                and kwargs.get("backend_kwargs", {}).get(
+                                    "engine", "pyscf"
+                                )
+                                not in ["pyscf", "civector", "civector-large"]
+                            )
                         )
                     ):
                         # the gradients of tcc and tequila are only right for expectation
-                        # values without Phase gates (number operators): the others go
-                        # through the shifted brakets
+                        # values without Phase gates (number operators), and tcc's
+                        # statevector and tensornetwork engines need auto-differentiation:
+                        # the others go through the shifted brakets
                         compiled_args.append(
                             compile(
                                 *args,
