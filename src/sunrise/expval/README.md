@@ -9,6 +9,7 @@ Everything needed to evaluate $\langle\psi|H|\psi\rangle$ (and overlaps $\langle
   | `spex` | [spex](https://github.com/tequilahub/spex) sparse simulator, installed with sunrise (default) |
   | `tcc` | [TenCirChem](https://github.com/tencent-quantum-lab/TenCirChem) |
   | `fqe` | [OpenFermion-FQE](https://github.com/quantumlib/OpenFermion-FQE) |
+  | `ffsim` | [ffsim](https://github.com/qiskit-community/ffsim) dense CI vectors, gates and operators must conserve N and S_z |
   | `tequila` | maps to qubits and uses any [tequila](https://github.com/tequilahub/tequila) simulator |
 
 - `minimize` – optimize the circuit parameters.

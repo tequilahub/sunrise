@@ -22,7 +22,7 @@ class FermBraketImpl(QuantumArg):
     r"""Symbolic braket :math:`\langle bra|O|ket \rangle` between two FCircuits.
 
     It is stored inside a tequila Objective and compiled by a fermionic backend
-    (spex, tcc, fqe or tequila) when the Objective is simulated. It cannot be
+    (spex, tcc, fqe, ffsim or tequila) when the Objective is simulated. It cannot be
     evaluated directly. Users normally create it through ``sunrise.Braket``.
 
     Parameters

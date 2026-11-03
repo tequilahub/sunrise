@@ -2,7 +2,7 @@
 
 Entry points are Braket, ExpectationValue, Overlap and Fidelity, which return
 tequila Objectives that are evaluated by one of the fermionic backends
-("spex", "tcc", "fqe") or by the tequila qubit simulators.
+("spex", "tcc", "fqe", "ffsim") or by the tequila qubit simulators.
 """
 
 from __future__ import annotations

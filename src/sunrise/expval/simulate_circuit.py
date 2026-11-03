@@ -57,7 +57,7 @@ def simulate_fcircuit(
     variables : dict, optional
         Values of the circuit variables, {variable: value}.
     backend : str, optional
-        "spex", "tcc" or "fqe" for the fermionic simulators. A tequila qubit
+        "spex", "tcc", "fqe" or "ffsim" for the fermionic simulators. A tequila qubit
         backend is selected as "tequila" (default qubit backend) or
         "tequila-<name>" / "t-<name>". If None, ``pick_backend`` chooses.
     **kwargs
