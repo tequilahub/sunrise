@@ -94,22 +94,5 @@ Each module in [`src/sunrise`](src/sunrise) has a short README with an introduct
 # Examples
 The [examples](examples/) folder has scripts for most modules, for instance the [hybrid molecule](examples/hybrid_molecule/README_example.py), [CLPO orbitals](examples/CLPO_orbitals), [ADAPT](examples/ADAPT), the [circuit visualizer](examples/circuit_visualizer) and the [valence bond embedding](examples/VB_embedding/embedding.py).
 
-# Acknowledgments & Citations
-
-This software incorporates components from the following third-party projects. If you use this software to obtain results for publication, you are required to cite these works as follows:
-
-## 1. JANPA package of programs
-This product includes components from the **JANPA package of programs** ([http://janpa.sourceforge.net/](http://janpa.sourceforge.net/)) developed by Tymofii Nikolaienko.
-
-**Required Citations:**
-* T. Yu. Nikolaienko, L. A. Bulavin; *Localized orbitals for optimal decomposition of molecular properties*, Int. J. Quantum Chem. (2019), Vol.119, page e25798, DOI: [10.1002/qua.25798](https://doi.org/10.1002/qua.25798)
-* T.Y.Nikolaienko, L.A.Bulavin, D.M.Hovorun; *JANPA: an open source cross-platform implementation of the Natural Population Analysis on the Java platform*, Comput.Theor.Chem.(2014), V.1050, P.15-22, DOI: [10.1016/j.comptc.2014.10.002](https://doi.org/10.1016/j.comptc.2014.10.002)
-
-## 2. Molden2AIM
-This product includes the **Molden2AIM** utility ([https://github.com/zorkzou/Molden2AIM](https://github.com/zorkzou/Molden2AIM)) developed by Zhi-Qiang Zou.
-
-**Suggested Citation:**
-* Zhi-Qiang Zou, *Molden2AIM: A program for converting MOLDEN files to WFN/WFX files*, [https://github.com/zorkzou/Molden2AIM](https://github.com/zorkzou/Molden2AIM).
-
 # License
-This project is licensed under the MIT License. It includes third-party components (JANPA and Molden2AIM) with specific attribution and citation requirements. See [THIRD-PARTY-LICENSE](THIRD-PARTY-LICENSE) for details.
+This project is licensed under the [MIT License](LICENSE). JANPA, used for the CLPO orbitals, comes with [janpa-py](https://github.com/davibinco/janpa-py), which lists its own citation requirements.
