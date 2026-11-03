@@ -60,6 +60,8 @@ class FFS_EXPVAL:
         self._bra: FCircuit = None
         self._ket_generators: list = None
         self._bra_generators: list = None
+        # (variable values, bra, ket) of the last states call, see states
+        self._states_cache: tuple = None
 
         bra = braket.bra
         ket = braket.ket
@@ -171,14 +173,21 @@ class FFS_EXPVAL:
                 f" {[k for k, c in check_variables.items() if not c]}"
             )
 
+        # the states are kept for the next call with the same values,
+        # e.g. the operators of compute_rdms
+        key = tuple(float(map_variables(k, v)) for k in self.extract_variables())
+        if self._states_cache and self._states_cache[0] == key:
+            return self._states_cache[1:]
         ket = _apply_circuit_to_state(
             self._init_state_ket, self.ket, self._ket_generators, v
         )
         if self.is_diagonal:
-            return ket, ket
-        bra = _apply_circuit_to_state(
-            self._init_state_bra, self.bra, self._bra_generators, v
-        )
+            bra = ket
+        else:
+            bra = _apply_circuit_to_state(
+                self._init_state_bra, self.bra, self._bra_generators, v
+            )
+        self._states_cache = (key, bra, ket)
         return bra, ket
 
     def extract_variables(self) -> list[Variable]:
@@ -219,6 +228,7 @@ class FFS_EXPVAL:
         self._bra_generators = _build_generators(
             bra, self.molecule.norb, self.molecule.nelec
         )
+        self._states_cache = None
 
     @property
     def ket(self) -> FCircuit:
@@ -243,6 +253,7 @@ class FFS_EXPVAL:
         self._ket_generators = _build_generators(
             ket, self.molecule.norb, self.molecule.nelec
         )
+        self._states_cache = None
 
     @property
     def variables_bra(self) -> list[Variable]:
@@ -284,10 +295,12 @@ class FFS_EXPVAL:
     @init_state_bra.setter
     def init_state_bra(self, init_state_bra: QubitWaveFunction):
         self._init_state_bra = self.__qwvf_to_civect(init_state_bra)
+        self._states_cache = None
 
     @init_state_ket.setter
     def init_state_ket(self, init_state_ket: QubitWaveFunction):
         self._init_state_ket = self.__qwvf_to_civect(init_state_ket)
+        self._states_cache = None
 
     @init_state.setter
     def init_state(self, init_state: QubitWaveFunction):

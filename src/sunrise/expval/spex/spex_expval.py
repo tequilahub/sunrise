@@ -39,6 +39,8 @@ class SpexExpval:
         self._bra = None
         self._compiled_ket: _CompiledCircuit = None
         self._compiled_bra: _CompiledCircuit = None
+        # (variable values, bra, ket) of the last simulate call, see simulate
+        self._states_cache: tuple = None
         self._name = None
         self._molecule = None
         # Molecule Data
@@ -165,6 +167,7 @@ class SpexExpval:
         bra = bra.to_upthendown(self.norb)
         self._bra = bra
         self._compiled_bra = _CompiledCircuit(bra)
+        self._states_cache = None
 
     @property
     def ket(self) -> FCircuit:
@@ -179,6 +182,7 @@ class SpexExpval:
         ket = ket.to_upthendown(self.norb)
         self._ket = ket
         self._compiled_ket = _CompiledCircuit(ket)
+        self._states_cache = None
 
     @property
     def variables(self) -> list[Variable]:
@@ -196,6 +200,7 @@ class SpexExpval:
     def init_state(self, init_state: QubitWaveFunction):
         self._init_state_bra = self.__qwvf_to_civect(init_state)
         self._init_state_ket = self.__qwvf_to_civect(init_state)
+        self._states_cache = None
 
     @property
     def is_diagonal(self):
@@ -353,13 +358,25 @@ class SpexExpval:
                 f"Objective did not receive all variables: {variables} given, missing {missing}"
             )
 
-        ket_state = self._apply_circuit(self._init_state_ket, self._compiled_ket, dvars)
-        if self.is_diagonal:
-            bra_state = ket_state
+        # the states are kept for the next call with the same values,
+        # e.g. the operators of compute_rdms
+        key = tuple(
+            float(dvars[k] if k in dvars else dvars[k.name])
+            for k in self.extract_variables()
+        )
+        if self._states_cache and self._states_cache[0] == key:
+            bra_state, ket_state = self._states_cache[1:]
         else:
-            bra_state = self._apply_circuit(
-                self._init_state_bra, self._compiled_bra, dvars
+            ket_state = self._apply_circuit(
+                self._init_state_ket, self._compiled_ket, dvars
             )
+            if self.is_diagonal:
+                bra_state = ket_state
+            else:
+                bra_state = self._apply_circuit(
+                    self._init_state_bra, self._compiled_bra, dvars
+                )
+            self._states_cache = (key, bra_state, ket_state)
 
         if callable(self.operator):
             ket_state = self.operator(ket_state)

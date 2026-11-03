@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 
-from numpy import conj, real
+from numpy import asarray, conj, real
 from tencirchem.static.ci_utils import get_ci_strings
 from tencirchem.static.engine_ucc import civector_to_statevector, get_ket
 from tencirchem.static.evolve_civector import get_civector as get_civector_
@@ -59,6 +59,7 @@ def get_expval(
     params_bra=None,
     ex_ops_bra: tuple | None = None,
     init_state_bra=None,
+    cache: dict | None = None,
 ):
     "Now retuns also the overlap betwen states"
     if ex_ops_bra is None:
@@ -71,27 +72,43 @@ def get_expval(
     map_params = params_to_tcc(params, angles, total_variables)
     map_params_bra = params_to_tcc(params_bra, angles, total_variables)
     logger.info("Entering `get_expval`")
-    ci_strings = get_ci_strings(n_qubits, n_elec_s, mode)
-    init_state_ket = translate_init_state(init_state, n_qubits, ci_strings)
-    init_state_bra = translate_init_state(init_state_bra, n_qubits, ci_strings)
-    ket = GETVECTOR_MAP[engine](
-        map_params,
-        n_qubits,
-        n_elec_s,
+    # cache keeps the last bra and ket, reused while the circuits and angles stay the same
+    # (e.g. the operators of compute_rdms)
+    key = (
+        engine,
         tuple(ex_ops),
-        (*range(len(ex_ops)),),
-        mode=mode,
-        init_state=init_state_ket,
-    )
-    bra = GETVECTOR_MAP[engine](
-        map_params_bra,
-        n_qubits,
-        n_elec_s,
         tuple(ex_ops_bra),
-        (*range(len(ex_ops_bra)),),
-        mode=mode,
-        init_state=init_state_bra,
+        id(init_state),
+        id(init_state_bra),
+        tuple(asarray(map_params).tolist()),
+        tuple(asarray(map_params_bra).tolist()),
     )
+    if cache is not None and cache.get("key") == key:
+        ket, bra = cache["ket"], cache["bra"]
+    else:
+        ci_strings = get_ci_strings(n_qubits, n_elec_s, mode)
+        init_state_ket = translate_init_state(init_state, n_qubits, ci_strings)
+        init_state_bra = translate_init_state(init_state_bra, n_qubits, ci_strings)
+        ket = GETVECTOR_MAP[engine](
+            map_params,
+            n_qubits,
+            n_elec_s,
+            tuple(ex_ops),
+            (*range(len(ex_ops)),),
+            mode=mode,
+            init_state=init_state_ket,
+        )
+        bra = GETVECTOR_MAP[engine](
+            map_params_bra,
+            n_qubits,
+            n_elec_s,
+            tuple(ex_ops_bra),
+            (*range(len(ex_ops_bra)),),
+            mode=mode,
+            init_state=init_state_bra,
+        )
+        if cache is not None:
+            cache.update(key=key, ket=ket, bra=bra)
     hket = apply_op(hamiltonian, ket)
     return real(conj(bra) @ hket), real(conj(bra) @ ket)
 
@@ -107,21 +124,29 @@ def get_energy(
     mode,
     init_state,
     engine,
+    cache: dict | None = None,
 ):
     assert len(angles) == len(total_variables)
     map_params = params_to_tcc(params, angles, total_variables)
     logger.info("Entering `get_energy`")
-    ci_strings = get_ci_strings(n_qubits, n_elec_s, mode)
-    init_state = translate_init_state(init_state, n_qubits, ci_strings)
-    ket = GETVECTOR_MAP[engine](
-        map_params,
-        n_qubits,
-        n_elec_s,
-        tuple(ex_ops),
-        (*range(len(ex_ops)),),
-        mode=mode,
-        init_state=init_state,
-    )
+    # cache keeps the last state, see get_expval
+    key = (engine, tuple(ex_ops), id(init_state), tuple(asarray(map_params).tolist()))
+    if cache is not None and cache.get("key") == key:
+        ket = cache["ket"]
+    else:
+        ci_strings = get_ci_strings(n_qubits, n_elec_s, mode)
+        init_state = translate_init_state(init_state, n_qubits, ci_strings)
+        ket = GETVECTOR_MAP[engine](
+            map_params,
+            n_qubits,
+            n_elec_s,
+            tuple(ex_ops),
+            (*range(len(ex_ops)),),
+            mode=mode,
+            init_state=init_state,
+        )
+        if cache is not None:
+            cache.update(key=key, ket=ket)
     hket = apply_op(hamiltonian, ket)
     return real(conj(ket) @ hket)
 

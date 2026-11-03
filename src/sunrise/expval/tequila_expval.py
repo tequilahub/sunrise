@@ -21,20 +21,27 @@ def TequilaBraket(braket: FermBraketImpl, *args, **kwargs) -> Objective:
     if bra is not None:
         bra = bra.to_upthendown(mol.n_orbitals).to_qcircuit(mol)
     ket = braket.ket.to_upthendown(mol.n_orbitals).to_qcircuit(mol)
-    operator = braket.operator
-    if operator is None:
-        operator = "H"
-    if isinstance(operator, str):
-        if operator == "H":
-            operator = mol.make_hamiltonian()
-        elif operator == "HCB":
-            operator = mol.make_hardcore_boson_hamiltonian()
-        elif operator == "I":
-            operator = I([braket.qubits])
-        else:
-            operator = from_string(operator)
-    elif isinstance(operator, FermionOperator):
-        operator = mol.transformation(operator)
+    # a list of operators is measured on one simulation of the circuit (compute_rdms)
+    operators = braket.operator
+    operators = list(operators) if isinstance(operators, list) else [operators]
+    for i, operator in enumerate(operators):
+        if operator is None:
+            operator = "H"
+        if isinstance(operator, str):
+            if operator == "H":
+                operator = mol.make_hamiltonian()
+            elif operator == "HCB":
+                operator = mol.make_hardcore_boson_hamiltonian()
+            elif operator == "I":
+                operator = I([braket.qubits])
+            else:
+                operator = from_string(operator)
+        elif isinstance(operator, FermionOperator):
+            operator = mol.transformation(operator)
+        operators[i] = operator
+    if isinstance(braket.operator, list):
+        return ExpectationValue(*args, U=ket, H=operators, shape=[len(operators)])
+    operator = operators[0]
     if braket.is_diagonal:
         return ExpectationValue(*args, U=ket, H=operator, **kwargs)
     return BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)
