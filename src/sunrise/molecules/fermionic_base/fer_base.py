@@ -34,10 +34,10 @@ from sunrise.molecules.qubit_base.chemistry_tools import (
 )
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
-from ...expval import Braket
+from ...expval import Braket, FermBraketImpl, TequilaBraket, pick_backend
 
 # from tequila.simulators.simulator_api import simulate
-from ...expval.minimize import simulate
+from ...expval.minimize import compile, simulate
 
 try:
     # if you are experiencing import errors you need to update openfermion
@@ -1624,12 +1624,21 @@ class FermionicBase(QuantumChemistryBase):
         if backend is None:
             backend = self.fermionic_backend
         if evaluate:
-            if rdm_trafo is None:
+            if rdm_trafo is None and (backend or pick_backend()) == "tequila":
+                # tequila measures the list of operators on one simulation of the circuit
                 evals = simulate(
-                    Braket(operator=qops, ket=U, shape=[len(qops)], molecule=self),
-                    backend=backend,
+                    TequilaBraket(FermBraketImpl(ket=U, operator=qops, molecule=self)),
                     variables=variables,
                 )
+            elif rdm_trafo is None:
+                # one braket for all the operators: the backend keeps the state between them
+                expval = compile(
+                    Braket(operator="I", ket=U, molecule=self), backend=backend
+                ).args[0]
+                evals = []
+                for op in qops:
+                    expval.operator = expval.build_operator(op)
+                    evals.append(expval(variables))
             else:
                 qops = [
                     rdm_trafo.dagger() * qops[i] * rdm_trafo for i in range(len(qops))

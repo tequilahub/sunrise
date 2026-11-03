@@ -124,6 +124,8 @@ class EXPVAL(UCC):
         self._params_ket = None
         self._variables_bra = None
         self._variables_ket = None
+        # last bra and ket of expval/energy, see engine_braket.get_expval
+        self.civector_cache = {}
         delattr(self, "_params")
         # delattr(self,'init_guess')
         delattr(self, "_param_ids")
@@ -308,6 +310,7 @@ class EXPVAL(UCC):
                     params_bra=self.variables_bra,
                     init_state=self.init_state_ket,
                     init_state_bra=self.init_state_bra,
+                    cache=self.civector_cache,
                 )
                 return hamiltonian * (float(e) + self.e_core * s)
         e, s = get_expval(
@@ -324,6 +327,7 @@ class EXPVAL(UCC):
             params_bra=self.variables_bra,
             init_state=self.init_state_ket,
             init_state_bra=self.init_state_bra,
+            cache=self.civector_cache,
         )
         return float(e) + self.e_core * s
 
@@ -386,6 +390,7 @@ class EXPVAL(UCC):
                     ex_ops=self.ex_ops_ket,
                     params=self.variables_ket,
                     init_state=self.init_state_ket,
+                    cache=self.civector_cache,
                 )
                 return hamiltonian * (float(e) + self.e_core)
         e = get_energy(
@@ -399,6 +404,7 @@ class EXPVAL(UCC):
             ex_ops=self.ex_ops_ket,
             params=self.variables_ket,
             init_state=self.init_state_ket,
+            cache=self.civector_cache,
         )
         return float(e) + self.e_core
 
@@ -951,15 +957,18 @@ class EXPVAL(UCC):
     @init_state_bra.setter
     def init_state_bra(self, init_state_bra):
         self._init_state_bra = init_state_bra
+        self.civector_cache = {}
 
     @init_state_ket.setter
     def init_state_ket(self, init_state_ket):
         self._init_state_ket = init_state_ket
+        self.civector_cache = {}
 
     @init_state.setter
     def init_state(self, init_state):
         self._init_state_bra = init_state
         self._init_state_ket = init_state
+        self.civector_cache = {}
 
     @property
     def ex_ops(self) -> Tensor:

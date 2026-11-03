@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 from ctypes import ArgumentError
+from numbers import Number
 
 import fqe
 import tequila as tq
 from fqe.hamiltonians.diagonal_coulomb import DiagonalCoulomb
 from fqe.hamiltonians.sparse_hamiltonian import SparseHamiltonian
-from tequila import QubitWaveFunction, TequilaException
+from tequila import Objective, QubitWaveFunction, TequilaException
 
 from sunrise.expval.fqe.fermionic_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
 
-from ..fermionic_braket import FermBraketImpl
+from ..fermionic_braket import _SHIFTS, FermBraketImpl, _grad_phase
 
 
 class FQEBraKet:
@@ -27,41 +28,18 @@ class FQEBraKet:
         self.bra_original_obj = None
         self.bra_generator = None
         self.fermion_operator = None
+        # (angles, ket, bra) of the last simulate call, see simulate
+        self._states_cache: tuple = None
 
         ket = braket.ket
         bra = braket.bra
-        mol = braket.molecule
-        operator = braket.operator
+        self.molecule = braket.molecule
+        mol = self.molecule
+        self.grad_variable = braket.grad_variable
         self.n_ele = mol.n_electrons
         self.n_orbitals = mol.n_orbitals
 
-        if isinstance(operator, str):
-            if operator.lower() == "h" or operator.lower() == "hamiltonian":
-                c, h, g = mol.get_integrals()
-                h_of = make_fermionic_hamiltonian(
-                    one_body_integrals=h, two_body_integrals=g.elems, constant=c
-                )
-                self.h_fqe = fqe.get_hamiltonian_from_openfermion(
-                    h_of, norb=self.n_orbitals
-                )
-            elif operator.lower() == "i" or operator.lower() == "identity":
-                self.h_fqe = None
-            else:
-                raise TequilaException(f"Not implemented operator {operator}")
-        elif isinstance(
-            operator, openfermion.ops.operators.fermion_operator.FermionOperator
-        ):
-            self.h_fqe = fqe.get_hamiltonian_from_openfermion(
-                operator, norb=mol.n_orbitals
-            )
-            self.fermion_operator = operator
-        elif isinstance(operator, float):
-            operator = openfermion.ops.FermionOperator(term=None, coefficient=operator)
-            self.h_fqe = fqe.get_hamiltonian_from_openfermion(
-                operator, norb=mol.n_orbitals
-            )
-        else:
-            raise TequilaException(f"Not recognized format {type(operator)}")
+        self.operator = self.build_operator(braket.operator)
 
         bin_dict = generate_of_binary_dict(self.n_orbitals, self.n_ele // 2)
 
@@ -97,6 +75,36 @@ class FQEBraKet:
         self.ket_time_evolved = None
         self.bra_time_evolved = None
 
+    def build_operator(self, operator):
+        """
+        The fqe hamiltonian of the operator, None for the identity.
+        """
+        mol = self.molecule
+        self.fermion_operator = None
+        if isinstance(operator, str):
+            if operator.lower() == "h" or operator.lower() == "hamiltonian":
+                c, h, g = mol.get_integrals()
+                h_of = make_fermionic_hamiltonian(
+                    one_body_integrals=h, two_body_integrals=g.elems, constant=c
+                )
+                return fqe.get_hamiltonian_from_openfermion(h_of, norb=self.n_orbitals)
+            elif operator.lower() == "i" or operator.lower() == "identity":
+                return None
+            else:
+                raise TequilaException(f"Not implemented operator {operator}")
+        elif isinstance(
+            operator, openfermion.ops.operators.fermion_operator.FermionOperator
+        ):
+            self.fermion_operator = operator
+            return fqe.get_hamiltonian_from_openfermion(operator, norb=mol.n_orbitals)
+        elif isinstance(operator, Number):
+            operator = openfermion.ops.FermionOperator(
+                term=None, coefficient=float(operator)
+            )
+            return fqe.get_hamiltonian_from_openfermion(operator, norb=mol.n_orbitals)
+        else:
+            raise TequilaException(f"Not recognized format {type(operator)}")
+
     def __call__(self, variables: dict | list | None = None, *args, **kwargs) -> float:
         """
 
@@ -104,6 +112,34 @@ class FQEBraKet:
         :param args:
         :param kwargs:
         :return: Expectation value <bra|H|ket> or <ket|ket> if no Hamiltonian is provided
+        """
+        if variables is None:
+            variables = {}
+        if self.grad_variable is not None:
+            # the shift rule of _grad_FermBraket, each term with one gate shifted
+            gradient = 0.0
+            for is_bra, U in [(True, self.bra), (False, self.ket)]:
+                if U is None:
+                    continue
+                for i, gate in enumerate(U.gates):
+                    if self.grad_variable not in gate.extract_variables():
+                        continue
+                    inner = _grad_phase(gate.variables, self.grad_variable)
+                    if isinstance(inner, Objective):
+                        inner = inner(variables)
+                    for shift, w in _SHIFTS:
+                        gradient += (
+                            w * inner * self.simulate(variables, (is_bra, i, shift))
+                        )
+            return gradient
+        return self.simulate(variables)
+
+    def simulate(
+        self, variables: dict | list | None = None, shift: tuple | None = None
+    ) -> float:
+        """
+        shift=(is_bra, gate index, angle) adds the angle to one gate of the bra or of the ket,
+        the other side keeps its circuit (used by the shift rule of the gradient).
         """
         if variables is None:
             variables = {}
@@ -136,53 +172,73 @@ class FQEBraKet:
         angle_internal_bra = []
         if not self.is_diagonal:
             angle_internal_bra = [x(internal_variables) for x in self.bra_angles]
+        # the unshifted states are kept for the next call with the same angles,
+        # e.g. the operators of compute_rdms
+        key = (tuple(angle_internal_ket), tuple(angle_internal_bra))
+        if shift is not None:
+            is_bra, i, angle = shift
+            angles = angle_internal_bra if is_bra else angle_internal_ket
+            gates = (self.bra if is_bra else self.ket).gates
+            # a UR gate has two angles, see FCircuit.variables
+            start = sum(2 if g._name == "UR" else 1 for g in gates[:i])
+            for j in range(start, start + (2 if gates[i]._name == "UR" else 1)):
+                angles[j] = angles[j] + angle
 
-        list_gen_vals_ket = []
-        for gens in self.ket_generator.values():
-            if len(gens) == 1:
-                list_gen_vals_ket.append(gens)
-            else:
-                for URs in gens:
-                    list_gen_vals_ket.append([URs])
-        zip_ket = zip(angle_internal_ket, list_gen_vals_ket)
-
-        ket_t = deepcopy(self.ket_wfn)
-        for arguments in zip_ket:
-            for generators in arguments[1]:
-                ket_t = ket_t.time_evolve(-0.5 * arguments[0], generators)
-
-        if self.is_diagonal:
-            bra_t = None
+        if shift is None and self._states_cache and self._states_cache[0] == key:
+            ket_t, bra_t = self._states_cache[1:]
         else:
-            bra_t = deepcopy(self.bra_wfn)
-            list_gen_vals_bra = []
-            for gens in self.bra_generator.values():
+            list_gen_vals_ket = []
+            for gens in self.ket_generator.values():
                 if len(gens) == 1:
-                    list_gen_vals_bra.append(gens)
+                    list_gen_vals_ket.append(gens)
                 else:
                     for URs in gens:
-                        list_gen_vals_bra.append([URs])
-            zip_bra = zip(angle_internal_bra, list_gen_vals_bra)
+                        list_gen_vals_ket.append([URs])
+            zip_ket = zip(angle_internal_ket, list_gen_vals_ket)
 
-            for arguments in zip_bra:
+            ket_t = deepcopy(self.ket_wfn)
+            for arguments in zip_ket:
                 for generators in arguments[1]:
-                    bra_t = bra_t.time_evolve(-0.5 * arguments[0], generators)
+                    ket_t = ket_t.time_evolve(-0.5 * arguments[0], generators)
+
+            if self.is_diagonal:
+                bra_t = None
+            else:
+                bra_t = deepcopy(self.bra_wfn)
+                list_gen_vals_bra = []
+                for gens in self.bra_generator.values():
+                    if len(gens) == 1:
+                        list_gen_vals_bra.append(gens)
+                    else:
+                        for URs in gens:
+                            list_gen_vals_bra.append([URs])
+                zip_bra = zip(angle_internal_bra, list_gen_vals_bra)
+
+                for arguments in zip_bra:
+                    for generators in arguments[1]:
+                        bra_t = bra_t.time_evolve(-0.5 * arguments[0], generators)
 
         self.ket_time_evolved = ket_t
         self.bra_time_evolved = bra_t
-        if self.h_fqe is not None:
+        if shift is None:
+            self._states_cache = (key, ket_t, bra_t)
+        if self.operator is not None:
             try:
-                result = fqe.expectationValue(wfn=ket_t, ops=self.h_fqe, brawfn=bra_t)
+                result = fqe.expectationValue(
+                    wfn=ket_t, ops=self.operator, brawfn=bra_t
+                )
             except ArgumentError:
                 # fqe crashes evaluating some DiagonalCoulomb operators (e.g. RDM elements n_p n_q), see
                 # https://github.com/quantumlib/OpenFermion-FQE/issues/142; as a SparseHamiltonian it works
                 if (
-                    not isinstance(self.h_fqe, DiagonalCoulomb)
+                    not isinstance(self.operator, DiagonalCoulomb)
                     or self.fermion_operator is None
                 ):
                     raise
-                self.h_fqe = SparseHamiltonian(self.fermion_operator)
-                result = fqe.expectationValue(wfn=ket_t, ops=self.h_fqe, brawfn=bra_t)
+                self.operator = SparseHamiltonian(self.fermion_operator)
+                result = fqe.expectationValue(
+                    wfn=ket_t, ops=self.operator, brawfn=bra_t
+                )
         else:
             result = fqe.dot(bra_t, ket_t)
         return result.real
@@ -218,7 +274,9 @@ class FQEBraKet:
         ket_v = self.extract_ket_variables()
 
         if self.bra_instructions is not None:
-            ket_v += self.extract_bra_variables()
+            # a new list (+= grew the ket list on every call), without duplicates
+            seen = set(ket_v)
+            ket_v = ket_v + [v for v in self.extract_bra_variables() if v not in seen]
         return ket_v
 
     @property
@@ -237,6 +295,7 @@ class FQEBraKet:
         self.ket_generator = create_fermionic_generators(
             self.ket_instructions, self.ket_angles
         )
+        self._states_cache = None
 
     @property
     def bra(self) -> FCircuit:
@@ -256,6 +315,7 @@ class FQEBraKet:
         self.bra_generator = create_fermionic_generators(
             self.bra_instructions, self.bra_angles
         )
+        self._states_cache = None
 
     @property
     def constant_dict_ket(self):
@@ -271,8 +331,8 @@ class FQEBraKet:
 
     def count_measurements(self) -> int:
         mes = 0
-        if self.h_fqe is not None:
-            mes = self.h_fqe.dim()
+        if self.operator is not None:
+            mes = self.operator.dim()
         return mes
 
     def __str__(self):
