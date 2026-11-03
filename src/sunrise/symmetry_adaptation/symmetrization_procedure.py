@@ -254,13 +254,8 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
         # the states already kept for each (irrep, m_s, block), as rows
         kept_wfns: dict[tuple, numpy.ndarray] = {}
 
-        for (
-            irrep,
-            s2_val,
-            is_eigenstate,
-            ms_val,
-            block,
-        ), wfn_list in SALC_by_sector.items():
+        for sector, wfn_list in SALC_by_sector.items():
+            irrep, s2_val, is_eigenstate, ms_val, block = sector
             strings = blocks[block][0]
 
             # Deduplicate copies within this sector, also when they differ by a global phase:
