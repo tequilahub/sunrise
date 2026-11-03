@@ -1,3 +1,5 @@
+"""Molecule class with a mixed encoding, where each spatial orbital is either fermionic or a hard-core boson."""
+
 from __future__ import annotations
 
 import copy
@@ -27,6 +29,63 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as qc_base
 
 
 class HybridBase(qc_base):
+    r"""Base class of hybrid molecules: each spatial orbital is encoded either as fermionic ("F") or
+    as hard-core boson ("B").
+
+    A fermionic orbital uses two qubits (alpha and beta spin orbital). A bosonic orbital
+    represents a spin-paired electron pair with a single qubit, which saves qubits but only
+    allows spin-paired excitations. Without ``select`` all orbitals are bosonic. The class
+    extends ``QuantumChemistryBase`` (see there for the inherited methods) with the Hamiltonian,
+    RDMs and circuits for this encoding.
+
+    Parameters
+    ----------
+    parameters : ParametersQC
+        Quantum chemistry parameters (geometry, basis set, charge, frozen core, ...).
+    select : str, dict, list or tuple
+        Encoding of each spatial orbital, "F" (fermionic, two qubits) or "B" (hard-core boson,
+        one qubit for a spin-paired electron pair). As str or list e.g. ``"FBB"``, as dict
+        ``{0: "F", 1: "B"}``. A list of int is read as the indices of the "F" orbitals.
+        Missing orbitals are set to "B".
+    transformation : str or callable, optional
+        Fermion-to-qubit encoding of the fermionic orbitals: "JordanWigner" (default),
+        "BravyiKitaev", "BravyiKitaevTree", "TaperedBinary" or the reordered ones (see
+        ``known_encodings``), or an already initialized encoding. The bosonic orbitals are
+        always hard-core bosons.
+    active_orbitals : list of int, optional
+        Active orbitals, the others are frozen. With N electrons, the first N//2 orbitals
+        are considered occupied when the active space is built.
+    frozen_orbitals : list of int, optional
+        Orbitals removed from the active orbitals.
+    orbital_type : str, optional
+        Type of the orbitals, e.g. "hf" or "native".
+    reference_orbitals : list of int, optional
+        Orbitals considered occupied when creating an active space, as total indices. Default
+        are the first ``n_electrons // 2``.
+    orbitals : list, optional
+        Orbital information (``OrbitalData``, can be a dict).
+    **kwargs
+        ``condense`` (bool, default True) drops the unused beta qubit of bosonic orbitals,
+        ``two_qubit`` (bool, default False) uses two qubits for bosonic orbitals (implies
+        ``condense=False``), ``integral_tresh`` (float, default 1e-6) is the threshold for
+        simplifying the Hamiltonian, ``n_electrons`` overrides the number of electrons,
+        ``transformation__<option>`` is passed to the encoding. The rest (e.g.
+        ``one_body_integrals``, ``two_body_integrals``, ``nuclear_repulsion``) is passed to
+        the integral manager.
+        Also ``point_group`` and ``integral_manager`` (an existing integral manager to reuse).
+
+    References
+    ----------
+    F. J. del Arco Santos et al., Quantum Sci. Technol. (2025), doi:10.1088/2058-9565/adbdee.
+
+    Examples
+    --------
+    >>> mol = sun.Molecule(geometry="H 0. 0. 0.\nH 0. 0. 1.6", basis_set="sto-3g",
+    ...                   select="BF", backend="pyscf", nature="hybrid")
+    >>> H = mol.make_hamiltonian()
+    >>> U = mol.make_ansatz("SPA", edges=mol.get_spa_edges())
+    """
+
     def __init__(
         self,
         parameters: ParametersQC,
@@ -40,20 +99,7 @@ class HybridBase(qc_base):
         *args,
         **kwargs,
     ):
-        """
-        Parameters
-        ----------
-        select: codification of the transformation for each MO.
-        parameters: the quantum chemistry parameters handed over as instance of the ParametersQC class (see there for content)
-        transformation1: the fermion to qubit transformation (default is JordanWigner).
-        transformation2: the boson to qubit transformation (default is Hard-Core Boson).
-        active_orbitals: list of active orbitals (others will be frozen, if we have N-electrons then the first N//2 orbitals will be considered occpied when creating the active space)
-        frozen_orbitals: convenience (will be removed from list of active orbitals)
-        reference_orbitals: give list of orbitals that shall be considered occupied when creating a possible active space (default is the first N//2). The indices are expected to be total indices (including possible frozen orbitals in the counting)
-        orbitals: information about the orbitals (should be in OrbitalData format, can be a dictionary)
-        args
-        kwargs
-        """
+        """Initialize the molecule, see the class docstring for the parameters."""
         if select is None:
             select = {}
         self._select = {}
@@ -139,24 +185,34 @@ class HybridBase(qc_base):
     def update_select(
         self, select: str | dict | list | tuple, n_orb: int | None = None
     ):
-        """
+        """Set the F/B encoding of the orbitals.
+
         Parameters
         ----------
-        select: codification of the transformation for each MO.
+        select : str, dict, list or tuple
+            Encoding of each spatial orbital, "F" (fermionic, two qubits) or "B" (hard-core boson,
+            one qubit for a spin-paired electron pair). As str or list e.g. ``"FBB"``, as dict
+            ``{0: "F", 1: "B"}``. A list of int is read as the indices of the "F" orbitals.
+            Missing orbitals are set to "B".
+        n_orb : int, optional
+            Number of orbitals. Default is ``self.n_orbitals``.
 
-        Returns
-        -------
-        Updates the MO cofication data. Returns Instance of the class
+        Raises
+        ------
+        ValueError
+            If a string, list or dict contains characters other than "F" and "B".
+        TequilaException
+            If ``select`` has an unsupported type.
+
+        Examples
+        --------
+        >>> mol.update_select([2, 3, 10, 11])  # these orbitals become fermionic
         """
         if n_orb is None:
             n_orb = self.n_orbitals
 
         def verify_selection_str(select: str, n_orb: int) -> dict:
-            """
-            Internal function
-            Checks if the orbital selection string has the appropiated lenght, otherwise corrects it
-            :return : corrected selection dict
-            """
+            """Return the selection as dict, padded with "B" or cut to ``n_orb`` orbitals."""
             sel = {}
             if len(select) >= n_orb:
                 select = select[:n_orb]
@@ -172,11 +228,7 @@ class HybridBase(qc_base):
             return sel
 
         def verify_selection_dict(select: dict, n_orb: int) -> dict:
-            """
-            Internal function
-            Checks if the orbital selection dictionary has the appropiated lenght, otherwise corrects it
-            :return : corrected selection dict
-            """
+            """Return the selection as complete dict, missing orbitals are "B"."""
             sel = {}
             for i in range(n_orb):
                 if i in [*select.keys()]:
@@ -191,11 +243,7 @@ class HybridBase(qc_base):
             return sel
 
         def verify_selection_list(select: list | tuple, n_orb: int) -> dict:
-            """
-            Internal function
-            Checks if the orbital selection string has the appropiated lenght, otherwise corrects it
-            :return : corrected selection dict
-            """
+            """Return the selection as dict from a list of "F"/"B" or of the "F" orbital indices."""
             select = [*select]
             sel = {}
             if len(select) and isinstance(select[0], int):
@@ -219,11 +267,7 @@ class HybridBase(qc_base):
             return sel
 
         def select_to_list(select: dict):
-            """
-            Internal function
-            Read the select string to make the proper Fer and Bos lists
-            :return : list of MOs for the Bos, MOs and SOs for the Fer space
-            """
+            """Return the bosonic orbitals, the fermionic orbitals and the fermionic spin orbitals."""
 
             hcb = 0
             jworb = 0
@@ -269,6 +313,22 @@ class HybridBase(qc_base):
 
     @classmethod
     def from_tequila(cls, molecule=None, transformation=None, *args, **kwargs):
+        """Create a hybrid molecule from another molecule, reusing its integrals and orbitals.
+
+        Parameters
+        ----------
+        molecule : QuantumChemistryBase
+            Molecule to copy.
+        transformation : EncodingBase, optional
+            Encoding. Default is the one of ``molecule``, converted to the hybrid version.
+        **kwargs
+            ``active_orbitals`` (default: those of ``molecule``), and options of the constructor
+            such as ``select``.
+
+        Returns
+        -------
+        HybridBase
+        """
         c = molecule.integral_manager.constant_term
         h1 = molecule.integral_manager.one_body_integrals
         h2 = molecule.integral_manager.two_body_integrals
@@ -309,20 +369,35 @@ class HybridBase(qc_base):
     def use_native_orbitals(
         self, inplace=False, core: list | None = None, *args, **kwargs
     ):
-        r"""
+        """Return the molecule in the native (orthonormalized atomic) orbital basis.
+
+        For standard basis sets these are the orthonormalized Gaussian basis functions. Core and
+        active orbitals are chosen by overlap with the current ones if not given. The F/B selection
+        is carried over to the new orbitals, so check that it is still what you want.
+
         Parameters
         ----------
-        inplace: update current molecule or return a new instance
-        core: list of the core orbitals indices (they will be frozen) on the current orbital schema. If not provided, they will be employed the
-        indices on the integral manager. Indices interpreted with respect to the complete basis. If core provided but not active, will be
-        chosen the ones with the lowest overlap on the Native schema.
-        active(in kwargs): list of the active orbital indices on the Native Orbs schema. If not provided they will be chosen the ones
-        with the lowest overlap with the core orbitals. For an example where it may necesary, check the H-He-H molecule
-        with pyscf; the fist HF orbital (at high interatomic distances) correspond to |\phi_0> = 1.|\chi_1>, being identical to the native \varphi_1>.
+        inplace : bool, optional
+            Change this molecule instead of returning a new one.
+        core : list of int, optional
+            Core orbitals (frozen) of the current orbitals, as total indices. Default are the frozen
+            orbitals of the integral manager. If given without ``active`` the active orbitals are
+            those with the lowest overlap with the core.
+        **kwargs
+            ``active`` (list of int) are the active orbitals in the native basis. Default are those
+            with the lowest overlap with the core orbitals. Needed e.g. for H-He-H with PySCF at large
+            distances, where the first HF orbital equals a native orbital,
+            ``|phi_0> = 1 |chi_1> = |varphi_1>``.
+            ``reference_orbitals`` (list of int) are the doubly occupied orbitals.
+
         Returns
         -------
-        New molecule in the native (orthonormalized) basis given
-        e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
+        HybridBase
+            The molecule in native orbitals (``self`` if ``inplace``).
+
+        Examples
+        --------
+        >>> mol = sun.Molecule(geometry=geometry, basis_set="sto-3g").use_native_orbitals()
         """
         from sunrise.utils.orbital_transformation import (
             get_active,
@@ -459,6 +534,7 @@ class HybridBase(qc_base):
 
     @property
     def select(self):
+        """dict : encoding of each orbital, ``{orbital: "F" or "B"}``."""
         if self._select is not None:
             return self._select
         else:
@@ -470,6 +546,7 @@ class HybridBase(qc_base):
 
     @property
     def condense(self):
+        """bool : whether the unused beta qubit of bosonic orbitals is dropped."""
         if self._condense is not None:
             return self._condense
         else:
@@ -481,6 +558,7 @@ class HybridBase(qc_base):
 
     @property
     def two_qubit(self):
+        """bool : whether bosonic orbitals use two qubits."""
         if self._two_qubit is not None:
             return self._two_qubit
         else:
@@ -494,18 +572,7 @@ class HybridBase(qc_base):
     def _initialize_transformation(
         self, transformation=None, *args, **kwargs
     ) -> EncodingBase:
-        """
-        Helper Function to initialize the Fermion-to-Qubit Transformation
-        Parameters
-        ----------
-        transformation: name of the transformation (passed down from __init__
-        args
-        kwargs
-
-        Returns
-        -------
-
-        """
+        """Create the encoding of this molecule from its name (default "JordanWigner") or return it as is."""
 
         if transformation is None:
             transformation = "JordanWigner"
@@ -545,19 +612,7 @@ class HybridBase(qc_base):
         *args,
         **kwargs,
     ) -> EncodingBase:
-        """
-        Helper Function to initialize the Fermion-to-Qubit Transformation
-        But providing all required parameters as input
-        Parameters
-        ----------
-        transformation: name of the transformation (passed down from __init__
-        args
-        kwargs
-
-        Returns
-        -------
-
-        """
+        """Like ``_initialize_transformation``, but with all properties of the encoding given as arguments."""
         if select is None:
             select = {}
         if transformation is None:
@@ -589,19 +644,22 @@ class HybridBase(qc_base):
 
     # Hamiltonian Related Funcions
     def make_hamiltonian(self) -> QubitHamiltonian:
-        """
+        """Return the molecular Hamiltonian as qubit operator, in the encoding of this molecule.
+
+        It is the sum of the fermionic, the bosonic and the interaction part, plus the nuclear
+        repulsion. Terms below ``integral_tresh`` are removed.
+
         Returns
         -------
-        Qubit Hamiltonian in the Fermion/Bosont-to-Qubit transformations defined in self.parameters
+        QubitHamiltonian
+
+        Examples
+        --------
+        >>> H = mol.make_hamiltonian()
         """
 
         def make_fermionic_hamiltonian() -> QubitHamiltonian:
-            """
-            Internal function
-            Returns
-            -------
-            Fermionic part of the total Hamiltonian
-            """
+            """Return the part of the Hamiltonian acting only on fermionic orbitals."""
             H_FER = []
             for i in self.FER_SO:
                 for j in self.FER_SO:
@@ -622,12 +680,7 @@ class HybridBase(qc_base):
             return self.transformation(H_FER)
 
         def make_bosonic_hamiltonian() -> QubitHamiltonian:
-            """
-            Internal function
-            Returns
-            -------
-            Bosonic part of the total Hamiltonian
-            """
+            """Return the part of the Hamiltonian acting only on bosonic orbitals."""
             H_BOS = []
             for i in self.BOS_MO:
                 for j in self.BOS_MO:
@@ -673,11 +726,7 @@ class HybridBase(qc_base):
             return self.transformation(H_BOS)
 
         def make_interaction_hamiltonian() -> QubitHamiltonian:
-            """
-            Returns
-            -------
-            Fermionic-Bosonic Interaction part of the total Hamiltonian
-            """
+            """Return the part of the Hamiltonian coupling bosonic and fermionic orbitals."""
             H_INT = []
             h2 = self._h2.elems
             for j in self.BOS_MO:
@@ -782,8 +831,12 @@ class HybridBase(qc_base):
         return H.simplify(self.integral_tresh)
 
     def make_hardcore_boson_hamiltonian(self) -> QubitHamiltonian:
-        """
-        Just for consistency.
+        """Return the Hamiltonian, same as ``make_hamiltonian`` (prints a warning if some orbitals
+        are fermionic).
+
+        Examples
+        --------
+        >>> H = mol.make_hardcore_boson_hamiltonian()
         """
         if len(self.FER_MO):
             print(
@@ -804,42 +857,57 @@ class HybridBase(qc_base):
         rdm_trafo: QubitHamiltonian = None,
         evaluate=True,
     ):
-        """
-        Computes the one- and two-particle reduced density matrices (rdm1 and rdm2) given
-        a unitary U. This method uses the standard ordering in physics as denoted below.
-        Note, that the representation of the density matrices depends on the qubit transformation
-        used. The Jordan-Wigner encoding corresponds to 'classical' second quantized density
-        matrices in the occupation picture.
+        r"""Compute the one- and two-particle reduced density matrices (RDMs) of the state ``U|0>``.
 
-        We only consider real orbitals and thus real-valued RDMs.
-        The matrices are set as private members _rdm1, _rdm2 and can be accessed via the properties rdm1, rdm2.
+        Only real orbitals and real RDMs are supported.
 
-        .. math :
-            \\text{rdm1: } \\gamma^p_q = \\langle \\psi | a^p a_q | \\psi \\rangle
-                                     = \\langle U 0 | a^p a_q | U 0 \\rangle
-            \\text{rdm2: } \\gamma^{pq}_{rs} = \\langle \\psi | a^p a^q a_s a_r | \\psi \\rangle
-                                             = \\langle U 0 | a^p a^q a_s a_r | U 0 \\rangle
+        .. math::
+            \gamma^p_q = \langle \psi | a^p a_q | \psi \rangle, \quad
+            \gamma^{pq}_{rs} = \langle \psi | a^p a^q a_s a_r | \psi \rangle, \quad
+            \psi = U|0\rangle
+
+        By default the 2-RDM is returned in the physics (Dirac) ordering,
+        ``rdm2[p, q, r, s]`` :math:`= \gamma^{pq}_{rs}`, see ``ordering``.
+
+        The RDMs are stored in ``rdm1`` and ``rdm2``. They are expectation values of the encoded
+        operators, so they depend on the encoding; for Jordan-Wigner they are the usual
+        second-quantized RDMs in the occupation picture.
 
         Parameters
         ----------
-        U :
-            Quantum Circuit to achieve the desired state \\psi = U |0\\rangle, non-optional
-        variables :
-            If U is parametrized, then need to hand over a set of fixed variables
-        spin_free :
-            Set whether matrices should be spin-free (summation over spin) or defined by spin-orbitals
-        get_rdm1, get_rdm2 :
-            Set whether either one or both rdm1, rdm2 should be computed. If both are needed at some point,
-            it is recommended to compute them at once.
-        rdm_trafo :
-            The rdm operators can be transformed, e.g., a^dagger_i a_j -> U^dagger a^dagger_i a_j U,
-            where U represents the transformation. The default is set to None, implying that U equas the identity.
-        evaluate :
-            if true, the tequila expectation values are evaluated directly via the tq.simulate command.
-            the protocol is optimized to avoid repetation of wavefunction simulation
-            if false, the rdms are returned as tq.QTensors
+        U : tq.QCircuit
+            Circuit preparing the state.
+        variables : dict or tq.Variables, optional
+            Values of the circuit parameters, if ``U`` is parametrized.
+        spin_free : bool, optional
+            Unused, the RDMs are always spin-free (summed over spin, size ``n_orbitals``).
+        get_rdm1, get_rdm2 : bool, optional
+            Which RDMs to compute. Computing both at once is more efficient.
+        ordering : str {"dirac", "phys", "chem", "openfermion"}, optional
+            Index ordering of the 2-RDM. Default is "dirac", the physics ordering
+            ``rdm2[p, q, r, s] = <psi|a^p a^q a_s a_r|psi>``; "chem" (Mulliken) and "openfermion" are
+            also possible.
+        use_hcb : bool, optional
+            Unused.
+        rdm_trafo : QubitHamiltonian, optional
+            Transformation applied to the operators, ``a^p a_q -> T^dagger a^p a_q T``. Default is the identity.
+        evaluate : bool, optional
+            If True evaluate the expectation values with ``tq.simulate``. If False return them as
+            ``tq.QTensor``.
+
         Returns
         -------
+        tuple or numpy.ndarray
+            ``(rdm1, rdm2)`` if both are requested, otherwise the requested one.
+
+        Raises
+        ------
+        TequilaException
+            If ``U`` is None or the encoding is Bravyi-Kitaev-Superfast.
+
+        Examples
+        --------
+        >>> rdm1, rdm2 = mol.compute_rdms(U, variables=variables)
         """
         # Check whether unitary circuit is not 0
         if U is None:
@@ -854,7 +922,7 @@ class HybridBase(qc_base):
             )
 
         def _build_1bdy_operators_mix() -> list:
-            """Returns BOS one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return the one-body operators (fermionic orbital pairs and bosonic diagonal terms) as symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetry pq = qp (not changed by spin-summation)
             ops = []
             for p in range(self.n_orbitals):
@@ -884,7 +952,7 @@ class HybridBase(qc_base):
             return ops
 
         def __case_2bdy(i: int, j: int, k: int, l: int) -> int:
-            """Returns 1 if allowed term all in J, 2 if all H, 3 mixed, 0 else"""
+            """Classify indices ``i, j, k, l``: 1 if all are fermionic, 2 if all bosonic, 3 if two of each, 0 otherwise."""
             list = [self.select[i], self.select[j], self.select[k], self.select[l]]
             b = list.count("B")
             f = list.count("F")
@@ -898,7 +966,7 @@ class HybridBase(qc_base):
                 return 0
 
         def _build_2bdy_operators_mix() -> list:
-            """Returns BOS two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+            """Return the two-body operators (fermionic, bosonic and mixed, see ``__case_2bdy``) as symmetry-reduced list of QubitHamiltonians."""
             # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
             #                and      = rspq
             ops = []
@@ -1442,9 +1510,7 @@ class HybridBase(qc_base):
             return ops
 
         def _assemble_rdm1_mix(evals) -> numpy.ndarray:
-            """
-            Returns BOS one-particle RDM built by symmetry conditions
-            """
+            """Assemble the one-particle RDM from the expectation values using the symmetries."""
             N = self.n_orbitals
             rdm1 = numpy.zeros([N, N])
             ctr: int = 0
@@ -1457,7 +1523,7 @@ class HybridBase(qc_base):
             return rdm1
 
         def _assemble_rdm2_mix(evals) -> numpy.ndarray:
-            """Returns spin-free two-particle RDM built by symmetry conditions"""
+            """Assemble the spin-free two-particle RDM from the expectation values using the symmetries."""
             ctr: int = 0
             rdm2 = numpy.zeros(
                 [self.n_orbitals, self.n_orbitals, self.n_orbitals, self.n_orbitals]
@@ -1550,18 +1616,26 @@ class HybridBase(qc_base):
         *args,
         **kwargs,
     ):
-        """
+        """Return a new molecule with transformed orbitals.
+
         Parameters
         ----------
-        orbital_coefficients: second index is new orbital indes, first is old orbital index (summed over), indices are assumed to be defined on the active space
-        ignore_active_space: if true orbital_coefficients are not assumed to be given in the active space
-        name: str, name the new orbitals
-        args
-        kwargs
+        orbital_coefficients : numpy.ndarray
+            Transformation matrix, first index is the old orbital (summed over), second index the new
+            orbital. By default defined on the active space.
+        ignore_active_space : bool, optional
+            If True the matrix acts on all orbitals instead of the active space.
+        name : str, optional
+            Name of the new orbitals.
 
         Returns
         -------
-        New molecule with transformed orbitals
+        HybridBase
+            The molecule keeps the encoding and ``select``.
+
+        Examples
+        --------
+        >>> mol = mol.transform_orbitals(C, ignore_active_space=True)  # C: new orbital coefficients
         """
 
         U = numpy.eye(self.integral_manager.orbital_coefficients.shape[0])
@@ -1593,16 +1667,28 @@ class HybridBase(qc_base):
     def verify_excitation(
         self, indices: typing.Iterable[tuple[int, int]], warning: bool = True
     ) -> bool:
-        """
-        Checks if the Bosonic restriction are accomplished by the excitation
+        """Check that an excitation respects the bosonic restrictions.
+
+        A bosonic orbital can only be excited as a spin-paired pair (both spin orbitals together).
+
         Parameters
         ----------
-        :param indices: turple of pair turples (a_i,b_j) where the electron is excited from a_i to b_j
-        :warning bool: change the action in case of forbiden excitations, from raising and Exception (if True) to just return False
-        :return : True if the excitations are allowed, False or raises an exception otherwise
+        indices : list of tuple of int
+            Excitation ``[(p0, q0), (p1, q1), ...]`` in spin orbitals (spatial orbital ``i`` has the
+            alpha spin orbital ``2*i`` and the beta spin orbital ``2*i+1``), ``(p, q)`` destroys p and
+            creates q. A flat list ``[p0, q0, p1, q1, ...]`` is also accepted.
+        warning : bool, optional
+            If True (default) raise an exception for forbidden excitations, otherwise return False.
+
         Returns
         -------
-            Optimized Tequila Hybrid Molecule
+        bool
+            True if the excitation is allowed.
+
+        Raises
+        ------
+        TequilaException
+            If the excitation is forbidden and ``warning`` is True.
         """
         sel = self.select
         if not isinstance(indices[0], typing.Iterable):
@@ -1648,24 +1734,37 @@ class HybridBase(qc_base):
         *args,
         **kwargs,
     ) -> QCircuit:
-        """
-        Convenience function for orbital rotation circuit (rotating spatial orbital i and j) with standard naming of variables
-        See arXiv:2207.12421 Eq.6 for UR(0,1)
-        Parameters:
+        """Return the orbital rotation circuit between spatial orbitals ``i`` and ``j`` (both must
+        be fermionic).
+
+        Both spin orbitals are rotated with the same angle, see arXiv:2207.12421 (Quantum 7, 1073 (2023)) Eq. 6.
+        The default variable name is ``("R", i, j)``.
+
+        Parameters
         ----------
-            indices:
-                two spatial(!) orbital indices i and j, a positive angle moves electrons from i to j
-            angle:
-                Numeric or hashable type or tequila objective. Default is None and results
-                in automatic naming as ("R",i,j)
-            label:
-                can be passed instead of angle to have auto-naming with label ("R",i,j,label)
-                useful for repreating gates with individual variables
-            control:
-                List of possible control qubits
-            assume_real:
-                Assume that the wavefunction will always stay real.
-                Will reduce potential gradient costs by a factor of 2
+        i, j : int
+            Spatial orbitals, both need to be fermionic. A positive angle moves electrons from i to j.
+        angle : float, hashable or tq.Objective, optional
+            Rotation angle. Default is an automatically named variable (in units of pi).
+        label : hashable, optional
+            Added to the automatic variable name, ``("R", i, j, label)``. Useful for repeated gates.
+        control : int or list of int, optional
+            Control qubits.
+        assume_real : bool, optional
+            Assume the wavefunction stays real, which halves the gradient cost.
+
+        Returns
+        -------
+        QCircuit
+
+        Raises
+        ------
+        TequilaException
+            If orbital i or j is bosonic (use ``UC`` instead).
+
+        Examples
+        --------
+        >>> U = mol.UR(0, 1, angle="a") + mol.UR(2, 3, angle="a")
         """
         if not (self.select[i] == "F" and self.select[j] == "F"):
             raise TequilaException(f"Rotation{(i, j)} not allowed, try Correlator")
@@ -1704,25 +1803,31 @@ class HybridBase(qc_base):
         *args,
         **kwargs,
     ) -> QCircuit:
-        """
-        Convenience function for orbital correlator circuit (correlating spatial orbital i and j through a spin-paired double excitation) with standard naming of variables
-        See arXiv:2207.12421 Eq.22 for UC(1,2)
+        """Return the orbital correlator circuit between spatial orbitals ``i`` and ``j``.
 
-        Parameters:
+        It is a spin-paired double excitation from i to j, see arXiv:2207.12421 (Quantum 7, 1073 (2023)) Eq. 22.
+        The default variable name is ``("C", i, j)``.
+
+        Parameters
         ----------
-            indices:
-                two spatial(!) orbital indices i and j, a positive angle moves electrons from i to j
-            angle:
-                Numeric or hashable type or tequila objective. Default is None and results
-                in automatic naming as ("R",i,j)
-            label:
-                can be passed instead of angle to have auto-naming with label ("R",i,j,label)
-                useful for repreating gates with individual variables
-            control:
-                List of possible control qubits
-            assume_real:
-                Assume that the wavefunction will always stay real.
-                Will reduce potential gradient costs by a factor of 2
+        i, j : int
+            Spatial orbitals. A positive angle moves electrons from i to j.
+        angle : float, hashable or tq.Objective, optional
+            Rotation angle. Default is an automatically named variable (in units of pi).
+        label : hashable, optional
+            Added to the automatic variable name, ``("C", i, j, label)``. Useful for repeated gates.
+        control : int or list of int, optional
+            Control qubits.
+        assume_real : bool, optional
+            Assume the wavefunction stays real, which halves the gradient cost.
+
+        Returns
+        -------
+        QCircuit
+
+        Examples
+        --------
+        >>> U = mol.UC(1, 2, angle="b")
         """
         if angle is None:
             if label is None:
@@ -1758,26 +1863,38 @@ class HybridBase(qc_base):
         assume_real=True,
         **kwargs,
     ) -> QCircuit:
-        """
-        Initialize a fermionic excitation gate defined as
+        """Return a fermionic excitation gate ``exp(-i a/2 G)``.
 
-        .. math::
-            e^{-i\\frac{a}{2} G}
-        with generator defines by the indices [(p0,q0),(p1,q1),...] or [p0,q0,p1,q1 ...]
-        .. math::
-            G = i(\\prod_{k} a_{q_k}^\\dagger a_{p_k} - h.c.)
+        The generator is ``G = i (prod_k a^dagger_{q_k} a_{p_k} - h.c.)`` for the pairs ``(p_k, q_k)``.
 
         Parameters
         ----------
-            indices:
-                List of tuples that define the generator, (p, q) destroys p and creates q
-            angle:
-                Numeric or hashable type or tequila objective
-            control:
-                List of possible control qubits
-            assume_real:
-                Assume that the wavefunction will always stay real.
-                Will reduce potential gradient costs by a factor of 2
+        indices : list of tuple of int
+            Excitation ``[(p0, q0), (p1, q1), ...]`` in spin orbitals (spatial orbital ``i`` has the
+            alpha spin orbital ``2*i`` and the beta spin orbital ``2*i+1``), ``(p, q)`` destroys p and
+            creates q. A flat list ``[p0, q0, p1, q1, ...]`` is also accepted.
+        angle : float, hashable or tq.Objective
+            Rotation angle.
+        control : int or list of int, optional
+            Control qubits.
+        assume_real : bool, optional
+            Assume the wavefunction stays real, which halves the gradient cost.
+        **kwargs
+            ``warning`` (bool) is passed to ``verify_excitation``; ``opt`` (bool) uses an optimized
+            compilation, see ``FermionicGateImpl``.
+
+        Returns
+        -------
+        QCircuit
+
+        Raises
+        ------
+        TequilaException
+            If the excitation violates the bosonic restrictions or the encoding does not support UCC.
+
+        Examples
+        --------
+        >>> U = mol.make_excitation_gate(indices=[(0, 4), (1, 5)], angle="a")  # pair excitation
         """
         if "warning" in kwargs:
             warning = kwargs["warning"]
@@ -1826,29 +1943,36 @@ class HybridBase(qc_base):
         form: str | None = None,
         remove_constant_term: bool = True,
     ) -> QubitHamiltonian:
-        r"""
-        Notes
-        ----------
-        Creates the transformed hermitian generator of UCC type unitaries:
-              M(a^\dagger_{a_0} a_{i_0} a^\dagger{a_1}a_{i_1} ... - h.c.)
-              where the qubit map M depends is self.transformation
+        """Return the generator of a UCC-type excitation as qubit operator.
+
+        It is ``1j * M(a^dagger_{a_0} a_{i_0} a^dagger_{a_1} a_{i_1} ... - h.c.)``, where ``M`` is
+        the encoding of this molecule.
 
         Parameters
         ----------
-        indices : typing.Iterable[typing.Tuple[int, int]] :
-            List of tuples [(i_0, a_0), (i_1, a_1), ... ], each pair destroys i and creates a - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
-            can also be given as one big list: [i_0, a_0, i_1, a_1 ...]
-        form : str : (Default value None):
-            Manipulate the generator to involution or projector
-            set form='involution' or 'projector'
-            the default is no manipulation which gives the standard fermionic excitation operator back
-        remove_constant_term: bool: (Default value True):
-            by default the constant term in the qubit operator is removed since it has no effect on the unitary it generates
-            if the unitary is controlled this might not be true!
+        indices : iterable of tuple of int
+            Excitation ``[(p0, q0), (p1, q1), ...]`` in spin orbitals (spatial orbital ``i`` has the
+            alpha spin orbital ``2*i`` and the beta spin orbital ``2*i+1``), ``(p, q)`` destroys p and
+            creates q. A flat list ``[p0, q0, p1, q1, ...]`` is also accepted.
+        form : str {"involution", "projector"}, optional
+            Manipulate the generator to an involution or a projector. Default is the standard
+            fermionic excitation operator.
+        remove_constant_term : bool, optional
+            Remove the constant term, which has no effect on the unitary. Keep it if the unitary is
+            controlled. Default is True.
+
         Returns
         -------
-        type
-            1j*Transformed qubit excitation operator, depends on self.transformation
+        QubitHamiltonian
+
+        Raises
+        ------
+        TequilaException
+            If the encoding does not support UCC or ``indices`` has a wrong format.
+
+        Examples
+        --------
+        >>> G = mol.make_excitation_generator(indices=[(0, 2), (1, 3)])
         """
         if not self.supports_ucc():
             raise TequilaException(
@@ -1956,10 +2080,21 @@ class HybridBase(qc_base):
 
     # Ansatzs and Algorithm
     def prepare_reference(self, state=None, *args, **kwargs) -> QCircuit:
-        """
+        """Return the circuit preparing the reference (Hartree-Fock) state in the encoding of this
+        molecule.
+
+        Parameters
+        ----------
+        state : list of int, optional
+            Occupation of the spin orbitals. Default is the reference state of this molecule.
+
         Returns
         -------
-        A tequila circuit object which prepares the reference of this molecule in the chosen transformation
+        QCircuit
+
+        Examples
+        --------
+        >>> U = mol.prepare_reference()  # Hartree-Fock state
         """
         if state is None:
             state = self._reference_state()
@@ -1977,11 +2112,14 @@ class HybridBase(qc_base):
         return U
 
     def prepare_hardcore_boson_reference(self) -> QCircuit:
-        """
-        Prepare reference state in the Hardcore-Boson approximation (eqch qubit represents two spin-paired electrons)
+        """Return the circuit preparing the reference state in the hard-core boson (HCB)
+        approximation.
+
+        Each qubit represents two spin-paired electrons. Use with ``make_hardcore_boson_hamiltonian``.
+
         Returns
         -------
-        tq.QCircuit that prepares the HCB reference
+        QCircuit
         """
         pos = self.transformation.pos
         U = gates.X(target=[pos[2 * i.idx] for i in self.reference_orbitals])
@@ -1989,9 +2127,38 @@ class HybridBase(qc_base):
         return U
 
     def make_ansatz(self, name: str, *args, **kwargs) -> QCircuit:
-        """
-        Automatically calls the right subroutines to construct ansatze implemented in sunrise.chemistry
-        name: namne of the ansatz, examples are: UpCCGSD, UpCCD, SPA, UCCSD, SPA+UpCCD, SPA+GS
+        """Return the circuit of a named ansatz, calling the matching ``make_*_ansatz`` method.
+
+        Several parts can be combined with "+", they use different variable labels and only the
+        first starts from the reference.
+
+        Parameters
+        ----------
+        name : str
+            Name of the ansatz, e.g. "UpCCGSD", "UpCCD", "SPA", "UCCSD", "SPA+UpCCD", "SPA+GS".
+            Names containing "SPA" call ``make_spa_ansatz``, "UCCSD" ``make_uccsd_ansatz``, and
+            names containing "D" or "S" ``make_upccgsd_ansatz``.
+        *args, **kwargs
+            Passed to the method that builds the ansatz.
+            For combined ansatze such as "SPA+UpCCD", ``label`` labels the variables of each part.
+
+        Returns
+        -------
+        QCircuit
+
+        Raises
+        ------
+        TequilaException
+            If the name is unknown.
+
+        See Also
+        --------
+        make_spa_ansatz : Separable Pair Ansatz (SPA).
+        make_upccgsd_ansatz : (k-)UpCCGSD-type ansatz.
+
+        Examples
+        --------
+        >>> U = mol.make_ansatz("SPA", edges=mol.get_spa_edges())
         """
         name = name.lower()
         if name.strip() == "":
@@ -2047,17 +2214,54 @@ class HybridBase(qc_base):
         ladder=True,
         check_edges=True,
     ) -> QCircuit:
-        """
-        Separable Pair Ansatz (SPA) for general molecules
-        see arxiv:
-        edges: a list of tuples that contain the orbital indices for the specific pairs
-               one example: edges=[(0,), (1,2,3), (4,5)] are three pairs, one with a single orbital [0], one with three orbitals [1,2,3] and one with two orbitals [4,5]
-        hcb: spa ansatz in the hcb (hardcore-boson) space without transforming to current transformation (e.g. JordanWigner), use this for example in combination with the self.make_hardcore_boson_hamiltonian() and see the article above for more info
-        use_units_of_pi: circuit angles in units of pi
-        label: label the variables in the circuit
-        optimize: optimize the circuit construction (see article). Results in shallow circuit from Ry and CNOT gates
-        ladder: if true the excitation pattern will be local. E.g. in the pair from orbitals (1,2,3) we will have the excitations 1->2 and 2->3, if set to false we will have standard coupled-cluster style excitations - in this case this would be 1->2 and 1->3
-        check_edges: default true. If False, the edges sanity is not checked. Take care.
+        """Return the Separable Pair Ansatz (SPA) circuit.
+
+        Each electron pair is correlated with its own group of orbitals (an "edge").
+        The molecule needs an even number of electrons.
+
+        Parameters
+        ----------
+        edges : list of tuple of int, optional
+            Orbitals of each pair, e.g. ``[(0,), (1, 2, 3), (4, 5)]`` are three pairs with one, three
+            and two orbitals. There must be ``n_electrons // 2`` edges without common orbitals.
+            Default is ``self.get_spa_edges()``.
+        hcb : bool, optional
+            Build the circuit in the hard-core boson space, without mapping to the encoding of the
+            molecule. Use with ``make_hardcore_boson_hamiltonian``.
+        use_units_of_pi : bool, optional
+            Give the circuit angles in units of pi.
+        label : hashable, optional
+            Label for the variables.
+        optimize : bool, optional
+            Build the shallow circuit of Ry and CNOT gates. Default is True if the encoding allows
+            it (``hcb_to_me`` is available) or has no fermionic orbitals.
+        ladder : bool, optional
+            If True (default) excitations are local, e.g. for the edge (1, 2, 3) they are 1->2 and
+            2->3. If False they are 1->2 and 1->3.
+        check_edges : bool, optional
+            Check that the edges are valid (number of edges, no shared orbitals). Default is True;
+            only switch it off if you are sure about the edges.
+
+        Returns
+        -------
+        QCircuit
+
+        Raises
+        ------
+        TequilaException
+            If the number of electrons is odd, or the edges are wrong in number or overlapping.
+
+        See Also
+        --------
+        make_ansatz : Build any named ansatz, e.g. "SPA" or "UpCCGSD".
+
+        References
+        ----------
+        J. S. Kottmann and A. Aspuru-Guzik, Phys. Rev. A 105, 032449 (2022), arXiv:2105.03836.
+
+        Examples
+        --------
+        >>> U = mol.make_spa_ansatz(edges=mol.get_spa_edges())
         """
         if edges is None:
             edges = self.get_spa_edges()
@@ -2173,42 +2377,66 @@ class HybridBase(qc_base):
         spin_adapt_singles: bool = True,
         neglect_z: bool = False,
         mix_sd: bool = False,
-        firts_double: bool = True,
+        first_double: bool = True,
         *args,
         **kwargs,
     ) -> QCircuit:
-        """
-        UpGCCSD Ansatz similar as described by Lee et. al.
+        """Return a (k-)UpCCGSD-type ansatz circuit, similar to Lee et al.
+
+        The variant is chosen by ``name``, see ``make_upccgsd_indices``. A prefix ``k-`` sets the
+        order, e.g. "2-UpCCGSD"; "UpCCD" has only doubles.
 
         Parameters
         ----------
-        include_reference
-            include the HF reference state as initial state
-        indices
-            pass custom defined set of indices from which the ansatz will be created
-            List of tuples of tuples spin-indices e.g. [((2*p,2*q),(2*p+1,2*q+1)), ...]
-        label
-            An additional label that is set with the variables
-            default is None and no label will be set: variables names will be
-            (x, (p,q)) for x in range(order)
-            with a label the variables will be named
-            (label, (x, (p,q)))
-        order
-            Order of the ansatz (default is 1)
-            determines how often the ordering gets repeated
-            parameters of repeating layers are independent
-        assume_real
-            assume a real wavefunction (that is always the case if the reference state is real)
-            reduces potential gradient costs from 4 to 2
-        mix_sd
-            Changes the ordering from first all doubles and then all singles excitations (DDDDD....SSSS....) to
-            a mixed order (DS-DS-DS-DS-...) where one DS pair acts on the same MOs. Useful to consider when systems
-            with high electronic correlation and system high error associated with the no Trotterized UCC.
-        firts_double
-            changes the excitation order from  Doubles then Singles if True, to Singles then Doubles if False
+        include_reference : bool, optional
+            Start from the reference state. Default is True.
+        name : str, optional
+            Name of the ansatz, e.g. "UpCCGSD", "UpCCD", "2-UpCCGSD". Names containing "HCB" use the
+            hard-core boson optimization.
+        indices : list, optional
+            Excitation indices of the layers (e.g. ``[((0, 3),), ((1, 4),)]``), replacing the ones
+            given by ``name``. Default is ``make_upccgsd_indices(name)``.
+        label : hashable, optional
+            Label added to the variable names, ``(label, (x, (p, q)))`` instead of ``(x, (p, q))``
+            with ``x`` the layer.
+        order : int, optional
+            Number of repetitions of the layer, each with independent parameters. Default is 1 or
+            the ``k`` of the name.
+        assume_real : bool, optional
+            Assume a real wavefunction (true for a real reference), which reduces the gradient cost.
+        hcb_optimization : bool, optional
+            Use the hard-core boson compilation. Needs an encoding with ``hcb_to_me``. Default is True
+            if available and the reference is included.
+        spin_adapt_singles : bool, optional
+            Use spin-adapted single excitations. Default is True.
+        neglect_z : bool, optional
+            Neglect the Z strings in the singles (needs Jordan-Wigner). Set automatically if the name
+            contains "A" (e.g. "UpCCGASD"). Default is False.
+        mix_sd : bool, optional
+            Order the excitations as pairs (double, single) acting on the same orbitals instead of all
+            doubles then all singles. Useful for strongly correlated systems with a large
+            Trotterization error of the UCC ansatz.
+        first_double : bool, optional
+            If True (default) doubles come before singles, otherwise singles first.
+        **kwargs
+            ``indices`` can be passed to use custom excitations, as list of tuples of
+            spin orbital pairs, e.g. ``[((2*p, 2*q), (2*p+1, 2*q+1)), ...]``.
+
         Returns
         -------
-            UpGCCSD ansatz
+        QCircuit
+
+        See Also
+        --------
+        make_ansatz : Build any named ansatz, e.g. "SPA" or "UpCCGSD".
+
+        References
+        ----------
+        J. Lee, W. J. Huggins, M. Head-Gordon and K. B. Whaley, J. Chem. Theory Comput. 15, 311 (2019), arXiv:1810.02327.
+
+        Examples
+        --------
+        >>> U = mol.make_upccgsd_ansatz(name="UpCCGSD")
         """
 
         name = name.upper()
@@ -2247,7 +2475,7 @@ class HybridBase(qc_base):
             raise TequilaException(
                 "Mixed SD can not be employed together with HCB Optimization with only one UCC layer"
             )
-        if hcb_optimization and not firts_double and (order == 1):
+        if hcb_optimization and not first_double and (order == 1):
             raise TequilaException(
                 "First Doubles can not be employed together with HCB Optimization with only one UCC layer"
             )
@@ -2269,7 +2497,7 @@ class HybridBase(qc_base):
                 label=(label, 0),
                 spin_adapt_singles=spin_adapt_singles,
                 mix_sd=mix_sd,
-                firts_double=firts_double,
+                first_double=first_double,
                 **kwargs,
             )
         else:
@@ -2305,7 +2533,7 @@ class HybridBase(qc_base):
                 spin_adapt_singles=spin_adapt_singles,
                 neglect_z=neglect_z,
                 mix_sd=mix_sd,
-                firts_double=firts_double,
+                first_double=first_double,
             )
         if not self.condense:
             U.n_qubits = 2 * self.n_orbitals
@@ -2322,12 +2550,40 @@ class HybridBase(qc_base):
         angle_transform=None,
         mix_sd=False,
         neglect_z=False,
-        firts_double: bool = True,
+        first_double: bool = True,
         *args,
         **kwargs,
     ) -> QCircuit:
+        """Return one layer of singles and/or doubles for the given orbital-pair indices, in the
+        order set by ``mix_sd`` and ``first_double``.
+
+        Parameters
+        ----------
+        indices : list
+            Orbital pairs, each given as ``[(p, q)]`` (spatial orbitals), e.g. from ``make_upccgsd_indices``.
+        include_singles, include_doubles : bool, optional
+            Which excitation types the layer contains. Default is both.
+        assume_real : bool, optional
+            Assume a real wavefunction (halves gradient costs). Default is True.
+        label : hashable, optional
+            Label of the variables.
+        spin_adapt_singles : bool, optional
+            Use spin-adapted singles. Default is True.
+        angle_transform : callable, optional
+            Function applied to the angle names of the singles.
+        mix_sd : bool, optional
+            Alternate doubles and singles on the same orbitals instead of all doubles first.
+        neglect_z : bool, optional
+            Neglect the Z strings in the singles (needs Jordan-Wigner). Default is False.
+        first_double : bool, optional
+            If True (default) doubles come before singles, otherwise singles first.
+
+        Returns
+        -------
+        tq.QCircuit
+        """
         U = QCircuit()
-        if include_singles and not mix_sd and not firts_double:
+        if include_singles and not mix_sd and not first_double:
             U += self.make_upccgsd_singles(
                 indices=indices,
                 assume_real=assume_real,
@@ -2340,7 +2596,7 @@ class HybridBase(qc_base):
             assert len(idx) == 1
             idx = idx[0]
             angle = ((idx,), "D", label)
-            if include_singles and mix_sd and not firts_double:
+            if include_singles and mix_sd and not first_double:
                 U += self.make_upccgsd_singles(
                     indices=[(idx,)],
                     assume_real=assume_real,
@@ -2378,7 +2634,7 @@ class HybridBase(qc_base):
                         assume_real=assume_real,
                         **kwargs,
                     )
-            if include_singles and mix_sd and firts_double:
+            if include_singles and mix_sd and first_double:
                 U += self.make_upccgsd_singles(
                     indices=[(idx,)],
                     assume_real=assume_real,
@@ -2388,7 +2644,7 @@ class HybridBase(qc_base):
                     neglect_z=neglect_z,
                 )
 
-        if include_singles and not mix_sd and firts_double:
+        if include_singles and not mix_sd and first_double:
             U += self.make_upccgsd_singles(
                 indices=indices,
                 assume_real=assume_real,
@@ -2410,6 +2666,28 @@ class HybridBase(qc_base):
         *args,
         **kwargs,
     ) -> QCircuit:
+        """Return the singles of a UpCCGSD-type layer for the given orbital-pair indices (or ansatz
+        name).
+
+        Parameters
+        ----------
+        indices : str or list, optional
+            Name of an ansatz (e.g. ``"UpCCGSD"``) whose orbital pairs are used, or the pairs as ``[(p, q)]`` entries.
+        spin_adapt_singles : bool, optional
+            If True one angle per pair is shared by up and down spin, otherwise separate angles.
+        label : hashable, optional
+            Label of the variables.
+        angle_transform : callable, optional
+            Function applied to the angle names.
+        assume_real : bool, optional
+            Assume a real wavefunction (halves gradient costs). Default is True.
+        neglect_z : bool, optional
+            Neglect the Z strings in the singles (needs Jordan-Wigner). Default is False.
+
+        Returns
+        -------
+        tq.QCircuit
+        """
         if neglect_z and "jordanwigner" not in self.transformation.name.lower():
             raise TequilaException(
                 "neglegt-z approximation in UpCCGSD singles needs the (Reversed)JordanWigner representation"
@@ -2505,21 +2783,32 @@ class HybridBase(qc_base):
     def make_hardcore_boson_excitation_gate(
         self, indices, angle, control=None, assume_real=True, compile_options="optimize"
     ) -> QCircuit:
-        """
-        Make excitation generator in the hardcore-boson approximation (all electrons are forced to spin-pairs)
-        use only in combination with make_hardcore_boson_hamiltonian()
+        """Return an excitation gate in the hard-core boson (HCB) approximation (electrons forced
+        into spin pairs).
+
+        All electrons are forced into spin pairs. Use with ``make_hardcore_boson_hamiltonian``.
 
         Parameters
         ----------
-        indices
-        angle
-        control
-        assume_real
-        compile_options
+        indices : list of tuple of int
+            Excitations ``[(p, q), ...]`` in spatial orbitals.
+        angle : float, hashable or tq.Objective
+            Rotation angle.
+        control : int or list of int, optional
+            Control qubits.
+        assume_real : bool, optional
+            Assume the wavefunction stays real.
+        compile_options : str, optional
+            Compilation options of ``tq.gates.QubitExcitation``.
 
         Returns
         -------
+        QCircuit
 
+        Raises
+        ------
+        TequilaException
+            If the indices are inconsistent with the encoding.
         """
         target = []
         for pair in indices:
@@ -2545,11 +2834,23 @@ class HybridBase(qc_base):
         )
 
     def hcb_to_me(self, U: QCircuit | None = None, **kwargs) -> QCircuit:
-        """
-        Transform a circuit in the hardcore-boson encoding (HCB) to the encoding of this molecule
-        U: HCB circuit (on the up qubits), the encoding circuit is appended to it
-           if None only the encoding circuit is returned
-        kwargs: passed to the encoding (e.g. all, bos)
+        """Map a circuit from the hard-core boson (HCB) encoding to the encoding of this molecule.
+
+        Parameters
+        ----------
+        U : tq.QCircuit, optional
+            Circuit in the HCB picture, acting on the up qubits. The mapping circuit is appended to it.
+            If None, only the mapping circuit is returned.
+        **kwargs
+            Passed to ``transformation.hcb_to_me``, e.g. ``all`` or ``bos``.
+
+        Returns
+        -------
+        QCircuit
+
+        Examples
+        --------
+        >>> U = mol.hcb_to_me(U=U_hcb)  # map a hard-core boson circuit to this encoding
         """
         UX = self.transformation.hcb_to_me(**kwargs)
         if U is None:
@@ -2557,22 +2858,20 @@ class HybridBase(qc_base):
         return U + UX
 
     def compute_energy(self, method: str, *args, **kwargs) -> float:
-        """
-        Call classical methods over PySCF (needs to be installed) or
-        use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
+        """Compute the energy of a classical or quantum method.
 
         Parameters
         ----------
-        method: method name
-                classical: HF, MP2, CCSD, CCSD(T), FCI -- with pyscf
-                quantum: UpCCD, UpCCSD, UpCCGSD, k-UpCCGSD, UCCSD,
-                see make_upccgsd_ansatz of the this class for more information
-        args
-        kwargs: for quantum methods, keyword arguments for minimizer
+        method : str
+            Classical methods from the backend (e.g. "hf", "mp2", "ccsd", "ccsd(t)", "fci"), or
+            quantum ansatz names (e.g. "UpCCD", "UpCCGSD", "UCCSD", see ``make_upccgsd_ansatz``).
+            A method with "hybrid" (e.g. "hybrid-fci") is computed with ``compute_restricted_energy``.
+        **kwargs
+            For quantum methods, arguments of the minimizer.
 
         Returns
         -------
-
+        float
         """
         method = method.lower()
         if "hybrid" in method:
@@ -2584,22 +2883,21 @@ class HybridBase(qc_base):
             return super().compute_energy(method, *args, **kwargs)
 
     def compute_restricted_energy(self, method: str, *args, **kwargs) -> float:
-        """
-        Call classical methods over PySCF (needs to be installed) or
-        use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
-        Difference with self.compute_energy() is that here the inteaction restriction
-        is considered
+        """Compute an energy with the interaction restricted according to ``select``.
+
+        Unlike ``compute_energy``, only the integrals allowed by the bosonic/fermionic selection are
+        kept, and the energy is computed with a PySCF molecule built from them.
+
         Parameters
         ----------
-        method: method name
-                classical: HF, MP2, CCSD, CCSD(T), FCI -- with pyscf
-                quantum: UpCCD, UpCCSD, UpCCGSD, k-UpCCGSD, UCCSD,
-                see make_upccgsd_ansatz of the this class for more information
-        args
-        kwargs: for quantum methods, keyword arguments for minimizer
+        method : str
+            Method name, see ``compute_energy``.
+        **kwargs
+            For quantum methods, arguments of the minimizer.
 
         Returns
         -------
+        float
         """
         from sunrise.molecules.qubit_base import Molecule as mol
 
@@ -2651,6 +2949,17 @@ class HybridBase(qc_base):
     def get_restricted_integrals(
         self, *args, **kwargs
     ) -> tuple[float, numpy.ndarray, numpy.ndarray]:
+        """Return the integrals with only the terms allowed by ``select``.
+
+        Returns
+        -------
+        tuple
+            ``(constant term, one-body integrals, two-body integrals as NBodyTensor)``.
+
+        Examples
+        --------
+        >>> integrals = mol.get_restricted_integrals()
+        """
         c, h, g = self.get_integrals()
         BOS_L = self.BOS_MO
         NBOS_L = self.FER_MO

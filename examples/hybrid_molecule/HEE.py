@@ -2,7 +2,7 @@ import subprocess
 
 import numpy as np
 
-import sunrise as sn
+import sunrise as sun
 
 try:
     from pyblock2.driver.core import DMRGDriver, SymmetryTypes
@@ -20,10 +20,10 @@ H -1.85042 -0.00018 -1.03002
 H -0.35993 -0.00000 -2.12298
 H 3.33365 -0.01193 -1.02751
 H 1.85521 0.00845 -2.12564"""
-mol = sn.Molecule(geometry=geometry, basis_set="sto-3g", nature="hybrid")
+mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", nature="hybrid")
 print("Canonical Orb. HF Energy ", mol.compute_energy("HF"))
 print("Canonical Orb. CCSD(T) Energy ", mol.compute_energy("CCSD(T)"))
-mol = sn.CLPO.generate_CLPO_molecule(mol)
+mol = sun.CLPO.generate_CLPO_molecule(mol)
 mol.update_select([4, 5, 10, 11])  # Just the pi-orbitals
 
 

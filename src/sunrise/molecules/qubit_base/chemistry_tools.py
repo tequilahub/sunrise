@@ -1,3 +1,5 @@
+"""Data containers and helpers for molecular quantum chemistry: parameters, active spaces, integrals, amplitudes and fermionic excitation gates."""
+
 from __future__ import annotations
 
 import os
@@ -29,9 +31,14 @@ except ImportError as E:
 
 @dataclass
 class ActiveSpaceData:
-    """
-    Small dataclass to keep the overview in active spaces
-    Class is used internally
+    """Orbital indices defining an active space (used internally).
+
+    Parameters
+    ----------
+    active_orbitals : list of int
+        Active spatial orbitals (indices in C1 ordering).
+    reference_orbitals : list of int
+        Spatial orbitals occupied in the reference determinant.
     """
 
     active_orbitals: list = None  # active orbitals (spatial, c1)
@@ -52,17 +59,33 @@ class ActiveSpaceData:
 
     @property
     def frozen_reference_orbitals(self):
+        """list of int : reference orbitals outside the active space (frozen, doubly occupied)."""
         return [i for i in self.reference_orbitals if i not in self.active_orbitals]
 
     @property
     def active_reference_orbitals(self):
+        """list of int : reference orbitals inside the active space."""
         return [i for i in self.reference_orbitals if i in self.active_orbitals]
 
 
 class FermionicGateImpl(gates.QubitExcitationImpl):
-    """
-    Small helper class for Fermionic Excictation Gates
-    Mainly so that "FermionicGate is displayed when circuits are printed
+    """Fermionic excitation gate, compiled to a circuit when needed.
+
+    Subclass of tequila's ``QubitExcitationImpl``; it mainly makes circuits print
+    as "FermionicExcitation".
+
+    Parameters
+    ----------
+    generator : tq.QubitHamiltonian
+        Generator of the excitation.
+    p0 : tuple
+        Angle (parameter) of the gate.
+    transformation : str
+        Fermion-to-qubit transformation used for the generator. Excitations are compiled
+        to a circuit for "jordan-wigner" and trotterized for other transformations.
+    indices : list of tuple of int
+        Pairs ``(p, q)`` of spin orbital indices; each pair destroys ``p`` and creates ``q``.
+        A flat sequence ``(p0, q0, p1, q1, ...)`` is also accepted.
     """
 
     def __init__(self, generator, p0, transformation, indices=None, *args, **kwargs):
@@ -80,7 +103,8 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         self.indices = self.format_excitation_indices(self.indices)
 
     def compile(self, *args, **kwargs):
-        if self.is_convertable_to_qubit_excitation():
+        """Compile the gate to a circuit: the exact fermionic excitation circuit with Jordan-Wigner, otherwise a Trotterized generator."""
+        if self.is_convertible_to_qubit_excitation():
             target = []
             for x in self.indices:
                 for y in x:
@@ -105,24 +129,37 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
                 )
 
     def format_excitation_indices(self, idx):
-        """
-        Consistent formatting of excitation indices
-        idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: p0<p1<pn, each pair keeps its direction
-        :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
-        :return: list of index tuples
+        """Sort the index pairs of an excitation by their first index (each pair keeps its direction).
+
+        For ``idx = [(p0, q0), (p1, q1), ..., (pn, qn)]`` the pairs are reordered such that
+        ``p0 < p1 < ... < pn``; inside each pair the order (direction) is kept.
+
+        Parameters
+        ----------
+        idx : list of tuple of int
+            Pairs ``(p, q)`` describing a single fermionic excitation; ``(p, q)`` destroys p and creates q.
+
+        Returns
+        -------
+        list of tuple of int
+            The sorted pairs.
         """
 
         idx = sorted(idx, key=lambda x: x[0])
         return list(idx)
 
     def format_excitation_variables(self, idx):
-        """
-        Consistent formatting of excitation variable
-        idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: p0 < p1 < p2, each pair keeps its direction
-        :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
-        :return: sign of the variable for the compiled circuit with re-ordered indices
+        """Return the sign of the variable that results from sorting the index pairs.
+
+        Parameters
+        ----------
+        idx : list of tuple of int
+            Pairs ``(p, q)`` describing a single fermionic excitation; ``(p, q)`` destroys p and creates q.
+
+        Returns
+        -------
+        int
+            +1 or -1, the sign to apply to the angle of the compiled circuit with re-ordered indices.
         """
         # prod_k a^dagger_{q_k} a_{p_k} = a^dagger_{q_0} ... a^dagger_{q_n} a_{p_n} ... a_{p_0}, the compiled circuit
         # has the creators sorted: the sign changes for every two pairs whose p and q are in opposite order
@@ -141,12 +178,26 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         angle: Real | Variable | typing.Hashable,
         case: int = 1,
     ) -> QCircuit:
-        """
-        Compilation of CRy as on https://doi.org/10.1103/PhysRevA.102.062612
-        If not control passed, Ry returned
+        """Compile a multi-controlled Ry rotation as in https://doi.org/10.1103/PhysRevA.102.062612.
+
         Parameters
         ----------
-        case: if 1 employs eq. 12 from the paper, if 0 eq. 13
+        target : int
+            Target qubit.
+        dcontrol : list of int or int
+            Controls of the rotation that are handled by the compilation of the paper.
+            If empty, a plain (controlled) Ry is returned.
+        control : list of int or int
+            Additional controls applied to the whole circuit.
+        angle : float, tq.Variable or hashable
+            Rotation angle.
+        case : int, optional
+            1 uses Eq. 12 of the paper, 0 uses Eq. 13. Default is 1.
+
+        Returns
+        -------
+        tq.QCircuit
+            The compiled circuit.
         """
         if control is not None and not len(control):
             control = None
@@ -218,9 +269,23 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         control: int | list | None = None,
         opt: bool = True,
     ) -> QCircuit:
-        """
-        Excitation [(i,j),(k,l)],... compiled following https://doi.org/10.1103/PhysRevA.102.062612
-        opt: whether to optimized CNOT H CNOT --> Rz Rz CNOT Rz
+        """Compile the excitation ``[(i, j), (k, l), ...]`` following https://doi.org/10.1103/PhysRevA.102.062612.
+
+        Parameters
+        ----------
+        angle : float, tq.Variable or hashable
+            Angle of the excitation.
+        indices : list of tuple of int
+            Pairs ``(p, q)`` of spin orbital indices, each destroying ``p`` and creating ``q``.
+        control : int or list of int, optional
+            Control qubits.
+        opt : bool, optional
+            Replace the sequence CNOT H CNOT by Rz Rz CNOT Rz, which is cheaper. Default is True.
+
+        Returns
+        -------
+        tq.QCircuit
+            The compiled circuit.
         """
         lto = []
         lfrom = []
@@ -281,14 +346,12 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
     def __repr__(self):
         return self.__str__()
 
-    def is_convertable_to_qubit_excitation(self):
-        """
-        spin-paired double excitations (both electrons occupy the same spatial orbital and are excited to another spatial orbital)
-        in the jordan-wigner representation are identical to 4-qubit excitations which can be compiled more efficient
-        this function hels to automatically detect those cases
-        Returns
-        -------
+    def is_convertible_to_qubit_excitation(self):
+        """Return whether the gate is a spin-paired double excitation, which is a 4-qubit excitation in Jordan-Wigner.
 
+        Spin-paired means both electrons occupy the same spatial orbital and move to another
+        common spatial orbital. Such excitations compile more efficiently, but this
+        conversion is currently disabled and the method always returns False.
         """
         return False
         if self.transformation.lower().strip("_") != "jordanwigner":
@@ -300,6 +363,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         return self.indices[0][1] // 2 == self.indices[1][1] // 2
 
     def map_qubits(self, qubit_map: dict):
+        """Return a copy of the gate acting on the qubits given by ``qubit_map`` (dict old qubit -> new qubit)."""
         mapped = deepcopy(self)
         mapped._target = tuple([qubit_map[i] for i in self.target])
         if self.control is not None:
@@ -319,9 +383,10 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
 
 
 def to_json_data(data):
-    """
-    Turn nested dictionaries, lists, tuples and numpy arrays into plain JSON types, so they can be saved without pickle
-    Tuples and arrays (with their dtype and shape) are tagged to get them back with from_json_data
+    """Turn nested dictionaries, lists, tuples and numpy arrays into plain JSON types.
+
+    This allows saving without pickle. Tuples and arrays (with dtype and shape) are
+    tagged so that ``from_json_data`` restores them.
     """
     if isinstance(data, dict):
         return {k: to_json_data(v) for k, v in data.items()}
@@ -341,9 +406,7 @@ def to_json_data(data):
 
 
 def from_json_data(data):
-    """
-    Inverse of to_json_data
-    """
+    """Inverse of ``to_json_data``: restore tuples and numpy arrays from their tagged JSON form."""
     if isinstance(data, dict):
         if "__tuple__" in data:
             return tuple(from_json_data(v) for v in data["__tuple__"])
@@ -358,20 +421,17 @@ def from_json_data(data):
 
 
 def prepare_product_state(state: BitString) -> QCircuit:
-    """Small convenience function
+    """Return the circuit that prepares a computational basis state from the all-zero state.
 
     Parameters
     ----------
-    state :
-        product state encoded into a bitstring
-    state: BitString :
-
+    state : tq.BitString
+        Product state, with 1 for each qubit that is flipped.
 
     Returns
     -------
-    type
-        unitary circuit which prepares the product state
-
+    tq.QCircuit
+        Circuit of X gates preparing the state.
     """
     result = QCircuit()
     for i, v in enumerate(state.array):
@@ -382,7 +442,37 @@ def prepare_product_state(state: BitString) -> QCircuit:
 
 @dataclass
 class ParametersQC:
-    """Specialization of ParametersHamiltonian"""
+    """Parameters defining a molecule: geometry, basis set, charge and multiplicity.
+
+    Parameters
+    ----------
+    basis_set : str
+        Basis set name, e.g. "sto-3g", "6-31g", "cc-pvdz" or "def2-svp".
+    geometry : str
+        Either the path to an ``.xyz`` file or the geometry as string, one atom per line,
+        e.g. ``"H 0.0 0.0 0.0\\nH 0.0 0.0 0.75"``.
+    units : str, optional
+        Units of the geometry, "angstrom" or "bohr". Default is angstrom.
+    description : str, optional
+        Free text description (taken from the ``.xyz`` comment line if empty).
+    multiplicity : int, optional
+        Spin multiplicity. Default is 1.
+    charge : int, optional
+        Total charge. Default is 0.
+    name : str, optional
+        Name of the molecule, used for file names.
+    frozen_core : bool, optional
+        Whether to freeze the core orbitals. Default is True.
+
+    Raises
+    ------
+    TequilaException
+        If neither ``name`` nor ``geometry`` is given.
+
+    Examples
+    --------
+    >>> p = ParametersQC(geometry="h2.xyz", units="angstrom", basis_set="sto-3g")
+    """
 
     basis_set: str = None  # Quantum chemistry basis set
     geometry: str = None  # geometry of the underlying molecule,
@@ -397,6 +487,12 @@ class ParametersQC:
     frozen_core: bool = True
 
     def get_number_of_core_electrons(self):
+        """Return the number of core electrons, counting the closed noble-gas shells of every atom.
+
+        Examples
+        --------
+        >>> n_core = mol.parameters.get_number_of_core_electrons()
+        """
         result = 0
         for atom in self.get_atoms(ghost="pyscf"):
             n = self.get_atom_number(atom)
@@ -416,14 +512,17 @@ class ParametersQC:
 
     @property
     def total_n_electrons(self):
+        """int : total number of electrons (nuclear charge minus the molecular charge)."""
         return self.get_nuc_charge() - self.charge
 
     def get_nuc_charge(self):
+        """Return the sum of the nuclear charges of all atoms (ghost atoms included)."""
         return sum(
             self.get_atom_number(name=atom) for atom in self.get_atoms(ghost="pyscf")
         )
 
     def get_atom_number(self, name):
+        """Return the atomic number of an element given by its name or symbol."""
         atom_numbers = {
             "h": 1,
             "he": 2,
@@ -475,6 +574,7 @@ class ParametersQC:
             )
 
     def get_atoms(self, ghost="of"):
+        """Return the list of atom names, with ghost atoms formatted for the backend ``ghost``."""
         return [x[0] for x in self.get_geometry(ghost=ghost)]
 
     def __post_init__(self, *args, **kwargs):
@@ -532,11 +632,12 @@ class ParametersQC:
 
     @property
     def filename(self):
+        """str : base name for files of this molecule, ``{name}_{basis_set}``."""
         return f"{self.name}_{self.basis_set}"
 
     @property
     def molecular_data_param(self) -> dict:
-        """:return: Give back all parameters for the MolecularData format from openfermion as dictionary"""
+        """dict : the parameters in the format of openfermion's ``MolecularData``."""
         return {
             "basis": self.basis_set,
             "geometry": self.get_geometry(desired_units="angstrom", ghost="of"),
@@ -548,20 +649,27 @@ class ParametersQC:
 
     @staticmethod
     def format_element_name(string, ghost="of"):
-        """OpenFermion uses case sensitive hash tables for chemical elements
-        I.e. you need to name Lithium: 'Li' and 'li' or 'LI' will not work
-        this convenience function does the naming
-        Also format the ghost atom input to the desired 'ghost' format. Openfermion just accepts the atom name
-        :return: first letter converted to upper rest to lower
+        """Format an element name as expected by the backends, e.g. "li" -> "Li".
+
+        OpenFermion needs capitalized element names. Ghost atoms (e.g. "ghost:H", "@H",
+        "gh(H)") are converted to the ghost syntax of the backend.
 
         Parameters
         ----------
-        string :
-
+        string : str
+            Element name, possibly with a ghost prefix.
+        ghost : str {"of", "openfermion", "pyscf", "psi4"}, optional
+            Backend whose ghost atom syntax is used. For openfermion only the atom name is kept.
 
         Returns
         -------
+        str
+            The formatted name.
 
+        Raises
+        ------
+        NotImplementedError
+            If ``ghost`` is not a supported backend and the atom is a ghost atom.
         """
 
         def format_ghost(string: str, ghost: str = "of") -> str:
@@ -642,23 +750,23 @@ class ParametersQC:
 
     @staticmethod
     def convert_to_list(geometry, initial_units, desired_units, ghost="of"):
-        """Convert a molecular structure given as a string into a list suitable for openfermion
+        r"""Convert a geometry string into a list of atoms with coordinates, as used by openfermion.
 
         Parameters
         ----------
-        geometry :
-            a string specifying a mol. structure. E.g. geometry="h 0.0 0.0 0.0\n h 0.0 0.0 1.0",
-        initial_units :
-            the units of the input geometry
-        desired_units :
-            the units of the output coordinates
-        ghost :
-            ghost atom format if required. For openfermion just removes the atom name.
+        geometry : str
+            Molecular structure, one atom per line, e.g. ``"h 0.0 0.0 0.0\n h 0.0 0.0 1.0"``.
+        initial_units : str
+            Units of the input geometry.
+        desired_units : str
+            Units of the output coordinates (openfermion requires angstrom).
+        ghost : str, optional
+            Ghost atom format, see ``format_element_name``.
+
         Returns
         -------
-        type
-            A list with the correct format for openfermion E.g return [ ('h',(0.0,0.0,0.0)), (..)], coordinates are in "desired_units",
-            note that openfermion requires coordinates in angstrom
+        list of tuple
+            Entries ``(name, (x, y, z))``, e.g. ``[("H", (0.0, 0.0, 0.0)), ...]``.
         """
         c_bohrtoang = physical_constants["Bohr radius"][0] * 10**10
         result = []
@@ -706,9 +814,23 @@ class ParametersQC:
         return result
 
     def get_geometry_string(self, desired_units="angstrom", ghost="of") -> str:
-        """returns the geometry as a string
-        :return: geometry string, if desired_units is not equal to self.units, the coordinates will be transformed to "desired_units"
-                ghost atoms are formated acordingly to "ghost"
+        """Return the geometry as a string with one atom per line.
+
+        Parameters
+        ----------
+        desired_units : str, optional
+            "angstrom" or "bohr"; coordinates are converted if different from ``units``.
+        ghost : str, optional
+            Ghost atom format, see ``format_element_name``.
+
+        Returns
+        -------
+        str
+            Lines ``"name x y z"``.
+
+        Examples
+        --------
+        >>> mol.parameters.get_geometry_string(ghost="psi4")
         """
         geom = self.get_geometry(desired_units=desired_units, ghost=ghost)
         f = ""
@@ -717,14 +839,32 @@ class ParametersQC:
         return f
 
     def get_geometry(self, desired_units="angstrom", ghost="of"):
-        """Returns the geometry
-        If a xyz filename was given the file is read out
-        otherwise it is assumed that the geometry was given as string
-        which is then reformatted as a list usable as input for openfermion.
-        ghost: how to threat ghost atoms if pressent, in openfermion they will be left as the non-ghost atom.
-        :return: geometry as list
-        e.g. [(h,(0.0,0.0,0.35)),(h,(0.0,0.0,-0.35))]
-        Coordinates are transformed into the "desired_units", note that openfermion requires coordinates in Angstrom!
+        """Return the geometry as list of atoms with coordinates.
+
+        The geometry is read from the file if ``geometry`` is the name of an ``.xyz`` file,
+        otherwise it is parsed from the string.
+
+        Parameters
+        ----------
+        desired_units : str, optional
+            "angstrom" or "bohr" (openfermion requires angstrom). Unknown units fall back
+            to angstrom with a warning.
+        ghost : str, optional
+            Ghost atom format, see ``format_element_name``.
+
+        Returns
+        -------
+        list of tuple
+            Entries ``(name, (x, y, z))``, e.g. ``[("H", (0.0, 0.0, 0.35)), ("H", (0.0, 0.0, -0.35))]``.
+
+        Raises
+        ------
+        TequilaException
+            If ``geometry`` is None.
+
+        Examples
+        --------
+        >>> mol.parameters.get_geometry()  # [(name, (x, y, z)), ...]
         """
         desired_units = desired_units.lower()
         if desired_units in ["angstrom", "ang", "a", "å"]:
@@ -760,14 +900,19 @@ class ParametersQC:
 
     @staticmethod
     def read_xyz_from_file(filename):
-        """Read XYZ filetype for molecular structures
-        https://en.wikipedia.org/wiki/XYZ_file_format
-        Units of the geometry in the file have to be equal to self.units, default for self.units is angstrom.
+        """Read a molecular structure from an XYZ file (https://en.wikipedia.org/wiki/XYZ_file_format).
+
+        The units in the file must be equal to ``units`` (angstrom by default).
 
         Parameters
         ----------
-        filename of the .xyz file
+        filename : str
+            Path of the ``.xyz`` file.
 
+        Returns
+        -------
+        tuple of str
+            The coordinate lines as one string, and the comment line of the file.
         """
         with open(filename, "r") as file:
             content = file.readlines()
@@ -779,7 +924,15 @@ class ParametersQC:
             return coord, comment
 
     def get_xyz(self, desired_units="angstrom", ghost="of") -> str:
-        """Returns string for a .xyz file with the coordinates in the "desired_units" """
+        """Return the content of an ``.xyz`` file with coordinates in ``desired_units``.
+
+        Parameters
+        ----------
+        desired_units : str, optional
+            "angstrom" (default) or "bohr".
+        ghost : str, optional
+            Ghost atom format, see ``format_element_name``. Default is "of".
+        """
         geom = self.get_geometry(desired_units=desired_units, ghost=ghost)
         f = ""
         f += f"{len(geom)}\n"
@@ -791,25 +944,39 @@ class ParametersQC:
 
 @dataclass
 class ClosedShellAmplitudes:
-    """
-    Helper Class for classical amplitudes
-    used internally
+    """Closed-shell coupled-cluster amplitudes (used internally).
+
+    Parameters
+    ----------
+    tIjAb : numpy.ndarray
+        Double amplitudes of shape (n_occ, n_occ, n_virt, n_virt).
+    tIA : numpy.ndarray
+        Single amplitudes of shape (n_occ, n_virt).
     """
 
     tIjAb: numpy.ndarray = None
     tIA: numpy.ndarray = None
 
     def make_parameter_dictionary(self, threshold=1.0e-8, screening=True):
-        """
+        """Convert the amplitudes to a dictionary of variables.
 
         Parameters
         ----------
-        threshold :
-             (Default value = 1.e-8)
+        threshold : float, optional
+            Amplitudes smaller than this are dropped if ``screening`` is True. Default is 1e-8.
+        screening : bool, optional
+            Whether to drop small amplitudes. Default is True.
 
         Returns
         -------
+        dict
+            Maps spatial-orbital index tuples ``(a, i, b, j)`` (doubles) or ``(a, i)`` (singles) to
+            the amplitude, sorted by decreasing absolute value.
 
+        Examples
+        --------
+        >>> amplitudes = mol.compute_mp2_amplitudes()
+        >>> variables = amplitudes.make_parameter_dictionary()
         """
         variables = {}
         if self.tIjAb is not None:
@@ -834,33 +1001,26 @@ class ClosedShellAmplitudes:
 
 @dataclass
 class Amplitudes:
-    """
-    Helper class for classical Coupled-Cluster Amplitudes
-    We adopt the Psi4 notation for consistency
-    I,A for alpha
-    i,a for beta
+    """Coupled-cluster amplitudes with separate spin cases (used internally).
 
-    Parameters
-    ----------
-
-    Returns
-    -------
-
+    Follows the Psi4 notation: upper case indices I, A are alpha, lower case i, a are beta
+    (occupied and virtual, respectively). Fields ``tIjAb``, ``tiJaB``, ``tijab``, ``tIJAB`` are the
+    double amplitudes of the corresponding spin cases, ``tIA`` and ``tia`` the singles.
     """
 
     @classmethod
     def from_closed_shell(cls, cs: ClosedShellAmplitudes):
-        """
-        Initialize from closed-shell Amplitude structure
+        """Create the amplitudes from closed-shell amplitudes, filling the other spin cases by symmetry.
 
         Parameters
         ----------
-        cs: ClosedShellAmplitudes :
-
+        cs : ClosedShellAmplitudes
+            Closed-shell amplitudes.
 
         Returns
         -------
-
+        Amplitudes
+            Amplitudes of all spin cases.
         """
         tijab = cs.tIjAb - numpy.einsum("ijab -> ijba", cs.tIjAb, optimize="greedy")
         return cls(
@@ -880,18 +1040,21 @@ class Amplitudes:
     tia: numpy.ndarray = None
 
     def make_parameter_dictionary(self, threshold=1.0e-8):
-        """
+        """Convert the amplitudes to a dictionary of variables.
 
         Parameters
         ----------
-        threshold :
-             (Default value = 1.e-8)
-             Neglect amplitudes below the threshold
+        threshold : float, optional
+            Amplitudes smaller than this are neglected. Default is 1e-8.
 
         Returns
         -------
-        Dictionary of tequila variables (hash is in the style of (a,i,b,j))
+        dict
+            Maps spin orbital index tuples ``(a, i, b, j)`` (doubles) or ``(a, i)`` (singles) to the amplitude.
 
+        Examples
+        --------
+        >>> variables = amplitudes.make_parameter_dictionary()
         """
         variables = {}
         if self.tIjAb is not None:
@@ -938,14 +1101,33 @@ class Amplitudes:
 
 
 class NBodyTensor:
-    """Convenience class for handling N-body tensors"""
+    """Tensor of N-body integrals (or density matrices) with active-space slicing and index reordering.
+
+    For two-body tensors (4 indices) the index ordering convention is tracked and can be
+    converted with ``reorder``. Subspaces (active, passive, full) can be sliced with ``sub_str``.
+
+    Parameters
+    ----------
+    elems : numpy.ndarray
+        Tensor data.
+    active_indices : list of int, optional
+        Active indices in the total ordering (list of orbital indices, not irreps).
+    ordering : str {"mulliken", "chem", "dirac", "phys", "openfermion", "of"}, optional
+        Ordering of a two-body tensor; detected automatically if None. Not allowed for other orders.
+
+        - "dirac" or "phys", <12|g|12>: g_pqrs = int p(1) q(2) g(1,2) r(1) s(2)
+        - "mulliken" or "chem", (11|g|22): g_pqrs = int p(1) q(1) g(1,2) r(2) s(2)
+        - "openfermion", [12|g|21]: g_pqrs = int p(1) q(2) g(1,2) r(2) s(1)
+    size_full : int, optional
+        Size of the "full" space if smaller than the tensor dimension.
+    verify : bool, optional
+        Check that the given ordering matches the detected one and warn otherwise.
+    """
 
     class Ordering:
-        """
-        Convenience to keep track of aliases in odering names for two body integrals
-        i.e. Mulliken/Chem/1122
-             Dirac/Phys/1212
-             openfermion/1221
+        """Ordering scheme of two-body integrals, resolving aliases.
+
+        Aliases: Mulliken/Chem/1122, Dirac/Phys/1212, openfermion/of/1221 (None means chem).
         """
 
         def __init__(self, scheme):
@@ -985,6 +1167,10 @@ class NBodyTensor:
             return self._scheme
 
     def identify_ordering(self, trials=25):
+        """Detect the ordering of a two-body tensor from its permutation symmetries (random checks).
+
+        Returns None for tensors that do not have 4 indices. Raises a ``TequilaException`` if no ordering fits.
+        """
         if len(self.shape) != 4:
             return None
         chem = False
@@ -1102,24 +1288,7 @@ class NBodyTensor:
         size_full: int | None = None,
         verify=False,
     ):
-        """
-        Parameters
-        ----------
-        elems: Tensor data as numpy array
-        active_indices: List of active indices in total ordering
-        ordering: Ordering scheme for two body tensors
-        "dirac" or "phys": <12|g|12>
-            .. math::
-                g_{pqrs} = \\int d1 d2 p(1)q(2) g(1,2) r(1)s(2)
-        "mulliken" or "chem": (11|g|22)
-            .. math::
-                g_{pqrs} = \\int d1 d2 p(1)r(2) g(1,2) q(1)s(2)
-        "openfermion":
-            .. math:: [12|g|21]
-                g_{gqprs} = \\int d1 d2 p(1)q(2) g(1,2) s(1)r(2)
-
-        size_full
-        """
+        """See the class docstring for the parameters."""
 
         # Set elements
         self.elems = elems
@@ -1162,25 +1331,30 @@ class NBodyTensor:
 
     @property
     def shape(self):
+        """tuple of int : shape of the tensor."""
         return self.elems.shape
 
     def sub_lists(self, idx_lists: list | None = None) -> numpy.ndarray:
-        """
-        Get subspace of tensor by a set of index lists
-        according to hPQ.sub_lists(idx_lists=[p, q]) = [hPQ for P in p and Q in q]
+        """Return the subtensor given by one list of indices per axis.
 
-        This essentially is an implementation of a non-contiguous slicing using numpy.take
+        For a matrix ``h``, ``h.sub_lists([p, q])`` is ``h[P, Q] for P in p and Q in q``
+        (non-contiguous slicing with ``numpy.take``).
 
         Parameters
         ----------
-            idx_lists :
-                List of lists, each defining the desired subspace per axis
-                Size needs to match order of tensor, and lists successively correspond to axis=0,1,2,...,N
+        idx_lists : list of list of int
+            One list per axis (axis 0, 1, ...); None keeps the full axis.
+            The length must equal the order of the tensor.
 
         Returns
         -------
-            out :
-                Sliced tensor as numpy.ndarray
+        numpy.ndarray
+            The sliced tensor.
+
+        Raises
+        ------
+        ValueError
+            If the number of index lists does not match the order of the tensor.
         """
         # Check if index list has correct size
         if len(idx_lists) != self.order:
@@ -1200,7 +1374,7 @@ class NBodyTensor:
         return out
 
     def set_index_lists(self):
-        """Set passive and full index lists based on class inputs"""
+        """Set the passive and full index lists from the active indices and the size."""
         tmp_size = self._size_full
         if self._size_full is None:
             tmp_size = self.elems.shape[0]
@@ -1211,26 +1385,28 @@ class NBodyTensor:
         self._full_indices = [i for i in range(tmp_size)]
 
     def sub_str(self, name: str) -> numpy.ndarray:
-        """
-        Get subspace of tensor by a string
-        Currently is able to resolve an active space, named 'a', full space 'f', and the complement 'p' = 'f' - 'a'.
-        Full space in this context may also be smaller than actual tensor dimension.
+        """Return the subtensor given by a string of space labels, one per axis.
 
-        The specification of active space in this context only allows to pick a set from a list of orbitals, and
-        is not able to resolve an active space from irreducible representations.
-
-        Example for one-body tensor:
-        hPQ.sub_lists(name='ap') = [hPQ for P in active_indices and Q in _passive_indices]
+        The labels are "a" (active space), "f" (full space, which can be smaller than the
+        tensor dimension) and "p" (passive space, full minus active). For a one-body
+        tensor, ``h.sub_str("ap")`` is ``h[P, Q] for P in active and Q in passive``.
 
         Parameters
         ----------
-            name :
-                String specifying the desired subspace, elements need to be a (active), f (full), p (full - active)
+        name : str
+            Letters from {"a", "f", "p"}; the length must equal the order of the tensor.
 
         Returns
         -------
-            out :
-                Sliced tensor as numpy.ndarray
+        numpy.ndarray
+            The sliced tensor.
+
+        Raises
+        ------
+        ValueError
+            If ``name`` has the wrong length or no active indices were set.
+        TequilaException
+            If ``name`` contains an invalid letter.
         """
         if not self._indices_set:
             self.set_index_lists()
@@ -1265,30 +1441,24 @@ class NBodyTensor:
         return out
 
     def reorder(self, to: str = "of"):
-        """
-        Function to reorder tensors according to some convention.
+        """Reorder the indices of a two-body tensor in place to the given convention.
+
+        Tensors that are not of order 4 are returned unchanged with a warning.
 
         Parameters
         ----------
-        to :
-            Ordering scheme of choice.
-            'openfermion', 'of' (default) :
-                openfermion - ordering, corresponds to integrals of the type
-                h^pq_rs = int p(1)* q(2)* O(1,2) r(2) s(1) (O(1,2)
-                with operators a^pq_rs = a^p a^q a_r a_s (a^p == a^dagger_p)
-                currently needed for dependencies on openfermion-library
-            'chem', 'c' :
-                quantum chemistry ordering, collect particle terms,
-                more convenient for real-space methods
-                h^pq_rs = int p(1) q(1) O(1,2) r(2) s(2)
-                This is output by psi4
-            'phys', 'p' :
-                typical physics ordering, integrals of type
-                h^pq_rs = int p(1)* q(2)* O(1,2) r(1) s(2)
-                with operators a^pq_rs = a^p a^q a_s a_r
+        to : str {"openfermion", "of", "chem", "c", "mulliken", "phys", "p", "dirac"}, optional
+            Target ordering. Default is "of".
 
-            Returns
-            -------
+            - "openfermion": h^pq_rs = int p(1)* q(2)* O(1,2) r(2) s(1), operators a^p a^q a_r a_s.
+              Needed for the openfermion library.
+            - "chem": h^pq_rs = int p(1) q(1) O(1,2) r(2) s(2). Output by Psi4 and PySCF.
+            - "phys": h^pq_rs = int p(1)* q(2)* O(1,2) r(1) s(2), operators a^p a^q a_s a_r.
+
+        Returns
+        -------
+        NBodyTensor
+            The tensor itself (``self``) with reordered elements.
         """
         if self.order != 4:
             warnings.warn("Reordering currently only implemented for two-body tensors.")
@@ -1320,6 +1490,26 @@ class NBodyTensor:
 
 @dataclass
 class OrbitalData:
+    """Properties of a single orbital; unset properties are None.
+
+    Parameters
+    ----------
+    irrep : str
+        Irrep of the symmetry group, if assigned.
+    idx_irrep : int
+        Index within the irrep.
+    idx_total : int
+        Index within the full set of orbitals.
+    idx : int
+        Index within the active space.
+    energy : float
+        Orbital energy.
+    occ : float
+        Occupation number.
+    pair : tuple
+        Orbitals of the electron pair this orbital belongs to.
+    """
+
     irrep: str = None  # irrep of symmetry group (if assigned)
     idx_irrep: int = None  # index within the irrep
     idx_total: int = None  # index within the total set of orbitals
@@ -1349,10 +1539,37 @@ class OrbitalData:
 
 
 class IntegralManager:
-    """
-    Manage Basis Integrals of Quantum Chemistry
-    All integrals are held in their original basis, the corresponding mo-coefficients have to be passed down
-    and are usually held by the QuantumChemistryBaseClass
+    """Store the integrals in the original basis and transform them to molecular orbitals on demand.
+
+    The integrals are kept in the basis they were computed in; the orbitals are defined by
+    the coefficient matrix ``orbital_coefficients``. Active spaces are applied when integrals are requested.
+
+    Parameters
+    ----------
+    one_body_integrals : numpy.ndarray
+        One-body integrals in the basis, shape (n, n).
+    two_body_integrals : NBodyTensor
+        Two-body integrals in the basis, shape (n, n, n, n).
+    basis_name : str, optional
+        Name of the basis.
+    orbital_type : str, optional
+        Kind of orbitals, e.g. "HF", "PNO", "native".
+    constant_term : float, optional
+        Constant energy term, usually the nuclear repulsion.
+    orbital_coefficients : numpy.ndarray, optional
+        Coefficient matrix C[basis function, orbital]. Default is the symmetrically
+        (Loewdin) orthonormalized basis.
+    active_space : ActiveSpaceData
+        Active and reference orbitals.
+    overlap_integrals : numpy.ndarray, optional
+        Overlap matrix of the basis. Default is the identity.
+    orbitals : list of OrbitalData, optional
+        Orbital properties. Default is one entry per orbital with only the indices set.
+
+    Raises
+    ------
+    TequilaException
+        If ``two_body_integrals`` cannot be reordered to "chem" ordering.
     """
 
     _overlap_integrals: numpy.ndarray | None = None
@@ -1421,12 +1638,12 @@ class IntegralManager:
         self.active_space = active_space
 
     def get_orthonormalized_orbital_coefficients(self):
-        """
-        Computes orbitals in this basis that are orthonormal (through loewdin orthonormalization)
+        """Compute orthonormal orbitals closest to the basis functions (Loewdin orthonormalization).
 
         Returns
         -------
-        coefficient matrix of orthonormalized orbitals
+        numpy.ndarray
+            Coefficient matrix of the orthonormalized orbitals.
         """
         if self.basis_is_orthogonal():
             return numpy.eye(self._one_body_integrals.shape[0])
@@ -1439,14 +1656,17 @@ class IntegralManager:
 
     @property
     def active_orbitals(self):
+        """list of OrbitalData : the active orbitals."""
         return [self._orbitals[i] for i in self._active_space.active_orbitals]
 
     @property
     def orbitals(self):
+        """list of OrbitalData : all orbitals."""
         return self._orbitals
 
     @property
     def active_space(self):
+        """ActiveSpaceData : active space data. Setting it updates the active-space index of each orbital."""
         return self._active_space
 
     @active_space.setter
@@ -1459,10 +1679,12 @@ class IntegralManager:
 
     @property
     def reference_orbitals(self):
+        """list of OrbitalData : the reference orbitals."""
         return [self._orbitals[i] for i in self.active_space.reference_orbitals]
 
     @property
     def active_reference_orbitals(self):
+        """list of OrbitalData : the reference orbitals that are in the active space."""
         return [
             self._orbitals[i]
             for i in self.active_space.active_orbitals
@@ -1471,48 +1693,33 @@ class IntegralManager:
 
     @property
     def overlap_integrals(self):
-        """
-        Returns
-        -------
-        Overlap integrals in given basis (using basis functions, not molecular orbitals. No active space considered)
-        """
+        """numpy.ndarray : overlap integrals of the basis functions (not molecular orbitals; no active space)."""
         return self._overlap_integrals
 
     @property
     def one_body_integrals(self):
-        """
-        Returns
-        -------
-        one_body integrals in given basis (using basis functions, not molecular orbitals. No active space considered)
-        """
+        """numpy.ndarray : one-body integrals of the basis functions (not molecular orbitals; no active space)."""
         return self._one_body_integrals
 
     @property
     def two_body_integrals(self):
-        """
-        Returns
-        -------
-        two-body orbitals in given basis (using basis functions, not molecular orbitals. No active space considered)
-        ordering is "chem" i.e. Mulliken i.e. integrals_{abcd} = <ac|g|bd>
+        """numpy.ndarray : two-body integrals of the basis functions in "chem" (Mulliken) ordering (not molecular orbitals; no active space).
+
+        ``integrals[a, b, c, d] = (ab|cd) = <ac|g|bd>``.
         """
         return self._two_body_integrals
 
     @property
     def constant_term(self):
-        """
-        Returns
-        -------
-        return constant term (usually nuclear repulsion). No active space considered
-        """
+        """float : constant energy term, usually the nuclear repulsion (no active space considered)."""
         return self._constant_term
 
     @property
     def orbital_coefficients(self):
-        """
-        second index is the orbital index, first the basis index
-        Returns
-        -------
-        orbital coefficient matrix C_{basis,orbital}
+        """numpy.ndarray : orbital coefficient matrix ``C[basis function, orbital]``.
+
+        Setting it checks that the orbitals are orthonormal and resets the orbital
+        data (irrep, energy, ...) except for the indices.
         """
         return self._orbital_coefficients
 
@@ -1525,14 +1732,13 @@ class IntegralManager:
             self._orbitals[i] = y
 
     def transform_to_native_orbitals(self):
-        """
-        Transform orbitals to orthonormal functions closest to the native basis
-        """
+        """Replace the orbitals by the orthonormal functions closest to the basis (Loewdin)."""
         c = self.get_orthonormalized_orbital_coefficients()
         self.orbital_coefficients = c
         self._orbital_type = f"orthonormalized-{self._basis_name}-basis"
 
     def is_unitary(self, U):
+        """Return whether ``U`` is a unitary matrix."""
         if len(U.shape) != 2:
             return False
         if U.shape[0] != U.shape[1]:
@@ -1541,15 +1747,14 @@ class IntegralManager:
         return numpy.isclose(numpy.linalg.norm(test), 0.0)
 
     def transform_orbitals(self, U, name=None):
-        """
-        Transform orbitals
+        """Rotate the orbitals in place with a unitary matrix, ``C -> C U``.
+
         Parameters
         ----------
-        U: second index is new orbital indes, first is old orbital index (summed over)
-
-        Returns
-        -------
-        updates the structure with new orbitals: c = cU
+        U : numpy.ndarray
+            Unitary matrix, first index is the old orbital (summed over), second the new orbital.
+        name : str, optional
+            New orbital type. By default "-transformed" is appended to the current one.
         """
         assert self.is_unitary(U)
         self.orbital_coefficients = numpy.einsum(
@@ -1568,18 +1773,24 @@ class IntegralManager:
         *args,
         **kwargs,
     ):
-        """
-        Get all molecular integrals in given orbital basis (determined by orbital_coefficients in self or the ones passed here)
-        active space is considered if not explicitly ignored
+        """Return the integrals in the molecular orbital basis.
+
+        Frozen reference orbitals are folded into the constant term and the one-body integrals
+        unless the active space is ignored.
+
         Parameters
         ----------
-        orbital_coefficients: orbital coefficients in the given basis (first index is basis, second index is orbitals). Need to go over full basis (no active space)
-        ordering: ordering of the two-body integrals (default is openfermion)
-        ignore_active_space: ignore active space and give back full integrals
+        orbital_coefficients : numpy.ndarray, optional
+            Coefficients C[basis function, orbital] over the full basis. Default are the stored ones.
+        ordering : str, optional
+            Ordering of the two-body integrals. Default is "openfermion".
+        ignore_active_space : bool, optional
+            Return the integrals of all orbitals.
 
         Returns
         -------
-
+        tuple
+            ``(c, h, g)``: constant term (float), one-body integrals (numpy.ndarray) and two-body integrals (NBodyTensor).
         """
         if orbital_coefficients is None:
             orbital_coefficients = self.orbital_coefficients
@@ -1645,17 +1856,19 @@ class IntegralManager:
         return g
 
     def verify_orbital_coefficients(self, orbital_coefficients, tolerance=1.0e-5):
-        """
-        Verify if orbital coefficients are valid (i.e. if they define a orthonormal set of orbitals)
+        """Return whether orbital coefficients define an orthonormal set of orbitals.
+
         Parameters
         ----------
-        orbital_coefficients: the orbital coefficients C_ij with i:basis and j:orbitals
-        tolerance
+        orbital_coefficients : numpy.ndarray
+            Coefficients C[basis function, orbital].
+        tolerance : float, optional
+            Maximal norm of the deviation of C^T S C from the identity. Default is 1e-5.
 
         Returns
         -------
-        True or False depending if the overlap matrix of the basis is transformed to a unit matrix
-
+        bool
+            True if the overlap matrix of the basis is transformed to the unit matrix.
         """
         S = self.overlap_integrals
         St = numpy.einsum("ix, xj -> ij", S, orbital_coefficients, optimize="greedy")
@@ -1663,10 +1876,12 @@ class IntegralManager:
         return numpy.linalg.norm(St - numpy.eye(S.shape[0])) < tolerance
 
     def basis_is_orthogonal(self, tolerance=1.0e-5):
+        """Return whether the overlap matrix of the basis is the identity within ``tolerance``."""
         S = self.overlap_integrals
         return numpy.linalg.norm(S - numpy.eye(S.shape[0])) < tolerance
 
     def active_space_is_trivial(self):
+        """Return whether all orbitals are active."""
         return len(self.active_orbitals) == len(self.orbitals)
 
     def __str__(self):
@@ -1679,6 +1894,20 @@ class IntegralManager:
         return result
 
     def print_basis_info(self, print_coefficients=True, *args, **kwargs) -> None:
+        """Print basis, orbital type, active and reference orbitals and, optionally, the orbital coefficients.
+
+        Prints the basis name, the orbital type, whether the basis is orthogonal, the number of
+        basis functions, the active orbitals and the reference (occupied) orbitals, all as total
+        indices. If ``print_coefficients``, it then prints every current orbital with its data
+        (index, irrep, energy, ...) and its coefficients in the basis functions.
+
+        Parameters
+        ----------
+        print_coefficients : bool, optional
+            Also print every orbital with its coefficients. Default is True.
+        *args, **kwargs
+            Passed to ``print``, e.g. ``file``.
+        """
         print("{:15} : {}".format("basis_name", self._basis_name), *args, **kwargs)
         print("{:15} : {}".format("orbital_type", self._orbital_type), *args, **kwargs)
         print(

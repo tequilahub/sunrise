@@ -1,3 +1,9 @@
+"""Drop-in replacements for tequila's minimize, grad, simulate and compile.
+
+They accept sunrise Objectives (built from FCircuits) and dispatch them to the
+fermionic backends, falling back to tequila for everything else.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Hashable
@@ -34,6 +40,48 @@ def minimize(
     *args,
     **kwargs,
 ):
+    """Minimize an objective, using fermionic backends for sunrise Objectives.
+
+    Same as ``tequila.minimize``, but if the objective contains fermionic brakets,
+    gradients and objectives are compiled with a fermionic backend first. The
+    backend is selected with the keyword ``fbackend`` (or ``fermionic_backend``),
+    or with ``backend`` if it names an installed fermionic backend. Otherwise
+    ``pick_backend`` is used.
+
+    Parameters
+    ----------
+    objective : tq.Objective
+        Objective to minimize.
+    method : str
+        Optimization method, any of tequila's optimizers. Default is "bfgs".
+    variables : list, optional
+        Variables to optimize. Default is all variables of the objective.
+    initial_values : dict or float or callable
+        Initial values of the variables. Default is 0.0.
+    maxiter : int, optional
+        Maximum number of iterations.
+    silent : bool
+        If True, do not print optimization progress. Default is True.
+    *args, **kwargs
+        Passed on to ``tequila.minimize``.
+
+    Returns
+    -------
+    OptimizerResults
+        Tequila optimization result (energy, optimal variables, history).
+
+    See Also
+    --------
+    simulate : Evaluate an Objective for fixed variable values.
+    grad : Gradient of an Objective.
+    sunrise.optimize_orbitals : Optimize the orbitals together with the circuit.
+
+    Examples
+    --------
+    >>> E = sun.Braket(ket=U, mol=mol)
+    >>> result = sun.minimize(E, silent=True)
+    >>> result.energy, result.variables
+    """
     if "fbackend" in kwargs:
         fbackend = kwargs["fbackend"]
     elif "fermionic_backend" in kwargs:
@@ -90,15 +138,44 @@ def grad(
     *args,
     **kwargs,
 ):
-    """
-    function for getting the gradients of directly differentiable gates. Expects precompiled circuits.
-    :param unitary: QCircuit: the QCircuit object containing the gate to be differentiated
-    :param g: a parametrized: the gate being differentiated
-    :param i: Int: the position in unitary at which g appears
-    :param variable: Variable or String: the variable with respect to which gate g is being differentiated
-    :param hamiltonian: the hamiltonian with respect to which unitary is to be measured, in the case that unitary
-        is contained within an ExpectationValue
-    :return: an Objective, whose calculation yields the gradient of g w.r.t variable
+    """Compute the gradient of an objective with respect to its variables.
+
+    For objectives with fermionic brakets the gradient is built from the
+    braket's own ``grad`` and not compiled here. Otherwise see ``tequila.grad``.
+
+    Parameters
+    ----------
+    objective : tq.Objective or QTensor
+        Objective to differentiate.
+    variable : Variable or list of Variable, optional
+        Variable(s) to differentiate with respect to. A list returns a dict
+        {variable: gradient}.
+    no_compile : bool
+        If True, do not compile the circuits before differentiating. Always True
+        for fermionic brakets.
+    *args, **kwargs
+        Passed on to ``tequila.grad``.
+
+    Returns
+    -------
+    tq.Objective or dict
+        Gradient Objective, or a dict mapping variables to gradient Objectives.
+
+    Raises
+    ------
+    TequilaException
+        If an empty list of variables is given.
+
+    See Also
+    --------
+    simulate : Evaluate the gradient Objective.
+    minimize : Optimize the variables of an Objective.
+
+    Examples
+    --------
+    >>> E = sun.Braket(ket=U, mol=mol)
+    >>> dE = sun.grad(E, "a")  # gradient Objective w.r.t. variable "a"
+    >>> sun.simulate(dE, variables={"a": 0.1})
     """
     if isinstance(variable, (list, tuple)):
         if len(variable) == 0:
@@ -135,34 +212,50 @@ def simulate(
     *args,
     **kwargs,
 ) -> RealNumber | QubitWaveFunction | None:
-    """Simulate a tequila objective or circuit
+    """Simulate an objective or circuit.
+
+    Same as ``tequila.simulate`` but also accepts sunrise ``FCircuit`` and
+    Objectives containing fermionic brakets.
 
     Parameters
     ----------
-    objective: Objective:
-        tequila objective or circuit
-    variables: Dict:
-        The variables of the objective given as dictionary
-        with keys as tequila Variables/hashable types and values the corresponding real numbers
-    samples : int, optional:
-        if None a full wavefunction simulation is performed, otherwise a fixed number of samples is simulated
-    backend : str, optional:
-        specify the backend or give None for automatic assignment
-    noise: NoiseModel, optional:
-        specify a noise model to apply to simulation/sampling
-    device:
-        a device upon which (or in emulation of which) to sample
-    initial_state: int or QubitWaveFunction:
-        the initial state of the circuit
-    *args :
-
-    **kwargs :
-        read_out_qubits = list[int] (define the qubits which shall be measured, has only effect on pure QCircuit simulation with samples)
+    objective : FCircuit or Objective or QCircuit or QTensor
+        Object to simulate.
+    variables : dict, optional
+        Values of the variables, with tequila Variables or hashable names as keys.
+    samples : int, optional
+        Number of samples. If None, the exact wavefunction/expectation is computed.
+    backend : str, optional
+        Backend name. If None, it is chosen automatically.
+    noise : NoiseModel, optional
+        Noise model to apply.
+    device : str, optional
+        Device on which (or in emulation of which) to sample.
+    initial_state : int or QubitWaveFunction
+        Initial state of the circuit. Default is 0.
+    *args, **kwargs
+        Passed on to the backend. ``read_out_qubits`` (list of int) selects the
+        measured qubits for sampled QCircuit simulations.
 
     Returns
     -------
     float or QubitWaveFunction
-        the result of simulation.
+        Result of the simulation. A list of objectives returns a list of results.
+
+    Raises
+    ------
+    TequilaException
+        If the objective is parametrized and no variables are passed.
+
+    See Also
+    --------
+    minimize : Optimize the variables of an Objective.
+    grad : Gradient of an Objective.
+
+    Examples
+    --------
+    >>> E = sun.Braket(ket=U, mol=mol)
+    >>> energy = sun.simulate(E, variables={"a": 0.1}, backend="spex")
     """
 
     variables = format_variable_dictionary(variables)
@@ -222,28 +315,36 @@ def compile(
     *args,
     **kwargs,
 ) -> BackendCircuit | Objective | None:
-    """Compile a tequila objective or circuit to a backend
+    """Compile an objective or circuit for a backend.
+
+    Same as ``tequila.compile``, but fermionic brakets inside Objectives are
+    compiled with a fermionic backend (see ``pick_backend``). Select it with the
+    keyword ``fbackend`` or by passing its name as ``backend``. An ``FCircuit`` is
+    returned unchanged, since fermionic backends do not compile circuits.
 
     Parameters
     ----------
-    objective: Objective:
-        tequila objective or circuit
-    variables: dict, optional:
-        The variables of the objective given as dictionary
-        with keys as tequila Variables and values the corresponding real numbers
-    samples: int, optional:
-        if None a full wavefunction simulation is performed, otherwise a fixed number of samples is simulated
-    backend : str, optional:
-        specify the backend or give None for automatic assignment
-    noise: NoiseModel, optional:
-        the noise model to apply to the objective or QCircuit.
-    device: optional:
-        a device on which (or in emulation of which) to sample the circuit.
+    objective : Objective or QCircuit or QTensor or FCircuit
+        Object to compile.
+    variables : dict, optional
+        Values of the variables.
+    samples : int, optional
+        Number of samples. If None, the exact wavefunction is simulated.
+    simulate_density : bool
+        Passed on to tequila's compile. Default is False.
+    backend : str, optional
+        Backend name. If None, it is chosen automatically.
+    noise : NoiseModel, optional
+        Noise model to apply.
+    device : optional
+        Device on which (or in emulation of which) to sample.
+    *args, **kwargs
+        Passed on to tequila's compile.
+
     Returns
     -------
-    simulators.BackendCircuit or Objective
-        the compiled object.
-
+    BackendCircuit or Objective or FCircuit
+        The compiled object.
     """
 
     fbackend = None
@@ -316,7 +417,23 @@ def compile(
 
 def compile_fexpval(
     objective=None, backend: str | None = None, *args, **kwargs
-):  # For now our fermionic backends don't support noise/samples... Variables not passed since already inside FermBraketImpl
+):  # TODO: For now our fermionic backends don't support noise/samples... Variables not passed since already inside FermBraketImpl
+    """Compile a fermionic braket with the chosen fermionic backend.
+
+    Parameters
+    ----------
+    objective : FermBraketImpl
+        Braket to compile. Variables are already stored inside it.
+    backend : str
+        Name of an installed fermionic backend.
+    *args, **kwargs
+        Passed on to the backend braket class.
+
+    Raises
+    ------
+    ImportError
+        If the backend is not installed.
+    """
     if backend.lower() in INSTALLED_FERMIONIC_BACKENDS:
         return INSTALLED_FERMIONIC_BACKENDS[backend.lower()](objective, *args, **kwargs)
     else:

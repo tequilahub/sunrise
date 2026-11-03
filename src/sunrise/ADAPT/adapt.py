@@ -1,5 +1,7 @@
 # Generalized Adaptive Solvers
 # as described in Kottmann, Anand, Aspuru-Guzik: https://doi.org/10.1039/D0SC06627C
+"""Adaptive (ADAPT) variational solver for qubit and fermionic molecules, with operator pools and objective factories. Based on Kottmann, Anand, Aspuru-Guzik, https://doi.org/10.1039/D0SC06627C."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -30,10 +32,23 @@ from sunrise.molecules.fermionic_base import FermionicBase
 
 
 class ObjectiveFactoryBase:
-    """
-    Default class to create the objective in the Adapt solver
-    This just creates the single ExpectationValue <H>_{Upre + U + Upost}
-    and U will be the circuit that is adaptively constructed
+    """Create the energy objective <H> of the circuit ``Upre + U + Upost`` for the Adapt solver.
+
+    ``U`` is the circuit that is built adaptively. If the molecule is fermionic or the
+    circuits are ``FCircuit`` the objective is a ``Braket``, otherwise a
+    tequila ``ExpectationValue``.
+
+    Parameters
+    ----------
+    H : FermionOperator or QubitHamiltonian or str, optional
+        Hamiltonian. For fermionic molecules the strings ``"H"`` (molecular Hamiltonian)
+        and ``"HCB"`` (hard-core boson Hamiltonian) are accepted.
+    Upre : QCircuit or FCircuit, optional
+        Circuit applied before ``U`` (typically the reference state). Default is empty.
+    Upost : QCircuit or FCircuit, optional
+        Circuit applied after ``U``. Default is empty. Must be of the same type as ``Upre``.
+    molecule : QuantumChemistryBase or FermionicBase, optional
+        Molecule used to evaluate fermionic objectives.
     """
 
     H: FermionOperator = None
@@ -76,6 +91,19 @@ class ObjectiveFactoryBase:
         self.molecule = molecule
 
     def __call__(self, U, screening=False, *args, **kwargs):
+        """Return the objective for the adaptive circuit ``U``.
+
+        Parameters
+        ----------
+        U : QCircuit or FCircuit
+            Adaptive part of the circuit; must be an ``FCircuit`` in the fermionic case.
+        screening : bool, optional
+            True when called during gradient screening. Not used here.
+
+        Returns
+        -------
+        tq.Objective
+        """
         if self.ferm:
             assert isinstance(U, FCircuit), (
                 f"FCircuit expected due to the solver initialization but {type(U)} received."
@@ -89,6 +117,7 @@ class ObjectiveFactoryBase:
             )
 
     def grad_objective(self, *args, **kwargs):
+        """Return the objective used for gradients; identical to calling the factory."""
         return self(*args, **kwargs)
 
     def __str__(self):
@@ -96,11 +125,59 @@ class ObjectiveFactoryBase:
 
 
 class Adapt:
+    """Adaptive solver: grows a circuit by repeatedly adding the pool operator with the largest energy gradient.
+
+    At each iteration all pool operators are screened (gradient at zero angle), the best
+    ``batch_size`` ones are appended to the circuit and all variables are optimized.
+    The loop stops at the convergence thresholds of ``AdaptParameters`` or at ``maxiter``.
+
+    Parameters
+    ----------
+    operator_pool : AdaptPoolBase
+        Pool of generators, e.g. ``MolecularPool``.
+    H : FermionOperator or QubitHamiltonian or str, optional
+        Hamiltonian, passed to ``ObjectiveFactoryBase`` (not needed with a custom ``objective_factory``).
+    objective_factory : callable, optional
+        Custom objective factory. Default is ``ObjectiveFactoryBase``.
+    backend : str, optional
+        Backend for simulation, e.g. ``"spex"`` or a tequila backend.
+    molecule : QuantumChemistryBase or FermionicBase, optional
+        Molecule; taken from the objective factory or the pool if not given.
+    **kwargs
+        ``Upre`` and ``Upost`` for the default objective factory, plus any field of
+        ``tequila.apps.adapt.AdaptParameters`` (e.g. ``maxiter``, ``batch_size``,
+        ``optimizer_args``, ``silent``). See tequila's Adapt and the online tutorials
+        (https://github.com/tequilahub/tequila-tutorials) for details.
+
+    References
+    ----------
+    H. R. Grimsley, S. E. Economou, E. Barnes and N. J. Mayhall, Nat. Commun. 10, 3007 (2019),
+    doi:10.1038/s41467-019-10988-2 (ADAPT-VQE).
+    J. S. Kottmann, A. Anand and A. Aspuru-Guzik, Chem. Sci. 12, 3497 (2021),
+    doi:10.1039/D0SC06627C (generalized adaptive solvers implemented here).
+
+    Examples
+    --------
+    >>> pool = sun.ADAPT.MolecularPool(molecule=mol, indices="UpCCSD")
+    >>> solver = sun.ADAPT.Adapt(operator_pool=pool, backend="spex", molecule=mol)
+    >>> result = solver()
+    >>> result.energy, result.U
+    """
+
     operator_pool: AdaptPoolBase = None
     objective_factory = None
     parameters: AdaptParameters = AdaptParameters()
 
     def make_objective(self, U, variables=None, *args, **kwargs):
+        """Create the objective for the circuit ``U`` using the objective factory.
+
+        Parameters
+        ----------
+        U : tq.QCircuit or FCircuit
+            Circuit built so far.
+        variables : dict, optional
+            Values of the variables of ``U``.
+        """
         return self.objective_factory(
             *args,
             U=U,
@@ -119,10 +196,6 @@ class Adapt:
         *args,
         **kwargs,
     ):
-        """
-        For the Default Adaptive Solver kwargs can contain Upre and Upost as described in:
-        See out online tutorial for more information: https://github.com/tequilahub/tequila-tutorials
-        """
         self.operator_pool = operator_pool
         self.backend = backend
         self.molecule = molecule
@@ -147,6 +220,7 @@ class Adapt:
             self.parameters.optimizer_args["silent"] = True
 
     def _has_upre(self):
+        """Return True if the objective factory's ``Upre`` already prepares a reference state."""
         Upre = getattr(self.objective_factory, "Upre", None)
         if Upre is None:
             return False
@@ -161,6 +235,29 @@ class Adapt:
         *args,
         **kwargs,
     ):
+        """Run the adaptive procedure.
+
+        Parameters
+        ----------
+        static_variables : dict, optional
+            Variables kept fixed and not optimized.
+        mp_pool : multiprocessing.Pool, optional
+            Pool used to screen the operator pool in parallel.
+        label : optional
+            Label added to the variable names of each added operator, as ``(iteration, label)``.
+        variables : dict, optional
+            Initial values of variables.
+        **kwargs
+            ``U`` (starting circuit) or ``initial_state`` can be given. By default the
+            reference of ``Upre`` (or of the pool) is used.
+
+        Returns
+        -------
+        AdaptReturn
+            Dataclass with fields ``U`` (final circuit), ``variables`` (optimized values),
+            ``energy``, ``histories`` (one optimizer history per iteration), ``objective_factory``,
+            ``screening_cycles``, ``objective_expval_evaluations`` and ``gradient_expval_evaluations``.
+        """
         if not self.parameters.silent:
             print("Starting Adaptive Solver")
             print(self)
@@ -333,6 +430,8 @@ class Adapt:
 
         @dataclasses.dataclass
         class AdaptReturn:
+            """Result of ``Adapt.__call__``."""
+
             U: QCircuit | FCircuit = None
             objective_factory: ObjectiveFactoryBase = None
             variables: dict = None
@@ -354,6 +453,22 @@ class Adapt:
         )
 
     def screen_gradients(self, U, variables, mp_pool=None):
+        """Compute the gradient of every pool operator at zero angle.
+
+        Parameters
+        ----------
+        U : QCircuit or FCircuit
+            Current circuit.
+        variables : dict
+            Current variable values.
+        mp_pool : multiprocessing.Pool, optional
+            Pool for parallel evaluation.
+
+        Returns
+        -------
+        dict
+            ``{pool index: abs gradient}`` sorted by decreasing gradient.
+        """
         args = []
         for k in self.operator_pool:
             arg = {}
@@ -372,6 +487,7 @@ class Adapt:
         return dEs
 
     def do_screening(self, arg):
+        """Return ``(pool index, summed absolute gradient)`` for the operator ``arg['k']`` appended to ``arg['U']``."""
         Ux = self.operator_pool.make_unitary(k=arg["k"], label="tmp")
         Utmp = arg["U"] + Ux
         variables = {**arg["variables"]}
@@ -404,19 +520,30 @@ class Adapt:
 
 
 class MolecularPool(AdaptPoolBase):
-    def __init__(self, molecule, indices: str):
-        """
+    """Operator pool of UCC-type excitations for a molecule.
 
-        Parameters
-        ----------
-        molecule:
-            a sunrise molecule object
-        indices
-            a list of indices defining UCC operations
-            indices refer to spin-orbitals
-            e.g. indices = [[(0,2),(1,3)], [(0,2)], [(1,3)]]
-            can be a string for predefined pools supported are UpCCD, UpCCSD, UpCCGD, and UpCCGSD
-        """
+    Parameters
+    ----------
+    molecule : QuantumChemistryBase or FermionicBase
+        Sunrise molecule. For hybrid molecules only orbitals marked ``"F"`` are used.
+    indices : str or list
+        Either a list of excitations in spin orbital indices, e.g.
+        ``[[(0, 2), (1, 3)], [(0, 2)], [(1, 3)]]``, or the name of a predefined pool built from
+        the letters ``U``, ``p`` (paired doubles), ``CC``, ``G`` (generalized), ``S``, ``D``
+        (e.g. ``"UpCCSD"``, ``"UpCCD"``, ``"UCCGSD"``, ``"UpCCGSD"``).
+
+    Raises
+    ------
+    TequilaException
+        If ``indices`` is a string that is not a UCC pool name.
+
+    Examples
+    --------
+    >>> pool = sun.ADAPT.MolecularPool(molecule=mol, indices="UpCCSD")
+    >>> solver = sun.ADAPT.Adapt(operator_pool=pool, backend="spex", molecule=mol)
+    """
+
+    def __init__(self, molecule, indices: str):
         self.molecule = molecule
         self.is_hybrid = hasattr(molecule, "select")
 
@@ -443,6 +570,17 @@ class MolecularPool(AdaptPoolBase):
         super().__init__(generators=indices)
 
     def make_indices_singles(self, generalized=False):
+        """Return the single excitations (spin orbital pairs, one per spin).
+
+        Parameters
+        ----------
+        generalized : bool, optional
+            Include all orbital pairs instead of only occupied to virtual. Default is False.
+
+        Returns
+        -------
+        list
+        """
         indices = []
         for p in range(self.molecule.n_electrons // 2):
             for q in range(self.molecule.n_electrons // 2, self.molecule.n_orbitals):
@@ -478,6 +616,20 @@ class MolecularPool(AdaptPoolBase):
         return self.sort_and_filter_unique_indices(indices)
 
     def make_indices_doubles(self, generalized=False, paired=True):
+        """Return the double excitations.
+
+        Parameters
+        ----------
+        generalized : bool, optional
+            Include all orbital pairs instead of only occupied to virtual. Default is False.
+        paired : bool, optional
+            Only paired doubles ``[(2p, 2q), (2p+1, 2q+1)]``. If False, all combinations of
+            two singles are added. Default is True.
+
+        Returns
+        -------
+        list
+        """
         indices = []
         for p in range(self.molecule.n_electrons // 2):
             for q in range(self.molecule.n_electrons // 2, self.molecule.n_orbitals):
@@ -499,6 +651,13 @@ class MolecularPool(AdaptPoolBase):
         return self.sort_and_filter_unique_indices(indices)
 
     def make_indices_doubles_all(self, generalized=False):
+        """Return all double excitations built from combinations of two single excitations.
+
+        Parameters
+        ----------
+        generalized : bool, optional
+            Use generalized singles (all orbital pairs, not only occupied to virtual). Default is False.
+        """
         singles = self.make_indices_singles(generalized=generalized)
         unwrapped = [x[0] for x in singles]
         # now make all combinations of singles
@@ -513,6 +672,13 @@ class MolecularPool(AdaptPoolBase):
         return self.sort_and_filter_unique_indices(indices)
 
     def sort_and_filter_unique_indices(self, indices):
+        """Return the excitations in a canonical order (sorted pairs), without repetitions or orbitals appearing twice.
+
+        Parameters
+        ----------
+        indices : list
+            Excitations, each a tuple of ``(p, q)`` pairs.
+        """
         # sort as: [[(a,b),(c,d),(e,f)...],...]with a<c, a<b, c<d
         sorted_indices = []
         for idx in indices:
@@ -538,16 +704,32 @@ class MolecularPool(AdaptPoolBase):
         return list(set(sorted_indices))
 
     def make_unitary(self, k, label):
+        """Return the excitation gate of pool element ``k`` with variable ``(generator, label)``.
+
+        Parameters
+        ----------
+        k : int
+            Index of the pool element.
+        label : optional
+            Label for the variable name.
+        """
         return self.molecule.make_excitation_gate(
             indices=self.generators[k],
             angle=(self.generators[k], label),
         )
 
     def initialize_circuit(self):
+        """Return the reference-state circuit of the molecule."""
         return self.molecule.prepare_reference()
 
 
 class PseudoSingletMolecularPool(MolecularPool):
+    """Pool where alpha and beta single excitations share one angle.
+
+    Each element is the spin-adapted pair of single excitations ``(2p, 2q)`` and ``(2p+1, 2q+1)``
+    (or a double excitation). Parameters are the same as for ``MolecularPool``.
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         indices = []
@@ -570,6 +752,15 @@ class PseudoSingletMolecularPool(MolecularPool):
         self.generators = list(set(indices))
 
     def make_unitary(self, k, label):
+        """Return the circuit of pool element ``k``, all its excitations sharing one variable.
+
+        Parameters
+        ----------
+        k : int
+            Index of the pool element.
+        label : hashable
+            Label added to the variable name.
+        """
         if isinstance(self.molecule, FermionicBase):
             U = FCircuit()
         else:
@@ -583,6 +774,31 @@ class PseudoSingletMolecularPool(MolecularPool):
 
 
 class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
+    """Objective for excited states: energy plus weighted overlaps with previously found states.
+
+    The objective is ``<H> + sum_i |factors[i]| * |<circuits[i]|U>|^2``, which pushes the state
+    away from the earlier ones.
+
+    Parameters
+    ----------
+    H : FermionOperator or QubitHamiltonian or str
+        Hamiltonian.
+    circuits : list
+        Adaptive circuits of the previously optimized states (without ``Upre``/``Upost``).
+    factors : list of float
+        Penalty weight of each previous state.
+    **kwargs
+        Passed to ``ObjectiveFactoryBase`` (``Upre``, ``Upost``, ``molecule``).
+
+    References
+    ----------
+    J. S. Kottmann, A. Anand and A. Aspuru-Guzik, Chem. Sci. 12, 3497 (2021), doi:10.1039/D0SC06627C.
+
+    Examples
+    --------
+    >>> factory = sun.ADAPT.ObjectiveFactorySequentialExcitedState(Upre=Upre, H=H, circuits=circuits, factors=[100.0] * len(circuits))
+    """
+
     def __init__(self, H, circuits: list, factors: list, *args, **kwargs):
         self.circuits = circuits
         self.factors = factors
@@ -617,6 +833,28 @@ def run_molecular_adapt(
     *args,
     **kwargs,
 ):
+    """Run the Adapt solver on a molecule with a predefined pool.
+
+    Parameters
+    ----------
+    molecule : QuantumChemistryBase or FermionicBase
+        Sunrise molecule.
+    operator_pool : str or AdaptPoolBase, optional
+        Pool name such as ``"UpCCSD"`` (see ``MolecularPool``) or a pool object. Default is ``"UCCGSD"``.
+    Upre : QCircuit or FCircuit, optional
+        Circuit applied before the adaptive part. Default is the molecule's reference state.
+    Upost : QCircuit or FCircuit, optional
+        Circuit applied after the adaptive part.
+    backend : str, optional
+        Simulation backend.
+    **kwargs
+        Passed to ``Adapt``.
+
+    Returns
+    -------
+    AdaptReturn
+        See ``Adapt.__call__``.
+    """
     if operator_pool is None:
         operator_pool = "UCCGSD"
 

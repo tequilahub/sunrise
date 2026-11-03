@@ -1,3 +1,5 @@
+"""Tools to measure a molecular Hamiltonian efficiently: rotate the orbitals, split off the hard-core boson (HCB) part, and estimate the number of measurements."""
+
 import numpy as np
 import tequila as tq
 
@@ -5,9 +7,21 @@ from sunrise.molecules.qubit_base import Molecule as QubitMolecule
 
 
 class input_state:
-    """
-    Wrapper class to hold the input state to measure the molecule Hamiltonian
-    The input state can be a quantum circuit or a wavefunction
+    """Container for the state whose energy is measured: either a circuit or a wavefunction.
+
+    Parameters
+    ----------
+    circuit : tq.QCircuit, optional
+        Circuit preparing the state.
+    variables : dict, optional
+        Values of the circuit variables.
+    wavefunction : tq.QubitWaveFunction, optional
+        State given directly. Exactly one of ``circuit`` and ``wavefunction`` must be given.
+
+    Raises
+    ------
+    ValueError
+        If both or neither of ``circuit`` and ``wavefunction`` are given.
     """
 
     circuit = None
@@ -25,9 +39,7 @@ class input_state:
         self.wavefunction = wavefunction
 
     def get_circuit(self):
-        """
-        Get the circuit from the wavefunction or the circuit
-        """
+        """Return the circuit; for a wavefunction input return an empty (dummy) circuit on the same qubits."""
         if self.wavefunction is not None and self.circuit is None:
             self.circuit = tq.gates.Rz(
                 angle=0, target=range(self.wavefunction.n_qubits)
@@ -35,9 +47,7 @@ class input_state:
         return self.circuit
 
     def get_wavefunction(self, variables=None):
-        """
-        Get the wavefunction from the circuit or the wavefunction
-        """
+        """Return the wavefunction; for a circuit input simulate it with ``variables`` (default: the stored ones)."""
         if self.circuit is not None and self.wavefunction is None:
             if variables is None:
                 variables = self.variables
@@ -48,11 +58,27 @@ class input_state:
 def gates_to_orb_rot(
     rotation_circuit: tq.QCircuit, dim: int, isReordered: bool = False, core: int = 0
 ) -> np.array:
-    """
-    rotation_circuit: a circuit with ONLY UR gates
-    dim: the dimension of the spatial orbital space, i.e., the number of orbitals
-    core: number of core orbitals, already counted on dim. This is bcs these core orbitals are not included on the UR qubit count
-    Output: a matrix that rotates the orbital coefficients
+    """Return the orbital rotation matrix represented by a circuit of ``UR`` gates.
+
+    Parameters
+    ----------
+    rotation_circuit : tq.QCircuit
+        Circuit containing only ``UR`` gates (each acts on spin up and down; only one of the pair is used).
+    dim : int
+        Number of spatial orbitals, including core orbitals.
+    isReordered : bool, optional
+        True if the circuit uses up-then-down qubit ordering. Default is False.
+    core : int, optional
+        Number of core orbitals; they are counted in ``dim`` but not in the circuit qubits. Default is 0.
+
+    Returns
+    -------
+    numpy.ndarray
+        Matrix of shape ``(dim, dim)`` transforming the orbital coefficients.
+
+    Examples
+    --------
+    >>> rot = sun.measurement.gates_to_orb_rot(UR, mol.n_orbitals)
     """
 
     # Extract parameters and indices from gates
@@ -102,8 +128,25 @@ def gates_to_orb_rot(
 
 
 def fold_rotators(mol, UR, *args, **kwargs):
-    """
-    Rotate the one- and two-body integrals of a molecule using the UR gates
+    """Return a new molecule whose integrals are rotated by the orbital rotation of the ``UR`` circuit.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule to rotate.
+    UR : tq.QCircuit
+        Circuit with only ``UR`` gates.
+    *args, **kwargs
+        Passed to ``gates_to_orb_rot`` (e.g. ``isReordered``, ``core``).
+
+    Returns
+    -------
+    QubitMolecule
+        Molecule with transformed one- and two-body integrals.
+
+    Examples
+    --------
+    >>> rotated_mol = sun.measurement.fold_rotators(mol, rotators[0])  # integrals in the rotated basis
     """
     # Get the transformation matrix from the circuit
     UR_matrix = gates_to_orb_rot(UR, mol.n_orbitals, *args, **kwargs)
@@ -135,8 +178,27 @@ def fold_rotators(mol, UR, *args, **kwargs):
 
 
 def get_hcb_part(mol):
-    """
-    Extract the hcb part and the residual part of a molecule
+    """Split a molecule into its hard-core boson (HCB) part and the remainder.
+
+    The HCB part keeps the diagonal one-body terms and the two-body integrals of type
+    ``(ii|kk)``, ``(ik|ki)`` and ``(ij|ij)``-like index patterns (``i==j and k==l``,
+    ``i==l and j==k``, ``i==k and j==l``). Everything else is the residual.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule to split.
+
+    Returns
+    -------
+    hcb_mol : QubitMolecule
+        Molecule with the HCB integrals (includes the nuclear repulsion).
+    res_mol : QubitMolecule
+        Molecule with the remaining integrals (zero nuclear repulsion).
+
+    Examples
+    --------
+    >>> hcb_mol, res_mol = sun.measurement.get_hcb_part(mol)
     """
     c, h, g = mol.get_integrals()
 
@@ -200,21 +262,53 @@ def rotate_and_hcb(
     *args,
     **kwargs,
 ):
-    """
-    Rotate the molecule using the UR gates and extract the hcb part and the residual part of the transformed molecule.
-    Iterate for all the elements of the rotators list.
+    """Iteratively rotate the orbitals and extract the HCB part of the Hamiltonian at each step.
 
-    molecule: the molecule that holds the Hamiltonian to be processed
-    rotators: the UR gates to be applied
+    For each rotator the current residual molecule is rotated, its HCB part is stored and the
+    remainder is passed on to the next rotator. Measuring each HCB molecule on the state
+    followed by the corresponding rotator reconstructs the energy.
 
-    circuit: the quantum circuit to be measured
-    variables: the parameters of the circuit
-    initial_state: if you want to use a wavefunction without a quantum circuit
+    Parameters
+    ----------
+    molecule : QuantumChemistryBase
+        Molecule holding the Hamiltonian.
+    rotators : list of tq.QCircuit
+        Circuits of ``UR`` gates, one per step.
+    circuit : tq.QCircuit, optional
+        Circuit preparing the state.
+    variables : dict, optional
+        Variables of the circuit.
+    initial_state : tq.QubitWaveFunction, optional
+        State given as a wavefunction instead of a circuit.
+    target : float, optional
+        Reference energy; only used to print the error when ``silent`` is False.
+    silent : bool, optional
+        If False, print the running approximation of the energy at each step (requires
+        ``target``). Default is True.
+    *args, **kwargs
+        Passed to ``fold_rotators`` and, when not silent, to ``tq.simulate``.
 
-    approx: the initial approximation of the energy
-    target: the target energy
+    Returns
+    -------
+    hcb_mols : list of QubitMolecule
+        One HCB molecule per rotator.
+    res_mol : QubitMolecule
+        Residual molecule after the last rotator.
 
-    Return a list of HCB molecules and the last residual molecule
+    Raises
+    ------
+    ValueError
+        If neither ``circuit`` nor ``initial_state`` is given.
+
+    References
+    ----------
+    D. Bincoletto and J. S. Kottmann, Digital Discovery (2026), doi:10.1039/D5DD00251F.
+
+    Examples
+    --------
+    >>> hcb_mols, res = sun.measurement.rotate_and_hcb(
+    ...     molecule=mol, rotators=rotators, circuit=U, variables=variables
+    ... )
     """
 
     # Initialize the input state in a wrapper class
@@ -276,18 +370,41 @@ def compute_num_meas(
     transformations=None,
     eps=1e-3,
 ):
-    """
-    Compute the number of measurements needed to estimate the expectation value of a Hamiltonian.
+    """Estimate the number of measurements needed to reach error ``eps`` on an expectation value.
 
-    circuit: the quantum circuit to be measured
-    variables: the parameters of the circuit
-    initial_state: if you want to use a wavefunction without a quantum circuit
+    For each measurement group the Pauli strings are measured after the group's diagonalizing
+    transformation; the number of shots for a string is ``(|c| * std / eps)**2`` and the group
+    needs the largest of these (at least 1). The group counts are summed.
 
-    is_hcb: if True, we measure the HCB Hamiltonian exploiting the three measurement groups
-    hcb_mol: the molecule that holds the HCB Hamiltonian
-    meas_groups: the measurement groups, in case the operator is not the HCB Hamiltonian
-    transformations: the transformations to be applied to the circuit, in case the operator is not the HCB Hamiltonian
-    eps: the error tolerance
+    Parameters
+    ----------
+    circuit : tq.QCircuit, optional
+        Circuit preparing the state.
+    variables : dict, optional
+        Variables of the circuit.
+    initial_state : tq.QubitWaveFunction, optional
+        State given as a wavefunction instead of a circuit.
+    is_hcb : bool, optional
+        If True, ``hcb_mol`` is split into its three measurement groups
+        (diagonal, XX/YY, and the rest). Default is False.
+    hcb_mol : QubitMolecule, optional
+        Molecule with the HCB Hamiltonian (used if ``is_hcb``).
+    meas_groups : list of tq.QubitHamiltonian, optional
+        Measurement groups of commuting terms (used if not ``is_hcb``).
+    transformations : list of tq.QCircuit, optional
+        Circuit diagonalizing each group (used if not ``is_hcb``).
+    eps : float, optional
+        Target statistical error. Default is 1e-3.
+
+    Returns
+    -------
+    float
+        Total number of measurements.
+
+    Raises
+    ------
+    ValueError
+        If neither ``circuit`` nor ``initial_state`` is given.
     """
 
     # Initialize the input state in a wrapper class

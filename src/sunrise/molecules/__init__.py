@@ -1,3 +1,5 @@
+"""Factory functions to create, convert, save and load sunrise molecules of all natures (qubit, hybrid, fermionic)."""
+
 from __future__ import annotations
 
 import json
@@ -45,30 +47,58 @@ def Molecule(
     *args,
     **kwargs,
 ) -> QuantumChemistryBase:
-    """
+    r"""Create a sunrise molecule of the chosen nature.
+
+    This is the main entry point (``sun.Molecule``). The molecule holds the integrals and orbitals and
+    provides Hamiltonians, ansatz circuits and classical reference energies.
 
     Parameters
     ----------
-    geometry
-        molecular geometry as string or as filename (needs to be in xyz format with .xyz ending)
-    basis_set
-        quantum chemistry basis set (sto-3g, cc-pvdz, etc)
-    nature
-        Molecule type (qubit, hybrid, fermionic); 'tequila' is kept as an alias for 'qubit'
-    backend
-        quantum chemistry backend (psi4, pyscf)
-    guess_wfn
-        pass down a psi4 guess wavefunction to start the scf cycle from
-        can also be a filename leading to a stored wavefunction
-    name
-        name of the molecule, if not given it's auto-deduced from the geometry
-        can also be done vice versa (i.e. geometry is then auto-deduced to name.xyz)
-    args
-    kwargs
+    geometry : str, optional
+        Molecular geometry as string, or filename of an xyz file (ending ``.xyz``).
+    basis_set : str, optional
+        Basis set name as understood by Psi4 and PySCF, e.g. ``"sto-3g"`` (minimal), ``"6-31g"``,
+        ``"6-31g*"``, ``"cc-pvdz"``, ``"cc-pvtz"``, ``"aug-cc-pvdz"`` or ``"def2-svp"``. Without a
+        basis set, MADNESS (basis-set-free PNOs) is used.
+    nature : str {"qubit", "hybrid", "fermionic"}, optional
+        Type of molecule. Default is ``"qubit"``. Short forms ``"q"``, ``"h"``, ``"f"`` work;
+        ``"tequila"`` and ``"t"`` are aliases of ``"qubit"``.
+    orbital_type : str, optional
+        Orbitals to use, e.g. ``"hf"``, ``"native"``, ``"pno"``. Default depends on the backend.
+    backend : str, optional
+        Quantum chemistry backend (``"pyscf"``, ``"psi4"``, ``"madness"`` or ``"base"`` if the integrals are given).
+        Default is the first installed one that fits.
+    guess_wfn : optional
+        Psi4 wavefunction (or filename of a stored one) to start the SCF cycle from.
+    name : str, optional
+        Name of the molecule. Default is deduced from the geometry (and vice versa the geometry is read from ``name.xyz``).
+    *args, **kwargs
+        Passed to the molecule class, e.g. ``charge``, ``frozen_core``, ``active_orbitals``, ``transformation``,
+        ``n_pno``, or the integrals for the base backend. ``units`` defaults to ``"angstrom"``.
+        For ``nature="hybrid"`` ``select`` sets the encoding of the orbitals.
 
     Returns
     -------
-        Molecule object
+    QuantumChemistryBase
+        The molecule (``FermionicBase`` for ``"fermionic"``, ``HyMolecule`` for ``"hybrid"``).
+
+    Raises
+    ------
+    TequilaException
+        If the nature is unknown.
+
+    See Also
+    --------
+    MoleculeFromSunrise : Change the nature of an existing molecule.
+    MoleculeFromPyscf : Create a molecule from a PySCF ``Mole``.
+    MoleculeFromOpenFermion : Create a molecule from an openfermion molecule.
+    load_molecule : Load a molecule saved with ``mol.save``.
+
+    Examples
+    --------
+    >>> import sunrise as sun
+    >>> mol = sun.Molecule(geometry="H 0 0 0\nH 0 0 0.75", basis_set="sto-3g", backend="pyscf")
+    >>> fmol = sun.Molecule(geometry="H 0 0 0\nH 0 0 0.75", basis_set="sto-3g", nature="fermionic")
     """
     if "units" not in kwargs:
         kwargs["units"] = "angstrom"
@@ -120,21 +150,38 @@ def Molecule(
 def MoleculeFromSunrise(
     mol, transformation=None, backend=None, *args, nature: str = "qubit", **kwargs
 ):
-    """
-    Initialize a sunrise Molecule from the integrals of another sunrise molecule in its current orbitals
+    """Create a molecule from the integrals of another sunrise molecule, in its current orbitals.
+
     Parameters
     ----------
-    mol
-        The sunrise molecule, of any nature
-    transformation
-        The Fermion to Qubit Transformation, if not given the one of mol is used when mol has the same nature
-    backend
-        The quantum chemistry backend, pyscf if installed for the nature, otherwise base
-    nature
-        Molecule type of the result (qubit, hybrid, fermionic)
+    mol : QuantumChemistryBase
+        Sunrise molecule of any nature.
+    transformation : str or callable, optional
+        Fermion-to-qubit transformation. Default is the one of ``mol`` if the nature is the same.
+    backend : str, optional
+        Quantum chemistry backend. Default is ``"pyscf"`` if installed for the nature, otherwise ``"base"``.
+    nature : str {"qubit", "hybrid", "fermionic"}, optional
+        Type of the new molecule. Default is ``"qubit"``.
+    *args, **kwargs
+        Passed to the molecule class.
+        ``select`` defaults to the ``select`` of ``mol`` for hybrid molecules.
+
     Returns
     -------
-        The sunrise molecule
+    QuantumChemistryBase
+
+    Raises
+    ------
+    TequilaException
+        If the nature is unknown.
+
+    See Also
+    --------
+    Molecule : Create a molecule from a geometry and basis set.
+
+    Examples
+    --------
+    >>> fmol = sun.MoleculeFromSunrise(mol, nature="fermionic")
     """
     if nature.lower() not in NATURE_BACKENDS:
         raise TequilaException(
@@ -169,19 +216,32 @@ def MoleculeFromSunrise(
 def load_molecule(
     filename: str, transformation: str | typing.Callable | None = None
 ) -> QuantumChemistryBase:
-    """
-    Load a sunrise molecule saved with mol.save(filename), in the nature it was saved with
-    It is rebuilt from the stored integrals and orbitals, nothing is recomputed
+    """Load a molecule saved with ``mol.save(filename)``, in the nature it was saved with.
+
+    The molecule is rebuilt from the stored integrals and orbitals, nothing is recomputed.
+    If the saved backend can not be restored (e.g. Psi4 without its wavefunction) the base backend is used with a warning.
+    Also available as ``sun.open_molecule``.
+
     Parameters
     ----------
-    filename
-        The HDF5 file written by mol.save
-    transformation
-        The Fermion to Qubit Transformation, if not given the saved one is used
-        A transformation that is a function can not be saved and has to be given here again
+    filename : str
+        HDF5 file written by ``mol.save``.
+    transformation : str or callable, optional
+        Fermion-to-qubit transformation. Default is the saved one.
+        A transformation given as function can not be saved and has to be given here again.
+
     Returns
     -------
-        The sunrise molecule
+    QuantumChemistryBase
+
+    See Also
+    --------
+    sunrise.molecules.qubit_base.qc_base.QuantumChemistryBase.save : Save a molecule to a file.
+
+    Examples
+    --------
+    >>> mol.save("h2.h5")
+    >>> mol = sun.load_molecule("h2.h5")
     """
     with h5py.File(filename, "r") as f:
         data = json.loads(f["molecule"][()])
@@ -264,21 +324,38 @@ def MoleculeFromOpenFermion(
     nature: str = "qubit",
     **kwargs,
 ) -> QuantumChemistryBase:
-    """
-    Initialize a sunrise Molecule directly from an openfermion molecule object
+    """Create a molecule from an openfermion molecule object.
+
+    With the base backend the integrals stored in the openfermion molecule are used as they are (no frozen core).
+
     Parameters
     ----------
-    molecule
-        The openfermion molecule
-    transformation
-        The Fermion to Qubit Transformation (jordan-wigner, bravyi-kitaev, bravyi-kitaev-tree and whatever OpenFermion supports)
-    backend
-        The quantum chemistry backend, can be None in this case
-    nature
-        Molecule type (qubit, hybrid, fermionic)
+    molecule : openfermion.MolecularData
+        The openfermion molecule.
+    transformation : str or callable, optional
+        Fermion-to-qubit transformation (``"jordan-wigner"``, ``"bravyi-kitaev"``, ``"bravyi-kitaev-tree"``
+        or whatever OpenFermion supports).
+    backend : str, optional
+        Quantum chemistry backend. Default is ``"base"``.
+    nature : str {"qubit", "hybrid", "fermionic"}, optional
+        Type of the new molecule. Default is ``"qubit"``.
+    *args, **kwargs
+        Passed to ``from_openfermion`` of the molecule class.
+        ``frozen_orbitals`` defaults to none. Integrals given here (``one_body_integrals``, ...)
+        take precedence over those of ``molecule``.
+
     Returns
     -------
-        The sunrise molecule
+    QuantumChemistryBase
+
+    Raises
+    ------
+    TequilaException
+        If the nature is unknown.
+
+    See Also
+    --------
+    Molecule : Create a molecule from a geometry and basis set.
     """
     if nature.lower() not in NATURE_BACKENDS:
         raise TequilaException(
@@ -319,9 +396,41 @@ def MoleculeFromPyscf(
     nature: str = "qubit",
     **kwargs,
 ) -> QuantumChemistryBase:
-    """
-    Initialize a sunrise Molecule from a pyscf molecule, with its HF orbitals if mo_coeff is not given
-    nature selects the Molecule type (qubit, hybrid, fermionic)
+    """Create a molecule from a PySCF ``Mole``, with its Hartree-Fock orbitals unless ``mo_coeff`` is given.
+
+    Parameters
+    ----------
+    molecule : pyscf.gto.Mole
+        The PySCF molecule.
+    mo_coeff : numpy.ndarray, optional
+        Orbital coefficients. Default is a restricted HF calculation (``orbital_type="hf"``, otherwise ``"unknown"``).
+    transformation : str or callable, optional
+        Fermion-to-qubit transformation.
+    active_orbitals : list of int, optional
+        Active orbitals (total indices).
+    frozen_orbitals : list of int, optional
+        Frozen orbitals (total indices).
+    nature : str {"qubit", "hybrid", "fermionic"}, optional
+        Type of the new molecule. Default is ``"qubit"``.
+    *args, **kwargs
+        Passed to the molecule class. ``mo_energy`` gives the orbital energies and ``basis_set`` the basis name
+        if the PySCF molecule has none (e.g. from molden files).
+        ``units`` are the units of the geometry, default "a" (angstrom).
+        ``nuclear_repulsion`` is computed from the PySCF molecule unless given.
+
+    Returns
+    -------
+    QuantumChemistryBase
+
+    Raises
+    ------
+    TequilaException
+        If the nature is unknown.
+
+    See Also
+    --------
+    Molecule : Create a molecule from a geometry and basis set.
+    MoleculeToPyscf : Convert a sunrise molecule to PySCF.
     """
     if nature.lower() not in NATURE_BACKENDS:
         raise TequilaException(
@@ -413,6 +522,24 @@ def MoleculeFromPyscf(
 
 
 def MoleculeToPyscf(molecule: QuantumChemistryBase, **kwargs) -> pyscf.gto.Mole:
+    """Return a PySCF ``Mole`` with the geometry, basis, charge and spin of a sunrise molecule.
+
+    Parameters
+    ----------
+    molecule : QuantumChemistryBase
+        The sunrise molecule.
+    **kwargs
+        ``point_group`` activates symmetry in that group (default no symmetry), ``cart`` sets cartesian basis functions.
+        ``verbose`` sets the verbosity of the PySCF mean-field object.
+
+    Returns
+    -------
+    pyscf.gto.Mole
+
+    Examples
+    --------
+    >>> pyscf_mol = sun.MoleculeToPyscf(mol)
+    """
     geometry = molecule.parameters.get_geometry()
     pyscf_geomstring = ""
     for atom in geometry:

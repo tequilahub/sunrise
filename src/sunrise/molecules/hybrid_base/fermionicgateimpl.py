@@ -1,3 +1,5 @@
+"""Gate implementation of fermionic excitations compiled for the mixed fermionic/hard-core boson encoding."""
+
 from __future__ import annotations
 
 import typing
@@ -10,9 +12,30 @@ from tequila.circuit import gates
 
 
 class FermionicGateImpl(gates.QubitExcitationImpl):
-    """
-    Small helper class for Fermionic Excictation Gates
-    Mainly so that "FermionicGate is displayed when circuits are printed
+    """Fermionic excitation gate, compiled following https://doi.org/10.1103/PhysRevA.102.062612.
+
+    Mainly a gate class so that "FermionicExcitation" is shown when circuits are printed.
+
+    Parameters
+    ----------
+    generator : QubitHamiltonian
+        Qubit generator of the excitation.
+    p0 : QubitHamiltonian
+        Projector used for the gradient of the gate.
+    transformation : str
+        Lower-case name of the encoding class, e.g. "jordanwigner". Other encodings are
+        compiled by Trotterization.
+    select : dict
+        "F"/"B" encoding of each spatial orbital.
+    indices : list of tuple of int
+        Excitation ``[(p0, q0), (p1, q1), ...]`` in spin orbitals, ``(p, q)`` destroys p and creates q.
+        A flat list ``[p0, q0, p1, q1, ...]`` is also accepted.
+    condense, up_then_down, two_qubit : bool
+        Properties of the encoding, see ``JordanWigner``.
+    **kwargs
+        ``opt`` (bool, default False) replaces the sequence CNOT H CNOT by Rz Rz CNOT Rz in
+        ``fermionic_excitation``; the rest is passed to ``QubitExcitationImpl`` (e.g. ``angle``,
+        ``control``, ``assume_real``).
     """
 
     def __init__(
@@ -58,9 +81,24 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         indices: list,
         control: int | list | None = None,
     ) -> QCircuit:
-        """
-        Excitation [(i,j),(k,l)],... compiled following https://doi.org/10.1103/PhysRevA.102.062612
-        opt: whether to optimized CNOT H CNOT --> Rz Rz CNOT Rz
+        """Compile the excitation into a circuit of CNOT ladders and a multi-controlled Ry.
+
+        Follows https://doi.org/10.1103/PhysRevA.102.062612. If the gate was created with ``opt=True``,
+        the sequence CNOT H CNOT is replaced by Rz Rz CNOT Rz.
+
+        Parameters
+        ----------
+        angle : float, tq.Variable or hashable
+            Angle of the excitation.
+        indices : list of tuple of int
+            Pairs ``(p, q)`` of spin orbital indices, each destroying ``p`` and creating ``q``.
+        control : int or list of int, optional
+            Control qubits.
+
+        Returns
+        -------
+        tq.QCircuit
+            The compiled circuit.
         """
         lto = []
         lfrom = []
@@ -129,7 +167,8 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         return Upair + Uladder + Ur + Uladder.dagger() + Upair2
 
     def compile(self, *args, **kwargs):
-        if self.is_convertable_to_qubit_excitation():
+        """Compile the gate to a circuit: the exact fermionic excitation circuit with Jordan-Wigner, otherwise one Trotter step of the generator."""
+        if self.is_convertible_to_qubit_excitation():
             target = []
             for x in self.indices:
                 for y in x:
@@ -154,24 +193,37 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         return U
 
     def format_excitation_indices(self, idx):
-        """
-        Consistent formatting of excitation indices
-        idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: p0<p1<pn, each pair keeps its direction
-        :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
-        :return: list of index tuples
+        """Sort the index pairs of an excitation by their first index (each pair keeps its direction).
+
+        For ``idx = [(p0, q0), (p1, q1), ..., (pn, qn)]`` the pairs are reordered such that
+        ``p0 < p1 < ... < pn``; inside each pair the order (direction) is kept.
+
+        Parameters
+        ----------
+        idx : list of tuple of int
+            Pairs ``(p, q)`` describing a single fermionic excitation; ``(p, q)`` destroys p and creates q.
+
+        Returns
+        -------
+        list of tuple of int
+            The sorted pairs.
         """
 
         idx = sorted(idx, key=lambda x: x[0])
         return list(idx)
 
     def format_excitation_variables(self, idx):
-        """
-        Consistent formatting of excitation variable
-        idx = [(p0,q0),(p1,q1),...,(pn,qn)]
-        sorted as: p0 < p1 < p2, each pair keeps its direction
-        :param idx: list of index tuples describing a single(!) fermionic excitation, (p, q) destroys p and creates q
-        :return: sign of the variable for the compiled circuit with re-ordered indices
+        """Return the sign of the variable that results from sorting the index pairs.
+
+        Parameters
+        ----------
+        idx : list of tuple of int
+            Pairs ``(p, q)`` describing a single fermionic excitation; ``(p, q)`` destroys p and creates q.
+
+        Returns
+        -------
+        int
+            +1 or -1, the sign to apply to the angle of the compiled circuit with re-ordered indices.
         """
         # prod_k a^dagger_{q_k} a_{p_k} = a^dagger_{q_0} ... a^dagger_{q_n} a_{p_n} ... a_{p_0}, the compiled circuit
         # has the creators sorted: the sign changes for every two pairs whose p and q are in opposite order
@@ -190,12 +242,26 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         angle: Real | Variable | typing.Hashable,
         case: int = 1,
     ) -> QCircuit:
-        """
-        Compilation of CRy as on https://doi.org/10.1103/PhysRevA.102.062612
-        If not control passed, Ry returned
+        """Compile a multi-controlled Ry rotation as in https://doi.org/10.1103/PhysRevA.102.062612.
+
         Parameters
         ----------
-        case: if 1 employs eq. 12 from the paper, if 0 eq. 13
+        target : int
+            Target qubit.
+        dcontrol : list of int or int
+            Controls of the rotation that are handled by the compilation of the paper.
+            If empty, a plain (controlled) Ry is returned.
+        control : list of int or int
+            Additional controls applied to the whole circuit.
+        angle : float, tq.Variable or hashable
+            Rotation angle.
+        case : int, optional
+            1 uses Eq. 12 of the paper, 0 uses Eq. 13. Default is 1.
+
+        Returns
+        -------
+        tq.QCircuit
+            The compiled circuit.
         """
         if control is not None and not len(control):
             control = None
@@ -261,21 +327,19 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
             return U
 
     def __str(self):
+        """Return a short description with the indices."""
         if self.indices is not None:
             return f"FermionicExcitation({self.indices!s})"
         return "FermionicExcitation"
 
     def __repr__(self):
+        """Return the string representation."""
         return self.__str__()
 
-    def is_convertable_to_qubit_excitation(self):
-        """
-        spin-paired double excitations (both electrons occupy the same spatial orbital and are excited to another spatial orbital)
-        in the jordan-wigner representation are identical to 4-qubit excitations which can be compiled more efficient
-        this function hels to automatically detect those cases
-        Returns
-        -------
+    def is_convertible_to_qubit_excitation(self):
+        """Return whether the gate is a spin-paired double excitation that equals a qubit excitation.
 
+        In Jordan-Wigner these can be compiled more efficiently. Currently disabled, always False.
         """
         return False
         if self.transformation.lower().strip("_") != "jordanwigner":
@@ -287,11 +351,7 @@ class FermionicGateImpl(gates.QubitExcitationImpl):
         return self.indices[0][1] // 2 == self.indices[1][1] // 2
 
     def select_to_list(self):
-        """
-        Internal function
-        Read the select string to make the proper Fer and Bos lists
-        :return : list of MOs for the Bos, MOs and SOs for the Fer space
-        """
+        """Return the list of fermionic qubits and the dict mapping spin orbitals to qubits."""
 
         hcb = 0
         FER_SO = []

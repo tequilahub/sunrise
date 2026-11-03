@@ -1,3 +1,5 @@
+"""Orbital-optimized SPA (separable pair approximation) workflow: ``run_spa`` and the ``SPASolver`` used by it."""
+
 from __future__ import annotations
 
 import warnings
@@ -27,7 +29,44 @@ def run_spa(
     fast_rdm=True,
     **kwargs,
 ) -> OptimizeOrbitalsResult:
+    """Optimize an SPA circuit together with the orbitals of a molecule.
 
+    Wraps ``sunrise.optimize_orbitals`` with an ``SPASolver`` that
+    exploits the separability of the SPA circuit.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule to optimize the orbitals of.
+    edges : list of tuple of int, tq.QCircuit or FCircuit, optional
+        Pairing of orbitals, e.g. ``[(0, 1), (2, 3)]``. A circuit is used directly;
+        None builds the default ``"HCB-SPA"`` ansatz.
+    initial_guess : numpy.ndarray or bool, optional
+        Initial orbital rotation. If None or True, a guess built from ``edges``
+        is used together with the native orbitals of ``mol``; if False, none.
+    decompose : bool, optional
+        Factorize expectation values over circuit clusters. Default is True.
+    silent : bool, optional
+        Suppress optimizer output. Default is True.
+    grouping : int or list of int, optional
+        Cluster size or explicit qubit clusters, see ``make_decomposed_clusters``.
+    backend : str, optional
+        Simulation backend. Default is ``"qulacs"``.
+    fast_rdm : bool, optional
+        Compute RDMs with ``fast_rdm``. Default is True.
+    **kwargs
+        Passed to ``sunrise.optimize_orbitals``.
+
+    Returns
+    -------
+    OptimizeOrbitalsResult
+        Optimized energy, orbitals and circuit variables.
+
+    Examples
+    --------
+    >>> opt = sun.SPAFP.run_spa(mol=mol, edges=edges, initial_guess=False, grouping=12)
+    >>> opt.energy
+    """
     if edges is None:
         U = mol.make_ansatz(name="HCB-SPA")
     elif isinstance(edges, (tq.QCircuit, FCircuit)):
@@ -66,6 +105,29 @@ def run_spa(
 
 
 class SPASolver:
+    """VQE-like solver for SPA circuits, to be used as ``vqe_solver`` in orbital optimization.
+
+    Calling the solver minimizes the energy of a circuit, and ``compute_rdms``
+    returns the RDMs of the current state. For plain graphs (lists of
+    pairs) the classical SPA solution is used and no circuit is simulated.
+
+    Parameters
+    ----------
+    decompose : bool, optional
+        Factorize expectation values over circuit clusters. Default is False.
+    grouping : int or list of int, optional
+        Cluster size or explicit qubit clusters.
+    backend : str, optional
+        Simulation backend. Default is ``"qulacs"``.
+    fast_rdm : bool, optional
+        Compute RDMs with ``fast_rdm``. Default is True.
+    restrict_to_hcb : bool, optional
+        Warn if circuit or Hamiltonian use more qubits than orbitals (hard-core boson
+        encoding). Default is True.
+    edges : list of tuple of int, optional
+        Orbital pairs of the SPA graph; enables the classical solver if given as pairs.
+    """
+
     def __init__(
         self,
         decompose=False,
@@ -89,6 +151,26 @@ class SPASolver:
         return self.vqe(*args, **kwargs)
 
     def vqe(self, H, circuit, molecule, *args, **kwargs) -> OptimizerResults:
+        """Minimize the energy of ``circuit`` for the Hamiltonian ``H``.
+
+        Parameters
+        ----------
+        H : tq.QubitHamiltonian
+            Hamiltonian in the current orbital basis.
+        circuit : tq.QCircuit
+            Parametrized SPA circuit (ignored if ``edges`` is a plain graph).
+        molecule : QuantumChemistryBase
+            Molecule providing the integrals.
+        *args, **kwargs
+            Passed to ``tq.minimize``.
+            ``restrict_to_hcb`` (bool) overrides the setting of the solver.
+
+        Returns
+        -------
+        OptimizerResults
+            Energy and optimal variables. Variables are reused as initial values
+            in later calls.
+        """
         if (
             self.edges is not None
             and isinstance(self.edges, list)
@@ -149,6 +231,24 @@ class SPASolver:
         return result
 
     def compute_rdms(self, U, variables, molecule, use_hcb=False):
+        """Compute the spin-free 1- and 2-RDM of the state ``U(variables)``.
+
+        Parameters
+        ----------
+        U : tq.QCircuit
+            Circuit preparing the state.
+        variables : dict
+            Values of the circuit variables.
+        molecule : QuantumChemistryBase
+            Molecule defining the RDM operators.
+        use_hcb : bool, optional
+            Use hard-core boson RDM operators. Default is False.
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            ``(rdm1, rdm2)``, the 2-RDM in the physics (Dirac) ordering.
+        """
         # start = time.time()
         if self.fast_rdm:
             if (
@@ -208,6 +308,13 @@ class SPASolver:
 
 
 def make_initial_orbital_guess(edges):
+    """Return an orbital rotation matrix mixing the two orbitals of each edge (single-orbital entries stay fixed).
+
+    Parameters
+    ----------
+    edges : list of tuple of int
+        SPA edges; length-2 edges mix their two orbitals.
+    """
 
     result = numpy.eye(2 * len(edges))
     for edge in edges:

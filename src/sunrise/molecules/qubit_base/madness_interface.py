@@ -1,3 +1,7 @@
+"""MADNESS backend: basis-set-free MRA-PNO orbitals and their integrals (``MadnessPNOMixin``) and
+the qubit MADNESS molecule.
+"""
+
 from __future__ import annotations
 
 import os
@@ -29,29 +33,37 @@ from .qc_base import (
 
 
 class TequilaMadnessException(TequilaException):
+    """Error raised by the MADNESS backend."""
+
     def __str__(self):
+        """Return the message prefixed with the backend name."""
         return "Error in madness backend:" + self.message
 
 
 class MadnessPNOMixin:
-    """
-    MRA-PNO functionality shared by the qubit, fermionic and hybrid madness molecules
-    Only needs self.orbitals and self.integral_manager (with the pair information of the PNOs)
-    Put it first in the bases so that it overrides the methods of the backend base class
+    """MRA-PNO orbitals and integrals from MADNESS, shared by the qubit, fermionic and hybrid molecules.
+
+    Only needs ``self.orbitals`` and ``self.integral_manager`` (with the pair information of the
+    PNOs). Put it first in the bases so that it overrides the methods of the backend base class.
+
+    References
+    ----------
+    J. S. Kottmann, P. Schleich, T. Tamayo-Mendoza and A. Aspuru-Guzik, J. Phys. Chem. Lett. 12, 663 (2021), doi:10.1021/acs.jpclett.0c03410.
     """
 
     def plot2cube(self, orbital, filename=None, *args, **kwargs):
-        """
-        plot orbitals to cube file (needs madtequila backend installed)
+        """Plot an orbital to a cube file (needs the madtequila backend installed).
+
         Parameters
         ----------
-        method: orbital, the orbital index (starting from 0 on the active orbitals)
-                if you want to plot frozen orbitals you can hand in a Tequila Orbital structure with idx_total defined
-        filename: name of the cubefile (default: mra_orbital_X.cube where X is the total index of the active orbital)
-        args: further arguments for plot2cube
-        kwargs further keyword arguments for plot2cube
-
-        see here for more https://github.com/kottmanj/madness/tree/tequila/src/apps/plot
+        orbital : int or OrbitalData
+            Index of the active orbital (starting from 0). Frozen orbitals can be given as
+            orbital structure with ``idx_total`` defined.
+        filename : str, optional
+            Name of the cube file. Default is ``mra_orbital_X.cube`` with X the total index of the orbital.
+        *args, **kwargs
+            Further arguments of the ``plot2cube`` executable, see
+            https://github.com/kottmanj/madness/tree/tequila/src/apps/plot
         """
 
         plot2cube = shutil.which("plot2cube")
@@ -86,6 +98,19 @@ class MadnessPNOMixin:
     def get_pair_orbitals(
         self, i: OrbitalData, j: OrbitalData, exclude: list[OrbitalData] | None = None
     ):
+        """Return the orbitals that belong to the pair ``(i, j)``.
+
+        Parameters
+        ----------
+        i, j : int or OrbitalData
+            The orbitals of the pair.
+        exclude : list of OrbitalData, optional
+            Orbitals to leave out.
+
+        Returns
+        -------
+        list of OrbitalData
+        """
         if isinstance(i, int):
             i = self.orbitals[i]
         if isinstance(j, int):
@@ -101,10 +126,12 @@ class MadnessPNOMixin:
         ]
 
     def get_virtual_orbitals(self):
+        """Return the virtual orbitals that belong to no pair (usually empty)."""
         return [x for x in self.orbitals if len(x.pair) == 1 and x.pair[0] < 0]
 
     # mol.save stores the PNO pair structure, sun.load_molecule gives it back to the qubit madness interface
     def _backend_data(self):
+        """Return the pair and occupation information of the orbitals (None, with a warning, if the PNO structure was lost)."""
         # the pnoinfo of the madness calculation (the integrals and the nuclear repulsion are stored by mol.save)
         orbitals = self.integral_manager.orbitals
         if any(o.pair is None or o.occ is None for o in orbitals):
@@ -120,29 +147,40 @@ class MadnessPNOMixin:
         }
 
     def use_CLPO_orbitals_and_edges(self, *args, **kwargs):
+        """Not supported with MADNESS orbitals."""
         raise NotImplementedError
 
     def use_CLPO_orbitals(self, *args, **kwargs):
+        """Not supported with MADNESS orbitals."""
         raise NotImplementedError
 
     def use_HAO_orbitals(self, *args, **kwargs):
+        """Not supported with MADNESS orbitals."""
         raise NotImplementedError
 
     def make_spa_ansatz(self, label=None, hcb=False, edges=None, **kwargs):
-        """
-        Shortcut for convenience
+        """Return the default SPA ansatz, equivalent to PNO-UpCCD with the MADNESS PNOs.
+
+        If ``edges`` or further keyword arguments are given, the SPA of the backend base class is used instead.
+
         Parameters
         ----------
-        label:
-           label for the angles
-        hcb:
-           if True the circuit will not map from HCB to JW (or other encodings supported)
-        edges, kwargs:
-           if given, the SPA of the backend base class is used (e.g. edges=mol.get_spa_edges())
+        label : hashable, optional
+            Label of the angles.
+        hcb : bool, optional
+            If True the circuit is not mapped from the hard-core boson encoding to the encoding of the molecule.
+        edges : list, optional
+            SPA edges, e.g. ``mol.get_spa_edges()``.
+        **kwargs
+            Passed to the ``make_spa_ansatz`` of the backend base class.
+
         Returns
         -------
-        Default SPA ansatz (equivalent to PNO-UpCCD with madness PNOs)
+        QCircuit or FCircuit
 
+        Examples
+        --------
+        >>> U = mol.make_spa_ansatz(edges=mol.get_spa_edges())  # doctest: +SKIP
         """
         if edges is not None or kwargs:
             # the fermionic SPA has no hcb option
@@ -156,6 +194,13 @@ class MadnessPNOMixin:
 
     @staticmethod
     def find_executable(madness_root_dir=None):
+        """Return the path of the ``pno_integrals`` executable, or None if not found.
+
+        Parameters
+        ----------
+        madness_root_dir : str, optional
+            Root directory of MADNESS. Default is the environment variable ``MAD_ROOT_DIR``.
+        """
         executable = shutil.which("pno_integrals")
         if madness_root_dir is None:
             madness_root_dir = str(os.environ.get("MAD_ROOT_DIR"))
@@ -164,8 +209,21 @@ class MadnessPNOMixin:
         return executable
 
     def read_tensors(self, name="molecule", filetype="npy", datadir=None):
-        """
-        Try to read files "name_htensor.npy" and "name_gtensor.npy"
+        """Read the tensors ``name_htensor.<filetype>`` and ``name_gtensor.<filetype>``.
+
+        Parameters
+        ----------
+        name : str, optional
+            Prefix of the files. Default is "molecule".
+        filetype : str, optional
+            File ending. Default is "npy".
+        datadir : str, optional
+            Directory of the files.
+
+        Returns
+        -------
+        tuple
+            One- and two-body tensors, each the string "failed" if it could not be read.
         """
 
         path = name
@@ -185,6 +243,15 @@ class MadnessPNOMixin:
         return h, g
 
     def cleanup(self, warn=False, delete_all_files=False):
+        """Delete intermediate MADNESS files.
+
+        Parameters
+        ----------
+        warn : bool, optional
+            Warn about files that cannot be deleted. Default is False.
+        delete_all_files : bool, optional
+            Also delete the tensor, pnoinfo and output files of this molecule. Default is False.
+        """
         filenames = ["pnoinfo.txt", "molecule_htensor.bin", "molecule.gtensor.bin"]
         if delete_all_files:
             filenames = [
@@ -210,30 +277,33 @@ class MadnessPNOMixin:
         f12_filename: str = "molecule_f12tensor.bin",
         **kwargs,
     ) -> float:
-        """
-        Computes the spin-free [2]_R12 correction, needing only the 1- and 2-RDM of a reference method
-        Requires either 1-RDM, 2-RDM or information to compute them in kwargs
+        r"""Return the spin-free [2]_R12 correction from the 1- and 2-RDM of a reference method.
+
+        Either the RDMs or the information to compute them (``U`` and ``variables`` as keyword
+        arguments, see ``compute_rdms``) must be given.
 
         Parameters
         ----------
-        rdm1 :
-            1-electron reduced density matrix
-        rdm2 :
-            2-electron reduced density matrix
-        gamma :
-            f12-exponent, for a correlation factor f_12 = -1/gamma * exp[-gamma*r_12]
-        n_ri :
-            dimensionality of RI-basis; if None, then the maximum available via tensors / basis-set is used
-        f12_filename :
-            when using madness_interface, <q|h|p> and <rs|1/r_12|pq> already available;
-            need to provide f12-tensor <rs|f_12|pq> as ".bin" from madness or ".npy", assuming Mulliken ordering
-        kwargs :
-            e.g. RDM-information via {"U": QCircuit, "variables": optimal angles}, needs to be passed if rdm1,rdm2 not
-            yet computed
+        rdm1, rdm2 : numpy.ndarray, optional
+            1- and 2-electron reduced density matrices (spin-free), the 2-RDM in the physics
+            (Dirac) ordering as returned by ``compute_rdms``.
+        n_ri : int, optional
+            Dimension of the RI basis. Default is the maximum available from the tensors.
+        f12_filename : str, optional
+            File with the f12 tensor :math:`\langle rs | f_{12} | pq \rangle`, ".bin" from MADNESS or
+            ".npy" (Mulliken ordering). The other tensors, :math:`\langle q | h | p \rangle` and
+            :math:`\langle rs | r_{12}^{-1} | pq \rangle`, are already available from MADNESS.
+            Default is "molecule_f12tensor.bin".
+        **kwargs
+            E.g. ``U`` and ``variables`` if the RDMs are not computed yet, or ``gamma`` (float,
+            default 1.4), the exponent of the correlation factor
+            :math:`f_{12} = -\frac{1}{\gamma} e^{-\gamma r_{12}}`; it must match the exponent used by
+            MADNESS for the f12 tensor.
 
         Returns
         -------
-            the f12 correction for the energy
+        float
+            The correction to the energy.
         """
         from .f12_corrections._f12_correction_madness import (
             ExplicitCorrelationCorrectionMadness,
@@ -251,6 +321,7 @@ class MadnessPNOMixin:
         return correction.compute()
 
     def __str__(self):
+        """Return a summary of the molecule, the executable and the tensor files."""
         path = self.parameters.name
         if hasattr(self, "datadir") and self.datadir is not None:
             path = f"{self.datadir}/{path}"
@@ -263,6 +334,7 @@ class MadnessPNOMixin:
         return info
 
     def __repr__(self):
+        """Return the same summary as ``__str__``."""
         return self.__str__()
 
     def _init_madness(
@@ -278,11 +350,12 @@ class MadnessPNOMixin:
         datadir=None,
         **kwargs,
     ):
-        """
-        Get the integrals and the PNO pair structure from madness (run it, read in the files with n_pno="read"
-        or take the data given by sun.load_molecule) and initialize the molecule with them
-        build is the __init__ of the backend base class (QuantumChemistryBase, HybridBase or FermionicBase),
-        all other keyword arguments (e.g. transformation, select) are passed to it
+        """Get the integrals and the PNO pair structure from MADNESS and initialize the molecule with them.
+
+        The data is computed by the executable, read from files (``n_pno="read"``) or taken from the
+        keyword arguments of ``sun.load_molecule``. ``build`` is the ``__init__`` of the backend base class
+        (QuantumChemistryBase, HybridBase or FermionicBase), the remaining keyword arguments (e.g.
+        ``transformation``, ``select``) are passed to it.
         """
         # can not use "geometry"
         # as this is already used for other things furter up
@@ -488,6 +561,7 @@ class MadnessPNOMixin:
             self.cleanup(warn=False, delete_all_files=False)
 
     def run_madness(self, *args, **kwargs):
+        """Run the MADNESS executable and return its status (or a message if there is no executable)."""
         if self.executable is None:
             return "\n\n----> pno_integrals executable not found <----\n\n"
         self.write_madness_input(*args, n_pno=self.n_pno, n_virt=self.n_virt, **kwargs)
@@ -520,6 +594,23 @@ class MadnessPNOMixin:
         *args,
         **kwargs,
     ):
+        """Write the MADNESS input file.
+
+        Parameters
+        ----------
+        n_pno : int, optional
+            Number of PNOs per active pair. Cannot be given together with ``n_orbitals``.
+        n_virt : int, optional
+            Number of additional virtual orbitals. Default is 0.
+        filename : str, optional
+            Name of the input file. Default is "input".
+        maxrank : int, optional
+            Maximum rank of the PNOs.
+        n_orbitals : int, optional
+            Total number of active orbitals. Default is the number of active electrons.
+        **kwargs
+            Dictionaries to change the sections of the input, e.g. ``pno={"maxrank": 10}``.
+        """
         if n_pno is not None and n_orbitals is not None:
             raise TequilaMadnessException(
                 f"n_pno={n_pno} and n_orbitals={n_orbitals} given ... please pick one"
@@ -608,6 +699,20 @@ class MadnessPNOMixin:
         return data
 
     def convert_madness_output_from_bin_to_npy(self, name, datadir=None):
+        """Convert the binary MADNESS tensors to ``.npy`` files and read them.
+
+        Parameters
+        ----------
+        name : str
+            Prefix of the files.
+        datadir : str, optional
+            Directory of the files, created if it does not exist.
+
+        Returns
+        -------
+        tuple
+            One- and two-body tensors and the pno info, each the string "failed" if it could not be read.
+        """
         path = name
         if datadir is not None:
             # if the datadir does not exist then tequila will crash
@@ -671,6 +776,41 @@ class MadnessPNOMixin:
 
 
 class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
+    """Qubit molecule with MRA-PNO orbitals and integrals from MADNESS.
+
+    Initialization is explained in the examples at the top of the module. The integrals are
+    either computed with the ``pno_integrals`` executable, read from the files
+    ``name_htensor.npy``, ``name_gtensor.npy`` and ``name_pnoinfo.txt`` (``n_pno="read"``), or
+    passed directly as ``one_body_integrals``, ``two_body_integrals``, ``pairinfo`` and ``occinfo``.
+
+    Parameters
+    ----------
+    parameters : ParametersQC
+        Molecular parameters.
+    transformation : str or callable, optional
+        Fermion-to-qubit encoding.
+    active_orbitals : list of int or str, optional
+        Active orbitals. Default is "auto", which removes reference orbitals without PNOs.
+    executable : str, optional
+        Name of the ``pno_integrals`` executable. Default is searched in the PATH and ``MAD_ROOT_DIR``.
+    n_pno : int or str, optional
+        Number of PNOs in addition to the occupied HF orbitals, or "read" to read the files.
+        Default is to read the files if there is no executable.
+    n_virt : int, optional
+        Number of additional virtual orbitals. Default is 0.
+    keep_mad_files : bool, optional
+        Keep the intermediate MADNESS files. Default is False.
+    datadir : str, optional
+        Directory of the MADNESS files.
+    **kwargs
+        Dictionaries to control the MADNESS input sections, e.g. ``pno={"maxrank": 10}`` or
+        ``dft={"k": 9}``, and further arguments of the base class.
+
+    References
+    ----------
+    J. S. Kottmann, P. Schleich, T. Tamayo-Mendoza and A. Aspuru-Guzik, J. Phys. Chem. Lett. 12, 663 (2021), doi:10.1021/acs.jpclett.0c03410.
+    """
+
     def __init__(
         self,
         parameters: ParametersQC,
@@ -684,6 +824,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
         *args,
         **kwargs,
     ):
+        """See the class docstring."""
         self._init_madness(
             super().__init__,
             parameters,
@@ -699,23 +840,22 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
         )
 
     def compute_energy(self, method, *args, **kwargs):
-        """
-        Call classical methods over PySCF (needs to be installed) or
-        use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
+        """Compute the energy of a classical or quantum method.
+
+        Classical methods run with PySCF, quantum methods build an ansatz and minimize the energy.
 
         Parameters
         ----------
-        method: method name
-                classical: HF, MP2, CCSD, CCSD(T), FCI
-                quantum: SPA-GASD (SPA can be dropped as well as letters in GASD)
-                examples: GSD is the same as UpCCGSD, SPA alone is equivalent to SPA-D
-                see make_upccgsd_ansatz of the this class for more information
-        args
-        kwargs
+        method : str
+            Classical: "HF", "MP2", "CCSD", "CCSD(T)", "FCI". Quantum: "SPA-GASD", where "SPA" and
+            letters of "GASD" can be dropped, e.g. "GSD" is the same as UpCCGSD and "SPA" alone
+            is "SPA-D". See ``make_upccgsd_ansatz``.
+        **kwargs
+            For quantum methods, keyword arguments of the minimizer.
 
         Returns
         -------
-
+        float
         """
 
         if any(x in method.upper() for x in ["U", "SPA", "PNO", "HCB"]):
@@ -735,6 +875,27 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
             return super().compute_energy(*args, method=method, **kwargs)
 
     def local_qubit_map(self, hcb=False, up_then_down=False):
+        """Return a qubit map that orders the orbitals pair by pair.
+
+        It does not make the circuit more local, but shows the locality better in pictures.
+        Apply it with ``H = H.map_qubits(qubit_map)`` and ``U = U.map_qubits(qubit_map)``.
+
+        Parameters
+        ----------
+        hcb : bool, optional
+            Map for the hard-core boson representation. Default is False.
+        up_then_down : bool, optional
+            Order the spin orbitals as all up then all down. Default is False.
+
+        Returns
+        -------
+        dict
+            Maps qubit indices to the new indices.
+
+        Examples
+        --------
+        >>> qubit_map = mol.local_qubit_map()  # doctest: +SKIP
+        """
         # re-arrange orbitals to result in more local circuits
         # does not make the circuit more local, but rather will show locality better in pictures
         # transform circuits and Hamiltonians with this map
@@ -773,26 +934,48 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
         *args,
         **kwargs,
     ):
-        """
-        Overwriting baseclass to allow names like : PNO-UpCCD etc
+        """Return a UpCCGSD-type ansatz circuit, with names like "SPA-UpCCD" and "PNO-UpCCD".
+
+        Overrides the base class method. The name has the form ``{order}-{HCB}-{SPA}-{excitations}``.
+
         Parameters
         ----------
-        label: label the variables of the ansatz ( variables will be labelled (indices, X, (label, layer) witch X=D/S)
-        direct_compiling: Directly compile the first layer (works only for transformation that implement the hcb_to_me function)
-        name: ansatz name (SPA-UpCCD or SPA-D, SPA-UpCCGD or SPA-GD, SPA-UpCCGSD or SPA-GSD, UpCCGSD or GSD ..., in general {HCB}-{SPA}-{Excitations}
-              if HCB is included in name: do not map from hard-core Boson to qubit encoding of this molecule
-              if SPA is included in name: Use the separable pair ansatz (excitations will be restricted to the PNO structure of the surrogate model)
-              Excitations: can be "S" (use only singles), "D" (use only doubles), "GSD" (generalized singles and doubles), "GASD" (approximate singles, neglecting Z terms in JW)
-        neglect_z: neglect all Z terms in singles excitations generators
-        order: repetition of layers, can be given over the name as well, the order needs to be the first in the name then (i.e. 2-UpCCGSD, 2-SPA-GSD, etc)
-        indices: excitation indices in the format of format_excitation_indices, e.g. [((0, 3),), ((1, 4),)]
-                 (see make_pno_upccgsd_ansatz), they replace the ones of the name in every layer
-        args
-        kwargs
+        name : str, optional
+            In general ``{HCB}-{SPA}-{excitations}``, e.g. "SPA-UpCCD" or "SPA-D", "SPA-UpCCGD" or
+            "SPA-GD", "SPA-UpCCGSD" or "SPA-GSD", "UpCCGSD" or "GSD". "HCB" in the name keeps the
+            hard-core boson encoding (no mapping to the qubit encoding of the molecule). "SPA" uses the
+            separable pair ansatz: the excitations are restricted to the PNO structure of the surrogate
+            model. The excitations are "S" (only singles), "D" (only doubles), "GSD" (generalized
+            singles and doubles) or "GASD" (approximate singles, neglecting Z terms in Jordan-Wigner).
+            Default is "UpCCGSD".
+        label : hashable, optional
+            Label of the variables, named ``(indices, X, (label, layer))`` with X = D or S.
+        direct_compiling : bool, optional
+            Compile the first layer directly (only for encodings with ``hcb_to_me``).
+        order : int, optional
+            Number of repeated layers. Can also be given as the first part of the name, e.g.
+            "2-UpCCGSD" or "2-SPA-GSD".
+        neglect_z : bool, optional
+            Neglect all Z terms in the generators of the singles. Set automatically if the name
+            contains "A" (e.g. "GASD").
+        hcb_optimization : bool, optional
+            Build the doubles in the hard-core boson space and map back.
+        include_reference : bool, optional
+            Start from the reference state. Default is True.
+        indices : list, optional
+            Excitation indices in the format of ``format_excitation_indices``, e.g.
+            ``[((0, 3),), ((1, 4),)]`` (see ``make_pno_upccgsd_ansatz``). They replace the indices
+            given by the name in every layer.
+        **kwargs
+            Passed to the base class, e.g. ``spin_adapt_singles`` (default False here).
 
         Returns
         -------
+        tq.QCircuit
 
+        Examples
+        --------
+        >>> U = mol.make_upccgsd_ansatz(name="HCB-PNO-UpCCD")
         """
         # check if the used qubit encoding has a hcb transformation
         try:
@@ -957,6 +1140,27 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
         direct_compiling: bool = False,
         ladder: bool = True,
     ):
+        """Return the hard-core boson PNO-UpCCD circuit, with pair doubles from each reference orbital into its PNOs.
+
+        Parameters
+        ----------
+        pairs : list of OrbitalData, optional
+            Reference orbitals of the pairs. Default is all reference orbitals.
+        label : hashable, optional
+            Label of the angles.
+        include_reference : bool, optional
+            Start from the reference state. Default is True.
+        direct_compiling : bool, optional
+            Compile directly into the encoding of the molecule (needs the reference).
+
+        ladder : bool, optional
+            With ``direct_compiling``, chain the CNOTs through the PNOs instead of fanning out from the
+            reference orbital. Default is True.
+
+        Returns
+        -------
+        tq.QCircuit
+        """
         if pairs is None:
             pairs = [x for x in self.reference_orbitals]
         U = QCircuit()
@@ -1012,11 +1216,22 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
     def make_upccgsd_indices(
         self, name="UpCCGD", exclude: list | None = None, *args, **kwargs
     ):
-        """
-        :param label: label the angles
-        :param generalized: if true the complement to UpCCGD is created (otherwise UpCCD)
-        :param exclude: list of indices to exclude
-        :return: All gates missing between PNO-UpCCD and UpCC(G)D
+        """Return the excitation indices missing between PNO-UpCCD and UpCC(G)D.
+
+        Parameters
+        ----------
+        label : hashable, optional
+            Not used.
+        name : str, optional
+            Excitation type. "G" in the name also adds the generalized excitations (otherwise
+            UpCCD), "PNO" or "SPA" returns only the PNO-pair excitations. Default is "UpCCGD".
+        exclude : list, optional
+            Indices to leave out.
+
+        Returns
+        -------
+        list
+            Formatted excitation indices, see ``format_excitation_indices``.
         """
 
         if exclude is None:
@@ -1075,6 +1290,21 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
     def make_pno_upccgsd_ansatz(
         self, generalized=False, include_offdiagonals=False, **kwargs
     ):
+        """Return a UpCCGSD-type ansatz restricted to the PNO excitations.
+
+        Parameters
+        ----------
+        generalized : bool, optional
+            Also add excitations between the PNOs of a pair. Default is False.
+        include_offdiagonals : bool, optional
+            Also add excitations of off-diagonal pairs. Default is False.
+        **kwargs
+            Passed on to ``make_upccgsd_ansatz``.
+
+        Examples
+        --------
+        >>> U = mol.make_pno_upccgsd_ansatz(name="UpCCD")  # doctest: +SKIP
+        """
         indices = []
         for i in self.reference_orbitals:
             for a in self.get_pair_orbitals(i=i, j=i, exclude=i):

@@ -1,3 +1,7 @@
+"""Psi4 backend: integrals, classical methods, amplitudes and RDMs from Psi4 (``Psi4Mixin``) and the
+qubit Psi4 molecule.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -23,15 +27,17 @@ from .qc_base import QuantumChemistryBase
 
 
 class TequilaPsi4Exception(TequilaException):
-    pass
+    """Exception for errors raised in the Psi4 interface."""
 
 
 class OpenVQEEPySCFException(TequilaException):
-    pass
+    """Unused exception, apparently copied from the PySCF interface."""
 
 
 @dataclass
 class Psi4Results:
+    """Results of a Psi4 run: Psi4 variables, output file, wavefunction and molecule."""
+
     variables: dict | None = (
         None  # psi4 variables dictionary, storing all computed values
     )
@@ -43,35 +49,57 @@ class Psi4Results:
 
 
 class Psi4Mixin:
-    """
-    psi4 functionality shared by the qubit, hybrid and fermionic psi4 molecules
-    Put it first in the bases so that it overrides the methods of the backend base class
-    (e.g. initialize_integral_manager, compute_energy, compute_rdms), which it calls with super()
+    """Integrals and classical methods from Psi4, shared by the qubit, fermionic and hybrid
+    molecules.
+
+    A restricted Hartree-Fock calculation is run with Psi4 (unless a reference wavefunction is given)
+    and its orbitals and integrals are used. Psi4 can then compute energies, CC amplitudes and RDMs,
+    and works with the point group symmetry of the molecule. Only closed-shell molecules
+    (multiplicity 1) are supported. Put it first in the bases so that it overrides the methods of the
+    backend base class (e.g. ``initialize_integral_manager``, ``compute_energy``, ``compute_rdms``), which
+    it calls with ``super()``.
+
+    Parameters
+    ----------
+    parameters : ParametersQC
+        Geometry, basis set, charge and other molecule parameters.
+    active_orbitals : dict or list of int, optional
+        Active spatial orbitals, either as list of orbital indices (e.g. ``[0, 1, 3]``)
+        or as dictionary with irreps as keys and lists of orbital indices
+        within the irrep as values (e.g. ``{"A1": [0, 1], "A2": [0]}``).
+        By default all orbitals are active.
+    reference_orbitals : dict or list of int, optional
+        Orbitals forming the reference, in the same format as ``active_orbitals``.
+        By default the first n_electrons/2 orbitals are used.
+    frozen_orbitals : dict or list of int, optional
+        Orbitals that are frozen (removed from the active space). By default the
+        core orbitals if ``parameters.frozen_core`` is set.
+    *args, **kwargs
+        Passed to the backend base class (e.g. ``transformation``, ``select``). ``ref_wfn`` can be given in
+        the kwargs: a Psi4 HF wavefunction (then HF is not recomputed), or a dictionary or filename
+        in the format of ``wfn.to_file()``, from which the integrals are computed
+        unless they are given as well. ``point_group`` selects the (Abelian) point group Psi4 computes in.
     """
 
     def _make_psi4_active_space_data(self, active_orbitals, reference=None):
-        """
-        Small helper function
-        Internal use only
+        """Convert active and reference orbitals to active space data with the Psi4 frozen orbitals.
+
         Parameters
         ----------
-        active_orbitals: dictionary :
-            dictionary with irreps as keys and a list of integers as values
-            i.e. occ = {"A1":[0,1], "A2":[0]}
-            means the occupied active space is made up of spatial orbitals
-            0A1, 1A1 and 0A2
-            as list: Give a list of spatial orbital indices
-            i.e. occ = [0,1,3] means that spatial orbital 0, 1 and 3 are used
-        reference: (Default value=None)
-            List of orbitals which form the reference
-            Can be given in the same format as active_orbitals
-            If given as None then the first N_electron/2 orbitals are taken
-            and the corresponding active orbitals are removed
+        active_orbitals : dict or list of int
+            Active spatial orbitals, as list of indices or as dictionary
+            ``{irrep: [indices within the irrep]}``. If None, None is returned.
+            E.g. ``{"A1": [0, 1], "A2": [0]}`` means the orbitals 0A1, 1A1 and 0A2, and
+            ``[0, 1, 3]`` means the spatial orbitals 0, 1 and 3.
+        reference : dict or list of int, optional
+            Orbitals forming the reference, in the same format. By default the first
+            n_electrons/2 orbitals, which are then removed from the active orbitals.
 
         Returns
         -------
-        Dataclass with active indices and reference indices (in spatial notation)
-
+        ActiveSpaceDataPsi4 or None
+            Active and reference indices (spatial orbitals) and the frozen_docc and
+            frozen_uocc Psi4 options (None if the active space is not Psi4 representable).
         """
 
         if active_orbitals is None:
@@ -79,10 +107,13 @@ class Psi4Mixin:
 
         @dataclass
         class ActiveSpaceDataPsi4(ActiveSpaceData):
+            """Active space data with the frozen orbitals as Psi4 options."""
+
             frozen_docc: list = None  # frozen reference orbitals grouped by irrep (psi4 option, if None then the active space can not be represented by psi4)
-            frozen_uocc: list = None  # frozen virtual orbtials grouped by irrep (psi4 option, if None then the active space can not be represented by psi4)
+            frozen_uocc: list = None  # frozen virtual orbitals grouped by irrep (psi4 option, if None then the active space can not be represented by psi4)
 
             def __str__(self):
+                """Return the active space data with the frozen_docc and frozen_uocc options."""
                 result = super().__str__()
                 result += "{key:15} : {value:15} \n".format(
                     key="frozen_docc", value=str(self.frozen_docc)
@@ -94,6 +125,7 @@ class Psi4Mixin:
 
             @property
             def psi4_representable(self):
+                """bool : whether Psi4 can represent the active space with frozen_docc and frozen_uocc (needs the standard reference orbitals)."""
                 standard_ref = [self.reference_orbitals[0] == 0] + [
                     self.reference_orbitals[i] == self.reference_orbitals[i + 1] - 1
                     for i in range(len(self.reference_orbitals) - 1)
@@ -199,30 +231,7 @@ class Psi4Mixin:
         *args,
         **kwargs,
     ):
-        """
-
-        Parameters
-        ----------
-        parameters
-        active_orbitals: dictionary :
-            dictionary with irreps as keys and a list of integers as values
-            i.e. occ = {"A1":[0,1], "A2":[0]}
-            means the occupied active space is made up of spatial orbitals
-            0A1, 1A1 and 0A2
-            as list: Give a list of spatial orbital indices
-            i.e. occ = [0,1,3] means that spatial orbital 0, 1 and 3 are used
-        reference: (Default value=None)
-            List of orbitals which form the reference
-            Can be given in the same format as active_orbitals
-            If given as None then the first N_electron/2 orbitals are taken
-            and the corresponding active orbitals are removed
-        args
-        kwargs
-            passed to the backend base class (e.g. transformation, select)
-            ref_wfn: psi4 HF wavefunction of the molecule (in kwargs), then it is not recomputed
-            can also be a dictionary in the layout of wfn.to_file() (as stored by mol.save) or the file it wrote
-            the integrals are computed from it, unless they are given as well (as by sun.load_molecule)
-        """
+        """See the class docstring."""
         psi4.core.clean()
         psi4.core.clean_options()
         psi4.core.clean_variables()
@@ -301,6 +310,7 @@ class Psi4Mixin:
             ]
 
         def list_to_irrep_dict(orbital_list):
+            """Group a list of orbitals with total indices by irrep, as dictionary ``{irrep: [indices within the irrep]}``."""
             # assume we have been given a list of orbitals with their total indices instead of a dictionary with irreps
             active_dict = {}
             if orbital_list is None:
@@ -346,13 +356,13 @@ class Psi4Mixin:
         self.kwargs = kwargs
 
     def _update_after_active_space(self, *args, **kwargs):
-        """
-        Hook for the backend class, called once the psi4 active space is set
-        (e.g. to rebuild the transformation for the number of active orbitals)
-        args and kwargs: the ones of __init__
+        """Hook for the backend class, called once the Psi4 active space is set (e.g. to rebuild the transformation for the number of active orbitals).
+
+        Receives the ``*args`` and ``**kwargs`` of ``__init__``.
         """
 
     def __deepcopy__(self, memo):
+        """Copy the molecule, sharing the Psi4 objects (C++ bindings that cannot be copied)."""
         # psi4.core objects are C++ bindings that cannot be pickled, so deepcopy fails on them.
         # They are only read after construction, so the copy shares them instead of duplicating them.
         memo[id(self.psi4_mol)] = self.psi4_mol
@@ -367,6 +377,7 @@ class Psi4Mixin:
         return result
 
     def _backend_data(self):
+        """Return the data stored by ``save`` (the serialized reference wavefunction), or None if Psi4 cannot serialize it."""
         # the reference wavefunction in the psi4 serialization (plain types and numpy arrays), given back as ref_wfn on load
         try:
             return {"ref_wfn": self.ref_wfn.to_file()}
@@ -380,29 +391,29 @@ class Psi4Mixin:
 
     @property
     def nirrep(self):
+        """int : number of irreps of the point group used by Psi4."""
         return self.ref_wfn.nirrep()
 
     def orbital_energies(
         self, irrep: int | str | None = None, beta: bool = False, wfn=None
     ):
-        """
-        Returns orbital energies of a given irrep
-        or all orbital energies of all irreps (default)
+        """Return the orbital energies of one irrep, or of all orbitals by default.
 
         Parameters
         ----------
-        irrep: int or str :
-            int: specify the irrep by number (in cotton ordering)
-            str: specify the irrep by name (like 'A1')
-            specify from which irrep you want the orbital energies
-            psi4 orders irreps in 'Cotton ordering'
-            http://www.psicode.org/psi4manual/master/psithonmol.html#table-irrepordering
-        beta: bool : (Default value=False)
-            get the beta electrons
+        irrep : int or str, optional
+            Irrep given by its number (Psi4 uses Cotton ordering, see
+            http://www.psicode.org/psi4manual/master/psithonmol.html#table-irrepordering) or by its
+            name (e.g. "A1"). If None, or if the point group is C1, all energies are returned.
+        beta : bool, optional
+            Return the energies of the beta orbitals instead of the alpha ones.
+        wfn : psi4.core.Wavefunction, optional
+            Wavefunction to read the energies from. Default is the reference wavefunction.
 
         Returns
         -------
-        list or orbital energies
+        list of float or numpy.ndarray
+            All orbital energies as list, or the array of the energies of the given irrep.
         """
         if wfn is None:
             wfn = self.ref_wfn
@@ -428,6 +439,7 @@ class Psi4Mixin:
             return tmp[irrep]
 
     def initialize_integral_manager(self, *args, **kwargs):
+        """Run (or reuse) the Psi4 HF calculation and set up the integral manager with its orbitals and integrals."""
         # get HF wavefunction and orbital coefficients
         ref_wfn = kwargs.pop("ref_wfn", None)
         if ref_wfn is not None:
@@ -508,6 +520,12 @@ class Psi4Mixin:
         return super().initialize_integral_manager(*args, **kwargs)
 
     def compute_ccsd_amplitudes(self):
+        """Compute the CCSD amplitudes with Psi4, see ``compute_amplitudes``.
+
+        Examples
+        --------
+        >>> amplitudes = mol.compute_ccsd_amplitudes()  # doctest: +SKIP
+        """
         return self.compute_amplitudes(method="ccsd")
 
     def _run_psi4(
@@ -523,6 +541,7 @@ class Psi4Mixin:
         *args,
         **kwargs,
     ):
+        """Run a Psi4 calculation and return ``(energy, wavefunction)``; the output goes to ``filename``."""
         psi4.core.clean()
         psi4.core.clean_variables()
         psi4.core.clean_options()
@@ -593,9 +612,7 @@ class Psi4Mixin:
         return energy, wfn
 
     def _extract_active_space(self, arr):
-        """
-        Internal function that helps to convert CCSD amplitudes if an actice space was set
-        """
+        """Restrict CCSD amplitudes to the active space, if one is set."""
         if self.integral_manager.active_space is None or (
             len(self.integral_manager.active_space.active_orbitals)
             == self.integral_manager.one_body_integrals.shape[0]
@@ -642,6 +659,7 @@ class Psi4Mixin:
         final_shape = tuple(final_shape)
 
         def func(*args):
+            """Return 1 if all indices lie in the active sets of their axes, else 0."""
             result = 1
             for i in range(len(args)):
                 result *= args[i] in active_sets[i]
@@ -664,6 +682,29 @@ class Psi4Mixin:
         *args,
         **kwargs,
     ) -> Amplitudes | ClosedShellAmplitudes:
+        """Compute coupled-cluster amplitudes with Psi4.
+
+        Parameters
+        ----------
+        method : str
+            Psi4 method, e.g. "ccsd". For "mp2" the base class implementation is used.
+        options : dict, optional
+            Psi4 options.
+        filename : str, optional
+            Psi4 output file. Default is ``{parameters.filename}_{method}.out``.
+        **kwargs
+            Passed to the Psi4 run.
+
+        Returns
+        -------
+        ClosedShellAmplitudes or Amplitudes
+            Amplitudes, restricted to the active space if one is set.
+
+        Raises
+        ------
+        TequilaPsi4Exception
+            If Psi4 fails to compute the amplitudes.
+        """
         if options is None:
             options = {}
 
@@ -716,6 +757,31 @@ class Psi4Mixin:
         *args,
         **kwargs,
     ):
+        """Compute the energy of a classical method with Psi4.
+
+        The active space of the molecule is passed to Psi4 as frozen orbitals, if
+        it can be represented there.
+
+        Parameters
+        ----------
+        method : str, optional
+            Psi4 method, e.g. "hf", "mp2", "ccsd", "fci". Default is "fci".
+        options : dict, optional
+            Psi4 options.
+        recompute : bool, optional
+            If False, return the stored energy of a previous calculation of this
+            method when available. Default is True.
+        ignore_active_space : bool, optional
+            Compute in the full orbital space.
+        **kwargs
+            Passed to the Psi4 run, e.g. ``point_group``, ``filename``, ``guess_wfn``.
+            ``threads`` sets the number of Psi4 threads.
+
+        Returns
+        -------
+        float
+            Total energy.
+        """
         if (
             not recompute
             and method.lower() in self.energies
@@ -759,6 +825,7 @@ class Psi4Mixin:
         )[0]
 
     def __str__(self):
+        """Return a summary of the molecule with the Psi4 point groups and irreps."""
         result = super().__str__()
         result += "\nPsi4 Data\n"
         result += "{key:15} : {value:15} \n".format(
@@ -780,10 +847,12 @@ class Psi4Mixin:
 
     @property
     def rdm1(self) -> tuple:
+        """numpy.ndarray or tuple : one-electron reduced density matrix, see ``QuantumChemistryBase.rdm1``."""
         return super().rdm1
 
     @property
     def rdm2(self) -> tuple:
+        """numpy.ndarray or tuple : two-electron reduced density matrix, see ``QuantumChemistryBase.rdm2``."""
         return super().rdm2
 
     def compute_rdms(
@@ -798,32 +867,37 @@ class Psi4Mixin:
         *args,
         **kwargs,
     ):
-        """
-        Same functionality as qc_base.compute_rdms (look there for more information),
-        plus the additional option to compute 1- and 2-RDM using psi4 by the keyword psi4_rdms
+        r"""Compute the 1- and 2-RDM, from a circuit or with Psi4.
+
+        Same as ``QuantumChemistryBase.compute_rdms``, with the additional option to use
+        a Psi4 CI calculation (``psi4_method``) instead of a circuit. The matrices are stored
+        and available as ``rdm1`` and ``rdm2``; nothing is returned. The Psi4 2-RDM is converted to
+        the physics (Dirac) ordering, ``rdm2[p, q, r, s] = <a^p a^q a_s a_r>``.
 
         Parameters
         ----------
-        U :
-             Quantum Circuit to achieve the desired state \\psi = U |0\\rangle, optional if psi4_rdms is set to True
-        variables :
-            If U is parametrized, then need to hand over a set of fixed variables
-        spin_free :
-            Set whether matrices should be spin-free (summation over spin) or defined by spin-orbitals
-        get_rdm1, get_rdm2 :
-            Set whether either one or both rdm1, rdm2 should be computed. If both are needed at some point,
-            it is recommended to compute them at once.
-            Note that whatever is specified in psi4_options has priority.
-        psi4_method:
-            Method to be run, currently only methods returning a CIWavefuntion are supported
-            (e.g. "detci" + ex_level in options, or "fci", "cisdt", "casscf", but NOT "cisd")
-        psi4_options:
-           Options to be handed over to psi4, containing e.g. excitation level of "detci"-method.
-           If "detci__opdm" for 1-RDM and "detci__tpdm" for 2-RDM are not included, the keywords get_rdm1, get_rdm2 are
-           used (if both are specified, prioritizing psi4_options).
+        U : tq.QCircuit, optional
+            Circuit preparing the state :math:`\psi = U |0\rangle`. Not needed if
+            ``psi4_method`` is given.
+        variables : dict, optional
+            Values of the variables of ``U``, if it is parametrized.
+        spin_free : bool, optional
+            Return spin-free matrices (summed over spin) instead of spin orbital ones.
+        get_rdm1, get_rdm2 : bool, optional
+            Whether to compute the 1-RDM and/or the 2-RDM. If both are needed, compute
+            them at once. Entries ``detci__opdm`` and ``detci__tpdm`` in ``psi4_options`` have priority.
+        psi4_method : str, optional
+            Psi4 method to use. Only methods returning a CIWavefunction are supported
+            (e.g. "detci" with ``detci__ex_level`` in the options, "fci", "cisdt", "casscf");
+            "cisd" is converted to "detci" with ``ex_level=2``.
+        psi4_options : dict, optional
+            Psi4 options, e.g. the excitation level of "detci". Default excitation level is 2.
+            If "detci__opdm" (1-RDM) or "detci__tpdm" (2-RDM) are not included, ``get_rdm1`` and
+            ``get_rdm2`` decide; if both are given, ``psi4_options`` takes priority.
 
-        Returns
-        -------
+        Examples
+        --------
+        >>> mol.compute_rdms(U=None, psi4_method="detci", psi4_options={"detci__ex_level": 2})  # doctest: +SKIP
         """
         if psi4_options is None:
             psi4_options = {}
@@ -886,38 +960,47 @@ class Psi4Mixin:
         cabs_options: dict | None = None,
         **kwargs,
     ) -> float:
-        """
-        Computes the spin-free [2]_R12 correction, needing only the 1- and 2-RDM of a reference method
-        Requires either 1-RDM, 2-RDM or information to compute them in kwargs
+        """Compute the spin-free [2]_R12 explicitly correlated energy correction.
+
+        Only the 1- and 2-RDM of a reference method are needed, either given directly
+        or computed through ``kwargs``. The correction is added to the energy of the
+        reference method.
 
         Parameters
         ----------
-        rdm1 :
-            1-electron reduced density matrix
-        rdm2 :
-            2-electron reduced density matrix
-        gamma :
-            f12-exponent, for a correlation factor f_12 = -1/gamma * exp[-gamma*r_12]
-        n_ri :
-            dimensionality of RI-basis; if None, then the maximum available via tensors / basis-set is used
-        cabs_type :
-            - either "active" for using a given basis set as is as approximative CBS (complete basis set), and specify
-            OBS (orbital basis) by an active space
-            - or "cabs+" for CABS+-approach as in
-                Valeev, E. F. (2004). Improving on the resolution of the identity in linear R12 ab initio theories.
-                Chemical Physics Letters, 395(4–6), 190–195. https://doi.org/10.1016/j.cplett.2004.07.061
-                -> pass cabs_name in cabs_options
-        cabs_options :
-            dict, which needs at least {"cabs_name": some CABS basis set} if cabs_type=="cabs+"
-        kwargs :
-            e.g. RDM-information via {"U": QCircuit, "variables": optimal angles} if computation via VQE,
-            or {"rdm__psi4_method": some CI method, "rdm__psi4_options": dict with psi4 options} if computation via
-            psi4, compare to psi4_interface.compute_rdms
-            one of the above needs to be passed if rdm1,rdm2 not yet computed
+        rdm1 : numpy.ndarray, optional
+            One-electron reduced density matrix.
+        rdm2 : numpy.ndarray, optional
+            Two-electron reduced density matrix (spin-free), in the physics (Dirac) ordering as
+            returned by ``compute_rdms``.
+        gamma : float, optional
+            Exponent of the correlation factor f_12 = -1/gamma * exp(-gamma*r_12). Default is 1.4.
+        n_ri : int, optional
+            Dimension of the RI basis. By default the largest available one is used.
+        cabs_type : str {"active", "cabs+"}, optional
+            "active" uses the basis set as approximate CBS and an active space as OBS.
+            "cabs+" uses the CABS+ approach of Valeev, Chem. Phys. Lett. 395, 190 (2004),
+            doi:10.1016/j.cplett.2004.07.061, which needs ``cabs_options["cabs_name"]``.
+            Default is "active".
+        cabs_options : dict, optional
+            Options for "cabs+": ``cabs_name`` (CABS basis set) and ``lindep_tol``.
+        **kwargs
+            Needed if the RDMs are not given: ``U`` and ``variables`` (to compute them from a
+            circuit) or ``rdm__psi4_method`` and ``rdm__psi4_options`` (to compute them
+            with Psi4, see ``compute_rdms``).
 
         Returns
         -------
-            the f12 correction for the energy
+        float
+            The F12 correction to the energy.
+
+        Examples
+        --------
+        >>> mol = sun.Molecule(geometry="He 0.0 0.0 0.0", basis_set="cc-pvdz",
+        ...                    active_orbitals=[0, 1], point_group="c1")  # doctest: +SKIP
+        >>> dE = mol.perturbative_f12_correction(
+        ...     cabs_type="cabs+", cabs_options={"cabs_name": "cc-pvqz"},
+        ...     rdm__psi4_method="detci")  # doctest: +SKIP
         """
         from .f12_corrections._f12_correction_psi4 import (
             ExplicitCorrelationCorrectionPsi4,
@@ -938,6 +1021,23 @@ class Psi4Mixin:
 
 
 class QuantumChemistryPsi4(Psi4Mixin, QuantumChemistryBase):
+    """Qubit molecule with integrals and classical methods from Psi4, see ``Psi4Mixin`` for the
+    backend options.
+
+    Parameters
+    ----------
+    parameters : ParametersQC
+        Geometry, basis set, charge and other molecule parameters.
+    transformation : str or callable, optional
+        Fermion-to-qubit transformation (e.g. "jordan-wigner").
+    active_orbitals, reference_orbitals, frozen_orbitals, *args, **kwargs
+        See ``Psi4Mixin``.
+
+    Examples
+    --------
+    >>> mol = QuantumChemistryPsi4(parameters=ParametersQC(geometry="h2.xyz", basis_set="sto-3g"), point_group="c1")  # doctest: +SKIP
+    """
+
     def __init__(
         self,
         parameters: ParametersQC,
@@ -948,6 +1048,7 @@ class QuantumChemistryPsi4(Psi4Mixin, QuantumChemistryBase):
         *args,
         **kwargs,
     ):
+        """See the class docstring."""
         super().__init__(
             parameters,
             active_orbitals,
@@ -959,5 +1060,6 @@ class QuantumChemistryPsi4(Psi4Mixin, QuantumChemistryBase):
         )
 
     def _update_after_active_space(self, *args, **kwargs):
+        """Rebuild the transformation for the number of active orbitals."""
         # the transformation needs the number of active orbitals
         self.transformation = self._initialize_transformation(*args, **kwargs)

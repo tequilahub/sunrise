@@ -13,7 +13,7 @@ from sunrise.symmetry_adaptation import (
     PointGroupRepresentation,
     SpinCGSymmetrizationProcedure,
     SpinSymmetrizationProcedure,
-    SymmetryAdaptedLinearCombintationSymmetrization,
+    SymmetryAdaptedLinearCombinationSymmetrization,
 )
 from sunrise.utils.transformation_helpers import FermionicSWAP
 
@@ -380,7 +380,7 @@ def test_SALC_symmetrization(molecule_pointgroup) -> None:
     provider_localized = IrrepProvider(mol, "loc")
     states_list = FockSpaceState.non_ionic_states(mol, provider_localized)
 
-    symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(
+    symm_list = SymmetryAdaptedLinearCombinationSymmetrization(mol).symmetrize(
         states_list
     )
     s2_op = mol.make_s2_op()
@@ -403,7 +403,7 @@ def test_SALC_symmetrization_correctness() -> None:
     provider_localized = IrrepProvider(mol, "loc")
     states_list = FockSpaceState.non_ionic_states(mol, provider_localized)
 
-    symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(
+    symm_list = SymmetryAdaptedLinearCombinationSymmetrization(mol).symmetrize(
         states_list
     )
 
@@ -442,7 +442,7 @@ def test_SALC_symmetrization_mixed_orbitals() -> None:
     assert mol.point_group.schoenflies_label == "D3h"
 
     states_list = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
-    procedure = SymmetryAdaptedLinearCombintationSymmetrization(mol)
+    procedure = SymmetryAdaptedLinearCombinationSymmetrization(mol)
     symm_list = procedure.symmetrize(states_list)
     assert len(symm_list) == len(states_list)
     assert Counter(state.irrep for state in symm_list) == {"A1'": 2, "A2'": 3, "E'": 10}

@@ -1,3 +1,5 @@
+"""Simulation of FCircuits with the FQE (OpenFermion-FQE) backend."""
+
 from __future__ import annotations
 
 from warnings import warn
@@ -26,6 +28,25 @@ except ImportError:
 def fqe_circuit_simulatorU(
     U: FCircuit, variables: Variables, n_orb: int | None = None, **backend_kwargs
 ) -> QubitWaveFunction:
+    """Simulate an FCircuit with FQE and return the final wavefunction.
+
+    Parameters
+    ----------
+    U : FCircuit
+        Circuit to simulate. It needs an initial state or number of electrons,
+        otherwise an empty wavefunction is returned with a warning.
+    variables : dict
+        Values of the circuit variables.
+    n_orb : int, optional
+        Number of spatial orbitals. Default is inferred from the circuit.
+    **backend_kwargs
+        Passed on to ``FQEBraKet``.
+
+    Returns
+    -------
+    QubitWaveFunction
+        Final state.
+    """
     from .. import Braket
     from ..minimize import compile
 
@@ -68,6 +89,7 @@ def fqe_circuit_simulatorU(
 
 
 def __generate_dummy_mol(n_orb: int, n_elec: int):
+    """Return a molecule with zero integrals and ``n_elec`` electrons, only used to build the braket."""
     h = np.zeros(shape=(n_orb, n_orb))
     g = np.zeros(shape=(n_orb, n_orb, n_orb, n_orb))
     geo = "".join([f"H 0. 0. {i}\n" for i in range(n_orb)])
@@ -84,6 +106,7 @@ def __generate_dummy_mol(n_orb: int, n_elec: int):
 
 
 def map_variables(x: list[Variable, Objective], dvariables: dict):
+    """Return the value of ``x``, evaluating it with ``dvariables`` if it is a Variable or Objective."""
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):

@@ -1,3 +1,5 @@
+"""Fock-space states (occupation-number determinants and their superpositions) with their spin and symmetry labels."""
+
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -19,7 +21,27 @@ if TYPE_CHECKING:
 
 @dataclass
 class FockSpaceState:
-    """A class representing a state in Fock space, i.e. a state of occupation numbers for each orbital."""
+    """A state in Fock space, i.e. a (superposition of) occupation-number state(s) with its spin and symmetry labels.
+
+    Qubits are ordered per spatial orbital as (alpha, beta), so bit ``2*i`` and ``2*i + 1`` of a
+    determinant are the spin orbitals of spatial orbital ``i``. Labels not given at construction
+    are computed on demand.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule defining the orbitals.
+    wavefunction : str or tequila.QubitWaveFunction
+        State to describe. A string is read as a bitstring, e.g. ``"1100"``.
+    provider : IrrepProviderBase
+        Provider used to compute the irrep.
+    S2 : float, optional
+        Precomputed value of :math:`S^2`, otherwise computed from the wavefunction.
+    irrep : str, optional
+        Precomputed irrep, otherwise computed with ``provider``.
+    m_s : float, optional
+        Precomputed spin projection, otherwise computed from the wavefunction.
+    """
 
     mol: QuantumChemistryBase
     wavefunction: tequila.QubitWaveFunction
@@ -50,11 +72,12 @@ class FockSpaceState:
 
     @property
     def is_superposition(self) -> bool:
-        """Returns True if the state is a superposition of multiple occupation number states, False if it is a single occupation number state."""
+        """bool : True if the wavefunction has more than one determinant."""
         return len([x for x in self.wavefunction.items()]) != 1
 
     @cached_property
     def bitstring(self) -> str | None:
+        """str or None : occupation bitstring in (alpha, beta) pairs per orbital, None for a superposition."""
         if self.is_superposition:
             return None
         return format(
@@ -63,7 +86,10 @@ class FockSpaceState:
 
     @cached_property
     def mo_occ(self) -> list[float]:
-        """Returns the expectation value of the occupation numbers of the molecular orbitals corresponding to the state."""
+        """list of float : occupation (0 to 2) of each spatial orbital.
+
+        For a superposition it is the expectation value, rounded to 4 digits.
+        """
 
         n_orbitals = self.mol.n_orbitals
         mo_occ = [0.0] * n_orbitals
@@ -90,7 +116,7 @@ class FockSpaceState:
 
     @cached_property
     def m_s(self) -> numpy.float64:
-        """Returns the total spin projection (m_s or ⟨S_z⟩) of the state."""
+        r"""float : spin projection :math:`\langle :math:`S_z` \rangle` of the state (as given at construction, or computed and rounded to 10 decimals)."""
         if self._m_s is not None:
             return self._m_s
         return numpy.round(
@@ -100,7 +126,7 @@ class FockSpaceState:
 
     @cached_property
     def S2(self) -> numpy.float64:
-        """Returns the expectation value of the total spin squared operator (⟨S^2⟩) for the state."""
+        """float : expectation value of :math:`S^2` (as given at construction, or computed and rounded to 10 decimals)."""
         if self._S2 is not None:
             return self._S2
         return numpy.round(
@@ -110,7 +136,7 @@ class FockSpaceState:
 
     @cached_property
     def spin_multiplicity(self) -> int:
-        """Returns the spin multiplicity of the state, defined by 2S + 1 as string."""
+        """str : spin multiplicity name derived from S2 ("singlet", "doublet", ... "nonet"), "mixed" if S2 matches none."""
 
         rounded_eigval = round(self.S2 * 4) / 4
         spin_type = {
@@ -128,13 +154,9 @@ class FockSpaceState:
 
     @cached_property
     def seniority(self) -> int | None:
-        """
-        Seniority = number of singly occupied orbitals, in the orbital basis
-        of self.wavefunction.
+        """int or None : number of singly occupied orbitals, in the orbital basis of the wavefunction.
 
-        Returns an int iff the state is an eigenstate of the seniority operator
-        (all determinants share the same seniority); None for superpositions
-        across seniority sectors.
+        None if the determinants have different seniorities.
         """
         # an orbital is singly occupied if its two qubits 2*i and 2*i+1 differ
         n_qubits = 2 * self.mol.n_orbitals
@@ -149,6 +171,13 @@ class FockSpaceState:
 
     @cached_property
     def irrep(self):
+        """str or None : irrep label of the state, the given one or computed with the irrep provider.
+
+        Raises
+        ------
+        TypeError
+            If no irrep was given and ``irrep_provider`` is not an ``IrrepProviderBase``.
+        """
         if self._irrep is not None:
             return self._irrep
         if not isinstance(self.irrep_provider, IrrepProviderBase):
@@ -162,7 +191,21 @@ class FockSpaceState:
 
     @classmethod
     def dataframe(cls, states: list[FockSpaceState]) -> DataFrame:
-        """Returns a pandas DataFrame representation of a list of FockSpaceStates."""
+        """Return a pandas DataFrame with one row per state.
+
+        Parameters
+        ----------
+        states : list of FockSpaceState
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns bitstring, wavefunction, mo_occ, m_s, S2, spin multiplicity, irrep, irrep_provider.
+
+        Examples
+        --------
+        >>> FockSpaceState.dataframe(states)
+        """
 
         return DataFrame(
             data=[
@@ -194,7 +237,17 @@ class FockSpaceState:
     def all_states(
         cls, mol: QuantumChemistryBase, provider: IrrepProviderBase
     ) -> list[FockSpaceState]:
-        """Generates all possible Fock space states for a given molecule."""
+        """Generate all Fock-space states of a molecule (including ionic ones).
+
+        Parameters
+        ----------
+        mol : QuantumChemistryBase
+        provider : IrrepProviderBase
+
+        Returns
+        -------
+        list of FockSpaceState
+        """
         return cls.by_filter(mol, provider)
 
     @classmethod
@@ -203,7 +256,22 @@ class FockSpaceState:
         mol: QuantumChemistryBase,
         provider: IrrepProviderBase,
     ) -> list[FockSpaceState]:
-        """Generates all non-ionic Fock space states for a given molecule."""
+        """Generate all non-ionic states, i.e. with the electron number of the molecule.
+
+        Parameters
+        ----------
+        mol : QuantumChemistryBase
+        provider : IrrepProviderBase
+
+        Returns
+        -------
+        list of FockSpaceState
+
+        Examples
+        --------
+        >>> states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
+        >>> [s.irrep for s in states]
+        """
         n_qubits = 2 * mol.n_orbitals
         # exactly the bitstrings with n_electrons bits set, with no wasted candidates
         gen = (
@@ -226,16 +294,43 @@ class FockSpaceState:
         max_count: int | None = None,
         bitstring_generator: Generator[str, None, None] | None = None,
     ) -> list[FockSpaceState]:
-        """Efficiently generates Fock space states for a given molecule taking various filters into account."""
+        """Generate Fock-space states of a molecule, keeping only those that satisfy the given filters.
+
+        Parameters
+        ----------
+        mol : QuantumChemistryBase
+        provider : IrrepProviderBase
+        mo_occ : list of int, optional
+            Required occupation (0, 1 or 2) of each spatial orbital. Also speeds up the search.
+        m_s : float, optional
+            Required spin projection.
+        S2 : float, optional
+            Required value of :math:`S^2`.
+        spin_multiplicity : str, optional
+            Required multiplicity name, e.g. ``"triplet"``.
+        irrep : str, optional
+            Required irrep label.
+        non_ionic : bool
+            If True, keep only states with the electron number of the molecule.
+        max_count : int, optional
+            Stop after this many states.
+        bitstring_generator : generator of str, optional
+            Candidate bitstrings to use instead of the whole Fock space. Takes precedence over
+            ``mo_occ``.
+
+        Returns
+        -------
+        list of FockSpaceState
+
+        Raises
+        ------
+        ValueError
+            If ``mo_occ`` does not have one entry per orbital.
+        """
         # import pyscf
 
         def mo_occ_bitstring_generator(values: list[int]) -> Generator[str, Any, None]:
-            """
-            maxs a list of 0s, 1s, and 2s and yields encoded strings.
-            - 0  -> "00"
-            - 2  -> "11"
-            - 1  -> either "10" or "01", yielding all combinations of these for each 1 in the input list.
-            """
+            """Yield the bitstrings for an occupation list of 0s, 1s and 2s: 0 is "00", 2 is "11" and 1 gives both "01" and "10"."""
             TWO_ONE_COMBOS = ["01", "10"]
             ones_count = values.count(1)
             one_options = [TWO_ONE_COMBOS] * ones_count

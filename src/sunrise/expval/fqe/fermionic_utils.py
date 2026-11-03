@@ -1,3 +1,5 @@
+"""Helpers to build fermionic Hamiltonians and excitation generators as OpenFermion operators."""
+
 import typing
 from collections import defaultdict
 from itertools import combinations
@@ -10,7 +12,24 @@ from sunrise.fermionic_operations.gates import *
 def make_fermionic_hamiltonian(
     one_body_integrals, two_body_integrals, constant, *args, **kwargs
 ):
+    """Build the molecular Hamiltonian as an OpenFermion FermionOperator.
 
+    Parameters
+    ----------
+    one_body_integrals : numpy.ndarray
+        One-body integrals in the spatial-orbital basis.
+    two_body_integrals : numpy.ndarray
+        Two-body integrals in the spatial-orbital basis (OpenFermion ordering).
+    constant : float
+        Constant energy term (nuclear repulsion plus core energy).
+    *args, **kwargs
+        Ignored.
+
+    Returns
+    -------
+    openfermion.FermionOperator
+        Hamiltonian in spin orbital basis.
+    """
     one_body_coefficients, two_body_coefficients = (
         openfermion.chem.molecular_data.spinorb_from_spatial(
             one_body_integrals, two_body_integrals
@@ -28,26 +47,33 @@ def make_fermionic_hamiltonian(
 def make_excitation_generator_op(
     indices: typing.Iterable[tuple[int, int]], form: str = "fermionic"
 ) -> openfermion.FermionOperator:
-    r"""
-    Notes
-    ----------
-    Creates the transformed hermitian generator of UCC type unitaries:
-          M(a^\dagger_{a_0} a_{i_0} a^\dagger{a_1}a_{i_1} ... - h.c.)
-          where the qubit map M depends is self.transformation
+    r"""Build the anti-Hermitian generator of a fermionic excitation.
+
+    For pairs ``(i_k, a_k)`` the generator is
+    :math:`-i\,a^\dagger_{a_0} a_{i_0} a^\dagger_{a_1} a_{i_1} \cdots + \text{h.c.}`,
+    so that :math:`\exp(\theta G)` is a UCC-type unitary.
 
     Parameters
     ----------
-    indices : typing.Iterable[typing.Tuple[int, int]] :
-        List of tuples [(i_0, a_0), (i_1, a_1), ... ], each pair destroys i and creates a - recommended format, in spin-orbital notation (alpha odd numbers, beta even numbers)
-        can also be given as one big list: [i_0, a_0, i_1, a_1 ...]
-    form : str : (Default value None):
-        Manipulate the generator to involution or projector
-        set form='involution' or 'projector'
-        the default is no manipulation which gives the standard fermionic excitation operator back
+    indices : iterable of tuple of int
+        Pairs ``[(i_0, a_0), (i_1, a_1), ...]`` in spin orbital notation, each
+        pair destroying ``i`` and creating ``a``. A flat list
+        ``[i_0, a_0, i_1, a_1, ...]`` is also accepted.
+    form : str, optional
+        "fermionic" (default) returns the plain generator. Other values transform
+        it into an involution or projector: "g+", "g-" (involutions), "p+", "p-",
+        "p0" (projectors).
+
     Returns
     -------
-    type
-        1j*Transformed qubit excitation operator, depends on self.transformation
+    openfermion.FermionOperator
+        Generator of the excitation. If it is a number operator (``i == a``), the
+        number operator itself is returned.
+
+    Raises
+    ------
+    TequilaException
+        If no indices are given, the flat list has odd length or ``form`` is unknown.
     """
 
     # check indices and convert to list of tuples if necessary
@@ -138,7 +164,22 @@ def make_excitation_generator_op(
 
 
 def create_fermionic_generators(instructions, angles, form: str = "fermionic") -> dict:
+    """Build the excitation generators for a list of excitations.
 
+    Parameters
+    ----------
+    instructions : list of list of tuple of int
+        Excitations, each a list of ``(i, a)`` pairs.
+    angles : list
+        Variable of each excitation.
+    form : str, optional
+        Form of the generators, see ``make_excitation_generator_op``.
+
+    Returns
+    -------
+    dict
+        Maps each variable of ``angles`` to the list of generators it multiplies.
+    """
     generators = defaultdict(list)
     new_instructions = []
 
@@ -160,17 +201,20 @@ def create_fermionic_generators(instructions, angles, form: str = "fermionic") -
 
 
 def generate_of_binary_dict(n_orb: int, n_e: int) -> dict:
-    """
-    create a dictionary of all possibilities of a binary string of length n_orb with n_e number of 1s as a key and
-    the integer value of the binary string as the value
+    """Map each occupation bitstring to a running index.
+
     Parameters
     ----------
-    n_orb: number of orbitals
-    n_e: number of electrons
+    n_orb : int
+        Length of the bitstrings.
+    n_e : int
+        Number of ones in each bitstring.
 
     Returns
     -------
-    Dictionary with the key being the binary possibilities and the value being the integer value of the binary string
+    dict
+        Keys are the (reversed) binary strings with ``n_e`` ones, values their
+        index in order of generation.
     """
     result = {}
     for index, positions in enumerate(combinations(range(n_orb), n_e)):

@@ -1,3 +1,5 @@
+"""Symbolic braket of fermionic circuits, the backend-independent argument of sunrise Objectives."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -17,6 +19,38 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 class FermBraketImpl(QuantumArg):
+    r"""Symbolic braket :math:`\langle bra|O|ket \rangle` between two FCircuits.
+
+    It is stored inside a tequila Objective and compiled by a fermionic backend
+    (spex, tcc, fqe, ffsim or tequila) when the Objective is simulated. It cannot be
+    evaluated directly. Users normally create it through ``sunrise.Braket``.
+
+    Parameters
+    ----------
+    ket : FCircuit
+        Circuit preparing the ket state.
+    bra : FCircuit, optional
+        Circuit preparing the bra state. If None, the ket is used.
+    operator : str or FermionOperator, optional
+        Operator between bra and ket. None means a plain overlap.
+    molecule : QuantumChemistryBase, optional
+        Molecule providing integrals and number of orbitals. If given, circuits
+        are converted to up-then-down orbital ordering.
+    contraction : callable, optional
+        Kept for compatibility with tequila's BraKet, unused by the backends.
+    shape : tuple, optional
+        Kept for compatibility with tequila's BraKet.
+    samples : int, optional
+        Number of samples, stored for tequila compatibility.
+    *args, **kwargs
+        Additional options stored and passed on to the backends.
+
+    Raises
+    ------
+    TequilaException
+        If ``ket`` is None.
+    """
+
     def __init__(
         self,
         ket: FCircuit,
@@ -44,18 +78,34 @@ class FermBraketImpl(QuantumArg):
         self._kwargs = kwargs
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
+        """Raise an error: the braket is symbolic and must be simulated through an Objective."""
         raise TequilaException(
             "FermBraketImpl is symbolic and should not be evaluated directly. "
             "Use sm.simulate(FermBraketImpl(...)) for backend execution."  # TODO or BraKet(...)[0/1] for symbolic objectives. this is from tequila, should we?
         )
 
     def compile(self) -> tuple:
+        """Return an Objective wrapping this braket."""
         return Objective(args=[self], transformation=identity)
 
     def grad(self, variable: Variable = None, *args, **kwargs) -> Objective:
+        """Return the gradient of the braket.
+
+        Parameters
+        ----------
+        variable : Variable, optional
+            Variable to differentiate with respect to. If None, a dict with the
+            gradients for all variables is returned.
+
+        Returns
+        -------
+        tq.Objective or dict
+            Gradient Objective, or dict {variable: gradient Objective}.
+        """
         return _grad_FermBraket(*args, objective=self, variable=variable, **kwargs)
 
     def extract_variables(self) -> list:
+        """Return the unique variables of ket and bra, in order of appearance."""
         var = list(self.ket.extract_variables())
         if self.bra is not None:
             var.extend(self.bra.extract_variables())
@@ -68,12 +118,14 @@ class FermBraketImpl(QuantumArg):
         return unique
 
     def count_measurements(self) -> int:
+        """Return the number of measurements needed, ``n_orbitals**4`` with a molecule, otherwise 1."""
         if self.molecule is not None:
             return self.molecule.n_orbitals**4
         else:
             return 1
 
     def map_variables(self, variables: dict, *args, **kwargs) -> FermBraketImpl:
+        """Return a new braket with variables replaced according to the dict ``variables``."""
         return FermBraketImpl(
             ket=self.ket.map_variables(variables, *args, **kwargs),
             bra=self.bra.map_variables(variables, *args, **kwargs)
@@ -88,6 +140,7 @@ class FermBraketImpl(QuantumArg):
         )
 
     def map_qubits(self, qubit_map: dict) -> FermBraketImpl:
+        """Return a new braket with qubits (orbital indices) relabelled according to ``qubit_map``."""
         op = None
         if hasattr(self.operator, "map_qubits"):
             op = self.operator.map_qubits(qubit_map)
@@ -107,28 +160,34 @@ class FermBraketImpl(QuantumArg):
 
     @property
     def U(self):
+        """FCircuit : alias of the ket circuit."""
         return self.ket
 
     @property
     def H(self) -> tuple:
+        """tuple : the operator as a tuple, empty for a plain overlap."""
         if self.operator is None:
             return ()
         return (self.operator,)
 
     @property
     def is_overlap(self) -> bool:
+        """bool : True if there is no operator."""
         return self.operator is None
 
     @property
     def is_self_overlap(self) -> bool:
+        """bool : True for the overlap of a state with itself."""
         return self.is_overlap and self.is_diagonal
 
     @property
     def is_diagonal(self) -> bool:
+        """bool : True if bra and ket are the same state (an expectation value)."""
         return self.bra is None or self.bra == self.ket
 
     @property
     def qubits(self) -> list[int]:
+        """list of int : sorted qubits acted on by ket, bra and operator."""
         q = set(self.ket.qubits)
         if self.bra is not None:
             q = set(self.bra.qubits) | q
@@ -139,22 +198,18 @@ class FermBraketImpl(QuantumArg):
 
     @property
     def is_compiled(self) -> bool:
+        """bool : always False, the braket is symbolic."""
         return False
 
     @property
     def bra(self) -> FCircuit:
-        """
-        Excitation operators applied to the bra.
-        """
+        """FCircuit : circuit preparing the bra state, the ket circuit if no bra was given."""
         if self._bra is None:
             return self.ket
         return self._bra
 
     @bra.setter
     def bra(self, bra: FCircuit):
-        """
-        Expected FCircuit.
-        """
         assert bra is None or isinstance(bra, FCircuit), (
             f"FCircuit expected, received {type(bra).__name__}"
         )
@@ -164,16 +219,11 @@ class FermBraketImpl(QuantumArg):
 
     @property
     def ket(self) -> FCircuit:
-        """
-        Excitation operators applied to the ket.
-        """
+        """FCircuit : circuit preparing the ket state."""
         return self._ket
 
     @ket.setter
     def ket(self, ket: FCircuit):
-        """
-        Expected FCircuit
-        """
 
         assert isinstance(ket, FCircuit), (
             f"FCircuit expected, received {type(ket).__name__}"
@@ -184,6 +234,7 @@ class FermBraketImpl(QuantumArg):
 
     @property
     def operator(self):
+        """str or FermionOperator or None : operator between bra and ket."""
         return self._operator
 
     @operator.setter
@@ -205,6 +256,12 @@ _SHIFTS = [(pi / 2, _C1), (-pi / 2, -_C1), (3 * pi / 2, -_C2), (-3 * pi / 2, _C2
 
 
 def _grad_FermBraket(objective: FermBraketImpl, variable: Variable = None) -> Objective:
+    """Return the gradient of a braket with respect to ``variable`` as an Objective.
+
+    Uses a four-term parameter-shift rule for each gate depending on the variable.
+    If ``variable`` is None, return a dict {variable: gradient} for all variables.
+    Return 0.0 if the braket does not depend on ``variable``.
+    """
     if variable is None:
         # None means that all components are created
         variables = objective.extract_variables()
@@ -247,16 +304,7 @@ def _grad_FermBraket(objective: FermBraketImpl, variable: Variable = None) -> Ob
 def _grad_shift_rule(
     g: FGateImpl, i: int, variable: Variable, expval: FermBraketImpl, bra: bool
 ) -> Objective:
-    """
-    function for getting the gradients of directly differentiable gates. Expects precompiled circuits.
-    :param unitary: FCircuit: the FCircuit object containing the gate to be differentiated
-    :param g: a parametrized: the gate being differentiated
-    :param i: int: the position in unitary at which g appears
-    :param variable: Variable or String: the variable with respect to which gate g is being differentiated
-    :param hamiltonian: the hamiltonian with respect to which unitary is to be measured, in the case that unitary
-        is contained within an ExpectationValue
-    :return: an Objective, whose calculation yields the gradient of g w.r.t variable
-    """
+    """Return the gradient contribution of gate ``g`` (position ``i``, in bra if ``bra`` is True) via a shift rule."""
     gradient = 0.0
     expval = deepcopy(expval)
     if type(g).__name__ == "URImpl":
@@ -338,13 +386,7 @@ def _grad_shift_rule(
 
 
 def _grad_phase(arg, variable):
-    """
-    a modified loop over __grad_objective, which gets derivatives
-     all the way down to variables, return 1 or 0 when a variable is (isnt) identical to var.
-    :param arg: a transform or variable object, to be differentiated
-    :param variable: the Variable with respect to which par should be differentiated.
-    :ivar var: the string representation of variable
-    """
+    """Return the derivative of ``arg`` with respect to ``variable`` (1 or 0 for plain variables)."""
 
     assert isinstance(variable, Variable)
     if isinstance(arg, Variable):

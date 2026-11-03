@@ -1,3 +1,5 @@
+"""Conversion of user-supplied color and style options into qpic style objects."""
+
 from __future__ import annotations
 
 from tequila import TequilaException
@@ -7,6 +9,7 @@ from .state import CircuitStyle
 
 
 def hex_to_three_letters(hex_color: str) -> str:
+    """Map a hex color ``"#RRGGBB"`` to a three-letter name usable as a qpic color name."""
     hex_color = hex_color.lstrip("#").upper()
     if len(hex_color) != 6:
         raise ValueError("Hex color must be 6 digits (e.g., FF5733).")
@@ -28,6 +31,7 @@ def hex_to_three_letters(hex_color: str) -> str:
 
 
 def hex_to_rgb(hex_str: str) -> tuple:
+    """Convert a 6-digit hex string (no ``#``) to an ``(r, g, b)`` tuple in [0, 1]."""
     rgb = []
     for i in (0, 2, 4):
         decimal = int(hex_str[i : i + 2], 16) / 255
@@ -38,6 +42,28 @@ def hex_to_rgb(hex_str: str) -> tuple:
 def parse_color(
     color: Color | tuple | list | str, color_dict: dict | None = None
 ) -> tuple[Color, dict]:
+    """Convert a user color specification to a ``Color``.
+
+    Hex strings (``"#RRGGBB"`` or ``"RRGGBB"``) are registered in ``color_dict``
+    under a generated name; other strings are taken as qpic color names.
+
+    Parameters
+    ----------
+    color : Color, str, tuple or list
+        Color to convert. A tuple or list must hold three RGB components.
+    color_dict : dict, optional
+        Custom color definitions (name to RGB), extended in place.
+
+    Returns
+    -------
+    tuple
+        The color and the updated ``color_dict``.
+
+    Raises
+    ------
+    TequilaException
+        If the color format is not recognized.
+    """
     if color_dict is None:
         color_dict = {}
     if isinstance(color, Color):
@@ -65,6 +91,31 @@ def parse_color(
 def parse_circuit_style(
     style: dict | None = None, color_dict: dict | None = None
 ) -> tuple[CircuitStyle, dict]:
+    """Build a ``CircuitStyle`` from a plain dictionary of options.
+
+    Recognized keys are ``group_together``, ``parametrized``, ``color_range``,
+    ``primary``, ``secondary`` (each with an optional ``<key>_text`` color),
+    ``personalize`` (gate name to color) and per-gate colors ``double``,
+    ``single``, ``generic``, ``UC``, ``UR`` (``single`` and ``double`` are
+    aliases of ``UR`` and ``UC``). Colors can be anything accepted by ``parse_color``.
+
+    Parameters
+    ----------
+    style : dict, optional
+        Style options. Not modified.
+    color_dict : dict, optional
+        Existing custom color definitions (name to RGB).
+
+    Returns
+    -------
+    tuple
+        The style and the color dictionary including newly defined colors.
+
+    Raises
+    ------
+    TequilaException
+        If ``color_range`` does not hold exactly two colors.
+    """
     if style is None:
         style = {}
     if color_dict is None:

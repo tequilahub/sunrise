@@ -1,23 +1,35 @@
+"""Top-level ``draw`` function for Sunrise and tequila circuits."""
+
 import hashlib
 import os
 
 
 def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
-    """
-    Draw a Sunrise FCircuit or Tequila Objective using the Sunrise graphical engine.
+    """Draw an FCircuit, QCircuit or tequila Objective as a PNG image.
+
+    FCircuits are rendered with the Sunrise engine (via ``FCircuit.export_to``),
+    plain tequila QCircuits fall back to ``tq.draw``. For an Objective, every
+    distinct expectation value circuit is drawn to ``<filename>_<i>.png``. In
+    Jupyter the image is displayed inline, otherwise its path is printed.
 
     Parameters
     ----------
-    circuit : FCircuit, QCircuit, or Objective
-        The circuit or objective to draw.
+    circuit : FCircuit, tq.QCircuit or tq.Objective
+        The circuit or objective to draw. ExpectationValues are unwrapped to their circuit.
     filename : str, optional
-        Name of the output file. Defaults to a unique temporary name.
+        Output file name; the extension is forced to ``.png``. Default is a
+        unique name ``sunrise_draw_<hash>.png``.
     width : int, optional
-        Width of the displayed image in Jupyter.
+        Width of the image displayed in Jupyter.
     height : int, optional
-        Height of the displayed image in Jupyter.
-    *args, **kwargs :
-        Additional arguments passed to FCircuit.export_to (e.g., show_spatial_orbitals, style).
+        Height of the image displayed in Jupyter. Default is 300.
+    *args, **kwargs
+        Passed to ``FCircuit.export_to`` (e.g. ``style``). A ``backend`` keyword is ignored.
+
+    Examples
+    --------
+    >>> import sunrise as sun
+    >>> sun.draw(circuit, filename="my_circuit.png")  # doctest: +SKIP
     """
     from tequila.objective import Objective
 

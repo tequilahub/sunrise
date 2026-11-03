@@ -1,3 +1,5 @@
+"""Variants of the pairing heuristics of ``shared`` that return several good pairings (best n solutions) instead of one."""
+
 import math
 import random
 
@@ -9,10 +11,33 @@ from .shared import matrix_scaling
 
 
 def total_distance(edges: list[tuple[int, int]], coordinates: np.ndarray):
+    """Return the summed distance of the ``(i, j)`` pairs in ``edges`` for the given coordinates.
+
+    Parameters
+    ----------
+    edges : list of tuple of int
+        Pairs ``(i, j)`` of atom indices.
+    coordinates : numpy.ndarray
+        Atomic coordinates, one row per atom.
+
+    Returns
+    -------
+    float
+
+    Examples
+    --------
+    >>> d = total_distance(edges, coordinates)
+    """
     return sum(np.linalg.norm(coordinates[i] - coordinates[j]) for i, j in edges)
 
 
 def random_matching(num_atoms: int):
+    """Return a random perfect matching of ``num_atoms`` atoms as a list of ``(i, j)`` pairs.
+
+    Examples
+    --------
+    >>> edges = random_matching(num_atoms)
+    """
     atoms = list(range(num_atoms))
     random.shuffle(atoms)
     random_edges = [(atoms[i], atoms[i + 1]) for i in range(0, num_atoms, 2)]
@@ -25,22 +50,27 @@ def random_matching(num_atoms: int):
 def crossover(
     parent_a: list[tuple[int, int]], parent_b: list[tuple[int, int]], num_atoms: int
 ):
-    """
-    Combine two parent solutions into a child.
+    """Combine two parent pairings into a child pairing.
+
+    Parameters
+    ----------
+    parent_a, parent_b : list of tuple of int
+        Parent pairings.
+    num_atoms : int
+        Number of atoms.
 
     Returns
     -------
-    list[tuple[int, int]]
+    list of tuple of int
 
     Notes
     -----
-    **Crossover Strategy (Three-Phase Inheritance):**
+    **Crossover strategy (three-phase inheritance):**
 
-    1. Common edges: Edges that appear in BOTH parents are always inherited
-
-    2. Compatible parent edges: From remaining atoms, inherit edges where
-
-    3. Random completion: Any remaining unpaired atoms are randomly paired
+    1. Common edges: edges that appear in BOTH parents are always inherited.
+    2. Compatible parent edges: from the remaining atoms, inherit the edges of ``parent_a``,
+       then of ``parent_b``, whose two atoms are both still unpaired.
+    3. Random completion: any remaining unpaired atoms are paired randomly.
     """
 
     child_edges = []
@@ -69,13 +99,7 @@ def crossover(
 
 
 def mutation(edges: list):
-    """
-    Mutate solution by swapping edges.
-
-    Returns
-    -------
-    list[tuple[int, int]]
-    """
+    """Return a mutated copy of the pairing, obtained by recombining the atoms of two randomly chosen edges."""
 
     new_edges = edges[:]
     i, j = random.sample(range(len(new_edges)), 2)
@@ -103,22 +127,29 @@ def genetic_algorithm_best_n_solutions(
     elite_size=2,
     best_n_solutions=10,
 ):
-    """
-    Solve using genetic algorithm.
+    """Run a genetic algorithm and return the best pairings of the final population.
 
     Parameters
     ----------
     num_atoms : int
-    coordinates : np.ndarray
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
     pop_size : int, optional
+        Population size. Default is 50.
     max_iter : int, optional
+        Number of generations. Default is 200.
     mutation_rate : float, optional
+        Probability that a child is mutated. Default is 0.9.
     elite_size : int, optional
+        Number of best pairings copied unchanged to the next generation. Default is 2.
+    best_n_solutions : int, optional
+        Number of solutions to return. Default is 10.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Best solution found.
+    list of list of tuple of int
+        Up to ``best_n_solutions`` pairings sorted by increasing total distance.
     """
 
     population = [random_matching(num_atoms=num_atoms) for i in range(pop_size)]
@@ -150,13 +181,7 @@ def genetic_algorithm_best_n_solutions(
 
 
 def random_neighbour(edges: list[tuple[int, int]]):
-    """
-    Generate neighboring solution via edge swap.
-
-    Returns
-    -------
-    list[tuple[int, int]]
-    """
+    """Return a neighbouring pairing obtained by swapping the partners of two randomly chosen edges."""
 
     new_edges = edges[:]
     i, j = random.sample(range(len(new_edges)), 2)
@@ -187,22 +212,29 @@ def simulated_annealing_best_n_solutions(
     max_iter=1000,
     best_n_solutions=10,
 ):
-    """
-    Optimize pairing using simulated annealing.
+    """Run simulated annealing and return the best distinct pairings visited.
 
     Parameters
     ----------
     num_atoms : int
-    coordinates : np.ndarray
-    start : float
-    end : float
-    alpha : float
-    max_iter : int
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
+    start : float, optional
+        Initial temperature. Default is 1.0.
+    end : float, optional
+        Final temperature. Default is 0.001.
+    alpha : float, optional
+        Cooling factor applied each step. Default is 0.95.
+    max_iter : int, optional
+        Maximum number of steps. Default is 1000.
+    best_n_solutions : int, optional
+        Number of solutions to return. Default is 10.
 
     Returns
     -------
-    list[tuple[int, int]]
-        Best found configuration.
+    list of list of tuple of int
+        Up to ``best_n_solutions`` pairings sorted by increasing total distance.
     """
 
     starting_edges = random_matching(num_atoms)
@@ -250,7 +282,26 @@ def two_opt_best_n_solutions(
     max_iter=1000,
     restart=1000,
 ):
+    """Run 2-opt local search from many random starts and return the best distinct pairings found.
 
+    Parameters
+    ----------
+    num_atoms : int
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
+    best_n_solutions : int, optional
+        Number of solutions to return. Default is 10.
+    max_iter : int, optional
+        Maximum number of improvement sweeps per restart. Default is 1000.
+    restart : int, optional
+        Number of random restarts. Default is 1000.
+
+    Returns
+    -------
+    list of list of tuple of int
+        Up to ``best_n_solutions`` pairings sorted by increasing total distance.
+    """
     solutions = {}
     for _ in range(restart):
         edges = random_matching(num_atoms)
@@ -299,6 +350,22 @@ def two_opt_best_n_solutions(
 
 # blossom for best n solutions
 def random_blossom(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10):
+    """Return several pairings from the Blossom algorithm, each time excluding one random edge of the previous matching.
+
+    Parameters
+    ----------
+    num_atoms : int
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
+    best_n_solutions : int, optional
+        Number of solutions to return. Default is 10.
+
+    Returns
+    -------
+    list of list of tuple of int
+        ``best_n_solutions`` matchings (the first one is the optimal matching).
+    """
     sol = []
 
     excluded_edges = set()
@@ -327,6 +394,22 @@ def random_blossom(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10)
 
 
 def random_blossom_scaled(num_atoms: int, coordinates: np.ndarray, best_n_solutions=10):
+    """Same as ``random_blossom`` but with the scaled distance matrix (see ``matrix_scaling``).
+
+    Parameters
+    ----------
+    num_atoms : int
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
+    best_n_solutions : int, optional
+        Number of solutions to return. Default is 10.
+
+    Returns
+    -------
+    list of list of tuple of int
+        ``best_n_solutions`` matchings (the first one is optimal for the scaled distances).
+    """
     sol = []
 
     excluded_edges = set()

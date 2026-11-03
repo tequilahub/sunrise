@@ -1,3 +1,5 @@
+"""Abstract fermionic circuit (``FCircuit``): an ordered list of fermionic gates acting on spin orbitals, independent of any qubit encoding."""
+
 from __future__ import annotations
 
 import copy
@@ -26,32 +28,41 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 class FCircuit:
-    """
-    Fundamental class representing an abstract circuit.
+    """Abstract circuit made of fermionic gates (excitations, orbital rotations, phases).
+
+    The circuit is not tied to a qubit mapping. It can be simulated directly or
+    converted to a ``tq.QCircuit`` with ``to_qcircuit``. Circuits are
+    concatenated with ``+`` / ``+=``.
+
+    Parameters
+    ----------
+    gates : list of FGateImpl, optional
+        Gates of the circuit.
+    initial_state : tq.QCircuit or FCircuit or tq.QubitWaveFunction or str or int or list or numpy.ndarray, optional
+        Reference state (e.g. the Hartree-Fock determinant). It must be given in
+        the up-then-down qubit ordering and must conserve the particle number.
+    parameter_map : dict, optional
+        Map ``{Variable: [(position, gate), ...]}``. Built from ``gates`` if not given.
 
     Attributes
     ----------
-    depth:
-        returns the gate depth of the circuit.
-    gates:
-        returns the gates in the circuit, as a list.
-    moments:
-        returns the circuit as a list of Moment objects.
-    n_qubits:
-        the number of qubits on which the circuit operates.
-    numbering:
-        returns the numbering convention use by tequila circuits.
-    qubits:
-        returns a list of qubits acted upon by the circuit.
-    initial_state:
-        returns QubitWaveFunction which defines initial state. It must be on UPTHENDOWN
+    depth : int
+        Number of gates.
+    gates : list of FGateImpl
+        Gates of the circuit.
+    n_qubits : int
+        Number of qubits (spin orbitals) the circuit acts on.
+    n_electrons : int or None
+        Number of electrons of the initial state (None if there is none).
+    qubits : list of int
+        Sorted qubits acted upon by the circuit.
+    initial_state : tq.QubitWaveFunction
+        Reference state, always in up-then-down ordering.
 
-
-    Methods
-    -------
-    make_parameter_map:
-
-
+    Examples
+    --------
+    >>> U = sun.gates.UC(0, 1, "a") + sun.gates.UR(1, 2, "b")
+    >>> U = sun.FCircuit.from_edges([(0, 1), (2, 3)], n_orb=4)
     """
 
     def __init__(
@@ -60,17 +71,6 @@ class FCircuit:
         initial_state: QCircuit | QubitWaveFunction | str | int | None = None,
         parameter_map=None,
     ):
-        """
-        init
-        Parameters
-        ----------
-        gates:
-            (Default value = None)
-            the gates to include in the circuit.
-        parameter_map:
-            (Default value = None)
-            mapping to indicate where in the circuit certain parameters appear.
-        """
         self._n_qubits = None
         self._min_n_qubits = 0
         self._initial_state = None
@@ -88,13 +88,11 @@ class FCircuit:
 
     @property
     def initial_state(self) -> QubitWaveFunction:
+        """QubitWaveFunction or None : reference state of the circuit, in up-then-down ordering."""
         return self._initial_state
 
     @initial_state.setter
     def initial_state(self, initial_state=None):
-        """
-        IT MUST BE UPTHENDOWN
-        """
         if initial_state is None or isinstance(initial_state, QubitWaveFunction):
             pass
         elif isinstance(initial_state, (QCircuit, FCircuit)):
@@ -120,17 +118,12 @@ class FCircuit:
 
     @property
     def depth(self):
-        """
-        gate depth of the abstract circuit.
-        Returns
-        -------
-        int: the depth.
-
-        """
+        """int : number of gates."""
         return len(self.gates)
 
     @property
     def gates(self) -> list[sunrise.fermionic_excitation.fgateimpl.FGateImpl]:
+        """list of FGateImpl : gates of the circuit."""
         if self._gates is None:
             return []
         else:
@@ -142,6 +135,7 @@ class FCircuit:
 
     @property
     def qubits(self):
+        """list of int : sorted qubits acted upon by the gates or covered by the initial state."""
         accumulate = []
         for g in self.gates:
             accumulate += list(g.qubits)
@@ -151,12 +145,14 @@ class FCircuit:
 
     @property
     def n_qubits(self):
+        """int : number of qubits of the circuit. Setting it raises if the value is smaller than the highest qubit used."""
         idx = max(self.max_qubit() + 1, self._min_n_qubits)
         wvf = self._initial_state.n_qubits if self._initial_state is not None else 0
         return max(idx, wvf)
 
     @property
     def n_electrons(self):
+        """int or None : number of electrons in the initial state, None if there is no initial state."""
         if self.initial_state is None:
             return None
         elif isinstance(self.initial_state._state, dict):
@@ -180,6 +176,7 @@ class FCircuit:
 
     @property
     def variables(self) -> list:
+        """list : variables of each gate, one entry per gate (two for ``UR`` gates)."""
         v = []
         for gate in self.gates:
             if gate._name == "UR":
@@ -188,13 +185,13 @@ class FCircuit:
         return v
 
     def make_parameter_map(self) -> dict:
-        """
+        """Build the map between variables and the gates that use them.
+
         Returns
         -------
-            ParameterMap of the circuit: A dictionary with
-            keys: variables in the circuit
-            values: list of all gates and their positions in the circuit
-            e.g. result[Variable("a")] = [(3, Rx), (5, Ry), ...]
+        dict
+            ``{Variable: [(position, gate), ...]}``, e.g.
+            ``result[Variable("a")] = [(3, Rx), (5, Ry)]``.
         """
         parameter_map = defaultdict(list)
         for idx, gate in enumerate(self.gates):
@@ -205,35 +202,28 @@ class FCircuit:
         return parameter_map
 
     def is_primitive(self):
-        """
-        Check if this is a single gate wrapped in this structure
-        :return: True if the circuit is just a single gate
-        """
+        """Return True if the circuit consists of a single gate."""
         return len(self.gates) == 1
 
     def replace_gates(
         self, positions: list, circuits: list, replace: list | None = None
     ):
-        """
-        Notes
-        ----------
-        Replace or insert gates at specific positions into the circuit
-        at different positions (faster than multiple calls to replace_gate)
+        """Replace or insert gates at the given positions and return a new circuit.
 
         Parameters
         ----------
-        positions: list of int:
-            the positions at which the gates should be added. Always refer to the positions in the original circuit
-        circuits: list or FCircuit:
-            the gates to add at the corresponding positions
-        replace: list of bool: (Default value: None)
-            Default is None which corresponds to all true
-            decide if gates shall be replaced or if the new parts shall be inserted without replacement
-            if replace[i] = true: gate at position [i] will be replaced by gates[i]
-            if replace[i] = false: gates[i] circuit will be inserted at position [i] (beaming before gate previously at position [i])
+        positions : list of int
+            Positions in the original circuit.
+        circuits : list of FCircuit or list of FGateImpl
+            Gates (or circuits) to place at the corresponding positions.
+        replace : list of bool, optional
+            If ``replace[i]`` is True the gate at ``positions[i]`` is replaced, if False
+            ``circuits[i]`` is inserted before it. Default is True for all.
+
         Returns
         -------
-            new circuit with inserted gates
+        FCircuit
+            New circuit; the initial state is copied.
         """
 
         assert len(circuits) == len(positions)
@@ -272,19 +262,37 @@ class FCircuit:
         return result
 
     def insert_gates(self, positions, gates):
-        """
-        See replace_gates
+        """Insert gates before the given positions and return a new circuit.
+
+        Parameters
+        ----------
+        positions : list of int
+            Positions in the original circuit.
+        gates : list of FCircuit or list of FGateImpl
+            Gates (or circuits) inserted before the corresponding positions.
+
+        Returns
+        -------
+        FCircuit
+
+        See Also
+        --------
+        replace_gates : Replace or insert gates.
         """
         return self.replace_gates(
             positions=positions, circuits=gates, replace=[False] * len(gates)
         )
 
     def dagger(self):
-        """
+        """Return the adjoint circuit (gates reversed and individually inverted).
+
         Returns
-        ------
-        QCircuit:
-            The adjoint of the circuit
+        -------
+        FCircuit
+
+        Examples
+        --------
+        >>> U = UR + UC + UR.dagger()
         """
         result = FCircuit()
         for g in reversed(self.gates):
@@ -292,24 +300,16 @@ class FCircuit:
         return result
 
     def extract_variables(self) -> list:
-        """
-        return a list containing all the variable objects contained in any of the gates within the unitary
-        including those nested within gates themselves.
+        """Return the variables appearing in the circuit.
 
         Returns
         -------
-        list:
-            the variables of the circuit
+        list of tq.Variable
         """
         return list(self._parameter_map.keys())
 
     def is_fully_parametrized(self):
-        """
-        Returns
-        -------
-        bool:
-            whether or not all gates in the circuit are paremtrized
-        """
+        """Return True if all gates depend on variables."""
         for gate in self.gates:
             if not gate.is_parameterized():
                 return False
@@ -324,12 +324,7 @@ class FCircuit:
         return True
 
     def is_fully_unparametrized(self):
-        """
-        Returns
-        -------
-        bool:
-            whether or not all gates in the circuit are unparametrized
-        """
+        """Return True if no gate depends on variables."""
         for gate in self.gates:
             if not gate.is_parameterized():
                 continue
@@ -344,20 +339,18 @@ class FCircuit:
         return True
 
     def is_mixed(self):
+        """Return True if the circuit has both parametrized and fixed gates."""
         return not (self.is_fully_parametrized() or self.is_fully_unparametrized())
 
     def extract_indices(self) -> list:
+        """Return the excitation indices of all gates as one flat list."""
         l = []
         for gate in self.gates:
             l.extend(gate.indices)
         return l
 
     def max_qubit(self):
-        """
-        Returns:
-        int:
-             Highest index of qubits in the circuit
-        """
+        """Return the highest qubit index in the circuit, including the initial state (int)."""
         qmax = 0
         for g in self.gates:
             qmax = max(qmax, g.max_qubit)
@@ -366,6 +359,7 @@ class FCircuit:
         return qmax
 
     def __iadd__(self, other):
+        """Append the gates of ``other`` in place. Raises if both circuits have an initial state."""
         if hasattr(other, "initial_state"):
             w = other.initial_state
         else:
@@ -389,6 +383,7 @@ class FCircuit:
         return self
 
     def __add__(self, other):
+        """Return a new circuit with the gates of ``other`` appended. Raises if both circuits have an initial state."""
         if hasattr(other, "initial_state"):
             w = other.initial_state
         else:
@@ -440,8 +435,18 @@ class FCircuit:
         return self.__str__()
 
     def to_upthendown(self, norb) -> FCircuit:
-        """
-        Initial State can't be reordered, it must always be on upthendown
+        """Return a copy whose gate indices use the up-then-down spin orbital ordering.
+
+        The initial state is not reordered, it is always in up-then-down ordering.
+
+        Parameters
+        ----------
+        norb : int
+            Number of spatial orbitals.
+
+        Returns
+        -------
+        FCircuit
         """
         u = []
         for gate in self.gates:
@@ -455,8 +460,18 @@ class FCircuit:
         )
 
     def to_udud(self, norb) -> FCircuit:
-        """
-        Initial State can't be reordered, it must always be on upthendown
+        """Return a copy whose gate indices use the interleaved (up, down, up, down, ...) ordering.
+
+        The initial state is not reordered, it is always in up-then-down ordering.
+
+        Parameters
+        ----------
+        norb : int
+            Number of spatial orbitals.
+
+        Returns
+        -------
+        FCircuit
         """
         u = []
         for gate in self.gates:
@@ -471,16 +486,40 @@ class FCircuit:
 
     @classmethod
     def from_Qcircuit(cls, circuit: QCircuit, **kwargs):
+        """Build an FCircuit from a ``tq.QCircuit`` made of fixed gates followed by (qubit) excitation gates.
+
+        Leading fixed gates become the initial state, parametrized excitation gates
+        become ``FermionicExcitation`` gates.
+
+        Parameters
+        ----------
+        circuit : tq.QCircuit
+            Circuit to convert.
+        variables : dict, optional
+            Passed through ``circuit.map_variables`` before the conversion.
+        reordered : bool, optional
+            Whether the indices of the circuit are in up-then-down ordering.
+            Default is True. False requires a circuit without fixed gates.
+
+        Returns
+        -------
+        FCircuit
+
+        Raises
+        ------
+        TequilaException
+            If the circuit contains unsupported gates.
+        """
         operations = FCircuit()
         reference = QCircuit()
         reordered = kwargs.get("reordered", True)
-        begining = True
+        beginning = True
         if "variables" in kwargs:
             circuit = circuit.map_variables(kwargs["variables"])
             kwargs.pop("variables")
         for gate in circuit.gates:
             if (
-                begining
+                beginning
                 and not hasattr(gate, "_parameter")
                 or isinstance(gate._parameter, numbers.Number)
             ):
@@ -491,7 +530,7 @@ class FCircuit:
                 if isinstance(gate._parameter, numbers.Number):
                     reference += gate
                 elif isinstance(gate, FermionicGateImpl):
-                    begining = False
+                    beginning = False
                     operations += sunrise.gates.FermionicExcitation(
                         indices=gate.indices,
                         variables=gate.parameter,
@@ -523,6 +562,38 @@ class FCircuit:
         use_units_of_pi=False,
         ladder=True,
     ):
+        """Build a circuit of ``UC`` gates from a list of edges (paths of spatial orbitals).
+
+        For each edge ``(a, b, c, ...)`` one ``UC`` gate is added per consecutive pair,
+        with variable ``((i, j), "D", label)``.
+
+        Parameters
+        ----------
+        edges : list of tuple of int
+            Orbital paths, e.g. ``[(0, 1), (2, 3)]``.
+        label : optional
+            Label added to the variable names.
+        n_orb : int, optional
+            Number of spatial orbitals. If given, the initial state is the determinant
+            with the first orbital of each edge doubly occupied.
+        use_units_of_pi : bool, optional
+            Multiply the angles by pi. Default is False.
+        ladder : bool, optional
+            If True (default) pairs are consecutive ``(a, b), (b, c), ...``, otherwise
+            all pairs start from the first orbital ``(a, b), (a, c), ...``.
+
+        Returns
+        -------
+        FCircuit
+
+        References
+        ----------
+        J. S. Kottmann and A. Aspuru-Guzik, Phys. Rev. A 105, 032449 (2022), arXiv:2105.03836.
+
+        Examples
+        --------
+        >>> U = sun.FCircuit.from_edges([(0, 1), (2, 3)], n_orb=4)
+        """
         operations = FCircuit()
         if n_orb:
             include_reference = True
@@ -551,17 +622,15 @@ class FCircuit:
 
     @staticmethod
     def wrap_gate(gate) -> FCircuit:
-        """
-        take a gate and return a qcircuit containing only that gate.
+        """Wrap a gate (or list of gates) in an FCircuit; an FCircuit is returned unchanged.
+
         Parameters
         ----------
-        gate: FGateImpl
-            the gate to wrap in a circuit.
+        gate : FGateImpl or list of FGateImpl or FCircuit
 
         Returns
         -------
-        FCircuit:
-            a one gate circuit.
+        FCircuit
         """
         if isinstance(gate, FCircuit):
             return gate
@@ -571,13 +640,11 @@ class FCircuit:
             return FCircuit(gates=[gate])
 
     def verify(self) -> bool:
-        """
-        make sure self is built properly and of the correct types.
+        """Check that the parameter map is consistent with the gates.
+
         Returns
         -------
-        bool:
-            whether or not the circuit is properly constructed.
-
+        bool
         """
         if not len(self._gates) is None and self.initial_state is None:
             return True
@@ -591,18 +658,18 @@ class FCircuit:
         return all(test)
 
     def map_qubits(self, qubit_map):
-        """
+        """Return a new circuit with relabeled qubits.
 
-        E.G.  Rx(1)Ry(2) --> Rx(3)Ry(1) with qubit_map = {1:3, 2:1}
+        The initial state is not carried over.
 
         Parameters
         ----------
-        qubit_map
-            a dictionary which maps old to new qubits
+        qubit_map : dict
+            Map from old to new qubit indices, e.g. ``{1: 3, 2: 1}``.
 
         Returns
         -------
-        A new circuit with mapped qubits
+        FCircuit
         """
 
         new_gates = [gate.map_qubits(qubit_map) for gate in self.gates]
@@ -611,16 +678,20 @@ class FCircuit:
         return FCircuit(gates=new_gates)  # TODO: initial state?
 
     def map_variables(self, variables: dict, *args, **kwargs):
-        """
+        """Return a new circuit with variables replaced.
 
         Parameters
         ----------
-        variables
-            dictionary with old variable names as keys and new variable names or values as values
+        variables : dict
+            Map from old variables (or names) to new variables or numerical values.
+
         Returns
         -------
-        Circuit with changed variables
+        FCircuit
 
+        Examples
+        --------
+        >>> U0 = U.map_variables({d: 0 for d in U.extract_variables()})  # all angles set to 0
         """
 
         variables = {
@@ -643,20 +714,37 @@ class FCircuit:
         return FCircuit(gates=new_gates, initial_state=self.initial_state)
 
     def to_matrix(self, variables=None):  # TODO:  Should we?
-        pass
+        """Not implemented."""
 
     def add_controls(self, control, inpl: bool = False) -> FCircuit | None:  # TODO
-        pass
+        """Not implemented."""
 
     def to_qcircuit(
         self,
         molecule: QuantumChemistryBase | None = None,
         transformation: Callable | None = None,
     ) -> QCircuit:
-        """
-        Transform from FCircuit to Qcircuit
-        :param molecule Any kind of Tequila/Sunrise Molecule with molecule.make_excitation_gate function
-        :param transformation Callable function such as transformation(FCircuit) -> QCircuit
+        """Convert to a ``tq.QCircuit``.
+
+        Parameters
+        ----------
+        molecule : QuantumChemistryBase, optional
+            Molecule providing ``make_excitation_gate`` and the fermion-to-qubit transformation.
+        transformation : callable, optional
+            Function ``transformation(FCircuit) -> QCircuit``. Used if no molecule is given.
+
+        Returns
+        -------
+        tq.QCircuit
+
+        Raises
+        ------
+        TequilaException
+            If neither argument is given or a gate type is not supported.
+
+        Examples
+        --------
+        >>> Uq = U.to_qcircuit(molecule=mol)
         """
         U = deepcopy(self)
         if molecule is not None:
@@ -714,6 +802,7 @@ class FCircuit:
             )
 
     def _verify_state(self):
+        """Check that the initial state conserves the particle number and is real."""
         if isinstance(self.initial_state._state, dict):
             nozero = [bin(i)[2:] for i in self._initial_state._state]
             ne = nozero[0].count("1")
@@ -739,6 +828,7 @@ class FCircuit:
         return len(flags) > 1
 
     def render(self, state, style, show_spatial_orbitals=True):
+        """Return the qpic text for the circuit (used by ``export_qpic``)."""
         # Inline initial wires logic
         iw = set()
         if self.initial_state is not None:
@@ -803,6 +893,23 @@ class FCircuit:
         select=None,
         **kwargs,
     ):
+        """Write the circuit as a qpic file ``<filename>.qpic``.
+
+        Parameters
+        ----------
+        filename : str
+            File name without extension.
+        filepath : str, optional
+            Output directory.
+        style : dict, optional
+            Drawing style options.
+        show_spatial_orbitals : bool, optional
+            Draw one wire per spatial orbital instead of per spin orbital. Default is True.
+        labels, colors, wire_colors : dict, optional
+            Custom gate labels, colors and wire colors.
+        select : dict, optional
+            Map ``{wire: "B"}``; wires marked ``"B"`` are drawn red.
+        """
         from os import path
 
         from sunrise.graphical.core.color import DefaultColors
@@ -889,6 +996,30 @@ class FCircuit:
             file.write(result)
 
     def export_to(self, filename: str, *args, **kwargs):
+        """Draw the circuit to a file.
+
+        Parameters
+        ----------
+        filename : str
+            Output name. The extension selects the format: ``qpic``, ``pdf`` (default) or ``png``.
+        n_orb : int, optional
+            Number of spatial orbitals. Default is ``n_qubits // 2``.
+        show_spatial_orbitals : bool, optional
+            One wire per spatial orbital. Default is True.
+        **kwargs
+            Passed to ``export_qpic``.
+            ``filepath`` is the directory of the output file; ``n_qubits_is_double`` is an old
+            alias (True shows spin orbitals, i.e. ``show_spatial_orbitals=False``).
+
+        Raises
+        ------
+        TequilaException
+            If the extension is not supported.
+
+        Examples
+        --------
+        >>> U.export_to("circuit.pdf", style={"single": "red", "generic": "#AC61AC"})  # doctest: +SKIP
+        """
         from copy import deepcopy
 
         from tequila import TequilaException

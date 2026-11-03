@@ -1,3 +1,5 @@
+"""Faster evaluation of tensors of expectation values (e.g. RDM operators) sharing few circuits."""
+
 from __future__ import annotations
 
 import time
@@ -11,6 +13,7 @@ from .decompose import decompose
 
 
 def tqcomp(*args, **kwargs):
+    """Thin wrapper around ``tq.compile``."""
     # print("\nHERE WE ARE\n")
     return tq.compile(*args, **kwargs)
 
@@ -23,6 +26,35 @@ def fast_qtensor(
     grouping: int | None = None,
     backend="qulacs",
 ):
+    """Evaluate or compile a tensor of expectation values, grouping entries by circuit.
+
+    Entries that share the same circuit are simulated together. If any entry
+    holds several expectation values or a Hamiltonian with several terms,
+    this falls back to a plain ``tq.simulate`` of the whole tensor.
+
+    Parameters
+    ----------
+    qtensor : tq.QTensor
+        Tensor of objectives, each a single expectation value.
+    variables : dict
+        Values of the circuit variables.
+    do_decompose : bool, optional
+        Split circuits into independent clusters, see ``decompose``. Default is False.
+    evaluate : bool, optional
+        If True, simulate and return numbers; otherwise return compiled objectives.
+        Default is True.
+    grouping : int, optional
+        Cluster size passed to ``decompose``.
+    backend : str, optional
+        Simulation backend. Default is ``"qulacs"``.
+
+    Returns
+    -------
+    tuple
+        ``(values, shape)``: with ``evaluate=True`` an array of shape ``shape``,
+        otherwise a flat list of compiled objectives. The fallback path returns
+        only the result of ``tq.simulate``.
+    """
     simple = True
     shape = qtensor.shape
     n = 1

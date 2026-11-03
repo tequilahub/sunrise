@@ -1,4 +1,3 @@
-import pickle
 import re
 import sys
 from copy import deepcopy
@@ -6,7 +5,7 @@ from copy import deepcopy
 import numpy as np
 import tequila as tq
 
-import sunrise as sn
+import sunrise as sun
 from sunrise.spafastprototype import decompose
 
 ## Example of protocol presented on http://arxiv.org/abs/2606.26882, using many tools already presented on this package examples.
@@ -24,7 +23,7 @@ H	-0.5293470	1.1571020	-1.4380990
 H	-0.0929010	-2.6229830	-0.4467250
 H	0.5293470	-1.1571020	-1.4380990
 """
-file_name = "butadiene_spa.data"
+file_name = "butadiene_spa.h5"
 
 
 def get_madness_sort_key(item):
@@ -63,30 +62,22 @@ def step1():
     Generating and optimizing the Molecule
     Orbital optimization may take a few minutes
     """
-    mol = sn.Molecule(geometry=geometry, basis_set="sto-3g", nature="h")
+    mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", nature="h")
     print("HF ", mol.compute_energy("HF"))  # -153.0089465151146
     print("CISD ", mol.compute_energy("CISD"))  # -153.28133918647
     print("CCSD(T) ", mol.compute_energy("CCSD(T)"))  # -153.3266212343813
-    mol, edges = sn.CLPO.generate_CLPO_molecule_edges(mol)
+    mol, edges = sun.CLPO.generate_CLPO_molecule_edges(mol)
     print(
         "Edges ", edges
     )  # [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9), (10, 11), (12, 13), (14, 15), (16, 17), (18, 19), (20, 21)]
-    opt = sn.SPAFP.run_spa(mol=mol, edges=edges, initial_guess=False, grouping=12)
+    opt = sun.SPAFP.run_spa(mol=mol, edges=edges, initial_guess=False, grouping=12)
     print("SPA Energy ", opt.energy)  # -153.20959140553126
-    with open(file_name, "wb") as file:
-        pickle.dump(opt.molecule, file)
+    opt.molecule.save(file_name)
 
 
 def plot():
-    objects = []
-    with open(file_name, "rb") as openfile:
-        while True:
-            try:
-                objects.append(pickle.load(openfile))
-            except EOFError:
-                break
-    mol: sn.molecules.HyMolecule = objects[0]
-    sn.plot_MO(mol)
+    mol = sun.load_molecule(file_name)
+    sun.plot_MO(mol)
 
 
 def step2():
@@ -112,14 +103,7 @@ def step2():
 
 
 def step3():
-    objects = []
-    with open(file_name, "rb") as openfile:
-        while True:
-            try:
-                objects.append(pickle.load(openfile))
-            except EOFError:
-                break
-    mol: sn.molecules.hybrid_base.HybridBase = objects[0]
+    mol = sun.load_molecule(file_name)
     edges = [
         (0, 1),
         (2, 3),
@@ -181,20 +165,20 @@ def step3():
         r0mol = deepcopy(mol)
         mUR = deepcopy(UR)
         mUR = mUR.map_variables({d: 0 for d in mUR.extract_variables()})
-        rot = sn.measurement.gates_to_orb_rot(
+        rot = sun.measurement.gates_to_orb_rot(
             mUR, len(mol.integral_manager.orbital_coefficients), core=core
         )
         r0mol = r0mol.transform_orbitals(rot.T, ignore_active_space=True)
-        sn.plot_MO(r0mol, filename="back_to_native", orbital=pi_list)
+        sun.plot_MO(r0mol, filename="back_to_native", orbital=pi_list)
 
         r0mol = deepcopy(mol)
         mUR = deepcopy(UR + UR1)
         mUR = mUR.map_variables({d: 0 for d in mUR.extract_variables()})
-        rot = sn.measurement.gates_to_orb_rot(
+        rot = sun.measurement.gates_to_orb_rot(
             mUR, len(mol.integral_manager.orbital_coefficients), core=core
         )
         r0mol = r0mol.transform_orbitals(rot.T, ignore_active_space=True)
-        sn.plot_MO(r0mol, filename="1st_graph", orbital=pi_list)
+        sun.plot_MO(r0mol, filename="1st_graph", orbital=pi_list)
 
     U_spaplus = U_spa + UR + UR1 + UC1 + UR1.dagger() + UR.dagger()
     E_spaplus = decompose(H=H, U=U_spaplus, grouping=[qpi_list, qcc_list, qch_list])
@@ -240,14 +224,7 @@ def orbital_refinement():
     except ImportError:
         pass
     world = fe.MadWorld(thresh=1e-6, ndims=3)
-    objects = []
-    with open(file_name, "rb") as openfile:
-        while True:
-            try:
-                objects.append(pickle.load(openfile))
-            except EOFError:
-                break
-    mol: sn.molecules.hybrid_base.HybridBase = objects[0]
+    mol = sun.load_molecule(file_name)
     edges = [
         (0, 1),
         (2, 3),
@@ -264,13 +241,13 @@ def orbital_refinement():
 
     ## For this particular case the following block of code doesn't matter
     ## But pyscf uses spherical coordinates meanwhile madness does on cartesians, important for d shells and further
-    mol_sph = sn.MoleculeToPyscf(mol, cart=False)
+    mol_sph = sun.MoleculeToPyscf(mol, cart=False)
     c2s = mol_sph.cart2sph_coeff(normalized="sp")
     mo_coeff_cart_pyscf_order = np.dot(c2s, mol.integral_manager.orbital_coefficients)
 
     ## A further issue is the shell ordering, pyscf orders by angular momentum (l) (first all s orbs, then all p...)
     ## meanwhile madness does following natural filling: (...  3s 3p 3d (if populated) 4s 4p)
-    mol_cart = sn.MoleculeToPyscf(mol, cart=True)
+    mol_cart = sun.MoleculeToPyscf(mol, cart=True)
     pyscf_labels = mol_cart.ao_labels()
     indexed_labels = list(enumerate(pyscf_labels))
     sorted_labels = sorted(indexed_labels, key=get_madness_sort_key)
@@ -283,7 +260,7 @@ def orbital_refinement():
     integrals = fe.Integrals(world)
     orbitals = integrals.transform(
         basis, mo_coeff_madness
-    )  # transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+    )  # transforms orbitals according to: orbitals[i] = sum[j] basis[j]*C[j,i]
     orbitals = integrals.orthonormalize(orbitals=orbitals)
     core = [
         orbitals[i.idx_total] for i in mol.integral_manager.orbitals if i.idx is None
@@ -309,7 +286,7 @@ def orbital_refinement():
         T = integrals.compute_kinetic_integrals(active)
         V = integrals.compute_potential_integrals(active, Vnuc)
 
-        mol = sn.Molecule(
+        mol = sun.Molecule(
             geometry=geometry,
             one_body_integrals=T + V + FC_int,
             two_body_integrals=G,
@@ -322,15 +299,15 @@ def orbital_refinement():
         )
         U = mol.make_ansatz(name="SPA", edges=edges)
         H = mol.make_hamiltonian()
-        E = sn.SPAFP.decompose(H=H, U=U, grouping=grouping)
+        E = sun.SPAFP.decompose(H=H, U=U, grouping=grouping)
         result = tq.minimize(
             E,
             silent=True,
             gradient="2-point",
             method_options={"finite_diff_rel_step": 1.0e-4},
         )
-        clusters = sn.SPAFP.make_decomposed_clusters(U, grouping)
-        rdm1, rdm2 = sn.SPAFP.fast_rdm(
+        clusters = sun.SPAFP.make_decomposed_clusters(U, grouping)
+        rdm1, rdm2 = sun.SPAFP.fast_rdm(
             U=U, mol=mol, variables=result.variables, clusters=clusters
         )
         print(f"iteration {iteration} energy {result.energy}")
@@ -349,8 +326,7 @@ def orbital_refinement():
             core[o].save_to_file(f"cor_SPA_orb{o}.data")
         for o in range(len(active)):
             active[o].save_to_file(f"act_SPA_orb{o}.data")
-        with open("ref_" + file_name, "wb") as file:
-            pickle.dump(mol, file)
+        mol.save("ref_" + file_name)
         if abs(energy - result.energy) < thres:
             converged = True
             print(
@@ -388,14 +364,7 @@ def plot_refined():
 
 
 def spa_refined():
-    objects = []
-    with open("ref_" + file_name, "rb") as openfile:
-        while True:
-            try:
-                objects.append(pickle.load(openfile))
-            except EOFError:
-                break
-    mol: sn.molecules.hybrid_base.HybridBase = objects[0]
+    mol = sun.load_molecule("ref_" + file_name)
     pi_list = [2, 3, 10, 11]
     cc_list = [0, 1, 4, 5, 8, 9]
     ch_list = [6, 7, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
@@ -467,19 +436,19 @@ def spa_refined():
             active.append(fe.SavedFct3D(f"act_SPA_orb{i}.data"))
         mUR = deepcopy(UR)
         mUR = mUR.map_variables({d: 0 for d in mUR.extract_variables()})
-        rot = sn.measurement.gates_to_orb_rot(mUR, len(active), core=0)
+        rot = sun.measurement.gates_to_orb_rot(mUR, len(active), core=0)
         trans = integrals.transform(
             active, rot
-        )  # transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+        )  # transforms orbitals according to: orbitals[i] = sum[j] basis[j]*C[j,i]
         for i in [2, 3, 10, 11]:
             world.cube_plot(f"back_to_native{i}", trans[i], geo, zoom=5)
 
         mUR = deepcopy(UR + UR1)
         mUR = mUR.map_variables({d: 0 for d in mUR.extract_variables()})
-        rot = sn.measurement.gates_to_orb_rot(mUR, len(active), core=0)
+        rot = sun.measurement.gates_to_orb_rot(mUR, len(active), core=0)
         trans = integrals.transform(
             active, rot
-        )  # transforms orbitals according to: orbtials[i] = sum[j] basis[j]*C[j,i]
+        )  # transforms orbitals according to: orbitals[i] = sum[j] basis[j]*C[j,i]
         for i in [2, 3, 10, 11]:
             world.cube_plot(f"2nd_graph{i}", trans[i], geo, zoom=5)
 

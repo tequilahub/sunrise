@@ -1,3 +1,7 @@
+"""PySCF backend: integrals and classical methods from PySCF (``PySCFMixin``) and the qubit PySCF
+molecule.
+"""
+
 from __future__ import annotations
 
 import typing
@@ -13,18 +17,32 @@ from .qc_base import QuantumChemistryBase
 
 
 def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
-    """
-    Merge alpha and beta bitstrings into a single string and compute the resulting phase.
+    r"""Merge alpha and beta bitstrings into a single interleaved bitstring and compute its phase.
 
-    Args:
-        alpha_str (int): Bitstring representing alpha electrons.
-        beta_str (int): Bitstring representing beta electrons.
-        norb (int): Number of orbitals.
+    The phase comes from the fermionic antisymmetry when the beta electrons are moved past the
+    alpha electrons of lower orbitals:
 
-    Returns:
-        tuple:
-            merged_str (int): Interleaved bitstring.
-            phase (int): Phase factor (+1 or -1) from fermionic antisymmetry.
+    .. math::
+        \text{phase} = (-1)^{\sum_{i \in \beta} N_\alpha(<i)},
+
+    where the sum runs over the occupied beta orbitals ``i`` and :math:`N_\alpha(<i)` is the
+    number of occupied alpha orbitals below ``i`` (bit ``k`` is orbital ``k``).
+
+    Parameters
+    ----------
+    alpha_str : int
+        Bitstring of the alpha electrons.
+    beta_str : int
+        Bitstring of the beta electrons.
+    norb : int
+        Number of orbitals.
+
+    Returns
+    -------
+    merged_str : int
+        Interleaved bitstring (alpha, beta) per orbital.
+    phase : int
+        Phase factor (+1 or -1) from the fermionic antisymmetry.
     """
     # Interleave the alpha and beta strings
     alpha_str_b = bin(alpha_str)[2:].zfill(norb)
@@ -38,19 +56,30 @@ def _merge_alpha_beta_strs(alpha_str, beta_str, norb):
 
 
 class OpenVQEEPySCFException(TequilaException):
-    pass
+    """Exception for errors raised in the PySCF interface."""
 
 
 class PySCFMixin:
-    """
-    PySCF functionality shared by the qubit, hybrid and fermionic pyscf molecules
-    Put it first in the bases so that it overrides the methods of the backend base class
+    """Integrals and classical methods from PySCF, shared by the qubit, fermionic and hybrid
+    molecules.
+
+    Unless integrals are passed explicitly, a restricted Hartree-Fock (RHF) calculation is run with
+    PySCF and its molecular orbitals, integrals and orbital irreps are used. Also provides HF, MP2,
+    CISD, CCSD, CCSD(T) and FCI energies through ``compute_energy``. Put it first in the bases so that
+    it overrides the methods of the backend base class.
+
+    Parameters
+    ----------
+    parameters : ParametersQC
+        Geometry, basis set and charge of the molecule.
+    *args, **kwargs
+        Passed to the backend base class (e.g. ``transformation``, ``select``). If ``one_body_integrals``
+        is not given, PySCF computes all integrals. Additional keywords used here: ``point_group``
+        (str, "c1" disables symmetry; default is to detect it) and ``verbose`` (PySCF verbosity of the HF run).
     """
 
     def __init__(self, parameters: ParametersQC, *args, **kwargs):
-        """
-        kwargs are passed to the backend base class (e.g. transformation, select)
-        """
+        """See the class docstring."""
         orbitals = None
         if "one_body_integrals" not in kwargs:
             geometry = parameters.get_geometry(ghost="pyscf")
@@ -126,12 +155,40 @@ class PySCFMixin:
 
     @property
     def _up_then_down(self) -> bool:
+        """bool : whether the wavefunctions are ordered up then down (always True for fermionic molecules, which have no qubit encoding)."""
         # the fermionic molecules have no qubit encoding, their wavefunctions are ordered up then down
         if self.transformation is None:
             return True
         return self.transformation.up_then_down
 
     def compute_fci(self, get_wfn=False, ci0=None, use_hcb=False, **kwargs):
+        """Compute the FCI energy with PySCF (``fci.direct_spin1``).
+
+        Parameters
+        ----------
+        get_wfn : bool, optional
+            If True, also return the FCI wavefunction(s) as ``QubitWaveFunction``.
+        ci0 : numpy.ndarray or tq.QubitWaveFunction, optional
+            Initial guess (full Fock space vector, Jordan-Wigner encoding),
+            converted with ``create_ci_vector``.
+        use_hcb : bool, optional
+            Use the hard-core boson (paired) representation with 2**n_orbitals
+            amplitudes instead of the full 2**(2*n_orbitals) space.
+        **kwargs
+            Passed to the PySCF FCI kernel, e.g. ``nroots``.
+
+        Returns
+        -------
+        float or tuple
+            The total energy (including nuclear repulsion); with ``get_wfn=True``
+            the tuple ``(energy, wavefunction)``. If ``nroots > 1``, energies and
+            wavefunctions are lists.
+
+        Examples
+        --------
+        >>> energy, wfn = mol.compute_fci(get_wfn=True)
+        >>> civec = mol.create_ci_vector(wfn)
+        """
         c, h1, h2 = self.get_integrals(ordering="chem")
         norb = self.n_orbitals
         nelec = self.n_electrons
@@ -186,15 +243,32 @@ class PySCFMixin:
         return e + c
 
     def create_ci_vector(self, wfn, use_hcb=False):
-        """
-        Reduces a full Fock space CI vector to the (na, nb) vector
-        required by fci.direct_spin1.
+        """Reduce a full Fock space vector to the (na, nb) CI matrix used by ``fci.direct_spin1``.
 
-        Args:
-            wfn (np.ndarray): 1D vector of length 2**(2*norb).
+        Only components with the correct numbers of alpha and beta electrons are kept.
 
-        Returns:
-            ci_vector (np.ndarray): 2D vector of shape (na, nb).
+        Parameters
+        ----------
+        wfn : numpy.ndarray or tq.QubitWaveFunction
+            Vector of length 2**(2*n_orbitals), or 2**n_orbitals if ``use_hcb``.
+            Should use the Jordan-Wigner encoding.
+        use_hcb : bool, optional
+            Interpret ``wfn`` in the hard-core boson (paired) representation.
+
+        Returns
+        -------
+        numpy.ndarray
+            CI matrix of shape (na, nb), the numbers of alpha and beta strings.
+
+        Raises
+        ------
+        ValueError
+            If the length of ``wfn`` does not match the number of orbitals.
+
+        Examples
+        --------
+        >>> energy, wfn = mol.compute_fci(get_wfn=True)
+        >>> civec = mol.create_ci_vector(wfn)
         """
         if not isinstance(wfn, numpy.ndarray):
             if hasattr(wfn, "to_array"):
@@ -269,6 +343,25 @@ class PySCFMixin:
         return ci_vector
 
     def compute_energy(self, method: str, *args, **kwargs) -> float:
+        """Compute the energy of a classical method with PySCF.
+
+        Parameters
+        ----------
+        method : str {"hf", "mp2", "cisd", "ccsd", "ccsd(t)", "fci"}
+            Method name (case-insensitive).
+        **kwargs
+            Passed to the underlying PySCF calculation.
+
+        Returns
+        -------
+        float
+            Total energy.
+
+        Raises
+        ------
+        TequilaException
+            If the method is unknown.
+        """
         method = method.lower()
 
         if method == "hf":
@@ -291,6 +384,7 @@ class PySCFMixin:
             raise ValueError(f"unknown method: {method}")
 
     def _get_hf(self, do_not_solve=True, **kwargs):
+        """Return a PySCF RHF object built from the stored integrals; the SCF is only run if ``do_not_solve`` is False."""
         c, h1, h2 = self.get_integrals(ordering="mulliken")
         norb = self.n_orbitals
         nelec = self.n_electrons
@@ -318,6 +412,7 @@ class PySCFMixin:
         return hf
 
     def _run_ccsd(self, hf=None, **kwargs):
+        """Run and return a PySCF RCCSD calculation."""
         from pyscf import cc
 
         if hf is None:
@@ -327,12 +422,14 @@ class PySCFMixin:
         return ccsd
 
     def _compute_perturbative_triples_correction(self, ccsd=None, **kwargs) -> float:
+        """Return the perturbative (T) correction on top of a CCSD calculation."""
         if ccsd is None:
             ccsd = self._run_ccsd(**kwargs)
         ecorr = ccsd.ccsd_t()
         return ecorr
 
     def _run_cisd(self, hf=None, **kwargs):
+        """Run and return a PySCF RCISD calculation."""
         from pyscf import ci
 
         if hf is None:
@@ -342,6 +439,7 @@ class PySCFMixin:
         return cisd
 
     def _run_mp2(self, hf=None, **kwargs):
+        """Run and return a PySCF MP2 calculation."""
         from pyscf import mp
 
         if hf is None:
@@ -351,6 +449,7 @@ class PySCFMixin:
         return mp2
 
     def __str__(self):
+        """Return a summary of the molecule with the point group and the orbital irreps."""
         base = super().__str__()
         try:
             if hasattr(self, "pyscf_molecule"):
@@ -367,6 +466,19 @@ class PySCFMixin:
 
 
 class QuantumChemistryPySCF(PySCFMixin, QuantumChemistryBase):
+    """Qubit molecule with integrals and classical methods from PySCF, see ``PySCFMixin`` for the
+    backend options.
+
+    Parameters
+    ----------
+    parameters : ParametersQC
+        Geometry, basis set and charge of the molecule.
+    transformation : str or callable, optional
+        Fermion-to-qubit transformation (e.g. "jordan-wigner").
+    *args, **kwargs
+        See ``PySCFMixin``.
+    """
+
     def __init__(
         self,
         parameters: ParametersQC,
@@ -374,4 +486,5 @@ class QuantumChemistryPySCF(PySCFMixin, QuantumChemistryBase):
         *args,
         **kwargs,
     ):
+        """See the class docstring."""
         super().__init__(parameters, *args, transformation=transformation, **kwargs)
