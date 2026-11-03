@@ -25,6 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install fqe --no-deps
+          pip install ffsim
           pip install git+https://github.com/davibinco/TenCirChem-NG.git
       - name: Lint with flake8
         run: |

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import tequila as tq
 from numpy import isclose
+from openfermion import FermionOperator
 
 import sunrise as sn
 import sunrise.expval.minimize as sn_minimize
@@ -18,6 +19,7 @@ from sunrise.expval import (
 
 HAS_TCC = "tcc" in INSTALLED_FERMIONIC_BACKENDS
 HAS_SPEX = "spex" in INSTALLED_FERMIONIC_BACKENDS
+HAS_FFSIM = "ffsim" in INSTALLED_FERMIONIC_BACKENDS
 
 
 @pytest.mark.parametrize(
@@ -306,6 +308,59 @@ def test_n_rotation_pi():
         assert isclose(ov, sign)
 
 
+@pytest.mark.skipif(not (HAS_SPEX and HAS_FFSIM), reason="spex or ffsim not installed")
+def test_ffsim_matches_spex():
+    geom = "H 0.0 0.0 0.0\nH 0.0 0.0 0.9\nH 0.0 0.0 1.8\nH 0.0 0.0 2.7"
+    mol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="f")
+    qmol = sn.Molecule(
+        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner"
+    )
+    ket = mol.make_ansatz("UpCCGSD") + sn.gates.Phase(1, "a") + sn.gates.Phase(6, "b")
+    bra = mol.make_ansatz("UpCCD")
+    rng = np.random.default_rng(7)
+    variables = {
+        v: rng.uniform(-1, 1) for v in ket.extract_variables() + bra.extract_variables()
+    }
+    fop = FermionOperator("0^ 2", 0.3) + FermionOperator("2^ 0", 0.3)
+    for operator in ["H", "I", qmol.make_hamiltonian(), fop, 0.5]:
+        E = Braket(ket=ket, bra=bra, operator=operator, mol=mol)
+        spex = sn.simulate(E, variables, backend="spex")
+        ffsim = sn.simulate(E, variables, backend="ffsim")
+        assert isclose(spex, ffsim, atol=1.0e-10)
+    spex = sn.simulate(ket, variables, backend="spex", n_orb=mol.n_orbitals)
+    ffsim = sn.simulate(ket, variables, backend="ffsim", n_orb=mol.n_orbitals)
+    assert isclose(spex.inner(ffsim), 1)
+
+
+@pytest.mark.skipif(not HAS_FFSIM, reason="ffsim not installed")
+def test_ffsim_spin_flip_raises():
+    # ffsim works in one (n_alpha, n_beta) sector: a+_beta a_alpha can not be simulated
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.9", basis_set="sto-3g", nature="f"
+    )
+    U = sn.gates.FermionicExcitation(indices=[(0, 3)], variables="a")
+    with pytest.raises(tq.TequilaException):
+        sn.simulate(Braket(ket=U, mol=mol), {"a": 0.1}, backend="ffsim")
+
+
+@pytest.mark.skipif(not (HAS_SPEX and HAS_FFSIM), reason="spex or ffsim not installed")
+def test_ffsim_rdms():
+    # the rdms are brakets of FermionOperators, used by optimize_orbitals
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.9\nH 0.0 0.0 1.8\nH 0.0 0.0 2.7",
+        basis_set="sto-3g",
+        nature="f",
+    )
+    U = mol.make_ansatz("UpCCGSD")
+    rng = np.random.default_rng(7)
+    variables = {v: rng.uniform(-1, 1) for v in U.extract_variables()}
+    for ordering in ["dirac", "mulliken"]:
+        spex = mol.compute_rdms(U, variables, backend="spex", ordering=ordering)
+        ffsim = mol.compute_rdms(U, variables, backend="ffsim", ordering=ordering)
+        assert np.allclose(spex[0], ffsim[0], atol=1.0e-10)
+        assert np.allclose(spex[1], ffsim[1], atol=1.0e-10)
+
+
 @pytest.mark.parametrize(
     "geom",
     [
@@ -405,7 +460,13 @@ def test_optimize_orbitals_respects_fermionic_backend(kwargs):
 
 
 @pytest.mark.parametrize(
-    "backend, module", [("spex", "spex_tequila"), ("tcc", "tencirchem"), ("fqe", "fqe")]
+    "backend, module",
+    [
+        ("spex", "spex_tequila"),
+        ("tcc", "tencirchem"),
+        ("fqe", "fqe"),
+        ("ffsim", "ffsim"),
+    ],
 )
 def test_installed_fermionic_backends(backend, module):
     # the backends are registered in a try/except ImportError, so if the library is installed
