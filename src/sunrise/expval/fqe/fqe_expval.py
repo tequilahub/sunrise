@@ -218,7 +218,9 @@ class FQEBraKet:
         ket_v = self.extract_ket_variables()
 
         if self.bra_instructions is not None:
-            ket_v += self.extract_bra_variables()
+            # a new list (+= grew the ket list on every call), without duplicates
+            seen = set(ket_v)
+            ket_v = ket_v + [v for v in self.extract_bra_variables() if v not in seen]
         return ket_v
 
     @property

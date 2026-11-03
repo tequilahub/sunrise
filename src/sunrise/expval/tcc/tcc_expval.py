@@ -193,9 +193,11 @@ class TCCBraket:
                 v.extend(d.extract_variables())
             else:
                 v.extend(d)
-        unique = []
+        # a set, comparing Variables one by one is slow for large circuits
+        seen, unique = set(), []
         for i in v:
-            if i not in unique:
+            if i not in seen:
+                seen.add(i)
                 unique.append(i)
         return unique
 

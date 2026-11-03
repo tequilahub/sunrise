@@ -188,14 +188,13 @@ class FFS_EXPVAL:
         """
         variables_bra = []
         variables_ket = []
-        uniques_bra = []
         if self.bra is not None:
             variables_bra = self.bra.extract_variables()
         if self.ket is not None:
             variables_ket = self.ket.extract_variables()
-        for v in variables_bra:
-            if v not in variables_ket:
-                uniques_bra.append(v)
+        # a set, comparing Variables one by one is slow for large circuits
+        seen = set(variables_ket)
+        uniques_bra = [v for v in variables_bra if v not in seen]
         return uniques_bra + variables_ket
 
     @property
