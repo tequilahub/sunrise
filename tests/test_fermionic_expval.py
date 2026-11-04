@@ -332,6 +332,27 @@ def test_ffsim_matches_spex():
     assert isclose(spex.inner(ffsim), 1)
 
 
+@pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
+def test_hcb_operator(backend):
+    # on a seniority-zero state the hardcore-boson Hamiltonian gives the same energy as H
+    if backend == "tequila":
+        pytest.xfail(
+            "tequila's HCB is the one-qubit-per-pair Hamiltonian, it only acts on the alpha qubits"
+        )
+    geom = "H 0.0 0.0 0.0\nH 0.0 0.0 0.9\nH 0.0 0.0 1.8\nH 0.0 0.0 2.7"
+    mol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="f")
+    ket = mol.make_ansatz("UpCCD")
+    rng = np.random.default_rng(3)
+    variables = {v: rng.uniform(-1, 1) for v in ket.extract_variables()}
+    E = {
+        op: sn.simulate(
+            Braket(ket=ket, operator=op, mol=mol), variables, backend=backend
+        )
+        for op in ["H", "HCB"]
+    }
+    assert isclose(E["H"], E["HCB"], atol=1.0e-10)
+
+
 @pytest.mark.skipif(not HAS_FFSIM, reason="ffsim not installed")
 def test_ffsim_spin_flip_raises():
     # ffsim works in one (n_alpha, n_beta) sector: a+_beta a_alpha can not be simulated

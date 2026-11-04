@@ -31,6 +31,7 @@ from sunrise.expval.tcc.operator_builder import (
     build_sparse_ci_operator,
     extract_restricted_integrals,
 )
+from sunrise.utils.fermionic_utils import hcb_restricted_integrals
 
 from ...fermionic_operations.circuit import FCircuit
 from ..fermionic_braket import FermBraketImpl
@@ -511,6 +512,13 @@ class TCCBraket:
                 self.BK.hamiltonian_lib = {}
             elif operator.upper() == "H":
                 pass
+            elif operator.upper() == "HCB":
+                # no speedup in tcc (dense contraction), only for consistency with the other backends
+                self.BK.int1e, self.BK.int2e = hcb_restricted_integrals(
+                    self.BK.int1e, self.BK.int2e
+                )
+                self.BK.hamiltonian = None
+                self.BK.hamiltonian_lib = {}
             else:
                 raise TequilaException(
                     f"No operator str {operator} supported on TCC BraKet"
