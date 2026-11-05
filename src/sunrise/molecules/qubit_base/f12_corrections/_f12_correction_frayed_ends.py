@@ -6,9 +6,9 @@ from tequila import TequilaException
 from ._f12_correction_base import ExplicitCorrelationCorrection
 
 
-class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
+class ExplicitCorrelationCorrectionFrayedends(ExplicitCorrelationCorrection):
     """
-    Class for computation of explicitly correlated correction, using PNO-orbitals from madness
+    Class for computation of explicitly correlated correction, using PNO-orbitals from Frayedends
     """
 
     def __init__(
@@ -25,7 +25,7 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
         Parameters
         ----------
         mol :
-            the molecule given by a QuantumChemistryMadness
+            the molecule given by a QuantumChemistryFrayedends
         rdm1 :
             1-electron reduced density matrix
         rdm2 :
@@ -35,13 +35,13 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
         n_ri :
             dimensionality of RI-basis; if None, then the maximum available via tensors / basis-set is used
         f12_filename :
-            when using madness_interface, <q|h|p> and <rs|1/r_12|pq> already available;
-            need to provide f12-tensor <rs|f_12|pq> as ".bin" from madness or ".npy", assuming Mulliken ordering
+            when using Frayedends_interface, <q|h|p> and <rs|1/r_12|pq> already available;
+            need to provide f12-tensor <rs|f_12|pq> as ".bin" from Frayedends or ".npy", assuming Mulliken ordering
         kwargs :
             e.g. RDM-information via {"U": QCircuit, "variables": optimal angles}, needs to be passed if rdm1,rdm2 not
             yet computed
         """
-        # Set up known external info for madness
+        # Set up known external info for Frayedends
         if f12_filename.endswith(".bin"):
             try:
                 f12_data = numpy.fromfile(f12_filename)
@@ -66,7 +66,7 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
             **kwargs,
         )
 
-    def setup_tensors_madness(self):
+    def setup_tensors_Frayedends(self):
         """
         Setup tensors with integrals provided externally
         Pretty much equivalent to super().setup_tensors_external
@@ -90,15 +90,15 @@ class ExplicitCorrelationCorrectionMadness(ExplicitCorrelationCorrection):
     def compute(self) -> float:
         """
         Computes universal explicitly correlated correction based on parameters of class instance
-        Uses madness-tensors read from an external file
+        Uses Frayedends-tensors read from an external file
 
         Returns
         -------
             the explicitly correlated correction
         """
-        print("Set up universal f12-correction using external integrals from madness.")
+        print("Set up universal f12-correction using external integrals from Frayedends.")
         # Prepare tensors
-        h, g, r = self.setup_tensors_madness()
+        h, g, r = self.setup_tensors_Frayedends()
         fock = super().build_fock_operator(h=h, g=g)
 
         # Compute correction using base class method

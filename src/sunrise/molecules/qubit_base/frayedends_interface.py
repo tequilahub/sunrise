@@ -5,6 +5,7 @@ import re
 import shutil
 import typing
 import warnings
+import sys
 
 import numpy
 from tequila import ExpectationValue
@@ -17,7 +18,14 @@ from .qc_base import (
     TequilaWarning,
     gates,
 )
+from ...utils.giuseppe import giuseppe_bar
+import frayedends as fe
 
+_Cached_WORLD = fe.MadWorld(ndims=3, thresh=1.0e-6) # TODO Here just while I work
+_world_options = ["l", "wavelet_order", "thresh", "initial_level", "truncate_mode", "refine", "n_threads"]
+
+
+_Live_Molecules_ID = []
 # Examples how to initialize the madness backend
 # sun.Molecule(geometry="...") will initialize a molecule with n_qubits=n_electrons (n_electrons//2 HF orbitals + n_electrons//2 PNOs)
 # sun.Molecule(geometry="...", n_pno="read") will read in files (name is auto-generated from geometry)
@@ -29,10 +37,13 @@ from .qc_base import (
 # sun.Molecule(geometry="...", n_pno=10) # computes 10 PNOs additional to the occupied HF orbitals
 
 
-class TequilaMadnessException(TequilaException):
+class SunriseFrayedEndsException(TequilaException):
     def __str__(self):
-        return "Error in madness backend:" + self.message
+        return "Error in FrayedEnds backend:" + self.message
 
+class SunriseFrayedEndWarning(TequilaWarning):
+    def __str__(self):
+        return "Warning in FrayedEnds backend:" + self.message
 
 class FrayedEndsMixin:
     """
@@ -41,18 +52,69 @@ class FrayedEndsMixin:
     Put it first in the bases so that it overrides the methods of the backend base class
     """
 
-    def plot2cube(self, orbital, filename=None, *args, **kwargs):
+    def cube_plot(self, filename: str | None = None, orbital: list[int] | None = None, use_active: bool = True,*args, **kwargs):
         """
         plot orbitals to cube file
         Parameters
         ----------
         filename: name of the cubefile (default: mra_orbital_X.cube where X is the total index of the active orbital)
-        zoom: #TODO
-        datapoints: #TODO
-        origin: #TODO
-        args: further arguments for plot2cube
-        kwargs further keyword arguments for plot2cube
+        use_active: Wether to plot only the active orbitals, if orbital list passed and true, its assumed that the indices are w.r.t. active orbitals (mol.integral_manager.active_orbitals[x].idx instead of ...[x].idx_total).
+        orbital: index of the orbitals to save
+        args: further arguments for cube_plot
+        kwargs further keyword arguments for cube_plot (or MadWorld if needed)
         """
+        if filename is None:
+                filename = (
+                    self.parameters.name
+                    + "-"
+                    + self.integral_manager._basis_name # TODO
+                    + "-"
+                    + self.integral_manager._orbital_type # TODO
+                )
+        if _Cached_WORLD is None:
+            word_kwargs = {k: kwargs.pop(k) for k in _world_options if k in kwargs}
+            self._initialize_world(**word_kwargs)
+
+        if orbital is None and use_active:
+            orbital = [i.idx_total for i in self.integral_manager.active_orbitals]
+            label = [i.idx for i in self.integral_manager.active_orbitals]
+        elif orbital is None and not use_active:
+            orbital = [i.idx_total for i in self.integral_manager.orbitals]
+            label = orbital
+        elif orbital is not None and use_active:
+            d = {i.idx: i.idx_total for i in self.integral_manager.orbitals}
+            label = orbital.copy()
+            orbital = [d[i] for i in orbital]
+        else:
+            label = orbital
+
+        for i, idx in enumerate(orbital):
+            name = str(label[i]) + "_" + filename + "_MO.cube",
+            giuseppe_bar(step=i, total_steps=len(orbital))
+            _Cached_WORLD.cube_plot(*args,
+                                    filename=name, 
+                                    mra_function=self.integral_manager.orbital[idx],
+                                    molecule=self._frayed_geom(),
+                                    **kwargs
+                                    )
+            giuseppe_bar(step=i + 1, total_steps=len(orbital))
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+    def _initialize_world(self,
+                    L: float = 50.0,  # half the box length, units: bohr
+                    wavelet_order: int = 7,  # wavelet order
+                    thresh: float = 1.0e-5,  # threshold for function representation
+                    initial_level: int = 3,  # initial projection level
+                    truncate_mode: int = 1,
+                    refine: bool = True,
+                    n_threads: int = -1,  # default is all available threads
+                ):
+        if _Cached_WORLD is not None:
+            warnings.warn("World Was already created on this proces, skiping for safetiness"), SunriseFrayedEndWarning
+            return
+        _Cached_WORLD = fe.MadWorld(ndims=3, L=L, k=wavelet_order, thresh=thresh, initial_level=initial_level,
+                                    truncate_mode=truncate_mode, refine=refine, n_threads=n_threads)
 
     def get_pair_orbitals(
         self, i: OrbitalData, j: OrbitalData, exclude: list[OrbitalData] | None = None
@@ -76,27 +138,25 @@ class FrayedEndsMixin:
 
     # mol.save stores the PNO pair structure, sun.load_molecule gives it back to the qubit madness interface
     def _backend_data(self):
-        # the pnoinfo of the madness calculation (the integrals and the nuclear repulsion are stored by mol.save)
-        orbitals = self.integral_manager.orbitals
-        if any(o.pair is None or o.occ is None for o in orbitals):
-            warnings.warn(
-                "the orbitals lost their PNO pair structure (e.g. they were transformed), "
-                "the molecule is loaded with the base backend",
-                TequilaWarning,
-            )
-            return None
-        return {
-            "pairinfo": [o.pair for o in orbitals],
-            "occinfo": [o.occ for o in orbitals],
-        }
+        # Extra info that the molecule need
+        ...
 
     def use_CLPO_orbitals_and_edges(self, *args, **kwargs):
+        '''
+        Currently no janpa - frayedends interface is implemented. However it can be interfaced via pyscf. See `examples/VB_embedding/embeddings.py`
+        '''
         raise NotImplementedError
 
     def use_CLPO_orbitals(self, *args, **kwargs):
+        '''
+        Currently no janpa - frayedends interface is implemented. However it can be interfaced via pyscf. See `examples/VB_embedding/embeddings.py`
+        '''
         raise NotImplementedError
 
     def use_HAO_orbitals(self, *args, **kwargs):
+        '''
+        Currently no janpa - frayedends interface is implemented. However it can be interfaced via pyscf. See `examples/VB_embedding/embeddings.py`
+        '''
         raise NotImplementedError
 
     def make_spa_ansatz(self, label=None, hcb=False, edges=None, **kwargs):
@@ -120,58 +180,10 @@ class FrayedEndsMixin:
             if hcb:
                 kwargs["hcb"] = hcb
             return super().make_spa_ansatz(edges=edges, label=label, **kwargs)
-        name = "SPA-UpCCD"
+        name = "SPA-UpCCD" # NOTE: This is due to PNOs, will change
         if hcb and "HCB" not in name.upper():
             name = "HCB-" + name
         return self.make_upccgsd_ansatz(name=name, label=label)
-
-    @staticmethod
-    def find_executable(madness_root_dir=None):
-        executable = shutil.which("pno_integrals")
-        if madness_root_dir is None:
-            madness_root_dir = str(os.environ.get("MAD_ROOT_DIR"))
-        if executable is None and madness_root_dir is not None:
-            executable = shutil.which(f"{madness_root_dir}/src/apps/pno/pno_integrals")
-        return executable
-
-    def read_tensors(self, name="molecule", filetype="npy", datadir=None):
-        """
-        Try to read files "name_htensor.npy" and "name_gtensor.npy"
-        """
-
-        path = name
-        if datadir is not None:
-            path = f"{datadir}/{name}"
-
-        try:
-            h = numpy.load(f"{path}_htensor.{filetype}")
-        except Exception:  # noqa: BLE001
-            h = "failed"
-
-        try:
-            g = numpy.load(f"{path}_gtensor.{filetype}")
-        except Exception:  # noqa: BLE001
-            g = "failed"
-
-        return h, g
-
-    def cleanup(self, warn=False, delete_all_files=False):
-        filenames = ["pnoinfo.txt", "molecule_htensor.bin", "molecule.gtensor.bin"]
-        if delete_all_files:
-            filenames = [
-                f"{self.parameters.name}_htensor.npy",
-                f"{self.parameters.name}_gtensor.npy",
-                f"{self.parameters.name}_pnoinfo.txt",
-                f"{self.parameters.name}_pno_integrals.out",
-            ]
-        for filename in filenames:
-            if os.path.exists(filename):
-                if warn:
-                    warnings.warn(
-                        f"Found file {filename} from previous calculation ... deleting it",
-                        TequilaWarning,
-                    )
-                os.remove(filename)
 
     def perturbative_f12_correction(
         self,
@@ -206,11 +218,11 @@ class FrayedEndsMixin:
         -------
             the f12 correction for the energy
         """
-        from .f12_corrections._f12_correction_madness import (
-            ExplicitCorrelationCorrectionMadness,
+        from .f12_corrections._f12_correction_frayed_ends import (
+            ExplicitCorrelationCorrectionFrayedends,
         )
 
-        correction = ExplicitCorrelationCorrectionMadness(
+        correction = ExplicitCorrelationCorrectionFrayedends(
             mol=self,
             rdm1=rdm1,
             rdm2=rdm2,
@@ -222,21 +234,15 @@ class FrayedEndsMixin:
         return correction.compute()
 
     def __str__(self):
-        path = self.parameters.name
-        if hasattr(self, "datadir") and self.datadir is not None:
-            path = f"{self.datadir}/{path}"
         info = super().__str__()
-        info += "\n"
-        info += "{:15} : {}\n".format("executable", self.executable)
-        info += "{:15} : {}\n".format("htensor", f"{path}_htensor.npy")
-        info += "{:15} : {}\n".format("gtensor", f"{path}_gtensor.npy")
+        # TODO        
 
         return info
 
     def __repr__(self):
         return self.__str__()
 
-    def _init_madness(
+    def _init_frayed(
         self,
         build: typing.Callable,
         parameters: ParametersQC,
@@ -249,400 +255,35 @@ class FrayedEndsMixin:
         datadir=None,
         **kwargs,
     ):
-        """
-        Get the integrals and the PNO pair structure from madness (run it, read in the files with n_pno="read"
-        or take the data given by sun.load_molecule) and initialize the molecule with them
-        build is the __init__ of the backend base class (QuantumChemistryBase, HybridBase or FermionicBase),
-        all other keyword arguments (e.g. transformation, select) are passed to it
-        """
-        # can not use "geometry"
-        # as this is already used for other things furter up
-        if "mad_geometry_options" in kwargs:
-            self.mad_geometry_options = kwargs["mad_geometry_options"]
+        
+        ## Frayed molecule nature independent init
+        ... 
 
-        self.datadir = datadir
+    def _frayed_geom(self):
+        return fe.MolecularGeometry(geometry=self.parameters.geometry, units=self.parameters.units, silent=True)
 
-        # see if MAD_ROOT_DIR is defined
-        self.madness_root_dir = os.environ.get("MAD_ROOT_DIR")
-        # see if the pno_integrals executable can be found
-        if executable is None:
-            executable = self.find_executable()
-            if executable is None and self.madness_root_dir is not None:
-                warnings.warn(
-                    f"MAD_ROOT_DIR={self.madness_root_dir} found\nbut couldn't find executable",
-                    TequilaWarning,
-                )
+    def compute_energy(): ...
+        ## Frayed has its own, other should be called super().X
 
-        else:
-            executable = shutil.which(executable)
-
-        self.executable = executable
-        self.n_pno = n_pno
-        self.n_virt = n_virt
-        self.kwargs = kwargs
-
-        # if no n_pno is given, look for MRA data (default)
-        name = parameters.name
-
-        # the data of a madness calculation can be given directly (e.g. by sun.load_molecule):
-        # one_body_integrals, two_body_integrals, nuclear_repulsion, pairinfo and occinfo, then no files are read
-        given = "one_body_integrals" in kwargs and "pairinfo" in kwargs
-        if given:
-            h = kwargs.pop("one_body_integrals")
-            g = kwargs.pop("two_body_integrals")
-            if isinstance(g, NBodyTensor):
-                g = g.reorder(to="chem").elems
-            n_pno = None
-        # try to read in data in the following cases
-        # - no executable found
-        # - executable found but read in explicitly demanded through n_pno="read"
-        elif (n_pno is None and executable is None) or (
-            hasattr(n_pno, "lower") and n_pno.lower() == "read"
-        ):
-            h, g = self.read_tensors(name=name, datadir=datadir)
-            n_pno = None
-        else:
-            h = "failed"
-            g = "failed"
-
-        if (isinstance(h, str) and "failed" in h) or (
-            isinstance(g, str) and "failed" in g
-        ):
-            status = "found {}_htensor.npy={}\n".format(name, "failed" not in h)
-            status += "found {}_gtensor.npy={}\n".format(name, "failed" not in g)
-            try:
-                # try to run madness
-                self.parameters = parameters
-                status += "madness="
-                madness_status = self.run_madness(*args, **kwargs)
-                if int(madness_status) != 0:
-                    warnings.warn(
-                        f"MADNESS did not terminate as expected! status = {status}",
-                        TequilaWarning,
-                    )
-                status += str(madness_status) + "\n"
-            except Exception as E:  # noqa: BLE001 - any failure is reported in the status message below
-                status += str(E) + "\n"
-
-            # will read the binary files, convert them and save them with the right name
-            h, g, pinfo = self.convert_madness_output_from_bin_to_npy(
-                name=name, datadir=datadir
-            )
-            status += "found {}_htensor.npy={}\n".format(name, "failed" not in h)
-            status += "found {}_gtensor.npy={}\n".format(name, "failed" not in g)
-            status += "found {}_pnoinfo.txt={}\n".format(name, "failed" not in pinfo)
-            status += "h_tensor report:\n"
-            status += str(h)
-            status += "g_tensor report:\n"
-            status += str(g)
-            status += "pnoinfo report:\n"
-            status += str(pinfo)
-
-            solution = f"Solution 1: Assuming precomputed files are available:\n    provide {name}_gtensor.npy, {name}_htensor.npy and {name}_pnoinfo.txt\n    and call the Molecule constructor with n_pno='read' keyword \n\nSolution 2: Try installing with conda\n    conda install madtequila -c kottmann\n\nSolution 3: Install from source\n    follow instructions on github.com/kottmanj/madness"
-            if self.executable is not None:
-                solution = f"madness executable was found, but calculation did not succeed, check {name}_pno_integrals.out for clues"
-
-            if "failed" in h or "failed" in g:
-                raise TequilaMadnessException(
-                    f"Could not initialize the madness interface\nStatus report is\n{status}\n\n"
-                    + solution
-                )
-        # get additional information from madness file
-        nuclear_repulsion = kwargs.pop("nuclear_repulsion", 0.0)
-        pairinfo = kwargs.pop("pairinfo", None)
-        occinfo = kwargs.pop("occinfo", None)
-        path = parameters.name
-        if datadir is not None:
-            path = f"{datadir}/{path}"
-        if not given:
-            for name in [
-                path + "_pnoinfo.txt",
-                parameters.name + "_pnoinfo.txt",
-                "pnoinfo.txt",
-            ]:
-                try:
-                    with open(name, "r") as f:
-                        for line in f:
-                            if "nuclear_repulsion" in line:
-                                nuclear_repulsion = float(line.split("=")[1])
-                            elif "pairinfo" in line:
-                                pairinfo = line.split("=")[1].split(",")
-                                pairinfo = [
-                                    tuple([int(i) for i in x.split(".")])
-                                    for x in pairinfo
-                                ]
-                            elif "occinfo" in line:
-                                occinfo = line.split("=")[1].split(",")
-                                occinfo = [float(x) for x in occinfo]
-
-                    if pairinfo is not None:
-                        break
-                except Exception:  # noqa: BLE001, S112
-                    continue
-
-        if pairinfo is None:
-            raise TequilaMadnessException(
-                "Pairinfo from madness calculation not found\nPlease provide pnoinfo.txt"
-            )
-
-        n_orbitals_total = h.shape[0]
-        if "n_orbitals" in kwargs:
-            # this would be the active orbitals
-            kwargs.pop("n_orbitals")
-
-        assert h.shape[1] == n_orbitals_total
-        assert sum(g.shape) == 4 * n_orbitals_total
-        assert len(g.shape) == 4
-        assert len(h.shape) == 2
-
-        g = NBodyTensor(elems=g, ordering="mulliken")
-
-        orbitals = []
-        if pairinfo is not None:
-            orbitals = [
-                OrbitalData(idx_total=i, idx=i, pair=p, occ=occinfo[i])
-                for i, p in enumerate(pairinfo)
-            ]
-            reference_orbitals = [x for x in orbitals if x.occ == 2.0]
-            if active_orbitals == "auto":
-                not_active = [
-                    i
-                    for i in reference_orbitals
-                    if sum([1 for x in orbitals if i.idx_total in x.pair]) < 2
-                ]
-                active_orbitals = [x.idx_total for x in orbitals if x not in not_active]
-
-            if active_orbitals is not None:
-                i = 0
-                for x in orbitals:
-                    if x.idx_total in active_orbitals:
-                        orbitals[x.idx_total].idx = i
-                        i += 1
-                    else:
-                        orbitals[x.idx_total].idx = None
-        else:
-            raise TequilaMadnessException(
-                "No pairinfo given: madness interface needs a file moleculename_pnoinfo.txt"
-            )
-
-        # convert to indices only
-        # active space data will be set in baseclass constructor
-        reference_orbitals = [x.idx_total for x in reference_orbitals]
-        if kwargs.get("reference_orbitals") is not None:
-            # given (e.g. by sun.load_molecule) instead of the doubly occupied orbitals
-            reference_orbitals = kwargs.pop("reference_orbitals")
-        kwargs.pop("reference_orbitals", None)
-        build(
-            *args,
-            parameters=parameters,
-            active_orbitals=active_orbitals,
-            one_body_integrals=h,
-            two_body_integrals=g,
-            nuclear_repulsion=nuclear_repulsion,
-            n_orbitals=n_orbitals_total,
-            orbitals=orbitals,
-            reference_orbitals=reference_orbitals,
-            **kwargs,
-        )
-
-        # print warning if read data does not match expectations
-        if n_pno is not None:
-            nrefs = len(self.reference_orbitals)
-            if n_pno + nrefs + n_virt != self.n_orbitals:
-                warnings.warn(
-                    f"read in data has {self.n_orbitals - nrefs} pnos/virtuals, but n_pno and n_virt where set to {n_pno} and {n_virt}",
-                    TequilaWarning,
-                )
-
-        # delete *.bin files and pnoinfo.txt form madness calculation (none if the data was given)
-        if not keep_mad_files and not given:
-            self.cleanup(warn=False, delete_all_files=False)
-
-    def run_madness(self, *args, **kwargs):
-        if self.executable is None:
-            return "\n\n----> pno_integrals executable not found <----\n\n"
-        self.write_madness_input(*args, n_pno=self.n_pno, n_virt=self.n_virt, **kwargs)
-
-        # prevent reading in old files
-        self.cleanup(warn=True, delete_all_files=True)
-
-        import subprocess
-        import time
-
-        start = time.time()
-        filename = f"{self.parameters.name}_pno_integrals.out"
-        print("Starting madness calculation with executable: ", self.executable)
-        print(f"output redirected to {filename} logfile")
-        with open(filename, "w") as logfile:
-            madout = subprocess.call([self.executable], stdout=logfile)
-        print(f"finished after {time.time() - start}s")
-
-        os.rename("pnoinfo.txt", f"{self.parameters.name}_pnoinfo.txt")
-
-        return madout
-
-    def write_madness_input(
-        self,
-        n_pno=None,
-        n_virt=0,
-        filename="input",
-        maxrank=None,
-        n_orbitals=None,
-        *args,
-        **kwargs,
-    ):
-        if n_pno is not None and n_orbitals is not None:
-            raise TequilaMadnessException(
-                f"n_pno={n_pno} and n_orbitals={n_orbitals} given ... please pick one"
-            )
-
-        n_electrons = self.parameters.total_n_electrons
-        if self.parameters.frozen_core:
-            # only count active electrons (will not compute pnos for frozen pairs)
-            n_core_electrons = self.parameters.get_number_of_core_electrons()
-            n_electrons -= n_core_electrons
-
-        n_pairs = n_electrons // 2
-        if n_orbitals is None:
-            n_orbitals = n_electrons  # minimal correlated (each active pair will have one virtual)
-
-        if n_pno is None:
-            n_pno = n_orbitals - n_pairs
-
-        if maxrank is None:
-            # need at least maxrank=1, otherwise no PNOs are computed
-            # this was a bug in <=v1.8.5
-            maxrank = max(1, int(numpy.ceil(n_pno / n_pairs)))
-
-        if maxrank <= 0:
-            warnings.warn(
-                f"maxrank={maxrank} in tequila madness backend! No PNOs will be computed. Set the value when initializing the Molecule as sun.Molecule(..., pno={'maxrank':1, ...})",
-                TequilaWarning,
-            )
-
-        data = {}
-        if self.parameters.multiplicity != 1:
-            raise TequilaMadnessException(
-                f"Currently only closed shell supported for MRA-PNO-MP2, you demanded multiplicity={self.parameters.multiplicity} for the surrogate"
-            )
-        data["dft"] = {
-            "charge": self.parameters.charge,
-            "xc": "hf",
-            "k": 7,
-            "econv": 1.0e-4,
-            "dconv": 5.0e-4,
-            "localize": "boys",
-            "ncf": "( none , 1.0 )",
-        }
-        data["pno"] = {
-            "maxrank": maxrank,
-            "f12": "false",
-            "thresh": 1.0e-4,
-            "diagonal": True,
-        }
-        if not self.parameters.frozen_core:
-            data["pno"]["freeze"] = 0
-        data["pnoint"] = {"n_pno": n_pno, "n_virt": n_virt, "orthog": "symmetric"}
-        data["plot"] = {}
-        data["f12"] = {}
-        for key, value in data.items():
-            if key in kwargs:
-                data[key] = {**value, **kwargs[key]}
-
-        geom = {}
-        if hasattr(self, "mad_geometry_options"):
-            geom = self.mad_geometry_options
-
-        if "units" not in geom:
-            geom["units"] = "angstrom"
-        if "eprec" not in geom:
-            geom["eprec"] = 1.0e-6
-        if "no_orient" not in geom:
-            geom["no_orient"] = 1
-        if filename is not None:
-            with open(filename, "w") as f:
-                for k1, v1 in data.items():
-                    print(k1, file=f)
-                    for k2, v2 in v1.items():
-                        print(f"{k2} {v2}", file=f)
-                    print("end\n", file=f)
-
-                print("geometry", file=f)
-                for k, v in geom.items():
-                    print(f"{k} {v}", file=f)
-                for line in self.parameters.get_geometry_string().split("\n"):
-                    line = line.strip()
-                    if line != "":
-                        print(line, file=f)
-                print("end", file=f)
-
-        return data
-
-    def convert_madness_output_from_bin_to_npy(self, name, datadir=None):
-        path = name
-        if datadir is not None:
-            # if the datadir does not exist then tequila will crash
-            try:
-                import os
-
-                if not os.path.exists(datadir):
-                    os.makedirs(datadir)
-            except Exception as E:  # noqa: BLE001  # reported in status
-                warnings.warn(
-                    f"tried to create datadir={datadir} and caught\n{E!s}",
-                    TequilaWarning,
-                )
-
-            path = f"{datadir}/{name}"
-        try:
-            g_data = numpy.fromfile("molecule_gtensor.bin".format())
-            sd = int(numpy.power(g_data.size, 0.25))
-            assert sd**4 == g_data.size
-            sds = [sd] * 4
-            g = g_data.reshape(sds)
-            numpy.save(f"{path}_gtensor.npy", arr=g)
-        except Exception as E:  # noqa: BLE001  # reported in status
-            g = f"failed\n{E!s}\n"
-
-        try:
-            h_data = numpy.fromfile("molecule_htensor.bin")
-            sd = int(numpy.sqrt(h_data.size))
-            assert sd**2 == h_data.size
-            sds = [sd] * 2
-            h = h_data.reshape(sds)
-            numpy.save(f"{path}_htensor.npy", arr=h)
-        except Exception as E:  # noqa: BLE001  # reported in status
-            h = f"failed\n{E!s}\n"
-
-        try:
-            with open(f"{name}_pnoinfo.txt", "r") as f1:
-                pnoinfo = f1.read().strip()
-        except Exception as E:  # noqa: BLE001
-            pnoinfo = f"failed\n{E!s}\n"
-
-        if datadir is not None:
-            try:
-                with (
-                    open(f"{name}_pnoinfo.txt", "r") as f1,
-                    open(f"{path}_pnoinfo.txt", "w") as f2,
-                ):
-                    f2.write(f1.read().strip())
-            except Exception as E:  # noqa: BLE001
-                pnoinfo = f"failed\n{E!s}\n"
-            try:
-                with (
-                    open(f"{name}_pno_integrals.out", "r") as f1,
-                    open(f"{path}_pno_integrals.out", "w") as f2,
-                ):
-                    f2.write(f1.read().strip())
-            except Exception:  # noqa: BLE001, S110
-                pass
-
-        return h, g, pnoinfo
+    def refine_orbitals(): ...
+        ## Keep similar to sn.optimize_orbitals
+        #   
 
     def __del__(self): ...
 
     def __deepcopy__(self): ...
+
+    def __copy__(self): ...
+
+    def __init__(self): ...
+
+    def compile_to_frayed(self): ...
+        ## return frayed ends compiled stuff for more experimented users ??
+
+    @staticmethod
+    def from_sunrise(other:QuantumChemistryBase): ...
+    # reads another sunrise molecule, reorders the orb coeff if needed, and proyects its via AtomicBasisProjector
+
 
 
 class QuantumChemistryFrayed(FrayedEndsMixin, QuantumChemistryBase):
