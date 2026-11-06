@@ -10,7 +10,7 @@ def vqd_projection_method(
     constant_list: list[Number],
 ):
     """Return the Variational Quantum Deflation (VQD) objective with overlap penalties for the circuit ``U``.
-    
+
     Parameters
     ----------
     H : QubitHamiltonian
@@ -21,7 +21,7 @@ def vqd_projection_method(
         Circuits of the previously optimized states.
     constant_list : list of float
         Penalty weight of each previous state.
-        
+
     Returns
     -------
     tq.Objective
@@ -31,7 +31,7 @@ def vqd_projection_method(
     ValueError
         If ``circuit_list`` and ``constant_list`` differ in length.
     """
-    
+
     E = tq.ExpectationValue(H=H, U=U)
     if len(circuit_list) != len(constant_list):
         raise ValueError(
