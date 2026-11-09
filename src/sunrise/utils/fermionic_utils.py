@@ -11,10 +11,25 @@ from sunrise.fermionic_operations.gates import *
 
 
 def hcb_restricted_integrals(h, g):
-    """
-    Keep only the integrals a seniority-zero state sees: h_ii, (ii|jj), (ij|ji), (ij|ij).
-    g in chemists notation. On seniority-zero states the result gives the same expectation
-    values as the hardcore-boson Hamiltonian.
+    r"""Keep only the integrals a seniority-zero state sees.
+
+    These are :math:`h_{ii}`, :math:`(ii|jj)`, :math:`(ij|ji)` and :math:`(ij|ij)`. On
+    seniority-zero states the restricted Hamiltonian gives the same expectation values as the
+    hard-core boson Hamiltonian, with 2-body terms only.
+
+    Parameters
+    ----------
+    h : numpy.ndarray
+        One-body integrals.
+    g : numpy.ndarray
+        Two-body integrals in chemists' (Mulliken) ordering.
+
+    Returns
+    -------
+    h : numpy.ndarray
+        Diagonal of ``h``.
+    g : numpy.ndarray
+        Restricted two-body integrals, same ordering.
     """
     i, j = numpy.indices(h.shape)
     g_hcb = numpy.zeros_like(g)

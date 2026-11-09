@@ -513,7 +513,11 @@ def _linear_operator(op: FermionOperator, norb: int, nelec: tuple) -> LinearOper
 
 
 def _hcb_operator(molecule: ffsim.MolecularData) -> FermionOperator:
-    # same terms as SpexExpval._build_hcb_hamiltonian; keys are (creation, beta, orbital)
+    """Return the hard-core boson Hamiltonian as ffsim FermionOperator, with the terms of ``SpexExpval._build_hcb_hamiltonian``.
+
+    Each electron pair lives on the two spin orbitals of a spatial orbital. The keys of the terms
+    are ``(creation, beta, orbital)``.
+    """
     h, g = molecule.one_body_integrals, molecule.two_body_integrals
     terms = {(): molecule.core_energy}
     for i in range(molecule.norb):
