@@ -10,10 +10,11 @@ import fqe
 import tequila as tq
 from fqe.hamiltonians.diagonal_coulomb import DiagonalCoulomb
 from fqe.hamiltonians.sparse_hamiltonian import SparseHamiltonian
+from numpy import ndarray
 from tequila import QubitWaveFunction, TequilaException
 
-from sunrise.expval.fqe.fermionic_utils import *
 from sunrise.fermionic_operations.circuit import FCircuit
+from sunrise.utils.fermionic_utils import *
 
 from ..fermionic_braket import FermBraketImpl
 
@@ -68,6 +69,19 @@ class FQEBraKet:
                 c, h, g = mol.get_integrals()
                 h_of = make_fermionic_hamiltonian(
                     one_body_integrals=h, two_body_integrals=g.elems, constant=c
+                )
+                self.h_fqe = fqe.get_hamiltonian_from_openfermion(
+                    h_of, norb=self.n_orbitals
+                )
+            elif operator.lower() == "hcb":
+                # the hardcore-boson Hamiltonian has a 4-body term, which fqe stores as a dense
+                # (2*norb)**8 tensor: the restricted 2-body integrals are equivalent on seniority-zero states
+                c, h, g = mol.get_integrals(ordering="chem")
+                h, g.elems = hcb_restricted_integrals(h, g.elems)
+                h_of = make_fermionic_hamiltonian(
+                    one_body_integrals=h,
+                    two_body_integrals=g.reorder("of").elems,
+                    constant=c,
                 )
                 self.h_fqe = fqe.get_hamiltonian_from_openfermion(
                     h_of, norb=self.n_orbitals
@@ -351,8 +365,7 @@ def set_init_state(
     wfn: fqe.Wavefunction,
     n_ele,
     n_orb,
-    init_state: list[tuple[str, int] | QubitWaveFunction | np.array]
-    | QubitWaveFunction,
+    init_state: list[tuple[str, int] | QubitWaveFunction | ndarray] | QubitWaveFunction,
     bin_dict: dict,
 ) -> None:
     """Set the initial state of an FQE wavefunction in place and normalize it.

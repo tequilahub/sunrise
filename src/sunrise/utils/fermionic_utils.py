@@ -4,9 +4,24 @@ import typing
 from collections import defaultdict
 from itertools import combinations
 
+import numpy
 import openfermion
 
 from sunrise.fermionic_operations.gates import *
+
+
+def hcb_restricted_integrals(h, g):
+    """
+    Keep only the integrals a seniority-zero state sees: h_ii, (ii|jj), (ij|ji), (ij|ij).
+    g in chemists notation. On seniority-zero states the result gives the same expectation
+    values as the hardcore-boson Hamiltonian.
+    """
+    i, j = numpy.indices(h.shape)
+    g_hcb = numpy.zeros_like(g)
+    g_hcb[i, i, j, j] = g[i, i, j, j]
+    g_hcb[i, j, j, i] = g[i, j, j, i]
+    g_hcb[i, j, i, j] = g[i, j, i, j]
+    return numpy.diag(numpy.diag(h)), g_hcb
 
 
 def make_fermionic_hamiltonian(

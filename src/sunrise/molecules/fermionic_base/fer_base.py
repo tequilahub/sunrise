@@ -2014,11 +2014,9 @@ class FermionicBase(QuantumChemistryBase):
             if "S" not in method.upper().split("-")[-1] and "HCB" not in method.upper():
                 method = "HCB-" + method
             U = self.make_ansatz(name=method)
-            if "hcb" in method.lower():
-                H = self.make_hardcore_boson_hamiltonian()
-            else:
-                H = self.make_hamiltonian()
-            E = Braket(operator=H, ket=U, mol=self)
+            E = Braket(
+                operator="HCB" if "hcb" in method.lower() else "H", ket=U, mol=self
+            )
             from sunrise import minimize
 
             return minimize(*args, objective=E, **kwargs).energy
