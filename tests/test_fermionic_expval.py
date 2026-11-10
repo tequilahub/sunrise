@@ -332,6 +332,17 @@ def test_controlled_fcircuit_fermionic_backends():
             sn.simulate(U, variables={"r": 0.3}, backend=backend, n_orb=2)
 
 
+def test_to_qcircuit_initial_state():
+    # empty first qubits and negative amplitudes are prepared too
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="q"
+    )
+    for init, occupied in [("1.0|0110>", "0110"), ("-1.0|1010>", "1010")]:
+        U = sn.FCircuit(initial_state=init)
+        wfn = tq.simulate(U.to_qcircuit(mol))
+        assert wfn.isclose(tq.QubitWaveFunction.from_string(f"1.0|{occupied}>"))
+
+
 @pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
 def test_givens_circuit_signed_permutation():
     # swapping orbitals 0 and 3 needs rotations by pi/2 and a phase of pi on orbital 3

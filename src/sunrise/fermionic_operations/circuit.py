@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from copy import deepcopy
 from typing import Callable
 
-from numpy import argwhere, array, eye, isclose, kron, ndarray, pi, where
+from numpy import argwhere, eye, isclose, kron, ndarray, pi
 from tequila import (
     BitNumbering,
     BitString,
@@ -699,24 +699,14 @@ class FCircuit:
             U = U.to_udud(molecule.n_orbitals)
             molecule.transformation.up_then_down = True
             if self.initial_state is not None:
-                idx = where(array(self._initial_state.to_array()) > 1.0e-6)[
-                    0
-                ]  # TODO change to dict
-                if not len(idx):
-                    pass
-                elif len(idx) > 1:
+                states = [k for k, v in self.initial_state.items() if abs(v) > 1.0e-6]
+                if len(states) > 1:
                     warnings.warn(
                         "Don't now how to prepare the circuit initial state, skyped for safety",
                         TequilaWarning,
                     )
-                else:
-                    res += X(
-                        target=[
-                            i
-                            for i in range(len(bin(idx[0])[2:]))
-                            if bin(idx[0])[2:][i] == "1"
-                        ]
-                    )
+                elif states:
+                    res += X(target=[q for q, b in enumerate(states[0].array) if b])
             for gate in U.gates:
                 if gate.name == "UR":
                     res += molecule.make_excitation_gate(
