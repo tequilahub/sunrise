@@ -24,7 +24,7 @@ from tequila import (
     simulate,
 )
 from tequila.objective.objective import FixedVariable, Variables
-from tequila.utils.bitstrings import BitNumbering, BitString
+from tequila.utils.bitstrings import BitNumbering
 
 from sunrise.expval.tcc.braket import EXPVAL
 from sunrise.expval.tcc.operator_builder import (
@@ -590,34 +590,18 @@ class TCCBraket:
         )
 
 
-def init_state_from_wavefunction(wvf: QubitWaveFunction):
-    if not isinstance(wvf._state, dict):
-        return init_state_from_array(wvf=wvf)
-    init_state = []
-    for i in wvf._state:
-        vec = bin(i)[2:].zfill(wvf.n_qubits)
-        init_state.append(
-            [vec, wvf._state[i].real]
-        )  # tcc automatically does this, but with an anoying message everytime
-    return init_state
-
-
-def init_state_from_array(wvf: QubitWaveFunction, tol=1e-6):
+def init_state_from_wavefunction(wvf: QubitWaveFunction, tol=1e-6):
     """
     Expected Initial State in UptheDown
     """
-    if isinstance(wvf._state, dict):
-        return init_state_from_wavefunction(wvf)
+    nq = int(2 * (ceil(wvf.n_qubits / 2)))  # if HCB may be odd amount of qubits
     init_state = []
-    nq = wvf.n_qubits
-    nq = int(2 * (ceil(nq / 2)))  # if HCB may be odd amount of qubits
-    for i, idx in enumerate(wvf._state):
-        vec = BitString.from_int(i)
-        vec.nbits = nq
-        vec = vec.binary
-        if abs(idx) > tol:
+    for idx, coeff in wvf.items():
+        if abs(coeff) > tol:
+            # tcc reads qubit 0 as the rightmost bit
+            vec = "".join(str(b) for b in idx.array[::-1]).zfill(nq)
             init_state.append(
-                [vec, idx.real]
+                [vec, coeff.real]
             )  # tcc automatically does this, but with an anoying message everytime
     return init_state
 
