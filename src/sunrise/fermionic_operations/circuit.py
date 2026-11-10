@@ -608,7 +608,20 @@ class FCircuit:
         new_gates = [gate.map_qubits(qubit_map) for gate in self.gates]
         # could speed up by applying qubit_map to parameter_map here
         # currently its recreated in the init function
-        return FCircuit(gates=new_gates)  # TODO: initial state?
+        initial_state = None
+        if self.initial_state is not None:
+            n = max([self.n_qubits] + [q + 1 for q in qubit_map.values()])
+            for k, v in self.initial_state.items():
+                bits = [0] * n
+                for q, b in enumerate(k.array):
+                    bits[qubit_map.get(q, q)] = b
+                basis = v * QubitWaveFunction.from_basis_state(
+                    n, BitString.from_array(bits)
+                )
+                initial_state = (
+                    basis if initial_state is None else initial_state + basis
+                )
+        return FCircuit(gates=new_gates, initial_state=initial_state)
 
     def map_variables(self, variables: dict, *args, **kwargs):
         """

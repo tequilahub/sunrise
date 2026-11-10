@@ -255,6 +255,13 @@ def test_circuit_simulate(geom, backend):
     assert isclose(tq_wfn.inner(sn_wfn), 1)
 
 
+def test_map_qubits_keeps_initial_state():
+    U = sn.FCircuit(initial_state="0.6|1100> - 0.8|0011>")
+    mapped = U.map_qubits({0: 2, 1: 3, 2: 0, 3: 1})
+    expected = tq.QubitWaveFunction.from_string("0.6|0011> - 0.8|1100>")
+    assert mapped.initial_state.isclose(expected)
+
+
 @pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
 def test_givens_circuit_signed_permutation():
     # swapping orbitals 0 and 3 needs rotations by pi/2 and a phase of pi on orbital 3
