@@ -351,12 +351,12 @@ class FermionicBase(QuantumChemistryBase):
         -------
 
         """
-        if control is not None:
-            raise NotImplementedError("Not implemented yet for Fermionic Backends")
         spin_indices = []
         for p, q in indices:
             spin_indices += [(2 * p, 2 * q), (2 * p + 1, 2 * q + 1)]
-        return gates.FermionicExcitation(indices=spin_indices, variables=angle)
+        return gates.FermionicExcitation(
+            indices=spin_indices, variables=angle, control=control
+        )
 
     def UR(
         self, i, j, angle=None, label=None, control=None, *args, **kwargs
@@ -382,9 +382,7 @@ class FermionicBase(QuantumChemistryBase):
                 angle = Variable(name=("R", i, j)) * numpy.pi
             else:
                 angle = Variable(name=("R", i, j, label)) * numpy.pi
-        if control is not None:
-            raise NotImplementedError("Not implemented yet for Fermionic Backends")
-        return gates.UR(i, j, angle)
+        return gates.UR(i, j, angle, control=control)
 
     def UC(
         self, i, j, angle=None, label=None, control=None, *args, **kwargs
@@ -414,9 +412,7 @@ class FermionicBase(QuantumChemistryBase):
                 angle = Variable(name=("C", i, j)) * numpy.pi
             else:
                 angle = Variable(name=("C", i, j, label)) * numpy.pi
-        if control is not None:
-            raise NotImplementedError("Not implemented yet for Fermionic Backends")
-        return gates.UC(i, j, angle)
+        return gates.UC(i, j, angle, control=control)
 
     def make_excitation_gate(self, indices, angle, control=None, **kwargs) -> FCircuit:
         """
@@ -440,11 +436,9 @@ class FermionicBase(QuantumChemistryBase):
                 Assume that the wavefunction will always stay real.
                 Will reduce potential gradient costs by a factor of 2
         """
-        if control is not None:
-            raise NotImplementedError(
-                "Not implemented yet for Fermionic Backends"
-            )  # TODO
-        return gates.FermionicExcitation(indices=indices, variables=angle)
+        return gates.FermionicExcitation(
+            indices=indices, variables=angle, control=control
+        )
 
     def transform_orbitals(
         self,
