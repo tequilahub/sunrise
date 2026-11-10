@@ -105,7 +105,7 @@ def simulate_fcircuit(
             mol = _generate_dummy_mol(n_orb)
             U = U.to_qcircuit(mol)
         else:
-            n_orb = int(ceil(U.max_qubit() + 1 / 2))
+            n_orb = int(ceil((U.max_qubit() + 1) / 2))
             U = U.to_qcircuit(molecule=_generate_dummy_mol(n_orb=n_orb))
         return tq_simulate(U, backend=backend, variables=variables, **kwargs)
     else:
