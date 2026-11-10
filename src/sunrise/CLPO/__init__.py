@@ -1,4 +1,4 @@
-"""Molecules in chemically localized orbital bases: hybrid atomic orbitals (HAO) and chemically localized pair orbitals (CLPO)."""
+"""Molecules in localized orbital bases: hybrid atomic orbitals (HAO) and Chemist's Localized Property-optimized Orbitals (CLPO)."""
 
 from .orbital_transformation import (
     generate_CLPO_molecule,

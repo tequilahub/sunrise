@@ -4,7 +4,7 @@ Adaptive circuit construction ([ADAPT-VQE](https://doi.org/10.1038/s41467-019-10
 
 **Main objects**
 - `MolecularPool`, `PseudoSingletMolecularPool` – operator pools built from molecular excitations (e.g. `indices="UpCCSD"`).
-- `Adapt` – the solver; works with qubit and fermionic molecules and any expectation-value backend.
+- `Adapt` – the solver; works with all sunrise molecules (qubit, fermionic and hybrid) and any expectation-value backend.
 - `ObjectiveFactorySequentialExcitedState` – variant for excited states ([Kottmann et al., Chem. Sci. 2021](https://doi.org/10.1039/D0SC06627C)).
 
 ```python

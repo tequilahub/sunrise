@@ -117,8 +117,10 @@ def optimize_orbitals(
     vqe_solver : callable, optional
         Custom solver, called as
         ``vqe_solver(H=H, circuit=circuit, molecule=molecule, **vqe_solver_arguments)``
-        and returning a tequila optimization result. By default the energy of
-        ``circuit`` is minimized.
+        and returning a tequila optimization result. If it has a
+        ``compute_rdms(U, variables, molecule, use_hcb)`` method, the RDMs are computed with it,
+        otherwise with ``molecule.compute_rdms`` (see ``SPASolver`` in
+        ``spafastprototype/spa.py``). By default the energy of ``circuit`` is minimized.
     pyscf_arguments : dict, optional
         Attributes of the PySCF MCSCF object. Default is
         ``{"max_cycle_macro": 10, "max_cycle_micro": 3}``.

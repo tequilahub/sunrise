@@ -51,7 +51,7 @@ from ..spex.spex_expval import _civect_to_qwvf, _qwvf_to_civect
 
 
 class FFS_EXPVAL:
-    """Expectation value or transition element evaluated with the ``"ffsim"`` backend.
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"ffsim"`` backend.
 
     The molecule is converted to ``ffsim.MolecularData``. Circuits are converted once to ffsim
     linear operators of their generators and applied to the initial state (Hartree-Fock unless a
@@ -400,9 +400,9 @@ class FFS_EXPVAL:
         Parameters
         ----------
         operator : str or number or FermionOperator or QubitHamiltonian
-            "I" (identity), "H" (molecular Hamiltonian), a constant, an ffsim FermionOperator, an
-            openfermion FermionOperator (interleaved spin orbital ordering) or a tequila
-            QubitHamiltonian. "HCB" is not supported, use the spex backend.
+            "I" (identity), "H" (molecular Hamiltonian), "HCB" (hard-core boson Hamiltonian), a
+            constant, an ffsim FermionOperator, an openfermion FermionOperator (interleaved spin
+            orbital ordering) or a tequila QubitHamiltonian.
 
         Returns
         -------

@@ -10,7 +10,7 @@ from .fermionic_braket import FermBraketImpl
 
 
 def TequilaBraket(braket: FermBraketImpl, *args, **kwargs) -> Objective:
-    """Expectation value or transition element evaluated with the ``"tequila"`` backend, i.e. as a
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"tequila"`` backend, i.e. as a
     tequila qubit Objective.
 
     Circuits are mapped to qubit circuits with the molecule's transformation

@@ -57,7 +57,7 @@ def plot_MO(
 
     Examples
     --------
-    >>> sun.plot_MO(molecule=mol, filename="N2_CLPO")  # doctest: +SKIP
+    >>> sun.plot_MO(molecule=mol, filename="N2_CLPO")
     """
 
     if filename is None:

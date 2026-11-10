@@ -233,8 +233,8 @@ class QuantumChemistryBase:
 
         Examples
         --------
-        >>> mol.save("molecule.h5")  # doctest: +SKIP
-        >>> mol = sun.load_molecule("molecule.h5")  # doctest: +SKIP
+        >>> mol.save("molecule.h5")
+        >>> mol = sun.load_molecule("molecule.h5")
         """
         from sunrise.molecules import NATURE_BACKENDS
 
@@ -1226,6 +1226,9 @@ class QuantumChemistryBase:
     def get_spa_edges(self, use_active: bool = True, **kwargs):
         """Return the SPA edges determined by the pure Python JANPA CLPO algorithm.
 
+        The CLPO bonds between atoms come from the atom connectivity (Hartree-Fock density, MP2 with
+        ``use_mp2``); each bond gives a pair of orbitals, used as SPA edge.
+
         Parameters
         ----------
         use_active : bool, optional
@@ -1236,7 +1239,7 @@ class QuantumChemistryBase:
         Returns
         -------
         list
-            List of edges (pairs of orbitals).
+            Pairs of orbital indices, one per bond (single indices for lone pairs).
 
         Examples
         --------
@@ -1343,16 +1346,17 @@ class QuantumChemistryBase:
         inplace : bool, optional
             Change this molecule instead of returning a new one. Default is False.
         edges : list of tuple of int, optional
-            Custom edges; by default they are taken from the CLPO bonds.
+            Bonds imposed on the CLPOs, as 0-based atom indices (see ``generate_CLPO_molecule_edges``);
+            the other bonds come from the atom connectivity.
 
         Returns
         -------
         tuple
-            Molecule in the CLPO basis and the list of SPA edges.
+            Molecule in the CLPO basis and the orbital pairs of each bond, to use as SPA edges.
 
         Examples
         --------
-        >>> mol, edges = mol.use_CLPO_orbitals_and_edges()  # doctest: +SKIP
+        >>> mol, edges = mol.use_CLPO_orbitals_and_edges()
         """
         from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
 
@@ -3878,7 +3882,7 @@ class QuantumChemistryBase:
 
         Examples
         --------
-        >>> dE = mol.perturbative_f12_correction(cabs_type="active", rdm__psi4_method="detci")  # doctest: +SKIP
+        >>> dE = mol.perturbative_f12_correction(cabs_type="active", rdm__psi4_method="detci")
         """
         from .f12_corrections._f12_correction_base import ExplicitCorrelationCorrection
 

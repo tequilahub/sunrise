@@ -1,8 +1,8 @@
-# CLPO – chemically localized orbitals
+# CLPO – localized orbitals of bonds and lone pairs
 
 Builds molecules in **localized orbital bases** that look like the chemist's picture of bonds and lone pairs:
 - **HAO** – hybrid atomic orbitals (sp, sp², sp³-like hybrids on each atom).
-- **CLPO** – chemically localized pair orbitals: bonding/antibonding pairs built from the HAOs.
+- **CLPO** – Chemist's Localized Property-optimized Orbitals: bonding/antibonding orbitals and lone pairs built from the HAOs.
 
 Because each bond becomes an orbital *pair*, CLPOs also give a natural graph of **edges** to use in pair ansätze such as SPA ([Kottmann & Aspuru-Guzik, PRA 2022](https://doi.org/10.1103/PhysRevA.105.032449)). The localization is done with [JANPA](https://janpa.sourceforge.net/) ([Nikolaienko et al., Comput. Theor. Chem. 2014](https://doi.org/10.1016/j.comptc.2014.10.002)); CLPOs are introduced in [Nikolaienko & Bulavin, Int. J. Quantum Chem. 2019](https://doi.org/10.1002/qua.25798) through a PySCF or Psi4 interface.
 
@@ -14,7 +14,7 @@ Because each bond becomes an orbital *pair*, CLPOs also give a natural graph of 
 |---|---|
 | `generate_HAO_molecule(mol)` | molecule in HAO basis |
 | `generate_CLPO_molecule(mol)` | molecule in CLPO basis |
-| `generate_CLPO_molecule_edges(mol, edges=None)` | molecule + suggested SPA edges |
+| `generate_CLPO_molecule_edges(mol, edges=None)` | molecule in CLPO basis + the orbital pairs of each bond, to use as SPA edges (`edges` imposes bonds between atoms, the others come from the atom connectivity) |
 
 The same is available as molecule methods for all natures: `mol.use_HAO_orbitals()`, `mol.use_CLPO_orbitals()`, `mol.use_CLPO_orbitals_and_edges()` and `mol.get_spa_edges()`.
 

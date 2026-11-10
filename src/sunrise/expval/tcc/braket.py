@@ -1,4 +1,4 @@
-"""TenCirChem ``UCC`` subclass for expectation values and transition elements.
+"""TenCirChem ``UCC`` subclass for brakets (overlaps, expectation values and transition elements).
 
 ``EXPVAL`` extends tencirchem's ``UCC`` with a separate bra circuit and an
 arbitrary operator, and is the engine behind ``TCCBraket``.
@@ -98,7 +98,8 @@ class EXPVAL(UCC):
             Possible values are ``"fermion"``, ``"qubit"`` and ``"hcb"``.
             Default to ``"fermion"``.
         engine : str, optional
-            The engine to run the calculation. See :ref:`advanced:Engines` for details.
+            The engine to run the calculation. See the engines section of the TenCirChem
+            documentation for details.
         run_hf : bool, optional
             Whether run HF for molecule orbitals. Defaults to ``True``.
             The argument has no effect if ``mol`` is a ``RHF`` object.
@@ -256,7 +257,7 @@ class EXPVAL(UCC):
     def expval(
         self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
     ) -> float:
-        """Evaluate the expectation value or transition element.
+        """Evaluate the braket (overlap, expectation value or transition element).
 
         Parameters
         ----------
@@ -398,7 +399,7 @@ class EXPVAL(UCC):
     def expval_and_grad(
         self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
     ) -> tuple[float, Tensor]:
-        """Evaluate the expectation value or transition element and its gradients.
+        """Evaluate the braket (overlap, expectation value or transition element) and its gradients.
 
         Parameters
         ----------

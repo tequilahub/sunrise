@@ -11,7 +11,7 @@ They can be simulated with fermionic backends or compiled to qubit circuits for 
 - **Molecules** of three natures: qubit (tequila circuits), fermionic and hybrid (some orbitals as hard-core bosons), with integrals from PySCF, Psi4 or MADNESS.
 - **Fermionic circuits** and ansätze such as SPA, UpCCGSD and UCCSD.
 - **Expectation values** and minimization with fermionic backends (spex, FQE, TenCirChem, ffsim) or tequila.
-- **Orbitals**: orbital optimization, chemically localized orbitals and automatic SPA edges.
+- **Orbitals**: orbital optimization, localized bond orbitals (CLPO, HAO) and automatic SPA edges.
 - Orbital correlation measures, symmetry adaptation, optimized measurements and circuit drawing.
 
 # Installation
@@ -80,7 +80,7 @@ Each module in [`src/sunrise`](src/sunrise) has a short README with an introduct
 | [fermionic_operations](src/sunrise/fermionic_operations) | fermionic gates and circuits (`FCircuit`) |
 | [expval](src/sunrise/expval) | expectation values, fermionic backends, orbital optimization |
 | [ADAPT](src/sunrise/ADAPT) | adaptive circuit construction (ADAPT-VQE) |
-| [CLPO](src/sunrise/CLPO) | chemically localized and hybrid atomic orbitals |
+| [CLPO](src/sunrise/CLPO) | Chemist's Localized Property-optimized Orbitals (CLPO) and hybrid atomic orbitals (HAO) |
 | [graph_selection](src/sunrise/graph_selection) | choosing SPA edges |
 | [spafastprototype](src/sunrise/spafastprototype) | splits (HCB) expectation values into smaller pieces to speed up SPA |
 | [MCVBT](src/sunrise/MCVBT) | multi-configurational valence bond theory |
@@ -88,7 +88,7 @@ Each module in [`src/sunrise`](src/sunrise) has a short README with an introduct
 | [orbital_correlation](src/sunrise/orbital_correlation) | orbital entanglement and correlation measures |
 | [symmetry_adaptation](src/sunrise/symmetry_adaptation) | spin and point-group adapted states |
 | [graphical](src/sunrise/graphical) | circuit drawing |
-| [plot_mo](src/sunrise/plot_mo.py) | orbital `.cube` files (PySCF cubegen) for [VESTA](https://jp-minerals.org/vesta/en/) or [Avogadro](https://www.openchemistry.org/projects/avogadro2/), see the [example](examples/plot_MO/plot_MO_options.py) |
+| [plot_mo](src/sunrise/plot_mo.py) | orbital `.cube` files (PySCF cubegen), to visualize with any chemistry viewer such as [VESTA](https://jp-minerals.org/vesta/en/) or [Avogadro](https://www.openchemistry.org/projects/avogadro2/), see the [example](examples/plot_MO/plot_MO_options.py) |
 | [utils](src/sunrise/utils) | internal helpers |
 
 # Examples

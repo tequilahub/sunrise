@@ -20,7 +20,7 @@ from ..fermionic_braket import FermBraketImpl
 
 
 class FQEBraKet:
-    """Expectation value or transition element evaluated with the ``"fqe"`` backend.
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"fqe"`` backend.
 
     Circuits are converted to products of fermionic excitation generators that
     are applied by time evolution to an FQE wavefunction (Hartree-Fock unless the
@@ -36,7 +36,7 @@ class FQEBraKet:
     Raises
     ------
     TequilaException
-        If the operator is not "H"/"hamiltonian", "I"/"identity", a
+        If the operator is not "H"/"hamiltonian", "HCB", "I"/"identity", a
         FermionOperator or a float.
 
     References

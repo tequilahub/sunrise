@@ -29,7 +29,7 @@ def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
     Examples
     --------
     >>> import sunrise as sun
-    >>> sun.draw(circuit, filename="my_circuit.png")  # doctest: +SKIP
+    >>> sun.draw(circuit, filename="my_circuit.png")
     """
     from tequila.objective import Objective
 

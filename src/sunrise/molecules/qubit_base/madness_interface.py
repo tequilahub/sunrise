@@ -180,7 +180,7 @@ class MadnessPNOMixin:
 
         Examples
         --------
-        >>> U = mol.make_spa_ansatz(edges=mol.get_spa_edges())  # doctest: +SKIP
+        >>> U = mol.make_spa_ansatz(edges=mol.get_spa_edges())
         """
         if edges is not None or kwargs:
             # the fermionic SPA has no hcb option
@@ -894,7 +894,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
 
         Examples
         --------
-        >>> qubit_map = mol.local_qubit_map()  # doctest: +SKIP
+        >>> qubit_map = mol.local_qubit_map()
         """
         # re-arrange orbitals to result in more local circuits
         # does not make the circuit more local, but rather will show locality better in pictures
@@ -1303,7 +1303,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, QuantumChemistryBase):
 
         Examples
         --------
-        >>> U = mol.make_pno_upccgsd_ansatz(name="UpCCD")  # doctest: +SKIP
+        >>> U = mol.make_pno_upccgsd_ansatz(name="UpCCD")
         """
         indices = []
         for i in self.reference_orbitals:

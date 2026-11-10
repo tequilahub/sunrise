@@ -1,6 +1,6 @@
 # Generalized Adaptive Solvers
 # as described in Kottmann, Anand, Aspuru-Guzik: https://doi.org/10.1039/D0SC06627C
-"""Adaptive (ADAPT) variational solver for qubit and fermionic molecules, with operator pools and objective factories. Based on Kottmann, Anand, Aspuru-Guzik, https://doi.org/10.1039/D0SC06627C."""
+"""Adaptive (ADAPT) variational solver for all sunrise molecules (qubit, fermionic and hybrid), with operator pools and objective factories. Based on Kottmann, Anand, Aspuru-Guzik, https://doi.org/10.1039/D0SC06627C."""
 
 from __future__ import annotations
 
@@ -34,9 +34,7 @@ from sunrise.molecules.fermionic_base import FermionicBase
 class ObjectiveFactoryBase:
     """Create the energy objective <H> of the circuit ``Upre + U + Upost`` for the Adapt solver.
 
-    ``U`` is the circuit that is built adaptively. If the molecule is fermionic or the
-    circuits are ``FCircuit`` the objective is a ``Braket``, otherwise a
-    tequila ``ExpectationValue``.
+    ``U`` is the circuit that is built adaptively.
 
     Parameters
     ----------
@@ -47,7 +45,7 @@ class ObjectiveFactoryBase:
         Circuit applied before ``U`` (typically the reference state). Default is empty.
     Upost : QCircuit or FCircuit, optional
         Circuit applied after ``U``. Default is empty. Must be of the same type as ``Upre``.
-    molecule : QuantumChemistryBase or FermionicBase, optional
+    molecule : QuantumChemistryBase or FermionicBase or HybridBase, optional
         Molecule used to evaluate fermionic objectives.
     """
 
@@ -138,10 +136,11 @@ class Adapt:
     H : FermionOperator or QubitHamiltonian or str, optional
         Hamiltonian, passed to ``ObjectiveFactoryBase`` (not needed with a custom ``objective_factory``).
     objective_factory : callable, optional
-        Custom objective factory. Default is ``ObjectiveFactoryBase``.
+        Custom objective factory, e.g. ``ObjectiveFactorySequentialExcitedState`` for excited
+        states (see ``tests/test_adapt.py``). Default is ``ObjectiveFactoryBase``.
     backend : str, optional
         Backend for simulation, e.g. ``"spex"`` or a tequila backend.
-    molecule : QuantumChemistryBase or FermionicBase, optional
+    molecule : QuantumChemistryBase or FermionicBase or HybridBase, optional
         Molecule; taken from the objective factory or the pool if not given.
     **kwargs
         ``Upre`` and ``Upost`` for the default objective factory, plus any field of
@@ -524,8 +523,10 @@ class MolecularPool(AdaptPoolBase):
 
     Parameters
     ----------
-    molecule : QuantumChemistryBase or FermionicBase
-        Sunrise molecule. For hybrid molecules only orbitals marked ``"F"`` are used.
+    molecule : QuantumChemistryBase or FermionicBase or HybridBase
+        Sunrise molecule. For hybrid molecules only excitations allowed by the encoding are used:
+        singles (and the unpaired doubles built from them) only between orbitals marked ``"F"``,
+        paired doubles between all orbitals.
     indices : str or list
         Either a list of excitations in spin orbital indices, e.g.
         ``[[(0, 2), (1, 3)], [(0, 2)], [(1, 3)]]``, or the name of a predefined pool built from
@@ -837,7 +838,7 @@ def run_molecular_adapt(
 
     Parameters
     ----------
-    molecule : QuantumChemistryBase or FermionicBase
+    molecule : QuantumChemistryBase or FermionicBase or HybridBase
         Sunrise molecule.
     operator_pool : str or AdaptPoolBase, optional
         Pool name such as ``"UpCCSD"`` (see ``MolecularPool``) or a pool object. Default is ``"UCCGSD"``.

@@ -49,7 +49,7 @@ def generate_CLPO_molecule_edges(
 ) -> tuple[QuantumChemistryBase, list]:
     r"""Generate a molecule with CLPO orbitals and the corresponding graph edges.
 
-    CLPOs (chemically localized orbitals) are built with JANPA from a natural population analysis; they
+    CLPOs (Chemist's Localized Property-optimized Orbitals) are built with JANPA from a natural population analysis; they
     are bonds, lone pairs and their antibonding partners, and define the graph used by SPA.
 
     Parameters
@@ -59,7 +59,8 @@ def generate_CLPO_molecule_edges(
     edges : list of tuple of int, optional
         Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
         for linear H4 (repeat a pair for a double bond). The bonds
-        between the other atom pairs are found automatically.
+        between the other atom pairs are found automatically from the Hartree-Fock density
+        (MP2 with ``use_mp2``).
     thres : float
         Convergence threshold of the JANPA hybrid-orbital optimization.
     silent : bool
@@ -106,8 +107,8 @@ def generate_CLPO_molecule_edges(
     Examples
     --------
     >>> mol = sun.Molecule(geometry="N 0 0 0\nN 0 0 1.1", basis_set="sto-3g")
-    >>> mol, edges = sun.CLPO.generate_CLPO_molecule_edges(mol, silent=True)  # doctest: +SKIP
-    >>> U = mol.make_ansatz("HCB-SPA", edges=edges)  # doctest: +SKIP
+    >>> mol, edges = sun.CLPO.generate_CLPO_molecule_edges(mol, silent=True)
+    >>> U = mol.make_ansatz("HCB-SPA", edges=edges)
     """
     if backend is None:
         backend = __pick_chem_backend(mol, **kwargs)
@@ -183,12 +184,12 @@ def generate_HAO_molecule(
 
     See Also
     --------
-    generate_CLPO_molecule : Chemically localized pair orbitals built from the HAOs.
+    generate_CLPO_molecule : Chemist's Localized Property-optimized Orbitals built from the HAOs.
     generate_CLPO_molecule_edges : CLPOs together with their SPA edges.
 
     Examples
     --------
-    >>> mol = sun.CLPO.generate_HAO_molecule(mol, silent=True)  # doctest: +SKIP
+    >>> mol = sun.CLPO.generate_HAO_molecule(mol, silent=True)
     """
     if backend is None:
         backend = __pick_chem_backend(mol, **kwargs)
@@ -236,7 +237,8 @@ def generate_CLPO_molecule(
     edges : list of tuple of int, optional
         Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
         for linear H4 (repeat a pair for a double bond). The bonds
-        between the other atom pairs are found automatically.
+        between the other atom pairs are found automatically from the Hartree-Fock density
+        (MP2 with ``use_mp2``).
     thres : float
         Convergence threshold of the JANPA hybrid-orbital optimization.
     silent : bool
@@ -279,7 +281,7 @@ def generate_CLPO_molecule(
 
     Examples
     --------
-    >>> mol = sun.CLPO.generate_CLPO_molecule(mol)  # doctest: +SKIP
+    >>> mol = sun.CLPO.generate_CLPO_molecule(mol)
     """
     if backend is None:
         backend = __pick_chem_backend(mol, **kwargs)

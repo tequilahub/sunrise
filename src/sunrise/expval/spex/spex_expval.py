@@ -32,7 +32,7 @@ _OPERATOR_CACHE_SIZE = 8
 
 
 class SpexExpval:
-    """Expectation value or transition element evaluated with the ``"spex"`` backend.
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"spex"`` backend.
 
     The molecular Hamiltonian is built from the molecule's integrals and cached, so brakets of a
     molecule with the same integrals share it. Circuits are compiled once into spex terms and
@@ -510,8 +510,8 @@ class SpexExpval:
     def molecule(self) -> QuantumChemistryBase:
         """QuantumChemistryBase : molecule of the braket.
 
-        Setting it also reads integrals, core energy, number of orbitals and
-        alpha/beta electrons from the molecule.
+        Setting it only reads the number of orbitals and of alpha/beta electrons; the Hamiltonian
+        is built from the integrals when it is needed, and cached.
         """
         return self._molecule
 

@@ -59,7 +59,7 @@ def _is_pyscf_molecule(molecule) -> bool:
 
 
 class TCCBraket:
-    """Expectation value or transition element evaluated with the ``"tcc"`` backend.
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"tcc"`` backend.
 
     Parameters
     ----------
@@ -200,7 +200,7 @@ class TCCBraket:
         Returns
         -------
         float
-            Expectation value (or transition element).
+            Value of the braket.
 
         Raises
         ------
@@ -535,8 +535,9 @@ class TCCBraket:
         Parameters
         ----------
         operator : str or FermionOperator or QubitHamiltonian or number, optional
-            "I" (identity), "H" (molecular Hamiltonian, the default of the backend),
-            a FermionOperator, a QubitHamiltonian or a constant.
+            "I" (identity), "H" (molecular Hamiltonian, the default of the backend), "HCB"
+            (hard-core boson Hamiltonian, through restricted integrals, no speedup), a
+            FermionOperator, a QubitHamiltonian or a constant.
 
         Returns
         -------
@@ -551,7 +552,7 @@ class TCCBraket:
         """
 
         def from_string(operator: str):
-            """Set up ``BK`` for the string operator "I" or "H"."""
+            """Set up ``BK`` for the string operator "I", "H" or "HCB"."""
             if operator.upper() == "I":
                 # identity as N/n_elec: exact on the fixed particle-number CI space
                 nmo = len(self.BK.aslst)

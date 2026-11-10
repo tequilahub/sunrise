@@ -26,7 +26,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
 
     Examples
     --------
-    >>> mol = sun.Molecule(geometry="...", n_pno=4, nature="fermionic")  # doctest: +SKIP
+    >>> mol = sun.Molecule(geometry="...", n_pno=4, nature="fermionic")
     """
 
     def __init__(self, parameters: ParametersQC, *args, **kwargs):
@@ -93,7 +93,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
 
         Examples
         --------
-        >>> qubit_map = mol.local_qubit_map()  # doctest: +SKIP
+        >>> qubit_map = mol.local_qubit_map()
         """
         # re-arrange orbitals to result in more local circuits
         # does not make the circuit more local, but rather will show locality better in pictures
@@ -406,7 +406,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
 
         Examples
         --------
-        >>> U = mol.make_pno_upccgsd_ansatz(name="UpCCD")  # doctest: +SKIP
+        >>> U = mol.make_pno_upccgsd_ansatz(name="UpCCD")
         """
         indices = []
         for i in self.reference_orbitals:

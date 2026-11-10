@@ -159,7 +159,7 @@ def generate_CLPO_molecule_edges_pyscf(
 ) -> tuple[QuantumChemistryBase, list]:
     """Generate a molecule with CLPO orbitals and the corresponding graph edges via PySCF.
 
-    CLPOs (chemically localized orbitals) are built with JANPA from a natural population analysis; they
+    CLPOs (Chemist's Localized Property-optimized Orbitals) are built with JANPA from a natural population analysis; they
     are bonds, lone pairs and their antibonding partners, and define the graph used by SPA.
 
     Parameters
@@ -169,7 +169,8 @@ def generate_CLPO_molecule_edges_pyscf(
     edges : list of tuple of int, optional
         Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
         for linear H4 (repeat a pair for a double bond). The bonds
-        between the other atom pairs are found automatically.
+        between the other atom pairs are found automatically from the Hartree-Fock density
+        (MP2 with ``use_mp2``).
     thres : float
         Convergence threshold of the JANPA hybrid-orbital optimization.
     silent : bool
@@ -427,7 +428,8 @@ def generate_CLPO_molecule_pyscf(
     edges : list of tuple of int, optional
         Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
         for linear H4 (repeat a pair for a double bond). The bonds
-        between the other atom pairs are found automatically.
+        between the other atom pairs are found automatically from the Hartree-Fock density
+        (MP2 with ``use_mp2``).
     thres : float
         Convergence threshold of the JANPA hybrid-orbital optimization.
     silent : bool

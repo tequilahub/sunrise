@@ -1018,7 +1018,7 @@ class FCircuit:
 
         Examples
         --------
-        >>> U.export_to("circuit.pdf", style={"single": "red", "generic": "#AC61AC"})  # doctest: +SKIP
+        >>> U.export_to("circuit.pdf", style={"single": "red", "generic": "#AC61AC"})
         """
         from copy import deepcopy
 

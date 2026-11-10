@@ -524,7 +524,7 @@ class Psi4Mixin:
 
         Examples
         --------
-        >>> amplitudes = mol.compute_ccsd_amplitudes()  # doctest: +SKIP
+        >>> amplitudes = mol.compute_ccsd_amplitudes()
         """
         return self.compute_amplitudes(method="ccsd")
 
@@ -897,7 +897,7 @@ class Psi4Mixin:
 
         Examples
         --------
-        >>> mol.compute_rdms(U=None, psi4_method="detci", psi4_options={"detci__ex_level": 2})  # doctest: +SKIP
+        >>> mol.compute_rdms(U=None, psi4_method="detci", psi4_options={"detci__ex_level": 2})
         """
         if psi4_options is None:
             psi4_options = {}
@@ -997,10 +997,10 @@ class Psi4Mixin:
         Examples
         --------
         >>> mol = sun.Molecule(geometry="He 0.0 0.0 0.0", basis_set="cc-pvdz",
-        ...                    active_orbitals=[0, 1], point_group="c1")  # doctest: +SKIP
+        ...                    active_orbitals=[0, 1], point_group="c1")
         >>> dE = mol.perturbative_f12_correction(
         ...     cabs_type="cabs+", cabs_options={"cabs_name": "cc-pvqz"},
-        ...     rdm__psi4_method="detci")  # doctest: +SKIP
+        ...     rdm__psi4_method="detci")
         """
         from .f12_corrections._f12_correction_psi4 import (
             ExplicitCorrelationCorrectionPsi4,
@@ -1035,7 +1035,7 @@ class QuantumChemistryPsi4(Psi4Mixin, QuantumChemistryBase):
 
     Examples
     --------
-    >>> mol = QuantumChemistryPsi4(parameters=ParametersQC(geometry="h2.xyz", basis_set="sto-3g"), point_group="c1")  # doctest: +SKIP
+    >>> mol = QuantumChemistryPsi4(parameters=ParametersQC(geometry="h2.xyz", basis_set="sto-3g"), point_group="c1")
     """
 
     def __init__(

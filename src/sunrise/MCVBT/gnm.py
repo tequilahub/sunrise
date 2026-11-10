@@ -53,8 +53,8 @@ class mcvbt:
     --------
     >>> from sunrise.MCVBT.gnm import mcvbt
     >>> graphs = [[(0, 1), (2, 3)], [(0, 3), (1, 2)], [(0, 2), (1, 3)]]  # H4
-    >>> solver = mcvbt(mol=mol, graphs=graphs, solver="spex", filename="h4.csv")  # doctest: +SKIP
-    >>> energies = solver.calculate_groundstate(init_strategy="pre-optimize")  # doctest: +SKIP
+    >>> solver = mcvbt(mol=mol, graphs=graphs, solver="spex", filename="h4.csv")
+    >>> energies = solver.calculate_groundstate(init_strategy="pre-optimize")
     """
 
     def __init__(
@@ -108,7 +108,7 @@ class mcvbt:
 
         Examples
         --------
-        >>> energies = solver.calculate_groundstate(init_strategy="pre-optimize")  # doctest: +SKIP
+        >>> energies = solver.calculate_groundstate(init_strategy="pre-optimize")
         """
         if self.circuits is None:
             self.__create_circuits()
@@ -197,7 +197,7 @@ class mcvbt:
 
         Examples
         --------
-        >>> solver.compare_to_fci()  # doctest: +SKIP
+        >>> solver.compare_to_fci()
         """
         fci = self.mol.compute_energy("fci")
         print("G(N,M) errors:")
