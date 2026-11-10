@@ -68,6 +68,10 @@ def simulate_fcircuit(
     backend = backend.strip().lower()
     # the fermionic simulators first: tequila also has a (qubit) backend named spex, reachable as tequila-spex
     if backend in SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR:
+        if any(g.is_controlled() for g in U.gates):
+            raise TequilaException(
+                f"Fermionic backend {backend} can't simulate controlled gates, use backend='tequila'"
+            )
         if backend in INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR:
             simulator = INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR[backend]
             return simulator(U=U, variables=variables, **kwargs)

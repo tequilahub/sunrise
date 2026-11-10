@@ -318,6 +318,14 @@ def compile_fexpval(
     objective=None, backend: str | None = None, *args, **kwargs
 ):  # For now our fermionic backends don't support noise/samples... Variables not passed since already inside FermBraketImpl
     if backend.lower() in INSTALLED_FERMIONIC_BACKENDS:
+        # only the tequila backend goes through the qubit circuit, where control qubits exist
+        circuits = [U for U in (objective.ket, objective.bra) if U is not None]
+        if backend.lower() != "tequila" and any(
+            g.is_controlled() for U in circuits for g in U.gates
+        ):
+            raise TequilaException(
+                f"Fermionic backend {backend} can't simulate controlled gates, use backend='tequila'"
+            )
         return INSTALLED_FERMIONIC_BACKENDS[backend.lower()](objective, *args, **kwargs)
     else:
         raise ImportError(f"Fermionic backend not recognised {backend}")

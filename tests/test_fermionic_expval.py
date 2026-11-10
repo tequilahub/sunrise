@@ -291,6 +291,47 @@ def test_to_qcircuit_jordan_wigner():
     assert np.allclose(wfn.to_array(), expected.to_array())
 
 
+def test_controlled_fcircuit():
+    geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6"
+    fmol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="f")
+    qmol = sn.Molecule(geometry=geom, basis_set="sto-3g", nature="q")
+    variables = {"c": 0.4, "r": 0.3, "p": 0.2}
+    U = fmol.UC(0, 1, angle="c") + fmol.UR(0, 1, angle="r") + sn.gates.Phase(1, "p")
+    expected = U.to_qcircuit(qmol).add_controls(4).to_matrix(variables)
+    # add_controls returns a controlled copy
+    assert np.allclose(
+        U.add_controls(4).to_qcircuit(qmol).to_matrix(variables), expected
+    )
+    assert not U.gates[0].is_controlled()
+    # same circuit with control= on every gate
+    C = fmol.UC(0, 1, angle="c", control=4) + fmol.UR(0, 1, angle="r", control=4)
+    C += sn.gates.Phase(1, "p", control=4)
+    assert np.allclose(C.to_qcircuit(qmol).to_matrix(variables), expected)
+
+
+def test_controlled_fcircuit_fermionic_backends():
+    # only the tequila backend goes through the qubit circuit, the others can't simulate controls
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    U = sn.FCircuit(
+        gates=mol.UR(0, 1, angle="r", control=4).gates, initial_state="1.0|1010>"
+    )
+    E = Braket(ket=U, mol=mol, operator="H")
+    for backend in INSTALLED_FERMIONIC_BACKENDS:
+        if backend == "tequila":
+            # the control qubit is |0>, so the rotation does nothing
+            assert np.isclose(
+                sn.simulate(E, variables={"r": 0.3}, backend=backend),
+                sn.simulate(E, variables={"r": 0.0}, backend=backend),
+            )
+            continue
+        with pytest.raises(tq.TequilaException):
+            sn.simulate(E, variables={"r": 0.3}, backend=backend)
+        with pytest.raises(tq.TequilaException):
+            sn.simulate(U, variables={"r": 0.3}, backend=backend, n_orb=2)
+
+
 @pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
 def test_givens_circuit_signed_permutation():
     # swapping orbitals 0 and 3 needs rotations by pi/2 and a phase of pi on orbital 3

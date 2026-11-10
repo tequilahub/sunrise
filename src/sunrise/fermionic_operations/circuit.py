@@ -670,8 +670,18 @@ class FCircuit:
         idle = max(2 * n_orb - U.n_qubits, 0)
         return kron(U.to_matrix(variables=variables), eye(2**idle))
 
-    def add_controls(self, control, inpl: bool = False) -> FCircuit | None:  # TODO
-        pass
+    def add_controls(self, control, inpl: bool = False) -> FCircuit:
+        """
+        Control every gate on the qubits in control (the initial state is not controlled)
+        Control qubits are qubits of the circuit returned by to_qcircuit, fermionic backends can't simulate them
+        :param control int or list of qubits
+        :param inpl if True self is changed and returned, otherwise a controlled copy is returned
+        """
+        circ = self if inpl else deepcopy(self)
+        control = [control] if isinstance(control, numbers.Integral) else list(control)
+        for gate in circ.gates:
+            gate.control = [*gate.control, *control]
+        return circ
 
     def to_qcircuit(
         self,
@@ -710,15 +720,21 @@ class FCircuit:
             for gate in U.gates:
                 if gate.name == "UR":
                     res += molecule.make_excitation_gate(
-                        indices=gate.indices[0], angle=gate.variables
-                    )  # TODO: Control
+                        indices=gate.indices[0],
+                        angle=gate.variables,
+                        control=gate.control or None,
+                    )
                     res += molecule.make_excitation_gate(
-                        indices=gate.indices[1], angle=gate.variables
-                    )  # TODO: Control
+                        indices=gate.indices[1],
+                        angle=gate.variables,
+                        control=gate.control or None,
+                    )
                 elif gate.name in ["UC", "FermionicExcitation", "GenericFermionic"]:
                     res += molecule.make_excitation_gate(
-                        indices=gate.indices[0], angle=gate.variables
-                    )  # TODO: Control
+                        indices=gate.indices[0],
+                        angle=gate.variables,
+                        control=gate.control or None,
+                    )
                 elif gate.name == "Ph":
                     res += Phase(
                         target=(
@@ -727,7 +743,8 @@ class FCircuit:
                         ),
                         angle=-0.5 * gate.variables,
                         # Ph(v) = exp(-i*v/2*n) while tq Phase(a) = exp(i*a*n)
-                    )  # TODO: Control
+                        control=gate.control or None,
+                    )
                 else:
                     raise TequilaException(f"Gate {gate} not idenified")
             return res

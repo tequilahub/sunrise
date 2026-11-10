@@ -15,57 +15,66 @@ def FermionicExcitation(
     indices: list | tuple | None,
     variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
     reordered: bool = False,
+    control: int | list | tuple | None = None,
 ) -> FCircuit:
     """
     Generic n-excitation gate defined by the indices [(0,2),(1,3),...].
     Reordered means for whether the indices provided are in up-down-up-down-... (False) or up-up-...-down-down-... convention
     """
-    return FCircuit.wrap_gate(FermionicExcitationImpl(indices, variables, reordered))
+    return FCircuit.wrap_gate(
+        FermionicExcitationImpl(indices, variables, reordered, control)
+    )
 
 
 def UR(
     i: int,
     j: int,
     variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
+    control: int | list | tuple | None = None,
 ) -> FCircuit:
     """
     Orbital Rotation gate, defined by a paired single excitation gate from Spatial orbital i to j (UR=exct([(2*i,2*j)],\theta) + exct([(2*i+1,2*j+1)],\theta))
     """
-    return FCircuit.wrap_gate(URImpl(i, j, variables))
+    return FCircuit.wrap_gate(URImpl(i, j, variables, control))
 
 
 def UC(
     i: int,
     j: int,
     variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
+    control: int | list | tuple | None = None,
 ) -> FCircuit:
     """
     Orbital Correlator gate, defined by a paired double excitation gate from Spatial orbital i to j (UC=exct([(2*i,2*j),(2*i+1,2*j+1)],\theta))
     """
-    return FCircuit.wrap_gate(UCImpl(i, j, variables))
+    return FCircuit.wrap_gate(UCImpl(i, j, variables, control))
 
 
 def UX(
     indices: list | tuple | None,
     variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
     reordered: bool = False,
+    control: int | list | tuple | None = None,
 ) -> FCircuit:
     """
     Shortcut for generic n-excitation gate defined by the indices [(0,2),(1,3),...].
     Reordered means for whether the indices provided are in up-down-up-down-... (False) or up-up-...-down-down-... convention
     """
-    return FCircuit.wrap_gate(FermionicExcitationImpl(indices, variables, reordered))
+    return FCircuit.wrap_gate(
+        FermionicExcitationImpl(indices, variables, reordered, control)
+    )
 
 
 def Phase(
     tarjet: int,
     variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
     reordered: bool = False,
+    control: int | list | tuple | None = None,
 ) -> FCircuit:
     """
     Phase gate on Spin-Orbital i. Care with angles, some simulators only accept real wvf.
     """
-    return FCircuit.wrap_gate(PhaseImpl(tarjet, variables, reordered))
+    return FCircuit.wrap_gate(PhaseImpl(tarjet, variables, reordered, control))
 
 
 def Givens(
