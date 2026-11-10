@@ -262,6 +262,23 @@ def test_map_qubits_keeps_initial_state():
     assert mapped.initial_state.isclose(expected)
 
 
+def test_to_matrix():
+    U = sn.FCircuit.from_edges(edges=[(0, 1)], n_orb=2) + sn.gates.UR(0, 1, "r")
+    variables = {v: 0.3 for v in U.extract_variables()}
+    M = U.to_matrix(variables=variables)
+    assert np.allclose(M.conj().T @ M, np.eye(16))
+    # the column of the initial state |1010> is the simulated wavefunction
+    wfn = sn.simulate(U, variables=variables, backend="tequila", n_orb=2)
+    assert np.allclose(M[:, 0b1010], wfn.to_array())
+    # an alpha-only excitation does not act on the last qubits, which are still included
+    G = sn.FCircuit() + sn.gates.FermionicExcitation(indices=[(0, 2)], variables="a")
+    M = G.to_matrix(variables={"a": 0.7})
+    assert M.shape == (16, 16)
+    U = sn.FCircuit(gates=G.gates, initial_state="1.0|1001>")
+    wfn = sn.simulate(U, {"a": 0.7}, backend="tequila", n_orb=2)
+    assert np.allclose(M[:, 0b1001], wfn.to_array())
+
+
 @pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
 def test_givens_circuit_signed_permutation():
     # swapping orbitals 0 and 3 needs rotations by pi/2 and a phase of pi on orbital 3
