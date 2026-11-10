@@ -11,9 +11,6 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
-    """
-    # todo add description and rename function evtl.
-    """
     transition_matrix = np.eye(len(circuits))
     overlap_matrix = np.eye(len(circuits))
 
