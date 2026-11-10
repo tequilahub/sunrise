@@ -69,8 +69,7 @@ def pick_backend(
     ----------
     backend : str, optional
         Backend to verify. If None, the first installed backend in
-        ``SUPPORTED_FERMIONIC_BACKENDS`` is chosen. "random" picks an installed
-        backend at random.
+        ``SUPPORTED_FERMIONIC_BACKENDS`` is chosen.
     samples : int, optional
         If given, only a backend supporting sampling is accepted.
     noise : str or NoiseModel, optional
@@ -109,13 +108,6 @@ def pick_backend(
 
     if hasattr(backend, "lower"):
         backend = backend.lower()
-
-    if backend == "random":
-        if needs_tequila:
-            return "tequila"
-        import random
-
-        return random.choice(list(INSTALLED_FERMIONIC_BACKENDS.keys()))
 
     if backend not in SUPPORTED_FERMIONIC_BACKENDS:
         raise TequilaException(f"Fermionic backend {backend} not supported")
