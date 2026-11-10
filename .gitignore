@@ -79,7 +79,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
-
+graphify-out/
 # PyBuilder
 .pybuilder/
 target/
