@@ -591,11 +591,3 @@ def test_compile_keeps_spex_for_tequila(kwargs, fermionic, qubit):
         sn_minimize.compile(E, **kwargs)
     assert {c.kwargs["backend"] for c in fspy.call_args_list} == {fermionic}
     assert {c.kwargs["backend"] for c in qspy.call_args_list} == {qubit}
-
-
-def test_save_load_variables(tmp_path):
-    # tuple names (as in the ADAPT pools) have to survive the round trip
-    variables = {"a": 0.1, ((0, 1), "D"): -0.2, tq.Variable(("tq", 3)): 0.3}
-    sn.save_variables(variables, tmp_path / "variables.json")
-    loaded = sn.load_variables(tmp_path / "variables.json")
-    assert loaded == tq.objective.format_variable_dictionary(variables)

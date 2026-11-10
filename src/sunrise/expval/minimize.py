@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-from ast import literal_eval
 from collections.abc import Hashable
 from numbers import Number
 from numbers import Real as RealNumber
@@ -323,47 +321,3 @@ def compile_fexpval(
         return INSTALLED_FERMIONIC_BACKENDS[backend.lower()](objective, *args, **kwargs)
     else:
         raise ImportError(f"Fermionic backend not recognised {backend}")
-
-
-def save_variables(variables: dict, filename: str):
-    """
-    Save a variable dictionary (e.g. the variables of a sn.minimize result) in a json file, without pickle.
-    Variable names are stored with repr, so tuple names like ((0, 1), "D") survive. Load with sn.load_variables
-
-    Parameters
-    ----------
-    variables
-        dictionary of variables (or names) and their values
-    filename
-        the json file
-    """
-    data = {}
-    for k, v in format_variable_dictionary(variables).items():
-        name = repr(k.name)
-        try:
-            assert literal_eval(name) == k.name
-        except Exception as E:
-            raise TequilaException(
-                f"can not save variable {k.name}, names need to be python literals (str, int, tuple, ...)"
-            ) from E
-        data[name] = float(v)
-    with open(filename, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def load_variables(filename: str) -> dict:
-    """
-    Load a variable dictionary saved with sn.save_variables
-
-    Parameters
-    ----------
-    filename
-        the json file
-
-    Returns
-    -------
-    dictionary of tq.Variable and their values
-    """
-    with open(filename) as f:
-        data = json.load(f)
-    return {Variable(literal_eval(k)): v for k, v in data.items()}
