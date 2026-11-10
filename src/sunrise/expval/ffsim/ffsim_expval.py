@@ -37,10 +37,10 @@ from tequila import (
 from tequila.objective.objective import Variables
 
 from sunrise.molecules.qubit_base import qc_base
+from sunrise.utils.fermionic_utils import make_excitation_generator_op
 
 from ...fermionic_operations.circuit import FCircuit
 from ..fermionic_braket import _SHIFTS, FermBraketImpl, _grad_phase
-from ..fqe.fermionic_utils import make_excitation_generator_op
 from ..spex.spex_expval import _civect_to_qwvf, _qwvf_to_civect
 
 
@@ -400,6 +400,9 @@ class FFS_EXPVAL:
                 )
             elif operator.upper() == "H":
                 return ffsim.linear_operator(self.molecule.hamiltonian, norb, nelec)
+            elif operator.upper() == "HCB":
+                # applied term by term: ~2*norb**2 terms instead of contracting all integrals
+                return _linear_operator(_hcb_operator(self.molecule), norb, nelec)
             else:
                 raise TequilaException(
                     f"No operator str {operator} supported on FFSim BraKet"
@@ -471,6 +474,36 @@ def _linear_operator(op: FermionOperator, norb: int, nelec: tuple) -> LinearOper
             f"FFSim BraKet: ffsim only supports operators conserving N and S_z, received {op}"
         )
     return ffsim.linear_operator(op, norb, nelec)
+
+
+def _hcb_operator(molecule: ffsim.MolecularData) -> FermionOperator:
+    # same terms as SpexExpval._build_hcb_hamiltonian; keys are (creation, beta, orbital)
+    h, g = molecule.one_body_integrals, molecule.two_body_integrals
+    terms = {(): molecule.core_energy}
+    for i in range(molecule.norb):
+        for j in range(molecule.norb):
+            # pair hopping a^_{j,a} a^_{j,b} a_{i,b} a_{i,a}
+            e1 = g[j, i, j, i] + (2 * h[i, i] if i == j else 0)
+            terms[
+                ((True, False, j), (True, True, j), (False, True, i), (False, False, i))
+            ] = e1
+            # pair-pair interaction n_{i,a} n_{i,b} n_{j,a} n_{j,b}
+            if i != j:
+                terms[
+                    (
+                        (True, False, i),
+                        (True, True, i),
+                        (True, False, j),
+                        (True, True, j),
+                    )
+                    + (
+                        (False, True, j),
+                        (False, False, j),
+                        (False, True, i),
+                        (False, False, i),
+                    )
+                ] = 2 * g[j, j, i, i] - g[j, i, i, j]
+    return FermionOperator(terms)
 
 
 def _build_generators(circuit: FCircuit, norb: int, nelec: tuple) -> list:
