@@ -591,3 +591,10 @@ def test_compile_keeps_spex_for_tequila(kwargs, fermionic, qubit):
         sn_minimize.compile(E, **kwargs)
     assert {c.kwargs["backend"] for c in fspy.call_args_list} == {fermionic}
     assert {c.kwargs["backend"] for c in qspy.call_args_list} == {qubit}
+
+
+def test_map_qubits_keeps_initial_state():
+    U = sn.FCircuit(initial_state="0.6|1100> - 0.8|0011>")
+    mapped = U.map_qubits({0: 2, 1: 3, 2: 0, 3: 1})
+    expected = tq.QubitWaveFunction.from_string("0.6|0011> - 0.8|1100>")
+    assert mapped.initial_state.isclose(expected)
