@@ -88,12 +88,10 @@ def simulate_fcircuit(
         if "mol" in kwargs:
             mol = kwargs["mol"]
             kwargs.pop("mol")
-            mol.transformation.up_then_down = True
             U = U.to_qcircuit(molecule=mol)
         elif "molecule" in kwargs:
             mol = kwargs["molecule"]
             kwargs.pop("molecule")
-            mol.transformation.up_then_down = True
             U = U.to_qcircuit(molecule=mol)
         elif "transformation" in kwargs:
             transformation = kwargs["transformation"]
