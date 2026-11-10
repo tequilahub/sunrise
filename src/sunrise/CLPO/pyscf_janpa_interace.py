@@ -225,7 +225,10 @@ def generate_CLPO_molecule_edges_pyscf(
         nmol_full.integral_manager._orbital_type = "CLPO"
 
         mol_out, to_active = transform(
-            original=mol, modified=nmol_full, orbital_type="CLPO"
+            original=mol,
+            modified=nmol_full,
+            orbital_type="CLPO",
+            **kwargs,
         )
 
         ncore = len(mol_out.integral_manager.orbital_coefficients) - mol_out.n_orbitals
@@ -337,7 +340,10 @@ def generate_HAO_molecule_pyscf(
         nmol_full.integral_manager.orbital_coefficients = aho_to_ao_full
         nmol_full.integral_manager._orbital_type = "HAO"
         mol_out, to_active = transform(
-            original=mol, modified=nmol_full, orbital_type="HAO"
+            original=mol,
+            modified=nmol_full,
+            orbital_type="HAO",
+            **kwargs,
         )
         if ret2act:
             return mol_out, to_active
