@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from openfermion.ops.operators.fermion_operator import FermionOperator
+from tequila import BraKet as tq_BraKet
 from tequila import ExpectationValue as tq_ExpectationValue
+from tequila import Fidelity as tq_Fidelity
 from tequila import Objective, QCircuit, TequilaException
 from tequila.objective.objective import identity
 
@@ -144,6 +146,9 @@ def Fidelity(
     A tq.Objective that evaluated to the fidelity between the two states
 
     """
+    if isinstance(ket, QCircuit):
+        # qubit circuits: the tequila fidelity (one expectation value instead of the complex braket)
+        return tq_Fidelity(*args, bra=bra, ket=ket, **kwargs)
     return Objective(
         args=[
             Braket(*args, ket=ket, bra=bra, molecule=mol, operator="I", **kwargs).args[
@@ -229,6 +234,17 @@ def Braket(
         # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
     if bra is None and operator is None:
         return Objective() + 1.0
+    if isinstance(ket, QCircuit):
+        # qubit circuits: the tequila objectives, with the qubit Hamiltonian of the molecule for "H"
+        if isinstance(operator, str) and operator == "H":
+            if mol is None:
+                raise TequilaException("operator 'H' needs a molecule")
+            operator = mol.make_hamiltonian()
+        elif isinstance(operator, str) and operator == "I":
+            operator = None
+        if bra is None:
+            return tq_ExpectationValue(*args, U=ket, H=operator, **kwargs)
+        return tq_BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)
     return Objective(
         args=[
             FermBraketImpl(
@@ -260,9 +276,6 @@ def ExpectationValue(
     Tequila objectives to be simulated or compiled.
 
     """
-    if isinstance(U, QCircuit):
-        # qubit circuit and qubit Hamiltonian: same as tq.ExpectationValue
-        return tq_ExpectationValue(*args, U=U, H=H, **kwargs)
     return Braket(*args, ket=U, operator=H, mol=mol, **kwargs)
 
 
@@ -288,10 +301,21 @@ def RealBraKet(
     Tequila objectives to be simulated or compiled.
 
     """
-    return Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+    braket = Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+    if isinstance(ket, QCircuit) and bra is not None:
+        # the complex tequila braket, its real part taken like in tq.RealBraKet (differentiable)
+        return braket.args[-1].compile()[0]
+    return braket
 
 
-def ImagBraKet(*args, **kwargs):
+def ImagBraKet(
+    ket: FCircuit,
+    bra: FCircuit | None = None,
+    operator: str | list[FermionOperator] | FermionOperator | None = None,
+    mol: QuantumChemistryBase | None = None,
+    *args,
+    **kwargs,
+):
     """
     Function that calculates the Imaginary part of a given Expectation Value of an Hamiltonian operator for a given quantum states.
     Defined just for consistency with Tequila, since chemistry molecules should be always real
@@ -307,4 +331,8 @@ def ImagBraKet(*args, **kwargs):
     Tequila objectives to be simulated or compiled.
 
     """
+    if isinstance(ket, QCircuit) and bra is not None:
+        # the complex tequila braket, its imaginary part taken like in tq.ImagBraKet (differentiable)
+        braket = Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+        return braket.args[-1].compile()[1]
     return Objective()

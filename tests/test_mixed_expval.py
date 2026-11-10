@@ -169,14 +169,28 @@ def test_mixed_objective_complex(backend):
         )
 
 
-def test_qubit_expval_matches_tequila():
-    # sn.ExpectationValue with a qubit circuit and qubit Hamiltonian is the tequila expectation value
+def test_qubit_braket_matches_tequila():
+    # sn.Braket and friends with qubit circuits are the tequila objectives, "H" is the qubit Hamiltonian of mol
     mol = sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.75", basis_set="sto-3g")
     H = mol.make_hamiltonian()
-    U = mol.make_ansatz("SPA", edges=[(0, 1)])
-    variables = {v: 0.3 for v in U.extract_variables()}
-    E = sn.ExpectationValue(H=H, U=U, mol=mol)
-    assert isclose(
-        sn.simulate(E, variables),
-        tq.simulate(tq.ExpectationValue(H=H, U=U), variables),
-    )
+    ket = mol.make_ansatz("SPA", edges=[(0, 1)])
+    bra = mol.prepare_reference() + tq.gates.Ry(angle="b", target=[0, 2])
+    variables = {v: 0.3 for v in ket.extract_variables()} | {"b": 1.1}
+    pairs = [
+        (sn.ExpectationValue(H="H", U=ket, mol=mol), tq.ExpectationValue(H=H, U=ket)),
+        (sn.Braket(ket=ket, bra=bra, mol=mol), tq.BraKet(ket=ket, bra=bra, operator=H)),
+        (sn.Overlap(ket=ket, bra=bra), tq.BraKet(ket=ket, bra=bra)),
+        (sn.Fidelity(ket=ket, bra=bra), tq.Fidelity(bra=bra, ket=ket)),
+        (
+            sn.RealBraKet(ket=ket, bra=bra, operator=H),
+            tq.RealBraKet(ket=ket, bra=bra, operator=H),
+        ),
+        (
+            sn.ImagBraKet(ket=ket, bra=bra, operator=H),
+            tq.ImagBraKet(ket=ket, bra=bra, operator=H),
+        ),
+    ]
+    for sn_objective, tq_objective in pairs:
+        assert isclose(
+            sn.simulate(sn_objective, variables), tq.simulate(tq_objective, variables)
+        )
