@@ -668,3 +668,19 @@ def test_controlled_fcircuit_fermionic_backends():
             sn.simulate(E, variables={"r": 0.3}, backend=backend)
         with pytest.raises(tq.TequilaException):
             sn.simulate(U, variables={"r": 0.3}, backend=backend, n_orb=2)
+
+
+@pytest.mark.skipif(
+    "fqe" not in INSTALLED_FERMIONIC_BACKENDS, reason="fqe not installed"
+)
+def test_fqe_initial_state_sign():
+    # the relative sign of the initial state amplitudes is kept
+    G = sn.FCircuit.from_edges(edges=[(0, 1)], n_orb=2) + sn.gates.UR(0, 1, "r")
+    variables = {v: 0.3 for v in G.extract_variables()}
+    init = "0.6|1010> - 0.8|0101>"
+    U = sn.FCircuit(gates=G.gates, initial_state=init)
+    wfn = sn.simulate(U, variables=variables, backend="fqe", n_orb=2)
+    expected = (
+        G.to_matrix(variables) @ tq.QubitWaveFunction.from_string(init).to_array()
+    )
+    assert np.allclose(wfn.to_array(), expected)

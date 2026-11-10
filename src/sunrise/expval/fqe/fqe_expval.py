@@ -365,6 +365,6 @@ def init_state_from_wavefunction(wvf: QubitWaveFunction, n_orb: int, bin_dict: d
             vec = vec[::-1]
             # vec = vec[len(vec)//2:]
             indices.append(bin_dict[vec])
-            values.append(abs(i))  # todo not sure about this
+            values.append(i)
 
     return indices, values
