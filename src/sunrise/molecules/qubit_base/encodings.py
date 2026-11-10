@@ -7,10 +7,13 @@ import abc
 
 import numpy
 import openfermion
-from tequila import TequilaException
+from openfermion.transforms.opconversions import bksf
+from tequila import BitString, TequilaException
 from tequila.circuit.circuit import QCircuit
-from tequila.circuit.gates import CNOT, X
+from tequila.circuit.gates import CNOT, H, Phase, X, Y, Z
 from tequila.hamiltonian.qubit_hamiltonian import QubitHamiltonian
+
+from .chemistry_tools import prepare_product_state
 
 
 def known_encodings():
@@ -112,6 +115,18 @@ class EncodingBase(metaclass=abc.ABCMeta):
         raise NotImplementedError(
             f"{type(self).__name__}::do_transform: called base class"
         )
+
+    @property
+    def n_qubits(self) -> int:
+        return 2 * self.n_orbitals
+
+    def prepare_state(self, state: list) -> QCircuit:
+        """
+        Circuit preparing a basis state from |0...0>
+        :param state:
+            basis-state as occupation number vector in spin orbitals (see map_state)
+        """
+        return prepare_product_state(BitString.from_array(self.map_state(state=state)))
 
     def map_state(self, state: list, *args, **kwargs) -> list:
         """
@@ -298,21 +313,97 @@ class BravyiKitaevTree(EncodingBase):
 
 class BravyiKitaevFast(EncodingBase):
     """
-    Uses OpenFermion::bravyi_kitaev_tree
+    Uses OpenFermion::bravyi_kitaev_fast (Bravyi-Kitaev superfast, arXiv:1712.00446)
+    One qubit per edge of the complete interaction graph of the spin orbitals, so every parity-preserving operator
+    acts on the same qubits (openfermion takes the graph of each operator and only real Hamiltonians).
     """
 
-    _ucc_support = False
+    _ucc_support = True
+
+    def __init__(self, n_electrons, n_orbitals, *args, **kwargs):
+        if "up_then_down" in kwargs:
+            raise TequilaException(
+                f"Don't pass up_then_down argument to {type(self).__name__}, it can't be changed"
+            )
+        super().__init__(
+            *args,
+            n_orbitals=n_orbitals,
+            n_electrons=n_electrons,
+            up_then_down=False,
+            **kwargs,
+        )
+        # the edges (p, q), p < q, as columns: the column index is the qubit of the edge
+        self.edge_matrix_indices = numpy.array(numpy.triu_indices(2 * n_orbitals, k=1))
+
+    @property
+    def n_qubits(self) -> int:
+        return self.edge_matrix_indices.shape[1]
 
     def do_transform(
         self, fermion_operator: openfermion.FermionOperator, *args, **kwargs
     ) -> openfermion.QubitOperator:
-        n_qubits = openfermion.count_qubits(fermion_operator)
-        if n_qubits != self.n_orbitals * 2:
-            raise NotImplementedError(
-                f"BravyiKitaevFast transformation currently only possible for full Hamiltonians (no UCC generators).\nfermion_operator was {fermion_operator}"
+        # in Majorana operators: gamma_2a gamma_2b = i A_ab
+        # and gamma_2v+1 = gamma_2v i B_v, whose B_v commutes with the gamma_2w that follow
+        qubit_operator = openfermion.QubitOperator()
+        majorana = openfermion.get_majorana_operator(fermion_operator)
+        for term, coeff in majorana.terms.items():
+            if len(term) % 2:
+                raise TequilaException(
+                    f"{type(self).__name__} maps parity-preserving operators only, got {fermion_operator}"
+                )
+            odd = [m // 2 for m in term if m % 2]
+            singles = []  # gamma_2v gamma_2v = 1
+            for v in [m // 2 for m in term]:
+                if singles and singles[-1] == v:
+                    singles.pop()
+                else:
+                    singles.append(v)
+            op = openfermion.QubitOperator((), coeff * 1j ** len(odd))
+            for a, b in zip(singles[::2], singles[1::2]):
+                op = op * (1j * bksf.edge_operator_aij(self.edge_matrix_indices, a, b))
+            for v in odd:
+                op = op * bksf.edge_operator_b(self.edge_matrix_indices, v)
+            qubit_operator += op
+        return qubit_operator
+
+    def prepare_state(self, state: list) -> QCircuit:
+        """
+        Circuit preparing a basis state, which is no basis state of the qubits in this encoding
+        :param state:
+            basis-state as occupation number vector in spin orbitals
+            sorted as: [0_up, 0_down, 1_up, 1_down, ... N_up, N_down]
+        :return:
+            the circuit preparing it from |0...0>
+        """
+        occupied = [i for i, x in enumerate(state) if int(x) == 1]
+        if len(occupied) % 2:
+            raise TequilaException(
+                f"{type(self).__name__} encodes states with an even number of electrons only"
             )
-        op = openfermion.get_interaction_operator(fermion_operator)
-        return openfermion.bravyi_kitaev_fast(op)
+        # vacuum: the +1 eigenstate of the loop stabilizers of openfermion's vacuum_operator,
+        # the triangles (0, i, j): edge (i, j) is in no other triangle, its qubit is the pivot
+        gates = {"X": X, "Y": Y, "Z": Z}
+        U = QCircuit()
+        for pivot, (i, j) in enumerate(self.edge_matrix_indices.T):
+            if i == 0:
+                continue
+            L = openfermion.QubitOperator(())
+            for a, b in [(0, i), (i, j), (j, 0)]:
+                L = 1j * L * bksf.edge_operator_aij(self.edge_matrix_indices, a, b)
+            # (1 + L)/sqrt(2) with the pivot in |0>: H and a phase on the pivot, then the rest of L controlled by it
+            ((term, coeff),) = L.terms.items()
+            term = dict(term)
+            phase = coeff * (1j if term.pop(pivot) == "Y" else 1)
+            U += H(target=pivot) + Phase(target=pivot, angle=numpy.angle(phase))
+            for q, p in term.items():
+                U += gates[p](target=q, control=pivot)
+        # c_2a c_2b = a_a^+ a_b^+ on unoccupied a, b
+        for a, b in zip(occupied[::2], occupied[1::2]):
+            A = bksf.edge_operator_aij(self.edge_matrix_indices, a, b)
+            ((term, _),) = A.terms.items()  # the coefficient is a global phase
+            for q, p in term:
+                U += gates[p](target=q)
+        return U
 
     def me_to_jw(self) -> QCircuit:
         raise TequilaException(f"{type(self).__name__}::me_to_jw: unimplemented")

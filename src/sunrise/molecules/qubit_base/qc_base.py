@@ -14,7 +14,7 @@ import numpy
 import pyscf
 import tequila
 import tequila.grouping.fermionic_functions as ff
-from tequila import BitString, QTensor, TequilaException, TequilaWarning
+from tequila import QTensor, TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
 from tequila.hamiltonian.paulis import I, Sm, Sp, Z, Zero
@@ -35,7 +35,6 @@ from .chemistry_tools import (
     IntegralManager,
     NBodyTensor,
     ParametersQC,
-    prepare_product_state,
     to_json_data,
 )
 from .encodings import EncodingBase, known_encodings
@@ -1734,12 +1733,9 @@ class QuantumChemistryBase:
         if state is None:
             state = self._reference_state()
 
-        reference_state = BitString.from_array(
-            self.transformation.map_state(state=state)
-        )
-        U = prepare_product_state(reference_state)
-        # prevent trace out in direct wfn simulation
-        U.n_qubits = self.n_orbitals * 2  # adapt when tapered transformations work
+        U = self.transformation.prepare_state(state=state)
+        # prevent trace out in direct wfn simulation (adapt when tapered transformations work)
+        U.n_qubits = self.transformation.n_qubits
         return U
 
     def prepare_hardcore_boson_reference(self):
@@ -2950,14 +2946,6 @@ class QuantumChemistryBase:
         # Check whether unitary circuit is not 0
         if U is None:
             raise TequilaException("Need to specify a Quantum Circuit.")
-        # Check whether transformation is BKSF.
-        # Issue here: when a single operator acts only on a subset of qubits, BKSF might not yield the correct
-        # transformation, because it computes the number of qubits incorrectly in this case.
-        # A hotfix such as for symmetry_conserving_bravyi_kitaev would require deeper changes, thus omitted for now
-        if type(self.transformation).__name__ == "BravyiKitaevFast":
-            raise TequilaException(
-                "The Bravyi-Kitaev-Superfast transformation does not support general FermionOperators yet."
-            )
         # Set up number of spin-orbitals and molecular orbitals respectively
         n_SOs = 2 * self.n_orbitals
         n_MOs = self.n_orbitals
