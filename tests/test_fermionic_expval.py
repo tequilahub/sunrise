@@ -684,3 +684,14 @@ def test_fqe_initial_state_sign():
         G.to_matrix(variables) @ tq.QubitWaveFunction.from_string(init).to_array()
     )
     assert np.allclose(wfn.to_array(), expected)
+
+
+def test_to_qcircuit_initial_state():
+    # empty first qubits and negative amplitudes are prepared too
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="q"
+    )
+    for init, occupied in [("1.0|0110>", "0110"), ("-1.0|1010>", "1010")]:
+        U = sn.FCircuit(initial_state=init)
+        wfn = tq.simulate(U.to_qcircuit(mol))
+        assert wfn.isclose(tq.QubitWaveFunction.from_string(f"1.0|{occupied}>"))
