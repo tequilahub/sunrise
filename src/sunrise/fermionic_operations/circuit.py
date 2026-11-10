@@ -687,7 +687,7 @@ class FCircuit:
         if molecule is not None:
             res = QCircuit()
             U = U.to_udud(molecule.n_orbitals)
-            molecule.transformation.upthendown = True
+            molecule.transformation.up_then_down = True
             if self.initial_state is not None:
                 idx = where(array(self._initial_state.to_array()) > 1.0e-6)[
                     0

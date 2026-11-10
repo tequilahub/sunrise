@@ -279,6 +279,18 @@ def test_to_matrix():
     assert np.allclose(M[:, 0b1001], wfn.to_array())
 
 
+def test_to_qcircuit_jordan_wigner():
+    # to_qcircuit has to switch a plain Jordan-Wigner molecule to up-then-down ordering
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="q"
+    )
+    U = sn.FCircuit.from_edges(edges=[(0, 1)], n_orb=2) + sn.gates.UR(0, 1, "r")
+    variables = {v: 0.3 for v in U.extract_variables()}
+    wfn = tq.simulate(U.to_qcircuit(mol), variables=variables)
+    expected = sn.simulate(U, variables=variables, backend="tequila", n_orb=2)
+    assert np.allclose(wfn.to_array(), expected.to_array())
+
+
 @pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
 def test_givens_circuit_signed_permutation():
     # swapping orbitals 0 and 3 needs rotations by pi/2 and a phase of pi on orbital 3
