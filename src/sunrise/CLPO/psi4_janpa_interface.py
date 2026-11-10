@@ -225,16 +225,17 @@ def generate_CLPO_molecule_edges_psi4(
             **kwargs,
         )
 
-        ncore = len(mol_out.integral_manager.orbital_coefficients) - mol_out.n_orbitals
+        # full CLPO index -> active space index (core orbitals need not be the first ones)
+        tot2act = {o.idx_total: o.idx for o in mol_out.integral_manager.orbitals}
+        to_active = {k: tot2act[v] for k, v in to_active.items()}
         graph = [
-            tuple([to_active[i] - ncore for i in edge if i in to_active])
-            for edge in graph_full
+            tuple([to_active[i] for i in edge if i in to_active]) for edge in graph_full
         ]
         graph = [g for g in graph if len(g)]
 
         # aviso holds full CLPO indices: warn and only then move them to the active space, mapping them once
-        __raise_aviso(aviso, to_active, ncore)
-        aviso = __map_aviso(aviso, to_active, ncore)
+        __raise_aviso(aviso, to_active)
+        aviso = __map_aviso(aviso, to_active)
     else:
         mo_matrix = orthogonalize(
             clpo_to_ao_full, mol.integral_manager.overlap_integrals
@@ -310,6 +311,9 @@ def generate_HAO_molecule_psi4(
             orbital_type="HAO",
             **kwargs,
         )
+        # full HAO index -> active space index (core orbitals need not be the first ones)
+        tot2act = {o.idx_total: o.idx for o in mol_out.integral_manager.orbitals}
+        to_active = {k: tot2act[v] for k, v in to_active.items()}
         if ret2act:
             return mol_out, to_active
         return mol_out
