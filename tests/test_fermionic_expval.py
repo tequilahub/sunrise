@@ -768,3 +768,20 @@ def test_tequila_superposition_initial_state():
     )
     with pytest.raises(tq.TequilaException):
         sn.simulate(Braket(ket=U, mol=mol), variables, backend="tequila")
+
+
+def test_reconstruct_matrix_symbolic_angles():
+    # alpha and beta gates of a pair must share the angle, also when it is symbolic
+    from sunrise.fermionic_operations.givens_rotations import (
+        reconstruct_matrix_from_circuit,
+    )
+
+    a, b = tq.Variable("a"), tq.Variable("b")
+    for alpha, beta in [(a, a), (0.5 * a, 0.5 * a)]:
+        U = sn.gates.FermionicExcitation(indices=[(0, 2)], variables=alpha)
+        U += sn.gates.FermionicExcitation(indices=[(1, 3)], variables=beta)
+        reconstruct_matrix_from_circuit(U, norb=2)
+    U = sn.gates.FermionicExcitation(indices=[(0, 2)], variables=a)
+    U += sn.gates.FermionicExcitation(indices=[(1, 3)], variables=b)
+    with pytest.raises(tq.TequilaException):
+        reconstruct_matrix_from_circuit(U, norb=2)
