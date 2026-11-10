@@ -36,8 +36,8 @@ def extract_clpo_graph(
     i = 0
     aviso = []
     while i < n_lo:
-        lo_type = lo_types[i]
-        occ = round(occupancies[i], 5)
+        lo_type = int(lo_types[i])
+        occ = float(round(occupancies[i], 5))
 
         if lo_type == LO_TYPE_LP:
             if 0.5 < occ < 1.5:
@@ -55,7 +55,7 @@ def extract_clpo_graph(
             if i + 1 >= n_lo or lo_types[i + 1] != LO_TYPE_NB:
                 raise ValueError(f"BD orbital {i} without following NB orbital")
             bd_occ = occ
-            nb_occ = round(occupancies[i + 1], 5)
+            nb_occ = float(round(occupancies[i + 1], 5))
             if bd_occ + nb_occ < 1.7:
                 aviso.append((lo_type, i, bd_occ + nb_occ))
             nodes.append((i, i + 1))
