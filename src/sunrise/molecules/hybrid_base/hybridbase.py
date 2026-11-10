@@ -788,7 +788,7 @@ class HybridBase(qc_base):
         if len(self.FER_MO):
             print(
                 "Warning HCB Hamiltonian called but the encoding is not full HCB, with encoding: ",
-                self.encoding,
+                self.select,
             )
         return self.make_hamiltonian()
 

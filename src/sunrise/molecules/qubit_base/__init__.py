@@ -21,7 +21,14 @@ __all__ = [
     "show_supported_modules",
 ]
 
-SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "psi4", "frayedends", "pyscf"]
+SUPPORTED_QCHEMISTRY_BACKENDS = [
+    "base",
+    "psi4",
+    "frayedends",
+    "madness",
+    "frayed",
+    "pyscf",
+]
 INSTALLED_QCHEMISTRY_BACKENDS = {
     "base": QuantumChemistryBase,
 }

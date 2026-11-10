@@ -18,10 +18,7 @@ import sunrise.molecules.qubit_base.qc_base as qcb
 
 HAS_PYSCF = "pyscf" in qc.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in qc.INSTALLED_QCHEMISTRY_BACKENDS
-HAS_MADNESS = (
-    "madness" in qc.INSTALLED_QCHEMISTRY_BACKENDS
-    and qc.QuantumChemistryMadness.find_executable() is not None
-)
+HAS_FRAYED = "frayedends" in qc.INSTALLED_QCHEMISTRY_BACKENDS
 
 standard_trafos = ["JordanWigner", "ReorderedJordanWigner", "BravyiKitaev"]
 trafos = standard_trafos
@@ -717,7 +714,6 @@ def test_pyscf_methods(method, geometry, basis_set):
     assert numpy.isclose(e1, e3, atol=1.0e-4)
 
 
-# madness does not use a basis set
 @pytest.mark.parametrize(
     "backend, basis_set",
     [
@@ -732,10 +728,10 @@ def test_pyscf_methods(method, geometry, basis_set):
             marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found"),
         ),
         pytest.param(
-            "madness",
-            None,
+            "frayedends",
+            "sto-3g",
             marks=pytest.mark.skipif(
-                condition=not HAS_MADNESS, reason="madness not found"
+                condition=not HAS_FRAYED, reason="frayedends not found"
             ),
         ),
     ],
@@ -792,10 +788,10 @@ def test_fermionic_backends(backend, basis_set, tmp_path, monkeypatch):
             marks=pytest.mark.skipif(condition=not HAS_PSI4, reason="psi4 not found"),
         ),
         pytest.param(
-            "madness",
-            None,
+            "frayedends",
+            "sto-3g",
             marks=pytest.mark.skipif(
-                condition=not HAS_MADNESS, reason="madness not found"
+                condition=not HAS_FRAYED, reason="frayedends not found"
             ),
         ),
     ],
@@ -900,9 +896,9 @@ def test_psi4_natures(nature, geometry, kwargs, tmp_path, monkeypatch):
     assert numpy.isclose(_ground_state_energy(mol), qmol.compute_energy("fci"))
 
 
-@pytest.mark.skipif(condition=not HAS_MADNESS, reason="madness not found")
-def test_madness_pno(tmp_path, monkeypatch):
-    # madness writes its files into the working directory
+@pytest.mark.skipif(condition=not HAS_FRAYED, reason="frayedends not found")
+def test_frayedends_pno(tmp_path, monkeypatch):
+    # the PNO molecule is saved as {name}_pno.h5 in the working directory, the other natures read it (n_pno="read")
     monkeypatch.chdir(tmp_path)
     geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 0.75"
     qmol = sun.Molecule(
@@ -922,6 +918,10 @@ def test_madness_pno(tmp_path, monkeypatch):
     # one occupied orbital with its two PNOs
     assert fmol.n_orbitals == hmol.n_orbitals == qmol.n_orbitals == 3
     assert fmol.get_spa_edges() == hmol.get_spa_edges() == [(0, 1, 2)]
+    # the MRA orbitals are read with the molecule, the natures share them
+    assert len(qmol.mra_orbitals) == 3
+    assert fmol.mra_orbitals == hmol.mra_orbitals == qmol.mra_orbitals
+    assert fmol.mra_parameters == hmol.mra_parameters == qmol.mra_parameters
 
     U = fmol.make_spa_ansatz(edges=fmol.get_spa_edges())
     result = sun.minimize(sun.Braket(molecule=qmol, ket=U), silent=True)

@@ -9,7 +9,14 @@ from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC
 
 from .hybridbase import HybridBase
 
-SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "psi4", "frayedends", "pyscf"]
+SUPPORTED_QCHEMISTRY_BACKENDS = [
+    "base",
+    "psi4",
+    "frayedends",
+    "madness",
+    "frayed",
+    "pyscf",
+]
 INSTALLED_QCHEMISTRY_BACKENDS = {
     "base": HybridBase,
 }
@@ -118,7 +125,7 @@ def HyMolecule(
             "frayed",
             "frayedends",
         ]:
-            backend = "madness"
+            backend = "frayedends"
             basis_set = "mra"
             parameters.basis_set = basis_set
             if orbital_type is not None and orbital_type.lower() not in [

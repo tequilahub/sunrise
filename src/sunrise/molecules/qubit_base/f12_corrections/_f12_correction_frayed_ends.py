@@ -96,7 +96,9 @@ class ExplicitCorrelationCorrectionFrayedends(ExplicitCorrelationCorrection):
         -------
             the explicitly correlated correction
         """
-        print("Set up universal f12-correction using external integrals from Frayedends.")
+        print(
+            "Set up universal f12-correction using external integrals from Frayedends."
+        )
         # Prepare tensors
         h, g, r = self.setup_tensors_Frayedends()
         fock = super().build_fock_operator(h=h, g=g)

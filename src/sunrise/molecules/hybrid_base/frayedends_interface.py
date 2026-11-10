@@ -8,7 +8,7 @@ from tequila import ExpectationValue, QCircuit, TequilaException, TequilaWarning
 from sunrise.molecules.qubit_base import ParametersQC
 from sunrise.molecules.qubit_base.frayedends_interface import (
     FrayedEndsMixin,
-    TequilaMadnessException,
+    SunriseFrayedEndsException,
 )
 
 from .hybridbase import HybridBase
@@ -30,8 +30,7 @@ class QuantumChemistryFrayed(FrayedEndsMixin, HybridBase):
         *args,
         **kwargs,
     ):
-        self._init_madness(
-            super().__init__,
+        super().__init__(
             parameters,
             *args,
             select=select,
@@ -163,7 +162,7 @@ class QuantumChemistryFrayed(FrayedEndsMixin, HybridBase):
         excitations = name.split("-")[-1]
 
         if "HCB" in name and "S" in excitations:
-            raise TequilaMadnessException(
+            raise SunriseFrayedEndsException(
                 f"name={name}, HCB + Singles can't be realized"
             )
 
@@ -207,7 +206,7 @@ class QuantumChemistryFrayed(FrayedEndsMixin, HybridBase):
                 kwargs["spin_adapt_singles"] = True
 
         if direct_compiling and not have_hcb_trafo and "HCB" not in name:
-            raise TequilaMadnessException(
+            raise SunriseFrayedEndsException(
                 f"direct_compiling={direct_compiling} demanded but no hcb_to_me in transformation={self.transformation}\ntry transformation='ReorderedJordanWigner' "
             )
 

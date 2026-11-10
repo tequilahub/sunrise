@@ -7,7 +7,7 @@ from tequila import TequilaWarning
 from sunrise.molecules.qubit_base import ParametersQC
 from sunrise.molecules.qubit_base.frayedends_interface import (
     FrayedEndsMixin,
-    TequilaMadnessException,
+    SunriseFrayedEndsException,
 )
 
 from ...expval import ExpectationValue
@@ -24,7 +24,7 @@ class QuantumChemistryFrayed(FrayedEndsMixin, FermionicBase):
     """
 
     def __init__(self, parameters: ParametersQC, *args, **kwargs):
-        self._init_madness(super().__init__, parameters, *args, **kwargs)
+        super().__init__(parameters, *args, **kwargs)
 
     def get_spa_edges(self, *args, **kwargs):
         """
@@ -135,7 +135,7 @@ class QuantumChemistryFrayed(FrayedEndsMixin, FermionicBase):
         excitations = name.split("-")[-1]
 
         if "HCB" in name and "S" in excitations:
-            raise TequilaMadnessException(
+            raise SunriseFrayedEndsException(
                 f"name={name}, HCB + Singles can't be realized"
             )
 
