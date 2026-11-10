@@ -30,7 +30,13 @@ from sunrise.expval import (
 )
 from sunrise.fermionic_operations import gates
 from sunrise.fermionic_operations.circuit import FCircuit
-from sunrise.expval.minimize import grad, minimize, simulate
+from sunrise.expval.minimize import (
+    grad,
+    load_variables,
+    minimize,
+    save_variables,
+    simulate,
+)
 from sunrise.expval.orbital_optimizer import optimize_orbitals
 from sunrise import graphical
 from sunrise.expval import (
@@ -84,6 +90,7 @@ __all__ = [
     "graph_selection",
     "graphical",
     "load_molecule",
+    "load_variables",
     "mcvbt",
     "measurement",
     "minimize",
@@ -96,6 +103,7 @@ __all__ = [
     "qpic_to_png",
     "quantumchemistry",
     "qubit_base",
+    "save_variables",
     "show_available_modules",
     "show_supported_modules",
     "simulate",
