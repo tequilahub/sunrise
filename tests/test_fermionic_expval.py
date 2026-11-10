@@ -591,3 +591,27 @@ def test_compile_keeps_spex_for_tequila(kwargs, fermionic, qubit):
         sn_minimize.compile(E, **kwargs)
     assert {c.kwargs["backend"] for c in fspy.call_args_list} == {fermionic}
     assert {c.kwargs["backend"] for c in qspy.call_args_list} == {qubit}
+
+
+def test_braket_operator_list():
+    # a list of operators gives a QTensor, evaluated like the single brakets
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    U = mol.make_ansatz("SPA", edges=[(0, 1)])
+    variables = {v: 0.3 for v in U.extract_variables()}
+    ops = [
+        "H",
+        FermionOperator("0^ 0"),
+        FermionOperator("2^ 2"),
+        FermionOperator("1^ 1"),
+    ]
+    E = Braket(ket=U, operator=ops, mol=mol)
+    assert isinstance(E, tq.QTensor) and E.shape == (4,)
+    assert Braket(ket=U, operator=ops, mol=mol, shape=(2, 2)).shape == (2, 2)
+    for backend in INSTALLED_FERMIONIC_BACKENDS:
+        expected = [
+            sn.simulate(Braket(ket=U, operator=op, mol=mol), variables, backend=backend)
+            for op in ops
+        ]
+        assert np.allclose(sn.simulate(E, variables, backend=backend), expected)

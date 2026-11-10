@@ -186,7 +186,7 @@ def simulate(
                 **kwargs,
             )
             for op in objective
-        ]  # TODO Multidimensional
+        ]
     if isinstance(objective, FCircuit):
         return simulate_fcircuit(
             *args, U=objective, variables=variables, backend=backend, **kwargs
@@ -262,6 +262,23 @@ def compile(
     fbackend = pick_backend(
         backend=fbackend, samples=samples, noise=noise, device=device
     )
+    if isinstance(objective, QTensor):
+        # compile every element, as tequila does
+        compiled = [
+            compile(
+                o,
+                variables=variables,
+                samples=samples,
+                simulate_density=simulate_density,
+                backend=backend,
+                noise=noise,
+                device=device,
+                fbackend=fbackend,
+                **kwargs,
+            )
+            for o in objective.flatten()
+        ]
+        return QTensor(objective_list=compiled, shape=objective.shape)
     if isinstance(objective, FCircuit):
         return objective  # Currently there is not FCircuit compilation since the fermionic backends work with lists of operations instead of actual qcircuit compilation
 

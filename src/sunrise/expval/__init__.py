@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from openfermion.ops.operators.fermion_operator import FermionOperator
-from tequila import Objective, TequilaException
+from tequila import Objective, QTensor, TequilaException
 from tequila.objective.objective import identity
 
 from sunrise.fermionic_operations.circuit import FCircuit
@@ -185,7 +185,7 @@ def Braket(
     mol: QuantumChemistryBase | None = None,
     *args,
     **kwargs,
-) -> Objective:
+) -> Objective | QTensor:
     """Function that allows to calculate different quantities
        depending on the passed parameters:
        1) If only ket is passed, returns the overlap with itself (1).
@@ -193,7 +193,7 @@ def Braket(
        3) If ket and operator are passed, returns the expectation value of the operator for the given state.
        4) If ket, bra and operator are passed, returns the transition element of the operator.
 
-       returns an instance of tq.Objective
+       returns an instance of tq.Objective, or a tq.QTensor of them for a list of operators
 
     Args:
         ket (FCircuit): FCircuit corresponding to a state.
@@ -205,6 +205,8 @@ def Braket(
                                                Hamiltonian is taken as default.
         mol: (QuantumChemistryBase, Optional) Sunrise Molecule to get the information (n electrons, integrals...)
                                                 if not enough data provided
+
+        shape: (tuple, optional) shape of the QTensor for a list of operators, defaults to (len(operator),)
 
     Returns:
         tq.Objective representing the BraKet
@@ -221,11 +223,14 @@ def Braket(
         ket = bra
         bra = None
     if isinstance(operator, list):
-        return [
-            Braket(*args, ket=ket, bra=bra, operator=op, mol=mol, **kwargs)
-            for op in operator
-        ]
-        # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
+        shape = kwargs.pop("shape", None) or (len(operator),)
+        return QTensor(
+            objective_list=[
+                Braket(*args, ket=ket, bra=bra, operator=op, mol=mol, **kwargs)
+                for op in operator
+            ],
+            shape=shape,
+        )
     if bra is None and operator is None:
         return Objective() + 1.0
     return Objective(
