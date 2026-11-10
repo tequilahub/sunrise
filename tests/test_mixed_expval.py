@@ -167,3 +167,16 @@ def test_mixed_objective_complex(backend):
         sn.simulate(
             (sn_term + tq_term).wrap(to_float), variables=variables, backend=backend
         )
+
+
+def test_qubit_expval_matches_tequila():
+    # sn.ExpectationValue with a qubit circuit and qubit Hamiltonian is the tequila expectation value
+    mol = sn.Molecule(geometry="H 0.0 0.0 0.0\nH 0.0 0.0 0.75", basis_set="sto-3g")
+    H = mol.make_hamiltonian()
+    U = mol.make_ansatz("SPA", edges=[(0, 1)])
+    variables = {v: 0.3 for v in U.extract_variables()}
+    E = sn.ExpectationValue(H=H, U=U, mol=mol)
+    assert isclose(
+        sn.simulate(E, variables),
+        tq.simulate(tq.ExpectationValue(H=H, U=U), variables),
+    )

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from openfermion.ops.operators.fermion_operator import FermionOperator
-from tequila import Objective, TequilaException
+from tequila import ExpectationValue as tq_ExpectationValue
+from tequila import Objective, QCircuit, TequilaException
 from tequila.objective.objective import identity
 
 from sunrise.fermionic_operations.circuit import FCircuit
@@ -259,6 +260,9 @@ def ExpectationValue(
     Tequila objectives to be simulated or compiled.
 
     """
+    if isinstance(U, QCircuit):
+        # qubit circuit and qubit Hamiltonian: same as tq.ExpectationValue
+        return tq_ExpectationValue(*args, U=U, H=H, **kwargs)
     return Braket(*args, ket=U, operator=H, mol=mol, **kwargs)
 
 
