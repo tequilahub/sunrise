@@ -749,3 +749,22 @@ def test_fqe_open_shell():
         G.to_matrix(variables) @ tq.QubitWaveFunction.from_string(init).to_array()
     )
     assert np.allclose(wfn.to_array(), expected)
+
+
+def test_tequila_superposition_initial_state():
+    # the tequila backend starts the simulation from the superposition
+    G = sn.FCircuit.from_edges(edges=[(0, 1)], n_orb=2) + sn.gates.UR(0, 1, "r")
+    variables = {v: 0.3 for v in G.extract_variables()}
+    init = "0.6|1010> - 0.8|0101>"
+    U = sn.FCircuit(gates=G.gates, initial_state=init)
+    wfn = sn.simulate(U, variables=variables, backend="tequila", n_orb=2)
+    expected = (
+        G.to_matrix(variables) @ tq.QubitWaveFunction.from_string(init).to_array()
+    )
+    assert np.allclose(wfn.to_array(), expected)
+    # a braket can't carry it into the qubit circuit
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    with pytest.raises(tq.TequilaException):
+        sn.simulate(Braket(ket=U, mol=mol), variables, backend="tequila")

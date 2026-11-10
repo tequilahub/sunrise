@@ -3,6 +3,7 @@ from __future__ import annotations
 from numpy import ceil, zeros
 from tequila import SUPPORTED_BACKENDS, QCircuit, QubitWaveFunction, TequilaException
 from tequila import simulate as tq_simulate
+from tequila.circuit.gates import Phase
 from tequila.objective import format_variable_dictionary
 from tequila.objective.objective import Variables
 
@@ -89,6 +90,14 @@ def simulate_fcircuit(
             backend = backend[backend.find("tequila-") + 8 :]
         elif "t-" in backend:
             backend = backend[backend.find("t-") + 2 :]
+        # before the initial state is removed
+        n_orb = int(ceil((U.max_qubit() + 1) / 2))
+        # to_qcircuit can't prepare a superposition: the simulation starts from it instead
+        if U.initial_state is not None and (
+            sum(abs(v) > 1.0e-6 for _, v in U.initial_state.items()) > 1
+        ):
+            kwargs["initial_state"] = U.initial_state
+            U = FCircuit(gates=U.gates)
         if "mol" in kwargs:
             mol = kwargs["mol"]
             kwargs.pop("mol")
@@ -107,8 +116,13 @@ def simulate_fcircuit(
             mol = _generate_dummy_mol(n_orb)
             U = U.to_qcircuit(mol)
         else:
-            n_orb = int(ceil((U.max_qubit() + 1) / 2))
             U = U.to_qcircuit(molecule=_generate_dummy_mol(n_orb=n_orb))
+        if isinstance(kwargs.get("initial_state"), QubitWaveFunction):
+            # tequila needs every qubit of a superposition initial state in the circuit
+            n_qubits = kwargs["initial_state"].n_qubits
+            for q in range(n_qubits):
+                if q not in U.qubits:
+                    U += Phase(target=q, angle=0.0)
         return tq_simulate(U, backend=backend, variables=variables, **kwargs)
     else:
         raise TequilaException(f"Not recognised backed: {backend}.")

@@ -701,9 +701,9 @@ class FCircuit:
             if self.initial_state is not None:
                 states = [k for k, v in self.initial_state.items() if abs(v) > 1.0e-6]
                 if len(states) > 1:
-                    warnings.warn(
-                        "Don't now how to prepare the circuit initial state, skyped for safety",
-                        TequilaWarning,
+                    raise TequilaException(
+                        f"to_qcircuit can't prepare the superposition initial state {self.initial_state}, "
+                        "use a fermionic backend (fqe, tcc, spex)"
                     )
                 elif states:
                     res += X(target=[q for q, b in enumerate(states[0].array) if b])
