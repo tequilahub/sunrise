@@ -844,14 +844,6 @@ class HybridBase(qc_base):
         # Check whether unitary circuit is not 0
         if U is None:
             raise TequilaException("Need to specify a Quantum Circuit.")
-        # Check whether transformation is BKSF.
-        # Issue here: when a single operator acts only on a subset of qubits, BKSF might not yield the correct
-        # transformation, because it computes the number of qubits incorrectly in this case.
-        # A hotfix such as for symmetry_conserving_bravyi_kitaev would require deeper changes, thus omitted for now
-        if type(self.transformation).__name__ == "BravyiKitaevFast":
-            raise TequilaException(
-                "The Bravyi-Kitaev-Superfast transformation does not support general FermionOperators yet."
-            )
 
         def _build_1bdy_operators_mix() -> list:
             """Returns BOS one-body operators as a symmetry-reduced list of QubitHamiltonians"""
