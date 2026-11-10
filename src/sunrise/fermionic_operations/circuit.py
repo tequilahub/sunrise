@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from copy import deepcopy
 from typing import Callable
 
-from numpy import argwhere, array, isclose, ndarray, pi, where
+from numpy import argwhere, array, eye, isclose, kron, ndarray, pi, where
 from tequila import (
     BitNumbering,
     BitString,
@@ -655,8 +655,20 @@ class FCircuit:
 
         return FCircuit(gates=new_gates, initial_state=self.initial_state)
 
-    def to_matrix(self, variables=None):  # TODO:  Should we?
-        pass
+    def to_matrix(self, variables=None):
+        """
+        Unitary matrix of the circuit gates (the initial state is not included)
+        :param variables dictionary with the values of the circuit variables
+        :return numpy array in the up-then-down (reordered Jordan-Wigner) qubit ordering
+        """
+        from sunrise.expval.simulate_circuit import _generate_dummy_mol
+
+        n_orb = (self.n_qubits + 1) // 2
+        molecule = _generate_dummy_mol(n_orb=n_orb)
+        U = FCircuit(gates=self.gates).to_qcircuit(molecule=molecule)
+        # tequila stops at the highest qubit the gates act on, the remaining qubits are idle
+        idle = max(2 * n_orb - U.n_qubits, 0)
+        return kron(U.to_matrix(variables=variables), eye(2**idle))
 
     def add_controls(self, control, inpl: bool = False) -> FCircuit | None:  # TODO
         pass
