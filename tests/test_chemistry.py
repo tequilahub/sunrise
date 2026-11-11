@@ -1389,6 +1389,33 @@ def test_spa_consistency(geometry, name, optimize, transformation):
     assert numpy.isclose(F, 1.0)
 
 
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize(
+    "transformation", ["BravyiKitaevTree", "ReorderedBravyiKitaevTree"]
+)
+def test_bravyi_kitaev_tree_me_to_jw(transformation):
+    # me_to_jw turns the Hamiltonian into the Jordan-Wigner one (6 spin orbitals, not a power of 2)
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0"
+    mol, jw = [
+        sun.Molecule(
+            geometry=geometry,
+            basis_set="sto-3g",
+            backend="pyscf",
+            charge=1,
+            transformation=t,
+        )
+        for t in [
+            transformation,
+            transformation.replace("BravyiKitaevTree", "JordanWigner"),
+        ]
+    ]
+    U = mol.transformation.me_to_jw()
+    U.n_qubits = 2 * mol.n_orbitals
+    U = U.to_matrix()
+    H, H_jw = mol.make_hamiltonian().to_matrix(), jw.make_hamiltonian().to_matrix()
+    assert numpy.allclose(U @ H @ U.conj().T, H_jw)
+
+
 @pytest.mark.skipif(
     condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found"
 )

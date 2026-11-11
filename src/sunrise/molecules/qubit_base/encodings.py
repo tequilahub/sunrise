@@ -293,7 +293,29 @@ class BravyiKitaevTree(EncodingBase):
         )
 
     def me_to_jw(self) -> QCircuit:
-        raise TequilaException(f"{type(self).__name__}::me_to_jw: unimplemented")
+        # the encoding maps the Jordan-Wigner bits x to A x (mod 2): undo A with CNOTs (Gaussian elimination)
+        n = 2 * self.n_orbitals
+        jw = JordanWigner(
+            n_electrons=self.n_electrons,
+            n_orbitals=self.n_orbitals,
+            up_then_down=self.up_then_down,
+        )
+        A = numpy.zeros((n, n), dtype=int)
+        for k in range(n):
+            state = [0] * n
+            state[k] = 1
+            A[:, list(jw.map_state(state)).index(1)] = self.map_state(state)
+        U = QCircuit()
+        for c in range(n):
+            if not A[c, c]:
+                r = next(r for r in range(c + 1, n) if A[r, c])
+                A[c] ^= A[r]
+                U += CNOT(control=r, target=c)
+            for r in range(n):
+                if r != c and A[r, c]:
+                    A[r] ^= A[c]
+                    U += CNOT(control=c, target=r)
+        return U
 
 
 class BravyiKitaevFast(EncodingBase):
