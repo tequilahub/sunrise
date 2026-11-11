@@ -454,7 +454,7 @@ def test_upccgsd(geometry, trafo):
         geometry=geometry, units="angstrom", basis_set="sto-3g", transformation=trafo
     )
     if not molecule.supports_ucc():
-        return
+        pytest.skip(f"{trafo} has no UCC support")
     energy = do_test_upccgsd(molecule)
     fci = molecule.compute_energy("fci")
     assert numpy.isclose(fci, energy, atol=1.0e-3)
