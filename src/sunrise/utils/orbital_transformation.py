@@ -147,18 +147,11 @@ def transform(
     modified: sunrise molecule with modified orb. coeff. to be orthogonalized
     original: sunrise HF molecule. Not runing here a new HF to be backend independent.
     orbital type: the text that will show whem printing the molecule
-    kwargs: Molecular arguments. It can also be defined the core and active orbitals, see get_core and get_active above.
+    kwargs: Molecular arguments. It can also be defined the core and active orbitals, both in total (not active) space indices see get_core and get_active above.
     Returns modified sunrise molecule with the core orbitals of the original one
     And a dictionary with the form {active_orbital_index_before:active_orbital_index_after}
     The frozen orbitals will always be the N first on the orbital matrix
     """
-    if "core" in kwargs:
-        core = kwargs["core"]
-        kwargs.pop("core")
-    else:
-        core = [
-            i.idx_total for i in original.integral_manager.orbitals if i.idx is None
-        ]
     assert len(original.integral_manager.orbitals) == len(
         modified.integral_manager.orbitals
     )
@@ -166,10 +159,12 @@ def transform(
     d_orig = modified.integral_manager.orbital_coefficients.copy()
     s = original.integral_manager.overlap_integrals.copy()
     n_basis = c_orig.shape[0]
-    if "active" in kwargs:
-        active = kwargs["active"]
-        kwargs.pop("active")
-    else:
+    active = kwargs.pop("active", None)
+    core = kwargs.pop("core", None)
+    if active is None and core is None:
+        core = [
+            i.idx_total for i in original.integral_manager.orbitals if i.idx is None
+        ]
         active = get_active(
             c_orig,
             d_orig,
@@ -180,6 +175,17 @@ def transform(
                 if i.idx is not None
             ],
         )
+    elif active is None and core is not None:
+        # core given: match in modified the complement of core in original
+        active = get_active(
+            c_orig, d_orig, s, [i for i in range(c_orig.shape[1]) if i not in core]
+        )
+    elif active is not None and core is None:
+        # active given (indices of modified): pick core from original
+        core = get_core(c_orig, d_orig, s, active)
+    assert len(core) + len(active) == len(original.integral_manager.orbitals)
+    core = list(core)
+    active = list(active)
     to_active = [i for i in range(n_basis) if i not in core]
     to_active = {active[i]: to_active[i] for i in range(len(active))}
     reference_orbitals = core.copy()
@@ -191,21 +197,14 @@ def transform(
     n_core = len(core)
     n_active = len(active)
     c_combined = numpy.zeros((n_basis, n_core + n_active))
-    for i, idx in enumerate(core):
-        c_combined[:, i] = c_orig[:, idx]
+    for idx in core:
+        c_combined[:, idx] = c_orig[:, idx]
     for act_idx in active:
         c_combined[:, to_active[act_idx]] = d_orig[:, act_idx]
     jcoef = orthogonalize_active_space(c_combined, s, core, [*to_active.values()])
-    ref = [
-        i.idx_total
-        for i in original.integral_manager.reference_orbitals
-        if i not in original.integral_manager.active_reference_orbitals
-    ]
-    ref.extend(
-        [i for i in range(n_basis) if i not in core][
-            : len(original.integral_manager.active_reference_orbitals)
-        ]
-    )
+    occ = [i.idx_total for i in original.integral_manager.reference_orbitals]
+    ref = [i for i in core if i in occ]
+    ref.extend([i for i in range(n_basis) if i not in core][: len(occ) - len(ref)])
     integral_manager = modified.initialize_integral_manager(
         one_body_integrals=original.integral_manager.one_body_integrals,
         two_body_integrals=original.integral_manager.two_body_integrals,
