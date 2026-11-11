@@ -192,6 +192,28 @@ def test_rotated_molecule() -> None:
     assert irreps[0] == irreps[1]
 
 
+# Tests d orbitals: in water with 6-31g* every canonical orbital is mapped onto itself up to the sign, and the one
+# A2 orbital, which only a d orbital can give in C2v, is found
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+def test_d_orbitals() -> None:
+    mol = sun.Molecule(
+        geometry="O 0. 0. 0.1271 \n H 0.758 0. -0.5085 \n H -0.758 0. -0.5085",
+        basis_set="6-31g*",
+        backend="pyscf",
+    )
+    operations = mol.mo_representation().operations
+    table = mol.point_group.character_table
+    for D in operations.values():
+        assert np.allclose(np.abs(np.diag(D)), 1.0)
+    irreps = [
+        table.vec_to_str(
+            np.round([operations[op][i, i] for op in table.operation_symbols])
+        )
+        for i in range(mol.n_orbitals)
+    ]
+    assert irreps.count("A2") == mol.compute_orbital_irreps().count("A2") == 1
+
+
 # Tests that the pyscf assigner falls back to the largest Abelian subgroup for non-Abelian groups
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_canonical_abelian_fallback() -> None:
