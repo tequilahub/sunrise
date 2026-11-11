@@ -138,22 +138,17 @@ class EncodingBase(metaclass=abc.ABCMeta):
         -------
 
         """
-        # default is a lazy workaround, but it workds
+        # one creation operator at a time keeps a single basis state, their product has 2**n_electrons terms
         n_qubits = 2 * self.n_orbitals
 
         spin_orbitals = sorted([i for i, x in enumerate(state) if int(x) == 1])
 
-        string = "1.0 ["
-        for i in spin_orbitals:
-            string += str(i) + "^ "
-        string += "]"
-
-        fop = openfermion.FermionOperator(string, 1.0)
-        op = self(fop)
         from tequila.wavefunction.qubit_wavefunction import QubitWaveFunction
 
         wfn = QubitWaveFunction.from_basis_state(n_qubits, 0)
-        wfn = wfn.apply_qubitoperator(operator=op)
+        for i in reversed(spin_orbitals):
+            op = self(openfermion.FermionOperator(f"{i}^"))
+            wfn = wfn.apply_qubitoperator(operator=op)
         assert wfn.length() == 1
         key = next(iter(wfn.keys())).array
         return key
