@@ -641,3 +641,30 @@ def test_samples(backend):
         counts = sn.simulate(U, variables, backend=backend, n_orb=2, samples=100000)
         probabilities = np.abs(wfn.to_array()) ** 2
         assert np.allclose(counts.to_array().real / 100000, probabilities, atol=1.0e-2)
+
+
+@pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
+@pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
+def test_operators(backend):
+    # Pauli strings, qubit Hamiltonians and numbers give the same on every backend
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    U = mol.make_ansatz("UpCCGSD")
+    V = mol.make_ansatz("SPA", edges=[(0, 1)])
+    variables = {
+        v: 0.3 + 0.1 * k
+        for k, v in enumerate(U.extract_variables() + V.extract_variables())
+    }
+    H = tq.paulis.Z(1) + 0.5 * tq.paulis.X(0) * tq.paulis.X(2)
+    # X(0) changes the number of electrons: zero
+    for op in ["Z(0)Z(2)", H, "X(0)", 2, 2.5]:
+        for bra in [None, V]:
+            E = sn.simulate(
+                Braket(ket=U, bra=bra, operator=op, mol=mol), variables, backend=backend
+            )
+            expected = sn.simulate(
+                Braket(ket=U, bra=bra, operator=op, mol=mol), variables, backend="spex"
+            )
+            # the tequila backend returns brakets as complex numbers
+            assert isclose(np.real(E), expected, atol=1.0e-8)

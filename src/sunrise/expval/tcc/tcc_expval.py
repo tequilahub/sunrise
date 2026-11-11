@@ -23,6 +23,7 @@ from tequila import (
     assign_variable,
     simulate,
 )
+from tequila.hamiltonian import paulis
 from tequila.objective.objective import FixedVariable, Variables
 from tequila.utils.bitstrings import BitNumbering, BitString
 
@@ -519,13 +520,12 @@ class TCCBraket:
                 )
                 self.BK.hamiltonian = None
                 self.BK.hamiltonian_lib = {}
-            else:
-                raise TequilaException(
-                    f"No operator str {operator} supported on TCC BraKet"
-                )
 
         if operator is None:
             return None
+        if isinstance(operator, str) and operator.upper() not in ["I", "H", "HCB"]:
+            # a Pauli string, as on the tequila backend
+            operator = paulis.from_string(operator)
         if isinstance(operator, str):
             if operator.upper() == "I":
                 return lambda ket: ket
