@@ -26,6 +26,7 @@ class FermBraketImpl(QuantumArg):
         contraction: Callable | None = None,
         shape: tuple | None = None,
         samples: int | None = None,
+        grad_variable: Variable | None = None,
         *args,
         **kwargs,
     ):
@@ -40,6 +41,8 @@ class FermBraketImpl(QuantumArg):
         self.ket = ket
         self.bra = bra
         self.operator = operator
+        # not None: the braket stands for its derivative with respect to grad_variable
+        self.grad_variable = grad_variable
         self._args = args
         self._kwargs = kwargs
 
@@ -83,6 +86,7 @@ class FermBraketImpl(QuantumArg):
             contraction=self._contraction,
             shape=self._shape,
             samples=self.samples,
+            grad_variable=self.grad_variable,
             args=self._args,
             **self._kwargs,
         )
@@ -101,6 +105,7 @@ class FermBraketImpl(QuantumArg):
             contraction=self._contraction,
             shape=self._shape,
             samples=self.samples,
+            grad_variable=self.grad_variable,
             args=self._args,
             **self._kwargs,
         )
@@ -204,7 +209,9 @@ _C2 = 0.25 * (sqrt(2) - 1) / sqrt(2)
 _SHIFTS = [(pi / 2, _C1), (-pi / 2, -_C1), (3 * pi / 2, -_C2), (-3 * pi / 2, _C2)]
 
 
-def _grad_FermBraket(objective: FermBraketImpl, variable: Variable = None) -> Objective:
+def _grad_FermBraket(
+    objective: FermBraketImpl, variable: Variable = None, expand: bool = False
+) -> Objective:
     if variable is None:
         # None means that all components are created
         variables = objective.extract_variables()
@@ -215,13 +222,39 @@ def _grad_FermBraket(objective: FermBraketImpl, variable: Variable = None) -> Ob
 
         for k in variables:
             assert k is not None
-            result[k] = _grad_FermBraket(objective, k)
+            result[k] = _grad_FermBraket(objective, k, expand)
         return result
     else:
         variable = assign_variable(variable)
 
     if variable not in objective.extract_variables():
         return 0.0
+
+    if not expand:
+        if objective.grad_variable is not None:
+            # second derivatives go through the shifted brakets
+            return tqgrad(
+                objective=_grad_FermBraket(
+                    objective, objective.grad_variable, expand=True
+                ),
+                variable=variable,
+                no_compile=True,
+            )
+        # one braket per variable, each backend evaluates its derivative (spex, ffsim and
+        # fqe with the shift rule below on shifted gates, tcc and tequila with their own
+        # gradient for expectation values without Phase gates, expand=True otherwise)
+        return Objective(
+            args=[
+                FermBraketImpl(
+                    ket=objective.ket,
+                    bra=objective._bra,
+                    operator=objective.operator,
+                    molecule=objective.molecule,
+                    grad_variable=variable,
+                )
+            ],
+            transformation=identity,
+        )
 
     dO = Objective()
     for is_bra, U in [(True, objective.bra), (False, objective.ket)]:
@@ -233,6 +266,7 @@ def _grad_FermBraket(objective: FermBraketImpl, variable: Variable = None) -> Ob
                 Us = deepcopy(U)
                 Us.gates[i].variables = Us.gates[i].variables + shift
                 e = deepcopy(objective, {id(objective.molecule): objective.molecule})
+                e.grad_variable = None
                 if is_bra:
                     e.bra = Us
                 else:
