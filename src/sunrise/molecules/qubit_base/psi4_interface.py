@@ -468,6 +468,7 @@ class Psi4Mixin:
             kwargs["orbital_coefficients"] = Ca
             kwargs["basis_name"] = self.parameters.basis_set
         kwargs["basis_type"] = "GBS"
+        kwargs.setdefault("basis_convention", "psi4")
 
         irreps = [
             self.psi4_mol.point_group().char_table().gamma(i).symbol().upper()
