@@ -509,18 +509,20 @@ def test_pick_backend_default():
 def test_pick_backend_verifies(backend):
     assert sn.pick_backend(backend) == backend
     assert sn.pick_backend(backend.upper()) == backend
+    assert sn.pick_backend(backend, samples=100) == backend
     if backend != "tequila":
-        # only the tequila backend can sample or simulate noise
+        # only the tequila backend can simulate noise
         with pytest.raises(tq.TequilaException):
-            sn.pick_backend(backend, samples=100)
+            sn.pick_backend(backend, noise="device")
 
 
 def test_pick_backend_samples_noise_random():
-    assert sn.pick_backend(samples=100) == "tequila"
+    assert sn.pick_backend(samples=100) == sn.pick_backend()
     assert sn.pick_backend(noise="device") == "tequila"
     assert sn.pick_backend("tequila", samples=100) == "tequila"
     assert sn.pick_backend("random") in INSTALLED_FERMIONIC_BACKENDS
-    assert sn.pick_backend("random", samples=100) == "tequila"
+    assert sn.pick_backend("random", samples=100) in INSTALLED_FERMIONIC_BACKENDS
+    assert sn.pick_backend("random", noise="device") == "tequila"
     with pytest.raises(tq.TequilaException):
         sn.pick_backend("qulacs")
 
@@ -591,3 +593,78 @@ def test_compile_keeps_spex_for_tequila(kwargs, fermionic, qubit):
         sn_minimize.compile(E, **kwargs)
     assert {c.kwargs["backend"] for c in fspy.call_args_list} == {fermionic}
     assert {c.kwargs["backend"] for c in qspy.call_args_list} == {qubit}
+
+
+def test_braket_operator_list():
+    # a list of operators gives a QTensor, evaluated like the single brakets
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    U = mol.make_ansatz("SPA", edges=[(0, 1)])
+    variables = {v: 0.3 for v in U.extract_variables()}
+    ops = [
+        "H",
+        FermionOperator("0^ 0"),
+        FermionOperator("2^ 2"),
+        FermionOperator("1^ 1"),
+    ]
+    E = Braket(ket=U, operator=ops, mol=mol)
+    assert isinstance(E, tq.QTensor) and E.shape == (4,)
+    assert Braket(ket=U, operator=ops, mol=mol, shape=(2, 2)).shape == (2, 2)
+    for backend in INSTALLED_FERMIONIC_BACKENDS:
+        expected = [
+            sn.simulate(Braket(ket=U, operator=op, mol=mol), variables, backend=backend)
+            for op in ops
+        ]
+        assert np.allclose(sn.simulate(E, variables, backend=backend), expected)
+
+
+@pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
+def test_samples(backend):
+    # sampled brakets and circuits approach the exact values
+    np.random.seed(1)
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    U = mol.make_ansatz("UpCCGSD")
+    V = mol.make_ansatz("SPA", edges=[(0, 1)])
+    variables = {
+        v: 0.3 + 0.1 * k
+        for k, v in enumerate(U.extract_variables() + V.extract_variables())
+    }
+    for E in [Braket(ket=U, mol=mol), Braket(ket=U, bra=V, mol=mol)]:
+        exact = sn.simulate(E, variables, backend=backend)
+        sampled = sn.simulate(E, variables, backend=backend, samples=100000)
+        assert isclose(sampled, exact, atol=1.0e-2)
+    if backend != "tequila":
+        wfn = sn.simulate(U, variables, backend=backend, n_orb=2)
+        counts = sn.simulate(U, variables, backend=backend, n_orb=2, samples=100000)
+        probabilities = np.abs(wfn.to_array()) ** 2
+        assert np.allclose(counts.to_array().real / 100000, probabilities, atol=1.0e-2)
+
+
+@pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
+@pytest.mark.parametrize("backend", INSTALLED_FERMIONIC_BACKENDS)
+def test_operators(backend):
+    # Pauli strings, qubit Hamiltonians and numbers give the same on every backend
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    U = mol.make_ansatz("UpCCGSD")
+    V = mol.make_ansatz("SPA", edges=[(0, 1)])
+    variables = {
+        v: 0.3 + 0.1 * k
+        for k, v in enumerate(U.extract_variables() + V.extract_variables())
+    }
+    H = tq.paulis.Z(1) + 0.5 * tq.paulis.X(0) * tq.paulis.X(2)
+    # X(0) changes the number of electrons: zero
+    for op in ["Z(0)Z(2)", H, "X(0)", 2, 2.5]:
+        for bra in [None, V]:
+            E = sn.simulate(
+                Braket(ket=U, bra=bra, operator=op, mol=mol), variables, backend=backend
+            )
+            expected = sn.simulate(
+                Braket(ket=U, bra=bra, operator=op, mol=mol), variables, backend="spex"
+            )
+            # the tequila backend returns brakets as complex numbers
+            assert isclose(np.real(E), expected, atol=1.0e-8)
