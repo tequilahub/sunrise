@@ -1356,13 +1356,12 @@ def test_spa_consistency(geometry, name, optimize, transformation):
         transformation=transformation,
     ).use_native_orbitals()
 
-    # test compares HCB and non-HCB SPA implementations
-    # conversion needs to be implemented for comparisson
-    # if not, HCB is not used in  circuit optimization anyways
+    # test compares HCB and non-HCB SPA implementations, the HCB one needs hcb_to_me
+    # (without it, HCB is not used in circuit optimization anyway)
     try:
         mol.transformation.hcb_to_me()
     except tq.TequilaException:
-        return
+        pytest.skip(f"{transformation} has no hcb_to_me")
 
     # doesn't need to make physical sense for the test
     edges = []
