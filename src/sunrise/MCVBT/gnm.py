@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import numpy as np
 import tequila as tq
-from tequila import SUPPORTED_BACKENDS, QCircuit, TequilaException, TequilaWarning
+from tequila import SUPPORTED_BACKENDS, TequilaWarning
 
 import sunrise as sn
 from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS, Braket
@@ -27,6 +27,8 @@ class mcvbt:
         silent=False,
     ):
 
+        if strategy not in (None, "shift"):
+            raise ValueError(f"Unknown strategy {strategy}")
         self.mol = mol
         self.graphs = graphs
         self.strategy = strategy
@@ -72,7 +74,6 @@ class mcvbt:
         else:
             raise ValueError(f"Unknown init_strategy {init_strategy}")
 
-        # self.strategy="shift" #todo check strategy
         if self.strategy is not None:
             self.__add_delocalization(variables_preopt=variables_preopt)
 
@@ -227,8 +228,6 @@ class mcvbt:
     def __add_delocalization(self, variables_preopt: dict[tq.Variable, float]):
         aux_circuits = []
         for i, circ in enumerate(self.circuits):
-            if isinstance(circ, QCircuit):
-                raise TequilaException("Strategies not implemented for QCircuit yet.")
             if self.strategy == "shift":
                 flat = [x for tup in self.graphs[i] for x in tup]
 
@@ -252,11 +251,6 @@ class mcvbt:
                         indices=[(2 * edge[0] + 1, 2 * edge[1] + 1)],
                         variables=f"shift{i}_{edge}",
                     )
-
-            elif self.strategy == "triangle":
-                raise NotImplementedError
-            else:
-                raise NotImplementedError
 
             aux_circuits.append(circ)
             filtered_variables = [
