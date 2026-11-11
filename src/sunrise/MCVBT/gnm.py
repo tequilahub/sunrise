@@ -268,7 +268,6 @@ class mcvbt:
 
 
 def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=None):
-    # circuits = [x for x in circuits]
     N = len(circuits)
     if M is None:
         M = len(circuits)
