@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from numpy import ceil, zeros
+from numpy.random import multinomial
 from tequila import SUPPORTED_BACKENDS, QCircuit, QubitWaveFunction, TequilaException
 from tequila import simulate as tq_simulate
 from tequila.circuit.gates import Phase
@@ -75,7 +76,17 @@ def simulate_fcircuit(
             )
         if backend in INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR:
             simulator = INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR[backend]
-            return simulator(U=U, variables=variables, **kwargs)
+            samples = kwargs.pop("samples", None)
+            if backend == "ffsim":
+                # ffsim samples its state vector itself
+                return simulator(U=U, variables=variables, samples=samples, **kwargs)
+            wfn = simulator(U=U, variables=variables, **kwargs)
+            if samples is None:
+                return wfn
+            # measured counts in the computational basis, as tequila returns them
+            probabilities = abs(wfn.to_array()) ** 2
+            counts = multinomial(samples, probabilities / probabilities.sum())
+            return QubitWaveFunction.from_array(counts)
         else:
             raise TequilaException(f"Backend {backend} not installed.")
     elif (
