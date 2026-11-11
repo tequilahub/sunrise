@@ -8,7 +8,7 @@ import tequila as tq
 import sunrise as sun
 from sunrise.symmetry_adaptation import (
     FockSpaceState,
-    IrrepProvider,
+    IrrepAssigner,
     PointGroup,
     PointGroupRepresentation,
     SpinCGSymmetrizationProcedure,
@@ -184,15 +184,15 @@ def test_rotated_molecule() -> None:
     for g in [geometry, rotated]:
         mol = sun.Molecule(geometry=g, basis_set="sto-3g", backend="pyscf")
         assert mol.point_group.schoenflies_label == "C2v"
-        provider = IrrepProvider(mol, "loc")
+        assigner = IrrepAssigner(mol, "projection")
         irreps.append(
-            [state.irrep for state in FockSpaceState.non_ionic_states(mol, provider)]
+            [state.irrep for state in FockSpaceState.non_ionic_states(mol, assigner)]
         )
     assert None not in irreps[0]
     assert irreps[0] == irreps[1]
 
 
-# Tests that the canonical provider falls back to the largest Abelian subgroup for non-Abelian groups
+# Tests that the pyscf assigner falls back to the largest Abelian subgroup for non-Abelian groups
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_canonical_abelian_fallback() -> None:
     mol = sun.Molecule(
@@ -203,7 +203,7 @@ def test_canonical_abelian_fallback() -> None:
     assert mol.point_group.schoenflies_label == "D4h"
     assert mol.abelian_point_group.schoenflies_label == "D2h"
 
-    states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
+    states = FockSpaceState.non_ionic_states(mol, IrrepAssigner(mol, "pyscf"))
     for state in states:
         assert state.irrep in mol.abelian_point_group.character_table.irreps
 
@@ -252,7 +252,7 @@ def test_localized_irreps_nature(nature, kwargs) -> None:
         nature=nature,
         **kwargs,
     )
-    for state in FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "loc")):
+    for state in FockSpaceState.non_ionic_states(mol, IrrepAssigner(mol, "projection")):
         assert state.irrep is not None
 
 
@@ -291,8 +291,8 @@ def test_orbital_order() -> None:
         ("1000", [1.0, 0.0], "Ag"),
         ("0010", [0.0, 1.0], "B1u"),
     ]:
-        for provider in ["canon", "loc"]:
-            state = FockSpaceState(mol, bitstring, IrrepProvider(mol, provider))
+        for assigner in ["pyscf", "projection"]:
+            state = FockSpaceState(mol, bitstring, IrrepAssigner(mol, assigner))
             assert state.mo_occ == mo_occ
             assert state.irrep == irrep
 
@@ -300,7 +300,7 @@ def test_orbital_order() -> None:
     wfn = 0.9 * tq.QubitWaveFunction.from_string(
         "|1000>"
     ) + 0.4359 * tq.QubitWaveFunction.from_string("|0010>")
-    assert FockSpaceState(mol, wfn, IrrepProvider(mol, "loc")).irrep is None
+    assert FockSpaceState(mol, wfn, IrrepAssigner(mol, "projection")).irrep is None
 
     mol4 = sun.Molecule(
         geometry="H 0. 0. 0. \n H 0. 0. 1. \n H 0. 0. 2. \n H 0. 0. 3.",
@@ -326,8 +326,8 @@ def test_spin_symmetrization(molecule_pointgroup) -> None:
     )
     mol.point_group = molecule_pointgroup[0]
 
-    provider_canonical = IrrepProvider(mol, "canon")
-    states_list = FockSpaceState.non_ionic_states(mol, provider_canonical)
+    assigner_pyscf = IrrepAssigner(mol, "pyscf")
+    states_list = FockSpaceState.non_ionic_states(mol, assigner_pyscf)
 
     symm_list = SpinSymmetrizationProcedure(mol).symmetrize(states_list)
     for state in symm_list:
@@ -342,8 +342,8 @@ def test_spin_symmetrization_correctness() -> None:
         geometry="H 0. 0. 0. \n H 0. 0. 0.74804", basis_set="sto-3g", backend="pyscf"
     )
     mol.point_group = "D2h"
-    provider_canonical = IrrepProvider(mol, "canon")
-    states_list = FockSpaceState.non_ionic_states(mol, provider_canonical)
+    assigner_pyscf = IrrepAssigner(mol, "pyscf")
+    states_list = FockSpaceState.non_ionic_states(mol, assigner_pyscf)
     symm_list = SpinSymmetrizationProcedure(mol).symmetrize(states_list)
 
     expected_wavefunctions = [
@@ -377,8 +377,8 @@ def test_SALC_symmetrization(molecule_pointgroup) -> None:
     )
     mol.point_group = molecule_pointgroup[0]
 
-    provider_localized = IrrepProvider(mol, "loc")
-    states_list = FockSpaceState.non_ionic_states(mol, provider_localized)
+    assigner_projection = IrrepAssigner(mol, "projection")
+    states_list = FockSpaceState.non_ionic_states(mol, assigner_projection)
 
     symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(
         states_list
@@ -400,8 +400,8 @@ def test_SALC_symmetrization_correctness() -> None:
     ).use_native_orbitals()
     mol.point_group = "D2h"
 
-    provider_localized = IrrepProvider(mol, "loc")
-    states_list = FockSpaceState.non_ionic_states(mol, provider_localized)
+    assigner_projection = IrrepAssigner(mol, "projection")
+    states_list = FockSpaceState.non_ionic_states(mol, assigner_projection)
 
     symm_list = SymmetryAdaptedLinearCombintationSymmetrization(mol).symmetrize(
         states_list
@@ -441,7 +441,7 @@ def test_SALC_symmetrization_mixed_orbitals() -> None:
     )
     assert mol.point_group.schoenflies_label == "D3h"
 
-    states_list = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
+    states_list = FockSpaceState.non_ionic_states(mol, IrrepAssigner(mol, "pyscf"))
     procedure = SymmetryAdaptedLinearCombintationSymmetrization(mol)
     symm_list = procedure.symmetrize(states_list)
     assert len(symm_list) == len(states_list)
@@ -466,9 +466,9 @@ def test_spin_CG_symmetrization(molecule_pointgroup) -> None:
         geometry=molecule_pointgroup[1], basis_set="sto-3g", backend="pyscf"
     )
     mol.point_group = molecule_pointgroup[0]
-    provider_canonical = IrrepProvider(mol, "canon")
+    assigner_pyscf = IrrepAssigner(mol, "pyscf")
 
-    det_states = FockSpaceState.non_ionic_states(mol, provider_canonical)
+    det_states = FockSpaceState.non_ionic_states(mol, assigner_pyscf)
     cg = SpinCGSymmetrizationProcedure(mol)
     csf_states = cg.symmetrize(det_states)
 
