@@ -87,7 +87,7 @@ def test_base(trafo):
     H = molecule.make_hamiltonian()
     eigvals = numpy.linalg.eigvalsh(H.to_matrix())
     assert numpy.isclose(eigvals[0], -2.87016214e00)
-    if "trafo" in standard_trafos:  # others change spectrum outside of the groundstate
+    if trafo in standard_trafos:  # others change spectrum outside of the groundstate
         assert numpy.isclose(eigvals[-1], 7.10921141e-01)
         assert len(eigvals) == 16
 
