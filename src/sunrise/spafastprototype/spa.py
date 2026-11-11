@@ -163,7 +163,6 @@ class SPASolver:
                     variables=variables,
                     n_orbitals=molecule.n_orbitals,
                 )
-            # needs hacked tq version where molecule.compute_rdms gives back the raw list of qops
             rdm1, rdm2 = fast_rdm(
                 U=U,
                 mol=molecule,
