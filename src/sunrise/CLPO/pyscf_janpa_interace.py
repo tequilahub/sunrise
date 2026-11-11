@@ -65,7 +65,7 @@ def extract_clpo_graph(
             bd_occ = occ
             nb_occ = float(round(occupancies[i + 1], 5))
             if bd_occ + nb_occ < 1.7:
-                aviso.append((lo_type, i, bd_occ + nb_occ))
+                aviso.append((lo_type, (i, i + 1), bd_occ + nb_occ))
             nodes.append((i, i + 1))
             i += 2
 
@@ -410,19 +410,23 @@ def generate_CLPO_molecule_pyscf(
 
 
 def __map_aviso(
-    aviso: list[tuple[int, int, float]],
+    aviso: list[tuple[int, int | tuple[int, int], float]],
     to_active: dict[int, int] | None,
     ncore: int = 0,
-) -> list[tuple[int, int, float]]:
+) -> list[tuple[int, int | tuple[int, int], float]]:
     """Moves the aviso orbital indices from the full CLPO list to the active space, None for those in the frozen core."""
+
+    def move(idx):
+        return to_active[idx] - ncore if idx in to_active else None
+
     return [
-        (lo_type, to_active[idx] - ncore if idx in to_active else None, occ)
+        (lo_type, tuple(move(i) for i in idx) if isinstance(idx, tuple) else move(idx), occ)
         for lo_type, idx, occ in aviso
     ]
 
 
 def __raise_aviso(
-    aviso: list[tuple[int, int, float]],
+    aviso: list[tuple[int, int | tuple[int, int], float]],
     to_active: dict[int, int] | None = None,
     ncore: int = 0,
 ):
@@ -441,4 +445,7 @@ def __raise_aviso(
         return f"frozen (CLPO {idx})"
 
     for lo_type, idx, occ in aviso:
-        warn(warnings[lo_type].format(i=name(idx), j=name(idx + 1), occ=occ))
+        if lo_type == LO_TYPE_BD:
+            warn(warnings[lo_type].format(i=name(idx[0]), j=name(idx[1]), occ=occ))
+        else:
+            warn(warnings[lo_type].format(i=name(idx), occ=occ))
