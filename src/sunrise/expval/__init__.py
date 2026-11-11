@@ -65,13 +65,13 @@ def pick_backend(
         what backend to choose or verify. if None: choose for the user, following the order of SUPPORTED_FERMIONIC_BACKENDS.
         'random' chooses one of the installed backends at random.
     samples: int, optional:
-        if int and not None, choose (verify) a backend which supports sampling.
+        number of measurements, every fermionic backend supports sampling.
     noise: str or NoiseModel, optional:
         if not None, choose (verify) a backend which supports the specified noise.
     device: optional:
         if not None, choose (verify) a backend which supports the specified device.
 
-    Only the tequila backend, which simulates through the tequila qubit simulators, supports samples, noise and devices.
+    Only the tequila backend, which simulates through the tequila qubit simulators, supports noise and devices.
 
     Returns
     -------
@@ -82,8 +82,9 @@ def pick_backend(
     if len(INSTALLED_FERMIONIC_BACKENDS) == 0:
         raise TequilaException("No fermionic backends installed on your system")
 
-    # the fermionic simulators only compute wavefunctions
-    needs_tequila = samples is not None or noise is not None or device is not None
+    # noise models and devices act on qubit gates
+    # TODO: noise and devices for the fermionic backends, they apply whole fermionic excitations
+    needs_tequila = noise is not None or device is not None
 
     if backend is None:
         if needs_tequila:
@@ -108,7 +109,7 @@ def pick_backend(
         raise TequilaException(f"Fermionic backend {backend} not installed")
     elif needs_tequila and backend != "tequila":
         raise TequilaException(
-            f"Fermionic backend {backend} does not support samples, noise or devices, use the tequila backend"
+            f"Fermionic backend {backend} does not support noise or devices, use the tequila backend"
         )
 
     return backend

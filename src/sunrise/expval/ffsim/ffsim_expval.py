@@ -21,7 +21,7 @@ from typing import Callable
 
 import ffsim
 from ffsim import FermionOperator
-from numpy import ceil, complex128, cos, exp, ndarray, real, sin, vdot, zeros
+from numpy import ceil, complex128, cos, exp, ndarray, real, sin, unique, vdot, zeros
 from openfermion import FermionOperator as OFFermionOperator
 from pyscf.gto import Mole
 from pyscf.scf import RHF
@@ -510,7 +510,11 @@ def _apply_circuit_to_state(
 
 
 def ffsim_circuit_simulator(
-    U: FCircuit, variables, n_orb: int | None = None, **backend_kwargs
+    U: FCircuit,
+    variables,
+    n_orb: int | None = None,
+    samples: int | None = None,
+    **backend_kwargs,
 ) -> QubitWaveFunction:
     if n_orb is None:
         n_orb = int(ceil((U.max_qubit() + 1) / 2))
@@ -535,6 +539,16 @@ def ffsim_circuit_simulator(
                 v[k] = val
 
     state = _apply_circuit_to_state(state, U, _build_generators(U, n_orb, nelec), v)
+    if samples is not None:
+        # measured counts, the bitstrings are the strings of addresses_to_strings
+        shots = ffsim.sample_state_vector(
+            state,
+            norb=n_orb,
+            nelec=nelec,
+            shots=samples,
+            bitstring_type=ffsim.BitstringType.INT,
+        )
+        return _civect_to_qwvf(dict(zip(*unique(shots, return_counts=True))), n_qubits)
     strings = ffsim.addresses_to_strings(
         range(len(state)), n_orb, nelec, bitstring_type=ffsim.BitstringType.INT
     )
