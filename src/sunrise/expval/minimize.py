@@ -134,7 +134,7 @@ def simulate(
     backend: str | None = None,
     noise: NoiseModel | None = None,
     device: str | None = None,
-    initial_state: int | QubitWaveFunction = 0,
+    initial_state: int | QubitWaveFunction | None = None,
     *args,
     **kwargs,
 ) -> RealNumber | QubitWaveFunction | None:
@@ -197,6 +197,7 @@ def simulate(
             variables=variables,
             backend=backend,
             samples=samples,
+            initial_state=initial_state,
             **kwargs,
         )
 
@@ -214,7 +215,7 @@ def simulate(
         *args,
         variables=variables,
         samples=samples,
-        initial_state=initial_state,
+        initial_state=0 if initial_state is None else initial_state,
         **kwargs,
     )
 

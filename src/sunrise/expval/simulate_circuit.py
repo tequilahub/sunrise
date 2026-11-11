@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from numpy import ceil, zeros
 from numpy.random import multinomial
 from tequila import SUPPORTED_BACKENDS, QCircuit, QubitWaveFunction, TequilaException
@@ -59,6 +61,16 @@ def simulate_fcircuit(
         variables = {}
     if isinstance(U, QCircuit):
         return tq_simulate(U, variables, backend=backend, **kwargs)
+    initial_state = kwargs.pop("initial_state", None)
+    if initial_state is not None:
+        U = deepcopy(U)
+        n_orb = kwargs.get("n_orb")
+        mol = kwargs.get("mol", kwargs.get("molecule"))
+        if n_orb is None and mol is not None:
+            n_orb = mol.n_orbitals
+        if n_orb is not None:
+            U.n_qubits = max(U.n_qubits, 2 * n_orb)
+        U.initial_state = deepcopy(initial_state)
     variables = format_variable_dictionary(variables)
     if variables is None and not (len(U.extract_variables()) == 0):
         raise TequilaException(

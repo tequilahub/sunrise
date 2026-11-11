@@ -540,6 +540,37 @@ def test_compile_uses_picked_backend():
     assert isinstance(compiled.args[0], INSTALLED_FERMIONIC_BACKENDS[sn.pick_backend()])
 
 
+@pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
+def test_simulate_fcircuit_initial_state_spex():
+    stored = tq.QubitWaveFunction.from_string("1.0|1010>")
+    state = tq.QubitWaveFunction.from_string("0.6|1010> - 0.8|0101>")
+    U = sn.FCircuit(initial_state=stored)
+
+    result = sn.simulate(U, backend="spex", n_orb=2, initial_state=state)
+    assert result.isclose(state)
+    result = sn.simulate(U, backend="spex", n_orb=2, initial_state=0b0101)
+    assert result.isclose(tq.QubitWaveFunction.from_string("1.0|0101>"))
+    result = sn.simulate(U, backend="spex", n_orb=2, initial_state=0)
+    assert result.isclose(tq.QubitWaveFunction.from_string("1.0|0000>"))
+    # without initial_state the stored one is used, and it was never overwritten
+    assert sn.simulate(U, backend="spex", n_orb=2).isclose(stored)
+
+
+def test_simulate_fcircuit_initial_state_qulacs():
+    pytest.importorskip("qulacs")
+    U = sn.FCircuit(initial_state="1.0|1111>")
+    result = sn.simulate(U, backend="tequila-qulacs", n_orb=2, initial_state=0b1101)
+    assert result.isclose(tq.QubitWaveFunction.from_string("1.0|1101>"))
+    assert sn.simulate(U, backend="tequila-qulacs", n_orb=2).isclose(U.initial_state)
+    V = tq.gates.X(target=0)
+    assert sn.simulate(V, backend="qulacs").isclose(
+        tq.QubitWaveFunction.from_string("1.0|1>")
+    )
+    assert sn.simulate(V, backend="qulacs", initial_state=1).isclose(
+        tq.QubitWaveFunction.from_string("1.0|0>")
+    )
+
+
 def test_simulate_fcircuit_uses_picked_backend():
     picked = sn.pick_backend()
     if picked not in sn_simulate_circuit.INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR:
