@@ -534,6 +534,8 @@ class MadnessPNOMixin:
             # given (e.g. by sun.load_molecule) instead of the doubly occupied orbitals
             reference_orbitals = kwargs.pop("reference_orbitals")
         kwargs.pop("reference_orbitals", None)
+        # TODO: when frayed_molecule is merged, label the projected AOs of the frayedends backend with
+        #  kwargs.setdefault("basis_convention", "frayedends") (next to orbital_type = "hf"), these PNOs have no AOs (None)
         build(
             *args,
             parameters=parameters,

@@ -209,22 +209,19 @@ def transform(
     orbital_type : str, optional
         Label shown when printing the molecule.
     **kwargs
-        ``core`` (list of int) and ``active`` (list of int) can be given to
-        override the automatic choice, see ``get_core`` and ``get_active``.
+        ``core`` and ``active`` (list of int, indices in the full orbital space, not the active
+        one) override the automatic choice. Default: the core is the frozen orbitals of
+        ``original``. With only ``core``, the active orbitals of ``modified`` are matched to the
+        other orbitals of ``original`` (``get_active``); with only ``active`` (indices in
+        ``modified``), the core is chosen from ``original`` (``get_core``).
 
     Returns
     -------
     tuple
-        The new molecule (same class as ``modified``; core orbitals come first
-        in the orbital matrix) and a dict ``{active orbital index in modified: index in the new molecule}``.
+        The new molecule (same class as ``modified``; the core orbitals keep their positions in
+        the orbital matrix and the active ones fill the others) and a dict
+        ``{active orbital index in modified: index in the new molecule}``.
     """
-    if "core" in kwargs:
-        core = kwargs["core"]
-        kwargs.pop("core")
-    else:
-        core = [
-            i.idx_total for i in original.integral_manager.orbitals if i.idx is None
-        ]
     assert len(original.integral_manager.orbitals) == len(
         modified.integral_manager.orbitals
     )
@@ -232,10 +229,12 @@ def transform(
     d_orig = modified.integral_manager.orbital_coefficients.copy()
     s = original.integral_manager.overlap_integrals.copy()
     n_basis = c_orig.shape[0]
-    if "active" in kwargs:
-        active = kwargs["active"]
-        kwargs.pop("active")
-    else:
+    active = kwargs.pop("active", None)
+    core = kwargs.pop("core", None)
+    if active is None and core is None:
+        core = [
+            i.idx_total for i in original.integral_manager.orbitals if i.idx is None
+        ]
         active = get_active(
             c_orig,
             d_orig,
@@ -246,6 +245,17 @@ def transform(
                 if i.idx is not None
             ],
         )
+    elif active is None and core is not None:
+        # core given: match in modified the complement of core in original
+        active = get_active(
+            c_orig, d_orig, s, [i for i in range(c_orig.shape[1]) if i not in core]
+        )
+    elif active is not None and core is None:
+        # active given (indices of modified): pick core from original
+        core = get_core(c_orig, d_orig, s, active)
+    assert len(core) + len(active) == len(original.integral_manager.orbitals)
+    core = list(core)
+    active = list(active)
     to_active = [i for i in range(n_basis) if i not in core]
     to_active = {active[i]: to_active[i] for i in range(len(active))}
     reference_orbitals = core.copy()
@@ -257,21 +267,14 @@ def transform(
     n_core = len(core)
     n_active = len(active)
     c_combined = numpy.zeros((n_basis, n_core + n_active))
-    for i, idx in enumerate(core):
-        c_combined[:, i] = c_orig[:, idx]
+    for idx in core:
+        c_combined[:, idx] = c_orig[:, idx]
     for act_idx in active:
         c_combined[:, to_active[act_idx]] = d_orig[:, act_idx]
     jcoef = orthogonalize_active_space(c_combined, s, core, [*to_active.values()])
-    ref = [
-        i.idx_total
-        for i in original.integral_manager.reference_orbitals
-        if i not in original.integral_manager.active_reference_orbitals
-    ]
-    ref.extend(
-        [i for i in range(n_basis) if i not in core][
-            : len(original.integral_manager.active_reference_orbitals)
-        ]
-    )
+    occ = [i.idx_total for i in original.integral_manager.reference_orbitals]
+    ref = [i for i in core if i in occ]
+    ref.extend([i for i in range(n_basis) if i not in core][: len(occ) - len(ref)])
     integral_manager = modified.initialize_integral_manager(
         one_body_integrals=original.integral_manager.one_body_integrals,
         two_body_integrals=original.integral_manager.two_body_integrals,

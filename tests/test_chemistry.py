@@ -1858,3 +1858,38 @@ def test_save_load_xyz_geometry(tmp_path, monkeypatch):
 
     assert loaded.parameters.name == "h4"
     assert loaded.make_hamiltonian() == H
+
+
+@pytest.mark.skipif(
+    condition=not HAS_PSI4 or not HAS_PYSCF, reason="you don't have psi4 and pyscf"
+)
+def test_basis_convention(tmp_path):
+    # psi4 and pyscf order the AOs differently, the backend labels its orbital coefficients
+    geometry = "H 0.0 0.0 0.0\nLi 0.0 0.0 1.6"
+    for backend in ("psi4", "pyscf"):
+        mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend=backend)
+        assert mol.integral_manager._basis_convention == backend
+        mol.save(tmp_path / "mol.h5")
+        loaded = sun.load_molecule(tmp_path / "mol.h5")
+        assert loaded.integral_manager._basis_convention == backend
+    # own integrals are labelled by the user
+    integrals = {
+        k: getattr(mol.integral_manager, k)
+        for k in ("one_body_integrals", "two_body_integrals", "overlap_integrals")
+    }
+    mol = sun.Molecule(
+        geometry=geometry,
+        basis_set="sto-3g",
+        backend="base",
+        basis_convention="custom",
+        **integrals,
+    )
+    assert mol.integral_manager._basis_convention == "custom"
+    with pytest.raises(tq.TequilaException):
+        sun.Molecule(
+            geometry=geometry,
+            basis_set="sto-3g",
+            backend="base",
+            basis_convention="pyscff",
+            **integrals,
+        )

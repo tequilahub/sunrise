@@ -8,7 +8,10 @@ tequila Objectives that are evaluated by one of the fermionic backends
 from __future__ import annotations
 
 from openfermion.ops.operators.fermion_operator import FermionOperator
-from tequila import Objective, TequilaException
+from tequila import BraKet as tq_BraKet
+from tequila import ExpectationValue as tq_ExpectationValue
+from tequila import Fidelity as tq_Fidelity
+from tequila import Objective, QCircuit, TequilaException
 from tequila.objective.objective import identity
 
 from sunrise.fermionic_operations.circuit import FCircuit
@@ -94,6 +97,11 @@ def pick_backend(
         If no backend is installed, the requested one is unknown, not installed,
         or cannot handle samples, noise or devices.
 
+    Notes
+    -----
+    Only the tequila backend, which simulates with the tequila qubit simulators, supports
+    samples, noise and devices.
+
     Examples
     --------
     >>> sun.pick_backend()  # name of the default fermionic backend
@@ -114,13 +122,6 @@ def pick_backend(
 
     if hasattr(backend, "lower"):
         backend = backend.lower()
-
-    if backend == "random":
-        if needs_tequila:
-            return "tequila"
-        import random
-
-        return random.choice(list(INSTALLED_FERMIONIC_BACKENDS.keys()))
 
     if backend not in SUPPORTED_FERMIONIC_BACKENDS:
         raise TequilaException(f"Fermionic backend {backend} not supported")
@@ -148,9 +149,9 @@ def Fidelity(
 
     Parameters
     ----------
-    ket : FCircuit
+    ket : FCircuit or tq.QCircuit
         Circuit preparing the first state.
-    bra : FCircuit
+    bra : FCircuit or tq.QCircuit
         Circuit preparing the second state.
     mol : QuantumChemistryBase, optional
         Molecule providing the number of orbitals and electrons if they cannot be
@@ -173,6 +174,9 @@ def Fidelity(
     >>> F = sun.Fidelity(ket=U1, bra=U2)  # |<U2|U1>|^2
     >>> sun.simulate(F, variables=variables)
     """
+    if isinstance(ket, QCircuit):
+        # qubit circuits: the tequila fidelity (one expectation value instead of the complex braket)
+        return tq_Fidelity(*args, bra=bra, ket=ket, **kwargs)
     return Objective(
         args=[
             Braket(*args, ket=ket, bra=bra, molecule=mol, operator="I", **kwargs).args[
@@ -194,9 +198,9 @@ def Overlap(
 
     Parameters
     ----------
-    ket : FCircuit
+    ket : FCircuit or tq.QCircuit
         Circuit preparing the ket state.
-    bra : FCircuit
+    bra : FCircuit or tq.QCircuit
         Circuit preparing the bra state.
     mol : QuantumChemistryBase, optional
         Molecule providing the number of orbitals and electrons if they cannot be
@@ -239,11 +243,14 @@ def Braket(
     - ``ket`` and ``operator``: expectation value of the operator;
     - ``ket``, ``bra`` and ``operator``: transition element of the operator.
 
+    Tequila qubit circuits (``tq.QCircuit``) give the tequila objectives, with "H" the qubit
+    Hamiltonian of ``mol``.
+
     Parameters
     ----------
-    ket : FCircuit
+    ket : FCircuit or tq.QCircuit
         Circuit preparing the ket state.
-    bra : FCircuit, optional
+    bra : FCircuit or tq.QCircuit, optional
         Circuit preparing the bra state. If None, the ket is used as bra.
     operator : str or FermionOperator or list of FermionOperator, optional
         Operator to evaluate. A string is one of "H" (molecular Hamiltonian),
@@ -300,6 +307,17 @@ def Braket(
         # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
     if bra is None and operator is None:
         return Objective() + 1.0
+    if isinstance(ket, QCircuit):
+        # qubit circuits: the tequila objectives, with the qubit Hamiltonian of the molecule for "H"
+        if isinstance(operator, str) and operator == "H":
+            if mol is None:
+                raise TequilaException("operator 'H' needs a molecule")
+            operator = mol.make_hamiltonian()
+        elif isinstance(operator, str) and operator == "I":
+            operator = None
+        if bra is None:
+            return tq_ExpectationValue(*args, U=ket, H=operator, **kwargs)
+        return tq_BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)
     return Objective(
         args=[
             FermBraketImpl(
@@ -321,7 +339,7 @@ def ExpectationValue(
 
     Parameters
     ----------
-    U : FCircuit
+    U : FCircuit or tq.QCircuit
         Circuit preparing the state.
     H : str or FermionOperator or list of FermionOperator, optional
         Operator to evaluate, see ``Braket``. Default is "H", the molecular
@@ -359,14 +377,15 @@ def RealBraKet(
 ):
     """Create an Objective for a braket, see ``Braket``.
 
-    Kept for consistency with tequila. Molecular states are real, so this is the
-    same as ``Braket`` and no real part is explicitly taken.
+    Kept for consistency with tequila. Fermionic states are real, so for an ``FCircuit``
+    this is the same as ``Braket``. For tequila qubit circuits with a ``bra``, the real part
+    of the tequila braket is taken.
 
     Parameters
     ----------
-    ket : FCircuit
+    ket : FCircuit or tq.QCircuit
         Circuit preparing the ket state.
-    bra : FCircuit, optional
+    bra : FCircuit or tq.QCircuit, optional
         Circuit preparing the bra state.
     operator : str or FermionOperator or list of FermionOperator, optional
         Operator to evaluate, see ``Braket``.
@@ -380,13 +399,47 @@ def RealBraKet(
     tq.Objective or list of tq.Objective
         Objective to be compiled or simulated.
     """
-    return Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+    braket = Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+    if isinstance(ket, QCircuit) and bra is not None:
+        # the complex tequila braket, its real part taken like in tq.RealBraKet (differentiable)
+        return braket.args[-1].compile()[0]
+    return braket
 
 
-def ImagBraKet(*args, **kwargs):
-    """Return an empty Objective (zero).
+def ImagBraKet(
+    ket: FCircuit,
+    bra: FCircuit | None = None,
+    operator: str | list[FermionOperator] | FermionOperator | None = None,
+    mol: QuantumChemistryBase | None = None,
+    *args,
+    **kwargs,
+):
+    """Create an Objective for the imaginary part of a braket.
 
-    Defined only for consistency with tequila: molecular states are real, so the
-    imaginary part of a braket is always zero.
+    Defined for consistency with tequila. Fermionic states are real, so for an ``FCircuit``
+    the result is zero. For tequila qubit circuits with a ``bra``, the imaginary part of the
+    tequila braket is taken.
+
+    Parameters
+    ----------
+    ket : FCircuit or tq.QCircuit
+        Circuit preparing the ket state.
+    bra : FCircuit or tq.QCircuit, optional
+        Circuit preparing the bra state.
+    operator : str or FermionOperator or list of FermionOperator, optional
+        Operator to evaluate, see ``Braket``.
+    mol : QuantumChemistryBase, optional
+        Sunrise molecule providing the integrals and number of electrons.
+    *args, **kwargs
+        Passed on to ``Braket``.
+
+    Returns
+    -------
+    tq.Objective
+        Objective to be compiled or simulated.
     """
+    if isinstance(ket, QCircuit) and bra is not None:
+        # the complex tequila braket, its imaginary part taken like in tq.ImagBraKet (differentiable)
+        braket = Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+        return braket.args[-1].compile()[1]
     return Objective()

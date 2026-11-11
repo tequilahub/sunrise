@@ -1565,11 +1565,15 @@ class IntegralManager:
         Overlap matrix of the basis. Default is the identity.
     orbitals : list of OrbitalData, optional
         Orbital properties. Default is one entry per orbital with only the indices set.
+    basis_convention : str, optional
+        AO ordering of the orbital coefficients: "pyscf", "psi4", "frayedends", "custom" or
+        None (unknown).
 
     Raises
     ------
     TequilaException
-        If ``two_body_integrals`` cannot be reordered to "chem" ordering.
+        If ``two_body_integrals`` cannot be reordered to "chem" ordering, or
+        ``basis_convention`` is unknown.
     """
 
     _overlap_integrals: numpy.ndarray | None = None
@@ -1578,6 +1582,9 @@ class IntegralManager:
     _constant_term: float | None = None
     _basis_name: str = "unknown"
     _orbital_type: str = "unknown"  # e.g. "HF", "PNO", "native"
+    # the program whose AO ordering the rows of the orbital coefficients follow, set by the backend
+    # ("pyscf", "psi4", "frayedends"), "custom" for an own AO basis, None if unknown or without AOs
+    _basis_convention: str | None = None
     _orbital_coefficients: numpy.ndarray | None = None
     _active_space: ActiveSpaceData | None = None
     _orbitals: list[OrbitalData] | None = None
@@ -1593,6 +1600,7 @@ class IntegralManager:
         active_space=None,
         overlap_integrals=None,
         orbitals=None,
+        basis_convention=None,
         *args,
         **kwargs,
     ):
@@ -1601,6 +1609,11 @@ class IntegralManager:
         self._constant_term = constant_term
         self._basis_name = basis_name
         self._orbital_type = orbital_type
+        if basis_convention not in ("pyscf", "psi4", "frayedends", "custom", None):
+            raise TequilaException(
+                f"unknown basis_convention {basis_convention}, use pyscf, psi4, frayedends, custom or None"
+            )
+        self._basis_convention = basis_convention
 
         assert len(self._one_body_integrals.shape) == 2
         assert len(self._two_body_integrals.shape) == 4
@@ -1910,6 +1923,11 @@ class IntegralManager:
         """
         print("{:15} : {}".format("basis_name", self._basis_name), *args, **kwargs)
         print("{:15} : {}".format("orbital_type", self._orbital_type), *args, **kwargs)
+        print(
+            "{:15} : {}".format("basis convention", self._basis_convention),
+            *args,
+            **kwargs,
+        )
         print(
             "{:15} : {}".format("orthogonal basis", self.basis_is_orthogonal()),
             *args,

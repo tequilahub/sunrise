@@ -102,7 +102,8 @@ def generate_CLPO_molecule_edges(
     -----
     Each aviso entry is ``(mo_type, orb_idx, occupation)``. It lists the orbitals that do not have
     the expected double occupancy: ``mo_type`` 1 is a lone pair with occupation between 0.5
-    and 1.5, 2 a bonding/antibonding pair ``(idx, idx + 1)`` whose summed occupation is below 1.7.
+    and 1.5, 2 a bonding/antibonding pair whose summed occupation is below 1.7, with ``orb_idx``
+    the tuple ``(idx, idx + 1)``.
     With ``use_active``, ``orb_idx`` is the active-space index (None if the orbital ended up in
     the frozen core), otherwise the index in the full CLPO list.
 
@@ -281,7 +282,8 @@ def generate_CLPO_molecule(
     -----
     Each aviso entry is ``(mo_type, orb_idx, occupation)``. It lists the orbitals that do not have
     the expected double occupancy: ``mo_type`` 1 is a lone pair with occupation between 0.5
-    and 1.5, 2 a bonding/antibonding pair ``(idx, idx + 1)`` whose summed occupation is below 1.7.
+    and 1.5, 2 a bonding/antibonding pair whose summed occupation is below 1.7, with ``orb_idx``
+    the tuple ``(idx, idx + 1)``.
     With ``use_active``, ``orb_idx`` is the active-space index (None if the orbital ended up in
     the frozen core), otherwise the index in the full CLPO list.
 
