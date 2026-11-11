@@ -1451,9 +1451,43 @@ class QuantumChemistryBase:
             self.integral_manager.orbital_coefficients
         )[:, [orbital.idx_total for orbital in self.orbitals]]
 
-        return pyscf.symm.label_orb_symm(
+        labels = pyscf.symm.label_orb_symm(
             pyscf_mol, pyscf_mol.irrep_name, pyscf_mol.symm_orb, orbital_coefficients
-        ).tolist()
+        )
+
+        # PySCF labels in its own frame (e.g. it turns water from the xz into the yz plane, swapping B1 and B2): write
+        # the characters for the operations of the geometry's frame, the one mo_representation uses
+        table = self.abelian_point_group.character_table
+        frame_operations = PointGroupRepresentation.get_geometric_representation(
+            self.abelian_point_group, self.parameters.get_geometry()
+        ).operations
+        pyscf_operations = pyscf.symm.geom.symm_ops(
+            self.abelian_point_group.schoenflies_label
+        )
+        axes = pyscf_mol._symm_axes
+        order = []
+        for op in table.operation_symbols:
+            # PySCF gives the inversion as the number -1, it is the same in every frame
+            if op == "i":
+                R = -numpy.eye(3)
+            else:
+                R = axes.T @ pyscf_operations[op] @ axes
+            matches = [
+                i
+                for i, frame_op in enumerate(table.operation_symbols)
+                if numpy.allclose(frame_operations[frame_op], R)
+            ]
+            # PySCF may take other axes for the Abelian subgroup (e.g. the diagonals of a square instead of x and y),
+            # then there is no common frame and its labels are kept
+            if not matches:
+                return labels.tolist()
+            order.append(matches[0])
+        irreps = []
+        for label in labels:
+            characters = numpy.zeros(len(order), dtype=numpy.complex128)
+            characters[order] = table.dict[label]
+            irreps.append(table.vec_to_str(characters))
+        return irreps
 
     def do_make_molecule(self, *args, **kwargs):
         """

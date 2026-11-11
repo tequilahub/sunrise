@@ -214,6 +214,27 @@ def test_d_orbitals() -> None:
     assert irreps.count("A2") == mol.compute_orbital_irreps().count("A2") == 1
 
 
+# Tests that the orbital irreps of PySCF are written in the frame of the geometry: PySCF turns water from the xz
+# into the yz plane, which would swap B1 and B2 against mo_representation
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+def test_orbital_irreps_frame() -> None:
+    mol = sun.Molecule(
+        geometry="O 0. 0. 0.1271 \n H 0.758 0. -0.5085 \n H -0.758 0. -0.5085",
+        basis_set="sto-3g",
+        backend="pyscf",
+    )
+    operations = mol.mo_representation().operations
+    table = mol.point_group.character_table
+    irreps = [
+        table.vec_to_str(
+            np.round([operations[op][i, i] for op in table.operation_symbols])
+        )
+        for i in range(mol.n_orbitals)
+    ]
+    assert "B1" in irreps
+    assert mol.compute_orbital_irreps() == irreps
+
+
 # Tests that the pyscf assigner falls back to the largest Abelian subgroup for non-Abelian groups
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
 def test_canonical_abelian_fallback() -> None:
