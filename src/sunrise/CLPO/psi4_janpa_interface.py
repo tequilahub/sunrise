@@ -36,8 +36,8 @@ def extract_clpo_graph(
     i = 0
     aviso = []
     while i < n_lo:
-        lo_type = lo_types[i]
-        occ = round(occupancies[i], 5)
+        lo_type = int(lo_types[i])
+        occ = float(round(occupancies[i], 5))
 
         if lo_type == LO_TYPE_LP:
             if 0.5 < occ < 1.5:
@@ -55,9 +55,9 @@ def extract_clpo_graph(
             if i + 1 >= n_lo or lo_types[i + 1] != LO_TYPE_NB:
                 raise ValueError(f"BD orbital {i} without following NB orbital")
             bd_occ = occ
-            nb_occ = round(occupancies[i + 1], 5)
+            nb_occ = float(round(occupancies[i + 1], 5))
             if bd_occ + nb_occ < 1.7:
-                aviso.append((lo_type, i, bd_occ + nb_occ))
+                aviso.append((lo_type, (i, i + 1), bd_occ + nb_occ))
             nodes.append((i, i + 1))
             i += 2
 
@@ -219,19 +219,23 @@ def generate_CLPO_molecule_edges_psi4(
         nmol_full.integral_manager._orbital_type = "CLPO"
 
         mol_out, to_active = transform(
-            original=mol, modified=nmol_full, orbital_type="CLPO"
+            original=mol,
+            modified=nmol_full,
+            orbital_type="CLPO",
+            **kwargs,
         )
 
-        ncore = len(mol_out.integral_manager.orbital_coefficients) - mol_out.n_orbitals
+        # full CLPO index -> active space index (core orbitals need not be the first ones)
+        tot2act = {o.idx_total: o.idx for o in mol_out.integral_manager.orbitals}
+        to_active = {k: tot2act[v] for k, v in to_active.items()}
         graph = [
-            tuple([to_active[i] - ncore for i in edge if i in to_active])
-            for edge in graph_full
+            tuple([to_active[i] for i in edge if i in to_active]) for edge in graph_full
         ]
         graph = [g for g in graph if len(g)]
 
         # aviso holds full CLPO indices: warn and only then move them to the active space, mapping them once
-        __raise_aviso(aviso, to_active, ncore)
-        aviso = __map_aviso(aviso, to_active, ncore)
+        __raise_aviso(aviso, to_active)
+        aviso = __map_aviso(aviso, to_active)
     else:
         mo_matrix = orthogonalize(
             clpo_to_ao_full, mol.integral_manager.overlap_integrals
@@ -302,8 +306,14 @@ def generate_HAO_molecule_psi4(
         nmol_full.integral_manager.orbital_coefficients = aho_to_ao_full
         nmol_full.integral_manager._orbital_type = "HAO"
         mol_out, to_active = transform(
-            original=mol, modified=nmol_full, orbital_type="HAO"
+            original=mol,
+            modified=nmol_full,
+            orbital_type="HAO",
+            **kwargs,
         )
+        # full HAO index -> active space index (core orbitals need not be the first ones)
+        tot2act = {o.idx_total: o.idx for o in mol_out.integral_manager.orbitals}
+        to_active = {k: tot2act[v] for k, v in to_active.items()}
         if ret2act:
             return mol_out, to_active
         return mol_out
@@ -364,19 +374,27 @@ def generate_CLPO_molecule_psi4(
 
 
 def __map_aviso(
-    aviso: list[tuple[int, int, float]],
+    aviso: list[tuple[int, int | tuple[int, int], float]],
     to_active: dict[int, int] | None,
     ncore: int = 0,
-) -> list[tuple[int, int, float]]:
+) -> list[tuple[int, int | tuple[int, int], float]]:
     """Moves the aviso orbital indices from the full CLPO list to the active space, None for those in the frozen core."""
+
+    def move(idx):
+        return to_active[idx] - ncore if idx in to_active else None
+
     return [
-        (lo_type, to_active[idx] - ncore if idx in to_active else None, occ)
+        (
+            lo_type,
+            tuple(move(i) for i in idx) if isinstance(idx, tuple) else move(idx),
+            occ,
+        )
         for lo_type, idx, occ in aviso
     ]
 
 
 def __raise_aviso(
-    aviso: list[tuple[int, int, float]],
+    aviso: list[tuple[int, int | tuple[int, int], float]],
     to_active: dict[int, int] | None = None,
     ncore: int = 0,
 ):
@@ -395,4 +413,7 @@ def __raise_aviso(
         return f"frozen (CLPO {idx})"
 
     for lo_type, idx, occ in aviso:
-        warn(warnings[lo_type].format(i=name(idx), j=name(idx + 1), occ=occ))
+        if lo_type == LO_TYPE_BD:
+            warn(warnings[lo_type].format(i=name(idx[0]), j=name(idx[1]), occ=occ))
+        else:
+            warn(warnings[lo_type].format(i=name(idx), occ=occ))
