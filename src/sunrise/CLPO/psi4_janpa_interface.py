@@ -199,7 +199,9 @@ def generate_CLPO_molecule_edges_psi4(
     use_mp2 : bool
         If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
     **kwargs
-        ``wfn`` (custom Psi4 wavefunction) is accepted but currently ignored.
+        ``wfn`` (custom Psi4 wavefunction) is currently not supported: it fails for Psi4 molecules and is ignored for others.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------
@@ -220,6 +222,8 @@ def generate_CLPO_molecule_edges_psi4(
     the frozen core), otherwise the index in the full CLPO list.
     """
 
+    # TODO: support a custom wfn (check kwargs.pop("wfn") first) and fix use_mp2 on psi4 molecules
+    # (psi4mol is undefined there, use molecule=wfn.molecule())
     if not hasattr(mol, "ref_wfn"):  # its not a psi4 base
         psi4mol = psi4.geometry(mol.parameters.get_geometry_string(ghost="psi4"))
         psi4mol.set_multiplicity(mol.parameters.multiplicity)
@@ -310,7 +314,9 @@ def generate_HAO_molecule_psi4(
     use_mp2 : bool
         If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
     **kwargs
-        ``wfn`` (custom Psi4 wavefunction) is accepted but currently ignored.
+        ``wfn`` (custom Psi4 wavefunction) is currently not supported and is ignored.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------
@@ -320,6 +326,8 @@ def generate_HAO_molecule_psi4(
         Only if ``ret2act`` and ``use_active`` are True.
     """
 
+    # TODO: support a custom wfn (check kwargs.pop("wfn") first) and fix use_mp2 on psi4 molecules
+    # (psi4mol is undefined there, use molecule=wfn.molecule())
     if not hasattr(mol, "ref_wfn"):  # its not a psi4 base
         psi4mol = psi4.geometry(mol.parameters.get_geometry_string(ghost="psi4"))
         psi4mol.set_multiplicity(mol.parameters.multiplicity)
@@ -397,7 +405,9 @@ def generate_CLPO_molecule_psi4(
     use_mp2 : bool
         If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
     **kwargs
-        ``wfn`` (custom Psi4 wavefunction) is accepted but currently ignored.
+        ``wfn`` (custom Psi4 wavefunction) is currently not supported: it fails for Psi4 molecules and is ignored for others.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------

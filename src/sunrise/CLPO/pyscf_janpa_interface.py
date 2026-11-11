@@ -187,6 +187,8 @@ def generate_CLPO_molecule_edges_pyscf(
         ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
         and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
         the responsibility of the user, JANPA only considers HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------
@@ -326,6 +328,8 @@ def generate_HAO_molecule_pyscf(
         ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
         and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
         the responsibility of the user, JANPA only considers HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------
@@ -446,6 +450,8 @@ def generate_CLPO_molecule_pyscf(
         ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
         and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
         the responsibility of the user, JANPA only considers HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------

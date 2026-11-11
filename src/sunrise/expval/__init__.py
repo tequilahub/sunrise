@@ -75,8 +75,7 @@ def pick_backend(
     ----------
     backend : str, optional
         Backend to verify. If None, the first installed backend in
-        ``SUPPORTED_FERMIONIC_BACKENDS`` is chosen. "random" picks an installed
-        backend at random.
+        ``SUPPORTED_FERMIONIC_BACKENDS`` is chosen.
     samples : int, optional
         If given, only a backend supporting sampling is accepted.
     noise : str or NoiseModel, optional

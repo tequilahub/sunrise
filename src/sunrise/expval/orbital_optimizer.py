@@ -1,7 +1,7 @@
 """Small application that wraps a tequila VQE object and passes it to the PySCF CASSCF solver.
 This way we can conveniently optimize orbitals.
 This basically does what is described here in the context of orbital-optimized unitary coupled-cluster (oo-ucc): https://journals.aps.org/prresearch/pdf/10.1103/PhysRevResearch.2.033421
-Of course we don't have to use UCC circuits but can pass whatever we want as circuit, or pass a "vqe_solver" object.
+Any circuit can be used instead of UCC, and the VQE itself can be replaced by a custom ``vqe_solver``.
 
 The Interface with the PySCF module follows the original PySCF article  https://arxiv.org/abs/2002.12531 (see Fig.3)
 
@@ -65,9 +65,9 @@ class OptimizeOrbitalsResult:
         Number of CASSCF iterations.
     """
 
-    old_molecule: QuantumChemistryBase = None  # the old tequila molecule
+    old_molecule: QuantumChemistryBase = None  # the old sunrise molecule
     molecule: QuantumChemistryBase = (
-        None  # the new tequila molecule with transformed orbitals
+        None  # the new sunrise molecule with transformed orbitals
     )
     mcscf_object: object | None = None  # the pyscf mcscf object
     mcscf_local_data: dict | None = None
@@ -160,8 +160,9 @@ def optimize_orbitals(
 
     See Also
     --------
-    sunrise.graph_selection.run_spa_optimization : Choose the SPA edges from the geometry, then optimize.
     sunrise.minimize : Optimize only the circuit variables.
+    sunrise.spafastprototype.run_spa : SPA with orbital optimization, using ``SPASolver`` as ``vqe_solver``.
+    sunrise.graph_selection.run_spa_optimization : Choose the SPA edges from the geometry, then optimize.
 
     Examples
     --------

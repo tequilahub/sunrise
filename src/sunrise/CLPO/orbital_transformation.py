@@ -80,6 +80,8 @@ def generate_CLPO_molecule_edges(
         Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``.
         Psi4: ``wfn``. The result is then the responsibility of the user, JANPA only considers
         HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------
@@ -174,6 +176,8 @@ def generate_HAO_molecule(
         Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``.
         Psi4: ``wfn``. The result is then the responsibility of the user, JANPA only considers
         HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------
@@ -258,6 +262,8 @@ def generate_CLPO_molecule(
         Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``.
         Psi4: ``wfn``. The result is then the responsibility of the user, JANPA only considers
         HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
     Returns
     -------
