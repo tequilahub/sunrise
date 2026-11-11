@@ -384,7 +384,11 @@ def __map_aviso(
         return to_active[idx] - ncore if idx in to_active else None
 
     return [
-        (lo_type, tuple(move(i) for i in idx) if isinstance(idx, tuple) else move(idx), occ)
+        (
+            lo_type,
+            tuple(move(i) for i in idx) if isinstance(idx, tuple) else move(idx),
+            occ,
+        )
         for lo_type, idx, occ in aviso
     ]
 
