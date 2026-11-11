@@ -1,3 +1,18 @@
+"""Small application that wraps a tequila VQE object and passes it to the PySCF CASSCF solver.
+This way we can conveniently optimize orbitals.
+This basically does what is described here in the context of orbital-optimized unitary coupled-cluster (oo-ucc): https://journals.aps.org/prresearch/pdf/10.1103/PhysRevResearch.2.033421
+Any circuit can be used instead of UCC, and the VQE itself can be replaced by a custom ``vqe_solver``.
+
+The Interface with the PySCF module follows the original PySCF article  https://arxiv.org/abs/2002.12531 (see Fig.3)
+
+Currently this is a beta version (not extensively used in real life), so be careful when using it and please report issues on github :-)
+
+References
+----------
+T. Mizukami et al., Phys. Rev. Research 2, 033421 (2020), doi:10.1103/PhysRevResearch.2.033421.
+Q. Sun et al., J. Chem. Phys. 153, 024109 (2020), arXiv:2002.12531.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -20,23 +35,39 @@ from ..molecules.qubit_base.qc_base import (
     QuantumChemistryBase,
 )
 
-"""
-Small application that wraps a tequila VQE object and passes it to the PySCF CASSCF solver.
-This way we can conveniently optimize orbitals.
-This basically does what is described here in the context of orbital-optimized unitary coupled-cluster (oo-ucc): https://journals.aps.org/prresearch/pdf/10.1103/PhysRevResearch.2.033421
-Of course we don't have to use UCC circuits but can pass whatever we want as circuit, or pass a "vqe_solver" object.
-
-The Interface with the PySCF module follows the original PySCF article  https://arxiv.org/abs/2002.12531 (see Fig.3)
-
-Currently this is a beta version (not extensively used in real life), so be careful when using it and please report issues on github :-)
-"""
-
 
 @dataclass
 class OptimizeOrbitalsResult:
-    old_molecule: QuantumChemistryBase = None  # the old tequila molecule
+    """Result of ``optimize_orbitals``.
+
+    Instances are also used as the CASSCF callback, which stores the iteration
+    count and the last PySCF local data.
+
+    Attributes
+    ----------
+    old_molecule : QuantumChemistryBase
+        Molecule before the optimization.
+    molecule : QuantumChemistryBase
+        Molecule with the optimized orbitals.
+    mcscf_object : object, optional
+        PySCF MCSCF object, only set if ``return_mcscf=True``.
+    mcscf_local_data : dict, optional
+        Local variables of the last CASSCF iteration.
+    mo_coeff : numpy.ndarray
+        Optimized molecular orbital coefficients.
+    energy : float
+        Optimized total energy.
+    U : FCircuit or QCircuit
+        Circuit used in the last VQE run.
+    variables : dict
+        Optimized circuit variables of the last VQE run.
+    iterations : int
+        Number of CASSCF iterations.
+    """
+
+    old_molecule: QuantumChemistryBase = None  # the old sunrise molecule
     molecule: QuantumChemistryBase = (
-        None  # the new tequila molecule with transformed orbitals
+        None  # the new sunrise molecule with transformed orbitals
     )
     mcscf_object: object | None = None  # the pyscf mcscf object
     mcscf_local_data: dict | None = None
@@ -50,6 +81,7 @@ class OptimizeOrbitalsResult:
 
     def __call__(self, local_data, *args, **kwargs):
         # use as callback
+        """Store the PySCF local data and count the iteration (CASSCF callback)."""
         if "u" in local_data:
             self.rotation_matrix = copy.deepcopy(local_data["u"])
         self.mcscf_local_data = local_data
@@ -74,33 +106,69 @@ def optimize_orbitals(
     *args,
     **kwargs,
 ) -> OptimizeOrbitalsResult:
-    """
+    """Optimize the orbitals of a molecule with a VQE and PySCF's CASSCF.
 
     Parameters
     ----------
-    molecule: The molecule whose orbitals are to be optimized
-    circuit: The circuit that defines the ansatz to the wavefunction in the VQE
-             can be None, if a customized vqe_solver is passed that can construct a circuit
-    vqe_solver: The VQE solver (the default - vqe_solver=None - will take the given circuit and construct an expectationvalue out of molecule.make_hamiltonian and the given circuit)
-                A customized object can be passed that needs to be callable with the following signature: vqe_solver(H=H, circuit=self.circuit, molecule=molecule, **self.vqe_solver_arguments)
-    pyscf_arguments: Arguments for the MCSCF structure of PySCF, if None, the defaults are {"max_cycle_macro":10, "max_cycle_micro":3} (see here https://pyscf.org/pyscf_api_docs/pyscf.mcscf.html)
-    silent: silence printout
-    use_hcb: indicate if the circuit is in hardcore Boson encoding
-    vqe_solver_arguments: Optional arguments for a customized vqe_solver or the default solver
-                          for the default solver: vqe_solver_arguments={"optimizer_arguments":A, "restrict_to_hcb":False} where A holds the kwargs for tq.minimize
-                          restrict_to_hcb keyword controls if the standard (in whatever encoding the molecule structure has) Hamiltonian is constructed or the hardcore_boson hamiltonian
-    initial_guess: Initial guess for the MCSCF module of PySCF (Matrix of orbital rotation coefficients)
-                   The default (None) is a unit matrix
-                   predefined commands are
-                        initial_guess="random"
-                        initial_guess="random_loc=X_scale=Y" with X and Y being floats
-                        This initialized a random guess using numpy.random.normal(loc=X, scale=Y) with X=0.0 and Y=0.1 as defaults
-    return_mcscf: return the PySCF MCSCF structure after optimization
-    molecule_arguments: arguments to pass to molecule_factory or default molecule constructor | only change if you know what you are doing
-    read_chkfile: checkpoint file to read the initial orbitals during the CASSCF optimization. For more info see https://pyscf.org/_modules/pyscf/mcscf/chkfile.html#load_mcscf
-    save_chkfile: checkpoint file to save the intermediate orbitals during the CASSCF optimization.
-    args: just here for convenience
-    kwargs: just here for conveniece
+    molecule : QuantumChemistryBase or FermionicBase or HybridBase
+        Molecule whose orbitals are optimized.
+    circuit : FCircuit or QCircuit, optional
+        Ansatz of the VQE. Can be None if ``vqe_solver`` builds its own circuit.
+    vqe_solver : callable, optional
+        Custom solver, called as
+        ``vqe_solver(H=H, circuit=circuit, molecule=molecule, **vqe_solver_arguments)``
+        and returning a tequila optimization result. If it has a
+        ``compute_rdms(U, variables, molecule, use_hcb)`` method, the RDMs are computed with it,
+        otherwise with ``molecule.compute_rdms`` (see ``SPASolver`` in
+        ``spafastprototype/spa.py``). By default the energy of ``circuit`` is minimized.
+    pyscf_arguments : dict, optional
+        Attributes of the PySCF MCSCF object. Default is
+        ``{"max_cycle_macro": 10, "max_cycle_micro": 3}``.
+    silent : bool
+        If True, suppress printout. Default is False.
+    vqe_solver_arguments : dict, optional
+        Arguments for the VQE solver. The default solver accepts
+        ``"optimizer_arguments"`` (kwargs of ``minimize``) and ``"restrict_to_hcb"``
+        (use the hard-core boson Hamiltonian).
+    initial_guess : numpy.ndarray or str, optional
+        Initial orbital rotation matrix for PySCF's MCSCF. Default is the identity.
+        "random" (width 1) and "near_zero" (width 1e-3) add normal noise to the identity;
+        "random_loc=X_scale=Y" sets mean X and width Y of the noise.
+    return_mcscf : bool
+        If True, store the PySCF MCSCF object in the result.
+    use_hcb : bool
+        If True, the circuit is in hard-core boson encoding.
+    molecule_factory : callable, optional
+        Constructor for the molecules built during the optimization.
+    molecule_arguments : dict, optional
+        Arguments for ``molecule_factory``. Only change if you know what you are doing.
+    restrict_to_active_space : bool
+        Default is True.
+    read_chkfile : str, optional
+        PySCF checkpoint file from which the initial orbitals are read.
+    save_chkfile : str, optional
+        PySCF checkpoint file in which intermediate orbitals are saved.
+    *args, **kwargs
+        Passed on to the optimizer. For fermionic molecules ``fermionic_backend``
+        and ``backend`` select the simulators.
+        ``fbackend`` is accepted as alias of ``fermionic_backend``.
+
+    Returns
+    -------
+    OptimizeOrbitalsResult
+        Optimized molecule, orbital coefficients, energy, circuit and variables.
+
+    See Also
+    --------
+    sunrise.minimize : Optimize only the circuit variables.
+    sunrise.spafastprototype.run_spa : SPA with orbital optimization, using ``SPASolver`` as ``vqe_solver``.
+    sunrise.graph_selection.run_spa_optimization : Choose the SPA edges from the geometry, then optimize.
+
+    Examples
+    --------
+    >>> U = mol.make_ansatz(name="SPA", edges=edges)
+    >>> opt = sun.optimize_orbitals(molecule=mol, circuit=U, silent=True)
+    >>> mol = opt.molecule
     """
 
     class solver:
@@ -250,6 +318,7 @@ def optimizer(
     *args,
     **kwargs,
 ):
+    """Run the PySCF CASSCF optimization with a VQE solver, see ``optimize_orbitals`` for the arguments."""
     try:
         from pyscf import lib, mcscf
 
@@ -383,8 +452,31 @@ def optimizer(
 
 @dataclass
 class PySCFVQEWrapper:
-    """
-    Wrapper for tequila VQE's to be compatible with PySCF orbital optimization
+    """Wrapper making a VQE solver usable as the FCI solver of PySCF's CASSCF.
+
+    ``kernel`` builds a molecule from the active-space integrals, runs the VQE and
+    stores the energy and reduced density matrices requested by PySCF.
+
+    Attributes
+    ----------
+    n_electrons : int
+        Number of electrons in the active space.
+    molecule_arguments : dict
+        Arguments used to construct the molecules.
+    history : list
+        Optimization results of all VQE runs.
+    const_part : float
+        Constant energy contribution added as nuclear repulsion.
+    silent : bool
+        If True, suppress printout.
+    vqe_solver : callable, optional
+        Custom solver, see ``optimize_orbitals``.
+    circuit : FCircuit or QCircuit, optional
+        VQE ansatz.
+    vqe_solver_arguments : dict
+        Arguments for the VQE solver.
+    molecule_factory : callable, optional
+        Constructor for the molecules built at each iteration.
     """
 
     # needs initialization
@@ -409,11 +501,13 @@ class PySCFVQEWrapper:
     def reorder(self, M, ordering, to):
         # convenience since we need to reorder
         # all the time
+        """Return the tensor ``M`` converted from index ordering ``ordering`` to ``to``."""
         M = NBodyTensor(elems=M, ordering=ordering)
         M.reorder(to=to)
         return M.elems
 
     def kernel(self, h1, h2, *args, **kwargs):
+        """Run the VQE for integrals ``h1`` and ``h2`` and return the energy and None (PySCF FCI-solver interface)."""
         if self.history is None:
             self.history = []
         h2of = self.reorder(h2, "mulliken", "openfermion")
@@ -517,9 +611,11 @@ class PySCFVQEWrapper:
         return result.energy, None
 
     def make_rdm12(self, *args, **kwargs):
+        """Return the stored one- and two-body reduced density matrices (PySCF FCI-solver interface)."""
         return self.rdm1, self.rdm2
 
     def __str__(self):
+        """Return the wrapper attributes, one per line."""
         result = f"{type(self).__name__}\n"
         for k, v in self.__dict__.items():
             if k == "circuit" and v is not None:

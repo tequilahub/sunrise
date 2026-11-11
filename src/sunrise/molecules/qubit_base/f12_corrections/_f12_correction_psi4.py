@@ -1,3 +1,5 @@
+"""F12 correction using integrals computed by Psi4 (active-space or CABS+ approach)."""
+
 from __future__ import annotations
 
 from itertools import product
@@ -12,8 +14,40 @@ from ._f12_correction_base import ExplicitCorrelationCorrection
 
 # since this needs psi4, put in external file! maybe own folder for corrections
 class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
-    """
-    Class for computation of explicitly correlated correction using integrals from psi4
+    """Explicitly correlated correction using integrals from Psi4.
+
+    Psi4 represents the correlation factor f_12 as a linear combination of Gaussians.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryPsi4
+        The molecule.
+    rdm1 : numpy.ndarray, optional
+        One-electron reduced density matrix.
+    rdm2 : numpy.ndarray, optional
+        Two-electron reduced density matrix (spin-free), in the physics (Dirac) ordering as
+        returned by ``compute_rdms``.
+    gamma : float, optional
+        Exponent of the correlation factor f_12 = -1/gamma * exp(-gamma*r_12). Default is 1.4.
+    n_ri : int, optional
+        Dimension of the RI basis. By default the largest available one is used.
+    cabs_type : str {"active", "cabs+"}, optional
+        "active" uses the full basis set as approximate CBS and an active space as OBS.
+        "cabs+" uses the CABS+ approach of Valeev (requires C1 symmetry and the CABS
+        basis name in ``cabs_options``). Default is "active".
+    cabs_options : dict, optional
+        Options for "cabs+": ``cabs_name`` (required, name of the CABS basis set) and
+        ``lindep_tol`` (linear dependency tolerance, default 1e-5).
+    **kwargs
+        Needed if ``rdm1`` and ``rdm2`` are not given: ``U`` and optionally ``variables``
+        to compute the RDMs from a circuit, or ``rdm__psi4_method`` and optionally
+        ``rdm__psi4_options`` (dict) to compute them with Psi4, see ``compute_rdms``.
+
+    Raises
+    ------
+    TequilaException
+        If ``cabs_type="cabs+"`` is used with a point group other than C1, or if the
+        RDMs cannot be obtained.
     """
 
     def __init__(
@@ -27,32 +61,7 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         cabs_options: dict | None = None,
         **kwargs,
     ):
-        """
-
-        Parameters
-        ----------
-        mol :
-            the molecule given by a QuantumChemistryPsi4
-        rdm1 :
-            1-electron reduced density matrix
-        rdm2 :
-            2-electron reduced density matrix
-        gamma :
-            f12-exponent, for a correlation factor f_12 = -1/gamma * exp[-gamma*r_12]
-        n_ri :
-            dimensionality of RI-basis; if None, then the maximum available via tensors / basis-set is used
-        cabs_type :
-            - either "active" for using a given basis set as is as approximative CBS (complete basis set), and specify
-            OBS (orbital basis) by an active space
-            - or "cabs+" for CABS+-approach by Valeev in [...] -> pass cabs_name in cabs_options
-        cabs_options :
-            dict, which needs at least {"cabs_name": some CABS basis set} if cabs_type=="cabs+"
-        kwargs :
-            e.g. RDM-information via {"U": QCircuit, "variables": optimal angles} if computation via VQE,
-            or {"rdm__psi4_method": some CI method, "rdm__psi4_options": dict with psi4 options} if computation via
-            psi4, compare to psi4_interface.compute_rdms
-            one of the above needs to be passed if rdm1,rdm2 not yet computed
-        """
+        """See the class docstring for the parameters."""
         super().__init__(
             mol=mol, rdm1=rdm1, rdm2=rdm2, n_ri=n_ri, gamma=gamma, **kwargs
         )
@@ -83,17 +92,17 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
 
     # "Active-space" approach, requires psi4
     def setup_tensors_active(self):
-        """
-        Easiest but least effective way to get a correction.
-        Use some GBS, of which an active space is used as OBS, the inactive ("passive") space as CABS.
-        This is not equivalent to CABS+, however still <CABS, OBS> = 0 via MOs
+        """Set up the tensors with the active-space approach.
 
-        cabs_options can be empty here, only necessary info is active space of mol
+        The simplest but least effective way to get a correction: the active space of the
+        molecule is the OBS and the remaining orbitals of the HF basis are the CABS.
+        This is not equivalent to CABS+, but CABS and OBS are still orthogonal (via the MOs).
+        Needs only the active space of the molecule; ``cabs_options`` can be empty.
 
         Returns
         -------
-        NBodyTensor
-            one-body tensor h, Coulomb tensor g, f_12 tensor r
+        tuple of NBodyTensor
+            One-body tensor ``h``, Coulomb tensor ``g`` and f12 tensor ``r``.
         """
 
         # HF - ref_wfn
@@ -142,19 +151,20 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         return h, g, r
 
     def setup_tensors_psi4_cabsplus(self):
-        """
-        For now, this works only with C1-symmetry!
+        """Set up the tensors with the CABS+ approach (C1 symmetry only).
 
-        Computes the required integrals via the CABS+ approach in
-            Valeev, E. F. Improving on the resolution of the identity in
-            linear R12 ab initio theories. Chem. Phys. Lett. 395, 190–195 (2004).
-
-        Requires cabs_options with name of CABS basis by keyword "cabs_name"
+        Follows Valeev, Chem. Phys. Lett. 395, 190 (2004), doi:10.1016/j.cplett.2004.07.061. Requires a Psi4 version with
+        CABS support and ``cabs_options["cabs_name"]`` (the CABS basis set).
 
         Returns
         -------
-        NBodyTensor
-            one-body tensor h, Coulomb tensor g, f_12 tensor r
+        tuple of NBodyTensor
+            One-body tensor ``h``, Coulomb tensor ``g`` and f12 tensor ``r``.
+
+        Raises
+        ------
+        TequilaException
+            If no CABS basis set name is given.
         """
         if "lindep_tol" in self.cabs_options:
             lindep_tol = self.cabs_options["lindep_tol"]
@@ -247,7 +257,7 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         # Compute and assemble tensors
         # Helper functions
         def get_irange(i: int):
-            """Returns indexing range for OBS and CABS part"""
+            """Return indexing range for OBS and CABS part."""
             irange = None
             if i == 0:  # OBS
                 irange = range(self.n_obs)
@@ -256,7 +266,7 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
             return irange
 
         def ind(i: int, p: int):
-            """Translates CBS to CABS indices for CABS-integrals"""
+            """Translate CBS to CABS indices for CABS-integrals."""
             if i == 0:  # OBS -> leave as is
                 return p
             elif i == 1:  # CABS -> translate to range [0,...,|CABS|]
@@ -328,13 +338,17 @@ class ExplicitCorrelationCorrectionPsi4(ExplicitCorrelationCorrection):
         return h, g, r
 
     def compute(self) -> float:
-        """
-        Computes universal explicitly correlated correction based on parameters of class instance
-        Builds tensors either by a naive active space of the CABS+-approach
+        """Compute the correction, building the tensors for the chosen ``cabs_type``.
 
         Returns
         -------
-            the explicitly correlated correction
+        float
+            The explicitly correlated correction.
+
+        Raises
+        ------
+        TequilaException
+            If ``cabs_type`` is unknown or the CABS+ setup fails.
         """
         # Prepare tensors
         if self.cabs_type.lower() == "active":

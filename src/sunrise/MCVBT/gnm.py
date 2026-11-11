@@ -1,3 +1,5 @@
+"""MCVBT driver: ground-state search in the span of several SPA-type circuits (one per graph), with the G(N, M) optimization scheme."""
+
 import csv
 import os
 from copy import deepcopy
@@ -15,6 +17,46 @@ from sunrise.molecules.qubit_base import QuantumChemistryBase
 
 
 class mcvbt:
+    """Multi-circuit variational solver built on one circuit per graph.
+
+    For each graph (list of orbital edges) a circuit is created (SPA ansatz plus orbital
+    rotations). The ground state is then searched as a linear combination of the first ``N``
+    circuits, solving a generalized eigenvalue problem for the coefficients (``G(N, 0)``)
+    and, in ``G(N, M)``, additionally optimizing the variables of the first ``M`` circuits.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule (qubit or fermionic).
+    graphs : list
+        One list of edges ``[(i, j), ...]`` (spatial orbital pairs) per circuit.
+    circuits : list of QCircuit or FCircuit, optional
+        Custom circuits, one per graph. Created from the graphs if not given.
+    strategy : str, optional
+        Extra "delocalization" gates added to each circuit. Only ``"shift"`` is implemented
+        (fermionic circuits only). Default is None.
+    solver : str, optional
+        Backend used for the simulation, a fermionic one (e.g. ``"FQE"``, default) or a tequila backend.
+    filename : str, optional
+        CSV file where the energies are logged when ``silent`` is False. Default is ``"mcvbt_results.csv"``.
+    overwrite_file : bool, optional
+        Delete an existing log file at start. Default is True.
+    silent : bool, optional
+        Suppress printing and logging. Default is False.
+
+    Raises
+    ------
+    ValueError
+        If ``circuits`` and ``graphs`` have different lengths.
+
+    Examples
+    --------
+    >>> from sunrise.MCVBT.gnm import mcvbt
+    >>> graphs = [[(0, 1), (2, 3)], [(0, 3), (1, 2)], [(0, 2), (1, 3)]]  # H4
+    >>> solver = mcvbt(mol=mol, graphs=graphs, solver="spex", filename="h4.csv")
+    >>> energies = solver.calculate_groundstate(init_strategy="pre-optimize")
+    """
+
     def __init__(
         self,
         mol: QuantumChemistryBase,
@@ -46,7 +88,28 @@ class mcvbt:
             raise ValueError("Number of circuits must be equal to number of graphs")
 
     def calculate_groundstate(self, init_strategy: str = "pre-optimize"):
+        """Compute the energies ``G(N, M)`` for increasing number of circuits ``N`` and optimized circuits ``M``.
 
+        Parameters
+        ----------
+        init_strategy : str {"pre-optimize", "zeros", "random"}, optional
+            Initial values of the circuit variables: optimize each circuit alone (default),
+            small constant values, or random angles.
+
+        Returns
+        -------
+        dict
+            ``{(N, M): energy}``. The key ``(1, 0)`` is the best single-circuit energy.
+
+        Raises
+        ------
+        ValueError
+            If ``init_strategy`` is unknown.
+
+        Examples
+        --------
+        >>> energies = solver.calculate_groundstate(init_strategy="pre-optimize")
+        """
         if self.circuits is None:
             self.__create_circuits()
 
@@ -130,7 +193,12 @@ class mcvbt:
         return self.results
 
     def compare_to_fci(self):
+        """Print the error of each ``G(N, M)`` energy relative to FCI (in Hartree).
 
+        Examples
+        --------
+        >>> solver.compare_to_fci()
+        """
         fci = self.mol.compute_energy("fci")
         print("G(N,M) errors:")
         print(self.results)
@@ -270,10 +338,45 @@ class mcvbt:
         return variables_preopt
 
     def get_final_variables(self):
+        """Return the variables of the last optimization (including the coefficients ``('c', i)``)."""
         return self.final_variables
 
 
 def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=None):
+    """Optimize ``G(N, M)``: the first ``M`` circuits and the linear coefficients are optimized, the others are kept fixed.
+
+    The energy of the normalized combination of the circuits is minimized (BFGS) and the
+    coefficients are updated from the generalized eigenvalue problem until the energy
+    changes by less than 1e-4 or ``max_iter`` is reached. Note that ``circuits`` is modified in place.
+
+    Parameters
+    ----------
+    circuits : list of QCircuit or FCircuit
+        The ``N`` circuits.
+    variables : dict
+        Starting values of the variables.
+    solver : str
+        Simulation backend.
+    mol : QuantumChemistryBase
+        Molecule.
+    filename : str
+        CSV file for the energy history (written only if ``silent`` is False).
+    silent : bool, optional
+        Suppress output. Default is True.
+    max_iter : int, optional
+        Maximum number of optimization rounds. Default is 10.
+    M : int, optional
+        Number of circuits whose variables are optimized. Default is ``N``.
+
+    Returns
+    -------
+    v : numpy.ndarray
+        Eigenvalues of the generalized eigenvalue problem (``v[0]`` is the energy).
+    vv : numpy.ndarray
+        Corresponding eigenvectors (columns).
+    variables : dict
+        Optimized variables, including the coefficients ``('c', i)``.
+    """
     # circuits = [x for x in circuits]
     N = len(circuits)
     if M is None:

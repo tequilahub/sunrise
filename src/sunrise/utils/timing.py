@@ -1,3 +1,5 @@
+"""Minimal timing decorator that records the run time of decorated functions."""
+
 import time
 
 _silent = True
@@ -5,10 +7,24 @@ _all_timinings = {}
 
 
 def reset_timings():
+    """Reset the recorded timings."""
     _all_timinings = {}
 
 
 def analyse(data=None):
+    """Print max, min and average run time per timed function.
+
+    Parameters
+    ----------
+    data : dict, optional
+        Mapping ``function name -> list of run times in seconds``. Default is the
+        timings recorded by ``timing``.
+
+    Returns
+    -------
+    tuple of float
+        ``(average, max, min)`` of the first entry in ``data``.
+    """
     if data is None:
         data = _all_timinings
     for k, v in data.items():
@@ -25,6 +41,20 @@ def analyse(data=None):
 
 
 def timing(f, *args, **kwargs):
+    """Wrap ``f`` so that each call records its wall-clock time.
+
+    Parameters
+    ----------
+    f : callable
+        Function to time. Times are stored per ``f.__name__`` and printed
+        after each call only if the module flag ``_silent`` is False.
+
+    Returns
+    -------
+    callable
+        The timed version of ``f``.
+    """
+
     def timed_function(*args, **kwargs):
         start = time.time()
         result = f(*args, **kwargs)

@@ -1,3 +1,9 @@
+"""Base class for the explicitly correlated (F12) energy correction of the spin-free [2]_R12 method.
+
+The use of [2]_R12 on top of VQE is described in P. Schleich, J. S. Kottmann and A. Aspuru-Guzik,
+Phys. Chem. Chem. Phys. 24, 13550 (2022), arXiv:2110.06812.
+"""
+
 from __future__ import annotations
 
 import numpy
@@ -7,19 +13,58 @@ from ..chemistry_tools import NBodyTensor
 
 
 class ExplicitCorrelationCorrection:
-    """
-    Computes universal explicitly correlated correction
-    following Kong, L. & Valeev, E. F. SF-[2] R12: A spin-adapted explicitly correlated method applicable to
-                                       arbitrary electronic states. J. Chem. Phys. 135, (2011)
+    """Explicitly correlated (F12) correction to an energy, using only the 1- and 2-RDM.
 
-    We use notation following the paper for orbital indices:
-        p,q,r,s,t,u,v,w,x,y: active space, equivalent to OBS;
-                            x,y denote uncorrelated orbitals, but for now, we correlate all in this implementation
-        k,l,m,n: full space, equivalent to CBS
-        a,b,c,d: cabs space, full = active + cabs
-    Also, we use a tensor notation, e.g. in O_KLrs O^kl_rs = <rs | O | kl>
-        upper case ~ covariant/creation indices,
-        lower case ~ contravariant/annihilation indices
+    Implements the spin-free [2]_R12 correction of Kong and Valeev
+    (J. Chem. Phys. 135, 214105 (2011)), applied to VQE references as in Schleich,
+    Kottmann and Aspuru-Guzik, Phys. Chem. Chem. Phys. 24, 13550 (2022). It estimates the
+    part of the correlation energy missing from a finite orbital basis (OBS) through
+    excitations into a complementary auxiliary basis (CABS), with the Slater-type
+    correlation factor f_12 = -1/gamma * exp(-gamma * r_12). Only the 1- and 2-RDM of the
+    reference state are needed, so no additional quantum resources are used. The integrals
+    are provided by subclasses or from external files.
+
+    Index notation (Latin letters for the Greek indices of the papers):
+
+    - p,q,r,s,t,u,v,w,x,y: active space, equivalent to the orbital basis set (OBS).
+      x,y denote the orbitals correlated by the geminals (geminal-generating orbitals). The method
+      allows correlating only a subset of them; this implementation correlates all active orbitals.
+    - k,l,m,n: full space, the resolution-of-identity (RI) approximation of the complete basis
+      set (CBS), built as the union of OBS and CABS.
+    - a,b,c,d: CABS (complementary auxiliary basis set) space.
+
+    Tensors are written e.g. O^kl_rs = <rs|O|kl>: upper indices refer to the ket, lower indices
+    to the bra. In variable names the upper indices are written in capitals, e.g. ``r_PQrs``.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        The molecule.
+    rdm1 : numpy.ndarray, optional
+        One-electron reduced density matrix.
+    rdm2 : numpy.ndarray, optional
+        Two-electron reduced density matrix (spin-free), in the physics (Dirac) ordering as
+        returned by ``compute_rdms``.
+    gamma : float, optional
+        Exponent of the correlation factor. Default is 1.4.
+    n_ri : int, optional
+        Dimension of the resolution-of-identity (RI) basis. Use it only to truncate the
+        available RI basis; by default the largest available one is used. It must
+        not exceed the available RI basis and must be larger than the OBS,
+        otherwise the correction is zero.
+    external_info : dict, optional
+        Where to find the f12 tensor <rs|f_12|pq>, as
+        ``{"f12_filename": path to a .npy file, "ordering": ordering of the tensor}``.
+    **kwargs
+        Needed if ``rdm1`` and ``rdm2`` are not given: ``U`` (tq.QCircuit) and
+        optionally ``variables`` (optimal angles), used to compute the RDMs, or
+        ``rdm__psi4_method`` to compute them later with Psi4. ``silent`` (bool)
+        suppresses printing of the intermediates.
+
+    Raises
+    ------
+    TequilaException
+        If neither the RDMs nor a way to compute them is given.
     """
 
     def __init__(
@@ -32,29 +77,7 @@ class ExplicitCorrelationCorrection:
         external_info: dict | None = None,
         **kwargs,
     ):
-        """
-        Parameters
-        ----------
-        mol :
-            the molecule given by a QuantumChemistryBase
-        rdm1 :
-            1-electron reduced density matrix
-        rdm2 :
-            2-electron reduced density matrix
-        gamma :
-            f12-exponent, for a correlation factor f_12 = -1/gamma * exp[-gamma*r_12]
-        n_ri :
-            dimensionality of RI-basis; specify only, if want to truncate available RI-basis
-            if None, then the maximum available via tensors / basis-set is used
-            must not be larger than size of available RI-basis, and not smaller than size of OBS
-            for n_ri==dim(OBS), the correction returns zero
-        external_info :
-            for usage in qc_base, need to provide information where to find one-body tensor f12-tensor <rs|f_12|pq>;
-            pass dictionary with {"f12_filename": where to find f12-tensor, "ordering": ordering scheme of tensor}
-        kwargs :
-            e.g. RDM-information via {"U": QCircuit, "variables": optimal angles}, needs to be passed if rdm1,rdm2 not
-            yet computed
-        """
+        """See the class docstring for the parameters."""
         # Associated molecule
         self.mol = mol
 
@@ -102,17 +125,24 @@ class ExplicitCorrelationCorrection:
         self.t_PQrs = None
 
     def _sp_ansatz(self) -> numpy.ndarray:
-        """
-        Set amplitudes for Hylleraas functional
-        Options: 1) minimize s.th. t* = argmin_t H^(2)
-                 2) fix s.th. cusp conditions are fulfilled
-                    following Ten-No, S. Explicitly correlated second order perturbation theory:
-                    Introduction of a rational generator and numerical quadratures. J. Chem. Phys. 121, 117–129 (2004)
-        here, use option 2) (computationally by far less expensive, LSE resulting out of 1) is often ill-conditioned)
+        r"""Return the geminal amplitudes t_PQrs of the Hylleraas functional.
+
+        There are two options to set the amplitudes:
+
+        1. Minimize the functional, :math:`t^* = \operatorname{argmin}_t H^{(2)}`. The resulting
+           linear system is often ill-conditioned.
+        2. Fix them such that the singlet and triplet electron-electron cusp conditions are
+           fulfilled (SP ansatz of S. Ten-no, Explicitly correlated second order perturbation
+           theory: Introduction of a rational generator and numerical quadratures, J. Chem. Phys.
+           121, 117-129 (2004)):
+           :math:`t^{rs}_{pq} = \frac{3}{8} \delta^r_p \delta^s_q + \frac{1}{8} \delta^r_q \delta^s_p`.
+
+        Option 2 is used here, as it is computationally far less expensive.
 
         Returns
         -------
-        amplitudes t_PQrs according to SP-ansatz
+        numpy.ndarray
+            Amplitudes of shape (n_active,) * 4.
         """
         kron_d = numpy.eye(len(self.active))
         t_PQrs = 3 / 8 * numpy.einsum(
@@ -121,16 +151,24 @@ class ExplicitCorrelationCorrection:
         return t_PQrs
 
     def build_fock_operator(self, h: NBodyTensor, g: NBodyTensor) -> NBodyTensor:
-        """
-        Assemble generalized (spin-free) Fock operator,
-        fock = core_hamiltonian + rdm1*( coulomb_matrix - 1/2*coulomb_matrix_permuted )
+        r"""Build the generalized (spin-free) Fock operator.
+
         .. math::
-                f^k_l = h^k_l + \\Gamma^s_r ( g^{kr}_{ls} - 1/2*g^{kr}_{sl} ), k,l \\in OBS \\cup CABS, s,r \\in CABS
+            f^k_l = h^k_l + \Gamma^s_r ( g^{kr}_{ls} - \tfrac{1}{2} g^{kr}_{sl} )
+
+        with k, l in OBS and CABS, and Gamma the one-electron RDM.
+
+        Parameters
+        ----------
+        h : NBodyTensor
+            One-body (core Hamiltonian) tensor.
+        g : NBodyTensor
+            Two-body (Coulomb) tensor in physicist ordering.
 
         Returns
         -------
         NBodyTensor
-            spin-free, generalized fock operator
+            Generalized Fock operator.
         """
         g_1 = numpy.einsum(
             "sr, krls -> kl", self.rdm1, g.sub_str("fafa"), optimize="greedy"
@@ -150,17 +188,18 @@ class ExplicitCorrelationCorrection:
         return fock
 
     def size_check(self, n_ri_max: int):
-        """
-        Raises an error, if choice of n_ri invalid
+        """Check that ``n_ri`` is valid.
 
         Parameters
         ----------
-        n_ri_max :
-            size of available RI-basis
+        n_ri_max : int
+            Size of the available RI basis.
 
-        Returns
-        -------
-
+        Raises
+        ------
+        TequilaException
+            If the OBS is not smaller than ``n_ri`` (the correction would be zero) or
+            if ``n_ri`` exceeds ``n_ri_max``.
         """
         # If dimensionality of OBS is same as dimensionality of (formally-)CBS (or its approx),
         # then correction does not make sense and returns 0
@@ -172,15 +211,21 @@ class ExplicitCorrelationCorrection:
             raise TequilaException("Dimensionality of CBS too large.")
 
     def setup_tensors_external(self):
-        """
-        Setup tensors with integrals provided externally
+        """Set up the tensors from integrals provided externally.
 
-        This assumes the f12-integrals r_PQrs = < rs | f_12 | pq > with f_12 = -1/gamma * exp(-gamma*r_12),
+        The f12 integrals r_PQrs = <rs|f_12|pq> are loaded from the ``.npy`` file in
+        ``external_info`` and must already include the factor f_12 = -1/gamma * exp(-gamma*r_12).
+        The other integrals are taken from the molecule.
 
         Returns
         -------
-        NBodyTensor
-            one-body tensor h, Coulomb tensor g, f_12 tensor r
+        tuple of NBodyTensor
+            One-body tensor ``h``, Coulomb tensor ``g`` and f12 tensor ``r``.
+
+        Raises
+        ------
+        TequilaException
+            If the molecule has no active space or ``external_info`` is incomplete.
         """
 
         if not self.active:
@@ -233,7 +278,7 @@ class ExplicitCorrelationCorrection:
         return h, g, r
 
     def _compute_intermediate_V(self, g: NBodyTensor, r: NBodyTensor):
-        """computes intermediate V, mixed geminal-reference block"""
+        """Compute intermediate V, the mixed geminal-reference block."""
         rdm1, rdm2 = self.rdm1, self.rdm2
         gKLxy_rRSkl = numpy.einsum(
             "klxy, rskl -> rsxy",
@@ -264,7 +309,7 @@ class ExplicitCorrelationCorrection:
         return V
 
     def _compute_intermediate_B(self, r: NBodyTensor, fock: NBodyTensor):
-        """computes intermediate B, geminal-geminal block with Fock operator"""
+        """Compute intermediate B, the geminal-geminal block with the Fock operator."""
         rdm1, rdm2 = self.rdm1, self.rdm2
         rZYpq_fockXy_rTUzx = numpy.einsum(
             "zypq, xy, tuzx -> tupq",
@@ -332,7 +377,7 @@ class ExplicitCorrelationCorrection:
         return B
 
     def _compute_intermediate_X(self, r: NBodyTensor, fock: NBodyTensor):
-        """computes intermediate X, geminal-geminal overlap"""
+        """Compute intermediate X, the geminal-geminal overlap."""
         rdm1, rdm2 = self.rdm1, self.rdm2
 
         rTUkl_rKLpq = numpy.einsum(
@@ -385,7 +430,7 @@ class ExplicitCorrelationCorrection:
         return X
 
     def _compute_intermediate_Delta_paper(self, r: NBodyTensor, fock: NBodyTensor):
-        """computes Delta intermediate according to formulas in the SF-[2]_R12 paper"""
+        """Compute intermediate Delta with the formulas of the SF-[2]_R12 paper."""
         # Delta intermediate
         # Delta from paper:
         rdm1, rdm2 = self.rdm1, self.rdm2
@@ -450,7 +495,7 @@ class ExplicitCorrelationCorrection:
         return Delta
 
     def _compute_intermediate_Delta_MBeq(self, r: NBodyTensor, fock: NBodyTensor):
-        """computes Delta intermediate according to formulas generated by MBEq-tool of Valeev group"""
+        """Compute intermediate Delta with formulas generated by the MBEq tool of the Valeev group."""
         rdm1, rdm2, t_PQrs = self.rdm1, self.rdm2, self.t_PQrs
         # Delta from MBeq-tool
         Delta1 = (
@@ -594,7 +639,7 @@ class ExplicitCorrelationCorrection:
     def _compute_intermediates(
         self, g: NBodyTensor, r: NBodyTensor, fock: NBodyTensor
     ) -> list:
-        """calls computation of intermediates and returns them as list"""
+        """Return the intermediates V, B, X and Delta as a list."""
         V = self._compute_intermediate_V(g, r)
         B = self._compute_intermediate_B(r, fock)
         X = self._compute_intermediate_X(r, fock)
@@ -612,9 +657,23 @@ class ExplicitCorrelationCorrection:
     def compute_correction(
         self, g: NBodyTensor, r: NBodyTensor, fock: NBodyTensor
     ) -> float:
-        """
-        Computes correction based on Coulomb tensor, f12-tensor and generalized Fock operator
-        Invokes SP-ansatz
+        """Compute the correction from the Coulomb tensor, f12 tensor and generalized Fock operator.
+
+        Uses the SP ansatz for the amplitudes and sums the intermediates V, B, X and Delta.
+
+        Parameters
+        ----------
+        g : NBodyTensor
+            Coulomb tensor.
+        r : NBodyTensor
+            f12 tensor.
+        fock : NBodyTensor
+            Generalized Fock operator, see ``build_fock_operator``.
+
+        Returns
+        -------
+        float
+            The explicitly correlated correction.
         """
 
         # Here, if len(active_!=n_obs, then active is effective OBS, and n_ri-len(active) is effective CABS
@@ -645,13 +704,12 @@ class ExplicitCorrelationCorrection:
         return correction
 
     def compute(self) -> float:
-        """
-        Computes universal explicitly correlated correction based on parameters of class instance
-        Tensors are read from file in base function
+        """Compute the correction with tensors read from the file given in ``external_info``.
 
         Returns
         -------
-            the explicitly correlated correction
+        float
+            The explicitly correlated correction.
         """
         print("Set up universal f12-correction using external integrals.")
         h, g, r = self.setup_tensors_external()

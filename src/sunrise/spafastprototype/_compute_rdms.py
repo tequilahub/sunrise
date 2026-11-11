@@ -1,3 +1,5 @@
+"""Computation of 1- and 2-RDMs from circuits via qubit operator expectation values (``compute_rdms`` and variants)."""
+
 import warnings
 from itertools import product
 from numbers import Number
@@ -26,42 +28,56 @@ def compute_rdms(
     rdm_trafo=None,
     evaluate: bool = True,
 ):
-    """
-    Computes the one- and two-particle reduced density matrices (rdm1 and rdm2) given
-    a unitary U. This method uses the standard ordering in physics as denoted below.
-    Note, that the representation of the density matrices depends on the qubit transformation
-    used. The Jordan-Wigner encoding corresponds to 'classical' second quantized density
-    matrices in the occupation picture.
+    r"""Compute the one- and two-particle reduced density matrices (RDMs) of the state ``U|0>``.
 
-    We only consider real orbitals and thus real-valued RDMs.
-    The matrices are set as private members _rdm1, _rdm2 and can be accessed via the properties rdm1, rdm2.
+    .. math::
+        \gamma^p_q = \langle \psi | a^p a_q | \psi \rangle, \quad
+        \gamma^{pq}_{rs} = \langle \psi | a^p a^q a_s a_r | \psi \rangle, \quad
+        \psi = U|0\rangle
 
-    .. math :
-        \\text{rdm1: } \\gamma^p_q = \\langle \\psi | a^p a_q | \\psi \\rangle
-                                 = \\langle U 0 | a^p a_q | U 0 \\rangle
-        \\text{rdm2: } \\gamma^{pq}_{rs} = \\langle \\psi | a^p a^q a_s a_r | \\psi \\rangle
-                                         = \\langle U 0 | a^p a^q a_s a_r | U 0 \\rangle
+    By default the 2-RDM is returned in the physics (Dirac) ordering,
+    ``rdm2[p, q, r, s]`` :math:`= \gamma^{pq}_{rs}`, see ``ordering``.
+
+    The representation depends on the qubit encoding; Jordan-Wigner gives the usual
+    second-quantized RDMs in the occupation picture. Only real orbitals, hence real RDMs, are
+    supported. The result is also stored
+    in ``self._rdm1`` and ``self._rdm2``.
+
+    Dispatches to ``compute_rdms_hybrid`` for ``HybridBase`` molecules and
+    to ``compute_rdms_tequila`` otherwise.
 
     Parameters
     ----------
-    U :
-        Quantum Circuit to achieve the desired state \\psi = U |0\\rangle, non-optional
-    variables :
-        If U is parametrized, then need to hand over a set of fixed variables
-    spin_free :
-        Set whether matrices should be spin-free (summation over spin) or defined by spin-orbitals
-    get_rdm1, get_rdm2 :
-        Set whether either one or both rdm1, rdm2 should be computed. If both are needed at some point,
-        it is recommended to compute them at once.
-    rdm_trafo :
-        The rdm operators can be transformed, e.g., a^dagger_i a_j -> U^dagger a^dagger_i a_j U,
-        where U represents the transformation. The default is set to None, implying that U equas the identity.
-    evaluate :
-        if true, the tequila expectation values are evaluated directly via the tq.simulate command.
-        the protocol is optimized to avoid repetation of wavefunction simulation
-        if false, the rdms are returned as tq.QTensors
+    U : tq.QCircuit
+        Circuit preparing the state. Required.
+    variables : dict, optional
+        Values of the circuit variables, if ``U`` is parametrized.
+    spin_free : bool, optional
+        If True, sum over spin and return RDMs over spatial orbitals; otherwise
+        over spin orbitals. Default is True.
+    get_rdm1, get_rdm2 : bool, optional
+        Which RDMs to compute. Computing both at once is more efficient. Default is True.
+    ordering : str {"dirac", "phys", "chem", "openfermion"}, optional
+        Index ordering of ``rdm2``. Default is "dirac", the physics ordering
+        ``rdm2[p, q, r, s] = <psi|a^p a^q a_s a_r|psi>``; "chem" (Mulliken) and "openfermion" are
+        also possible.
+    use_hcb : bool, optional
+        Use hard-core boson operators (one qubit per spatial orbital). Default is False.
+    rdm_trafo : tq.QCircuit, optional
+        Transformation ``T`` applied to the RDM operators, ``O -> T^dagger O T``. Default is the identity.
+    evaluate : bool, optional
+        If True, simulate the expectation values. If False, return ``(qops, None)``
+        with the unevaluated symmetry-reduced operators; ``rdm_trafo`` is not supported then.
+
     Returns
     -------
+    numpy.ndarray or tuple of numpy.ndarray
+        ``(rdm1, rdm2)``, or only the requested one.
+
+    Raises
+    ------
+    TequilaException
+        If ``U`` is None or the transformation is Bravyi-Kitaev-Superfast.
     """
     if isinstance(self, HybridBase):
         return compute_rdms_hybrid(
@@ -102,42 +118,55 @@ def compute_rdms_hybrid(
     rdm_trafo=None,
     evaluate: bool = True,
 ):
-    """
-    Computes the one- and two-particle reduced density matrices (rdm1 and rdm2) given
-    a unitary U. This method uses the standard ordering in physics as denoted below.
-    Note, that the representation of the density matrices depends on the qubit transformation
-    used. The Jordan-Wigner encoding corresponds to 'classical' second quantized density
-    matrices in the occupation picture.
+    r"""Compute the one- and two-particle reduced density matrices (RDMs) of the state ``U|0>``.
 
-    We only consider real orbitals and thus real-valued RDMs.
-    The matrices are set as private members _rdm1, _rdm2 and can be accessed via the properties rdm1, rdm2.
+    .. math::
+        \gamma^p_q = \langle \psi | a^p a_q | \psi \rangle, \quad
+        \gamma^{pq}_{rs} = \langle \psi | a^p a^q a_s a_r | \psi \rangle, \quad
+        \psi = U|0\rangle
 
-    .. math :
-        \\text{rdm1: } \\gamma^p_q = \\langle \\psi | a^p a_q | \\psi \\rangle
-                                 = \\langle U 0 | a^p a_q | U 0 \\rangle
-        \\text{rdm2: } \\gamma^{pq}_{rs} = \\langle \\psi | a^p a^q a_s a_r | \\psi \\rangle
-                                         = \\langle U 0 | a^p a^q a_s a_r | U 0 \\rangle
+    By default the 2-RDM is returned in the physics (Dirac) ordering,
+    ``rdm2[p, q, r, s]`` :math:`= \gamma^{pq}_{rs}`, see ``ordering``.
+
+    The representation depends on the qubit encoding; Jordan-Wigner gives the usual
+    second-quantized RDMs in the occupation picture. Only real orbitals, hence real RDMs, are
+    supported. The result is also stored in ``self._rdm1`` and ``self._rdm2``.
+
+    Version for ``HybridBase`` molecules, whose orbitals are partly encoded as
+    bosons (``self.select``).
 
     Parameters
     ----------
-    U :
-        Quantum Circuit to achieve the desired state \\psi = U |0\\rangle, non-optional
-    variables :
-        If U is parametrized, then need to hand over a set of fixed variables
-    spin_free :
-        Set whether matrices should be spin-free (summation over spin) or defined by spin-orbitals
-    get_rdm1, get_rdm2 :
-        Set whether either one or both rdm1, rdm2 should be computed. If both are needed at some point,
-        it is recommended to compute them at once.
-    rdm_trafo :
-        The rdm operators can be transformed, e.g., a^dagger_i a_j -> U^dagger a^dagger_i a_j U,
-        where U represents the transformation. The default is set to None, implying that U equas the identity.
-    evaluate :
-        if true, the tequila expectation values are evaluated directly via the tq.simulate command.
-        the protocol is optimized to avoid repetation of wavefunction simulation
-        if false, the rdms are returned as tq.QTensors
+    U : tq.QCircuit
+        Circuit preparing the state. Required.
+    variables : dict, optional
+        Values of the circuit variables, if ``U`` is parametrized.
+    spin_free : bool, optional
+        If True, sum over spin and return RDMs over spatial orbitals; otherwise
+        over spin orbitals. Default is True.
+    get_rdm1, get_rdm2 : bool, optional
+        Which RDMs to compute. Computing both at once is more efficient. Default is True.
+    ordering : str {"dirac", "phys", "chem", "openfermion"}, optional
+        Index ordering of ``rdm2``. Default is "dirac", the physics ordering
+        ``rdm2[p, q, r, s] = <psi|a^p a^q a_s a_r|psi>``; "chem" (Mulliken) and "openfermion" are
+        also possible.
+    use_hcb : bool, optional
+        Use hard-core boson operators (one qubit per spatial orbital). Default is False.
+    rdm_trafo : tq.QCircuit, optional
+        Transformation ``T`` applied to the RDM operators, ``O -> T^dagger O T``. Default is the identity.
+    evaluate : bool, optional
+        If True, simulate the expectation values. If False, return ``(qops, None)``
+        with the unevaluated symmetry-reduced operators; ``rdm_trafo`` is not supported then.
+
     Returns
     -------
+    numpy.ndarray or tuple of numpy.ndarray
+        ``(rdm1, rdm2)``, or only the requested one.
+
+    Raises
+    ------
+    TequilaException
+        If ``U`` is None or the transformation is Bravyi-Kitaev-Superfast.
     """
     # Check whether unitary circuit is not 0
     if U is None:
@@ -152,12 +181,12 @@ def compute_rdms_hybrid(
         )
 
     def _get_of_op(operator_tuple):
-        """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
+        """Return operator given by a operator tuple as OpenFermion - Fermion operator."""
         op = openfermion.FermionOperator(operator_tuple)
         return op
 
     def _get_qop_hermitian(of_operator) -> QubitHamiltonian:
-        """Returns Hermitian part of Fermion operator as QubitHamiltonian"""
+        """Return the Hermitian part of a FermionOperator as QubitHamiltonian."""
         qop = self.transformation(of_operator)
         # qop = QubitHamiltonian(self.transformation(of_operator))
         real, _imag = qop.split(hermitian=True)
@@ -169,7 +198,7 @@ def compute_rdms_hybrid(
             )
 
     def _build_1bdy_operators_mix() -> list:
-        """Returns BOS one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return BOS one-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetry pq = qp (not changed by spin-summation)
         ops = []
         for p in range(self.n_orbitals):
@@ -199,7 +228,7 @@ def compute_rdms_hybrid(
         return ops
 
     def __case_2bdy(i: int, j: int, k: int, l: int) -> int:
-        """Returns 1 if allowed term all in J, 2 if all H, 3 mixed, 0 else"""
+        """Return 1 if allowed term all in J, 2 if all H, 3 mixed, 0 else."""
         list = [self.select[i], self.select[j], self.select[k], self.select[l]]
         b = list.count("B")
         f = list.count("F")
@@ -213,7 +242,7 @@ def compute_rdms_hybrid(
             return 0
 
     def _build_2bdy_operators_mix() -> list:
-        """Returns BOS two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return BOS two-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
         #                and      = rspq
         ops = []
@@ -727,9 +756,7 @@ def compute_rdms_hybrid(
         return ops
 
     def _assemble_rdm1_mix(evals) -> numpy.ndarray:
-        """
-        Returns BOS one-particle RDM built by symmetry conditions
-        """
+        """Return BOS one-particle RDM built by symmetry conditions."""
         N = self.n_orbitals
         rdm1 = numpy.zeros([N, N])
         ctr: int = 0
@@ -742,7 +769,7 @@ def compute_rdms_hybrid(
         return rdm1
 
     def _assemble_rdm2_mix(evals) -> numpy.ndarray:
-        """Returns spin-free two-particle RDM built by symmetry conditions"""
+        """Return spin-free two-particle RDM built by symmetry conditions."""
         ctr: int = 0
         rdm2 = numpy.zeros(
             [self.n_orbitals, self.n_orbitals, self.n_orbitals, self.n_orbitals]
@@ -837,42 +864,55 @@ def compute_rdms_tequila(
     rdm_trafo=None,
     evaluate=True,
 ):
-    """
-    Computes the one- and two-particle reduced density matrices (rdm1 and rdm2) given
-    a unitary U. This method uses the standard ordering in physics as denoted below.
-    Note, that the representation of the density matrices depends on the qubit transformation
-    used. The Jordan-Wigner encoding corresponds to 'classical' second quantized density
-    matrices in the occupation picture.
+    r"""Compute the one- and two-particle reduced density matrices (RDMs) of the state ``U|0>``.
 
-    We only consider real orbitals and thus real-valued RDMs.
-    The matrices are set as private members _rdm1, _rdm2 and can be accessed via the properties rdm1, rdm2.
+    .. math::
+        \gamma^p_q = \langle \psi | a^p a_q | \psi \rangle, \quad
+        \gamma^{pq}_{rs} = \langle \psi | a^p a^q a_s a_r | \psi \rangle, \quad
+        \psi = U|0\rangle
 
-    .. math :
-        \\text{rdm1: } \\gamma^p_q = \\langle \\psi | a^p a_q | \\psi \\rangle
-                                 = \\langle U 0 | a^p a_q | U 0 \\rangle
-        \\text{rdm2: } \\gamma^{pq}_{rs} = \\langle \\psi | a^p a^q a_s a_r | \\psi \\rangle
-                                         = \\langle U 0 | a^p a^q a_s a_r | U 0 \\rangle
+    By default the 2-RDM is returned in the physics (Dirac) ordering,
+    ``rdm2[p, q, r, s]`` :math:`= \gamma^{pq}_{rs}`, see ``ordering``.
+
+    The representation depends on the qubit encoding; Jordan-Wigner gives the usual
+    second-quantized RDMs in the occupation picture. Only real orbitals, hence real RDMs, are
+    supported. The result is also stored
+    in ``self._rdm1`` and ``self._rdm2``.
+
+    Version for purely qubit-encoded molecules.
 
     Parameters
     ----------
-    U :
-        Quantum Circuit to achieve the desired state \\psi = U |0\\rangle, non-optional
-    variables :
-        If U is parametrized, then need to hand over a set of fixed variables
-    spin_free :
-        Set whether matrices should be spin-free (summation over spin) or defined by spin-orbitals
-    get_rdm1, get_rdm2 :
-        Set whether either one or both rdm1, rdm2 should be computed. If both are needed at some point,
-        it is recommended to compute them at once.
-    rdm_trafo :
-        The rdm operators can be transformed, e.g., a^dagger_i a_j -> U^dagger a^dagger_i a_j U,
-        where U represents the transformation. The default is set to None, implying that U equas the identity.
-    evaluate :
-        if true, the tequila expectation values are evaluated directly via the tq.simulate command.
-        the protocol is optimized to avoid repetation of wavefunction simulation
-        if false, the rdms are returned as tq.QTensors
+    U : tq.QCircuit
+        Circuit preparing the state. Required.
+    variables : dict, optional
+        Values of the circuit variables, if ``U`` is parametrized.
+    spin_free : bool, optional
+        If True, sum over spin and return RDMs over spatial orbitals; otherwise
+        over spin orbitals. Default is True.
+    get_rdm1, get_rdm2 : bool, optional
+        Which RDMs to compute. Computing both at once is more efficient. Default is True.
+    ordering : str {"dirac", "phys", "chem", "openfermion"}, optional
+        Index ordering of ``rdm2``. Default is "dirac", the physics ordering
+        ``rdm2[p, q, r, s] = <psi|a^p a^q a_s a_r|psi>``; "chem" (Mulliken) and "openfermion" are
+        also possible.
+    use_hcb : bool, optional
+        Use hard-core boson operators (one qubit per spatial orbital). Default is False.
+    rdm_trafo : tq.QCircuit, optional
+        Transformation ``T`` applied to the RDM operators, ``O -> T^dagger O T``. Default is the identity.
+    evaluate : bool, optional
+        If True, simulate the expectation values. If False, return ``(qops, None)``
+        with the unevaluated symmetry-reduced operators; ``rdm_trafo`` is not supported then.
+
     Returns
     -------
+    numpy.ndarray or tuple of numpy.ndarray
+        ``(rdm1, rdm2)``, or only the requested one.
+
+    Raises
+    ------
+    TequilaException
+        If ``U`` is None or the transformation is Bravyi-Kitaev-Superfast.
     """
     # Check whether unitary circuit is not 0
     if U is None:
@@ -894,7 +934,7 @@ def compute_rdms_tequila(
         raise TequilaException("Need to specify a Quantum Circuit.")
 
     def _get_hcb_op(op_tuple):
-        r"""Build the hardcore boson operators: b^\dagger_ib_j + h.c. in qubit encoding"""
+        r"""Build the hard-core boson operators :math:`b^\dagger_i b_j + \mathrm{h.c.}` in the qubit encoding."""
         if len(op_tuple) == 2:
             return 2 * Sm(op_tuple[0][0]) * Sp(op_tuple[1][0])
         elif len(op_tuple) == 4:
@@ -934,12 +974,12 @@ def compute_rdms_tequila(
             return Zero()
 
     def _get_of_op(operator_tuple):
-        """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
+        """Return operator given by a operator tuple as OpenFermion - Fermion operator."""
         op = openfermion.FermionOperator(operator_tuple)
         return op
 
     def _get_qop_hermitian(of_operator) -> QubitHamiltonian:
-        """Returns Hermitian part of Fermion operator as QubitHamiltonian"""
+        """Return the Hermitian part of a FermionOperator as QubitHamiltonian."""
         qop = self.transformation(of_operator)
         # qop = QubitHamiltonian(self.transformation(of_operator))
         real, _imag = qop.split(hermitian=True)
@@ -951,7 +991,7 @@ def compute_rdms_tequila(
             )
 
     def _build_1bdy_operators_spinful() -> list:
-        """Returns spinful one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return spinful one-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetry pq = qp
         ops = []
         for p in range(n_SOs):
@@ -963,7 +1003,7 @@ def compute_rdms_tequila(
         return ops
 
     def _build_2bdy_operators_spinful() -> list:
-        """Returns spinful two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return spinful two-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
         #                and      =  rspq
         ops = []
@@ -979,7 +1019,7 @@ def compute_rdms_tequila(
         return ops
 
     def _build_1bdy_operators_spinfree() -> list:
-        """Returns spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetry pq = qp (not changed by spin-summation)
         ops = []
         for p in range(n_MOs):
@@ -995,7 +1035,7 @@ def compute_rdms_tequila(
         return ops
 
     def _build_2bdy_operators_spinfree() -> list:
-        """Returns spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
         #                and      = rspq
         ops = []
@@ -1033,10 +1073,7 @@ def compute_rdms_tequila(
         return ops
 
     def _assemble_rdm1(evals, rdm1=None) -> numpy.ndarray:
-        """
-        Returns spin-ful or spin-free one-particle RDM built by symmetry conditions
-        Same symmetry with or without spin, so we can use the same function
-        """
+        """Return the spin-ful or spin-free 1-RDM built from the expectation values with the symmetry pq = qp."""
         N = n_MOs if spin_free else n_SOs
         if rdm1 is None:
             rdm1 = numpy.zeros([N, N])
@@ -1051,7 +1088,7 @@ def compute_rdms_tequila(
         return rdm1
 
     def _assemble_rdm2_spinful(evals, rdm2=None) -> numpy.ndarray:
-        """Returns spin-ful two-particle RDM built by symmetry conditions"""
+        """Return spin-ful two-particle RDM built by symmetry conditions."""
         ctr: int = 0
         if rdm2 is None:
             rdm2 = numpy.zeros([n_SOs, n_SOs, n_SOs, n_SOs])
@@ -1077,7 +1114,7 @@ def compute_rdms_tequila(
         return rdm2
 
     def _assemble_rdm2_spinfree(evals, rdm2=None) -> numpy.ndarray:
-        """Returns spin-free two-particle RDM built by symmetry conditions"""
+        """Return spin-free two-particle RDM built by symmetry conditions."""
         ctr: int = 0
         if rdm2 is None:
             rdm2 = numpy.zeros([n_MOs, n_MOs, n_MOs, n_MOs])
@@ -1096,7 +1133,7 @@ def compute_rdms_tequila(
         return rdm2
 
     def _build_1bdy_operators_hcb() -> list:
-        """Returns hcb one-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return hcb one-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetry pq = qp (not changed by spin-summation)
         ops = []
         for p in range(n_MOs):
@@ -1114,7 +1151,7 @@ def compute_rdms_tequila(
         return ops
 
     def _build_2bdy_operators_hcb() -> list:
-        """Returns hcb two-body operators as a symmetry-reduced list of QubitHamiltonians"""
+        """Return hcb two-body operators as a symmetry-reduced list of QubitHamiltonians."""
         # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
         #                and      = rspq
         ops = []
@@ -1247,7 +1284,17 @@ def compute_rdms_tequila(
 
 
 def _assemble_rdm2(evals, n_MOs, rdm2=None) -> numpy.ndarray:
-    """Returns spin-free two-particle RDM built by symmetry conditions"""
+    """Assemble the spin-free 2-RDM from its symmetry-reduced expectation values.
+
+    Parameters
+    ----------
+    evals : sequence
+        Expectation values of the symmetry-reduced operators, in operator order.
+    n_MOs : int
+        Number of spatial orbitals.
+    rdm2 : numpy.ndarray, optional
+        Array to fill in place. Default is a new zero array.
+    """
     ctr: int = 0
     if rdm2 is None:
         rdm2 = numpy.zeros([n_MOs, n_MOs, n_MOs, n_MOs])
@@ -1270,10 +1317,7 @@ def _assemble_rdm2(evals, n_MOs, rdm2=None) -> numpy.ndarray:
 
 
 def _assemble_rdm1(evals, n_MOs, rdm1=None):
-    """
-    Returns spin-ful or spin-free one-particle RDM built by symmetry conditions
-    Same symmetry with or without spin, so we can use the same function
-    """
+    """Assemble the (spin-free or spinful) 1-RDM from the lower-triangle expectation values; ``n_MOs`` is the matrix dimension."""
     N = n_MOs
     if rdm1 is None:
         rdm1 = numpy.zeros([N, N])

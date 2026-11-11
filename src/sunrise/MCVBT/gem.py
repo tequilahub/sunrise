@@ -1,3 +1,5 @@
+"""Generalized eigenvalue problem in the span of several (non-orthogonal) circuits."""
+
 import numpy as np
 import scipy
 from tequila import INSTALLED_BACKENDS
@@ -11,8 +13,34 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
-    """
-    # todo add description and rename function evtl.
+    """Solve the generalized eigenvalue problem ``H c = E S c`` in the basis of the circuit states.
+
+    The Hamiltonian and overlap matrices are evaluated with the chosen backend.
+
+    Parameters
+    ----------
+    circuits : list of QCircuit or list of FCircuit
+        Circuits preparing the basis states.
+    solver : str
+        Backend: a fermionic backend or an installed tequila backend.
+    variables : dict
+        Values of the circuit variables.
+    mol : QuantumChemistryBase
+        Molecule defining the Hamiltonian.
+    silent : bool, optional
+        If False print the Hamiltonian and overlap matrices. Default is True.
+
+    Returns
+    -------
+    v : numpy.ndarray
+        Eigenvalues in ascending order (``v[0]`` is the ground-state energy).
+    vv : numpy.ndarray
+        Eigenvectors as columns (coefficients of the circuits).
+
+    Raises
+    ------
+    ValueError
+        If ``solver`` is unknown.
     """
     transition_matrix = np.eye(len(circuits))
     overlap_matrix = np.eye(len(circuits))

@@ -1,3 +1,5 @@
+"""Fermionic backend ``"tequila"``: conversion of a fermionic braket into a tequila qubit Objective."""
+
 from openfermion import FermionOperator
 from tequila import BraKet, ExpectationValue, Objective
 from tequila.hamiltonian.paulis import I, from_string
@@ -8,6 +10,25 @@ from .fermionic_braket import FermBraketImpl
 
 
 def TequilaBraket(braket: FermBraketImpl, *args, **kwargs) -> Objective:
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"tequila"`` backend, i.e. as a
+    tequila qubit Objective.
+
+    Circuits are mapped to qubit circuits with the molecule's transformation
+    (an up-then-down orbital ordering is used) and the operator is transformed to
+    a qubit operator.
+
+    Parameters
+    ----------
+    braket : FermBraketImpl
+        Fermionic braket holding ket, optional bra, operator and molecule.
+    *args, **kwargs
+        Passed on to tequila's ``ExpectationValue`` or ``BraKet``.
+
+    Returns
+    -------
+    tq.Objective
+        ExpectationValue if the braket is diagonal, otherwise a BraKet.
+    """
     from sunrise.molecules.fermionic_base import FermionicBase
 
     mol = braket.molecule

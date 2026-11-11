@@ -1662,7 +1662,7 @@ def test_clpo_pyscf_ao_order():
     # cc-pVDZ has d shells, whose MOLDEN order (used by janpa) differs from the pyscf one
     from pyscf import scf
 
-    from sunrise.CLPO.pyscf_janpa_interace import _run_janpa_pipeline
+    from sunrise.CLPO.pyscf_janpa_interface import _run_janpa_pipeline
 
     mol = sun.Molecule(
         geometry="O 0.0 0.0 0.0\nH 0.757 0.586 0.0\nH -0.757 0.586 0.0",

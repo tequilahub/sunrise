@@ -1,3 +1,10 @@
+"""Exact and heuristic strategies to choose the graph (edges) of electron pairs for SPA circuits.
+
+References
+----------
+J. S. Kottmann and A. Aspuru-Guzik, Phys. Rev. A 105, 032449 (2022), arXiv:2105.03836.
+"""
+
 from .adapted_heuristics import (
     genetic_algorithm_best_n_solutions,
     random_blossom,

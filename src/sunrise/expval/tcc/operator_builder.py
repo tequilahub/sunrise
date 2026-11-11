@@ -1,5 +1,4 @@
-"""
-Fast, CI-space construction of an operator callable from an arbitrary (up_then_down
+"""Fast, CI-space construction of an operator callable from an arbitrary (up_then_down
 spin-orbital ordered) FermionOperator, avoiding the O(2**n_qubits) dense qubit
 wavefunction round trip.
 
@@ -9,7 +8,7 @@ Two strategies are provided:
   spin-restricted one- and two-body Hamiltonian (same integrals for both spins, which
   covers essentially all physical Hamiltonians/observables built the way TCC itself
   builds its Hamiltonians). When applicable, the operator can be applied directly in
-  CI space via :func:`tencirchem.static.hamiltonian.get_h_fcifunc_from_integral`
+  CI space via ``tencirchem.static.hamiltonian.get_h_fcifunc_from_integral``
   (PySCF's ``direct_nosym`` FCI contraction), at the cost of a CI vector instead of a
   full qubit statevector.
 - ``build_sparse_ci_operator``: a fully general fallback for any other 1-body/2-body
@@ -34,14 +33,23 @@ TOL = 1e-9
 def extract_restricted_integrals(
     operator: FermionOperator, n_orb: int
 ) -> tuple[np.ndarray, np.ndarray, float] | None:
-    """
-    Try to express `operator` (up_then_down spin-orbital indexed, 0..n_orb-1 in one
-    spin block and n_orb..2*n_orb-1 in the other) as a spin-restricted one- and
-    two-body Hamiltonian ``(int1e, int2e, constant)`` compatible with
-    :func:`tencirchem.static.hamiltonian.get_h_fcifunc_from_integral`.
+    """Express an operator as spin-restricted one- and two-body integrals.
 
-    Returns None when the operator has terms beyond 1-/2-body, is not Sz-conserving,
-    or is not spin-restricted; callers should fall back to a fully general method.
+    Parameters
+    ----------
+    operator : FermionOperator
+        Operator in up-then-down spin orbital ordering (indices ``0..n_orb-1`` for
+        one spin and ``n_orb..2*n_orb-1`` for the other).
+    n_orb : int
+        Number of spatial orbitals.
+
+    Returns
+    -------
+    tuple of (numpy.ndarray, numpy.ndarray, float) or None
+        ``(int1e, int2e, constant)`` as expected by tencirchem's
+        ``get_h_fcifunc_from_integral``. None if the operator has terms beyond
+        two-body, is complex, does not conserve Sz or is not spin-restricted;
+        callers should then use ``build_sparse_ci_operator``.
     """
     n_sorb = 2 * n_orb
     isalpha = lambda i: i >= n_orb
@@ -82,6 +90,7 @@ def extract_restricted_integrals(
     int2e = np.full((n_orb,) * 4, np.nan)
 
     def set_or_check(a, b, c, d, v):
+        """Store ``v`` in ``int2e`` or check it matches the stored value."""
         a, b, c, d = a % n_orb, b % n_orb, c % n_orb, d % n_orb
         cur = int2e[a, b, c, d]
         if np.isnan(cur):
@@ -124,10 +133,24 @@ def extract_restricted_integrals(
 def build_sparse_ci_operator(
     operator: FermionOperator, n_qubits: int, ci_strings
 ) -> csr_matrix:
-    """
-    General fallback: build the Jordan-Wigner sparse matrix once (O(2**n_qubits),
-    paid only at construction time) and restrict it to the CI-string basis so that
-    every subsequent application is a cheap CI-space sparse matrix-vector product.
+    """Build a sparse matrix of an operator restricted to the CI-string basis.
+
+    The Jordan-Wigner matrix is built once, at cost ``O(2**n_qubits)``, so each
+    later application is a cheap sparse matrix-vector product.
+
+    Parameters
+    ----------
+    operator : FermionOperator
+        Operator of any body order, also non-Hermitian.
+    n_qubits : int
+        Number of qubits (spin orbitals).
+    ci_strings : array_like of int
+        Bitstrings of the CI basis.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Real part of the operator in the CI basis.
     """
     fop_rev = reverse_fop_idx(operator, n_qubits)
     full_sparse = get_sparse_operator(jordan_wigner(fop_rev), n_qubits=n_qubits)

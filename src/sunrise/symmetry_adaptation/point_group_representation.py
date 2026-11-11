@@ -1,3 +1,5 @@
+"""Representations of point groups: how each symmetry operation acts on a kind of state (3D vectors, orbitals, wavefunctions)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,6 +20,22 @@ S = TypeVar(
 
 @dataclass(frozen=True)
 class PointGroupRepresentation(Generic[T, S]):
+    """A representation of a point group: how each symmetry operation acts on a kind of state.
+
+    Parameters
+    ----------
+    operations : dict of str to T
+        Representation of each operation (e.g. a 3x3 matrix), keyed by its label.
+    application_function : callable
+        ``f(op, state)`` applying an operation to a state. Default is ``op @ state``.
+    is_close_function : callable
+        ``f(state1, state2)`` telling whether two states are equal. Default is ``numpy.isclose(...).all()``.
+
+    See Also
+    --------
+    QuantumChemistryBase.mo_representation : The operations acting on the molecular orbitals.
+    """
+
     operations: dict[str, T]
     application_function: Callable[[T, S], S] = lambda op, state: op @ state
     is_close_function: Callable[[S, S], bool] = lambda state1, state2: numpy.isclose(
@@ -25,14 +43,40 @@ class PointGroupRepresentation(Generic[T, S]):
     ).all()
 
     def apply(self, operation: T, state: S) -> S:
-        """Apply a symmetry operation to a state."""
+        """Apply a symmetry operation to a state and return the new state.
+
+        Parameters
+        ----------
+        operation : T
+            Symmetry operation, e.g. a value of ``operations``.
+        state : S
+            State the operation acts on.
+
+        Returns
+        -------
+        S
+
+        Examples
+        --------
+        >>> rep = mol.mo_representation()
+        >>> rep.apply(rep.operations["i"], wfn)
+        """
 
         return self.application_function(operation, state)
 
     def character_vector(self, state: S) -> NDArray[numpy.complex128]:
-        """
-        Returns the character vector of the representation, i.e. the expectation values <state|op|state> of the
-        symmetry operations. For a state of a one-dimensional irrep these are its characters, either 1 or -1.
+        r"""Return the expectation values :math:`\langle state|O|state \rangle` of the operations, one per operation.
+
+        For a state of a one-dimensional irrep these are its characters, either 1 or -1.
+
+        Parameters
+        ----------
+        state : S
+            State with an ``inner`` product, e.g. a ``tq.QubitWaveFunction``.
+
+        Returns
+        -------
+        numpy.ndarray
         """
 
         return numpy.array(
@@ -43,15 +87,31 @@ class PointGroupRepresentation(Generic[T, S]):
     def get_geometric_representation(
         cls, pg: PointGroup, geometry: list | None = None
     ) -> PointGroupRepresentation[NDArray[numpy.complex128], NDArray[numpy.complex128]]:
-        """
-        Returns the geometric representation of a point group, i.e. where the symmetry operations are represented as 3x3 matrices and the states are 3D vectors.
+        """Return the geometric representation of a point group: 3x3 matrices acting on 3D vectors.
 
-        The matrices are written for the standard orientation of the point group (e.g. the principal axis along z).
-        If the geometry of a molecule is given, e.g. [("H", (0.0, 0.0, 0.35)), ("H", (0.0, 0.0, -0.35))], they are
-        rotated onto the symmetry axes of the molecule. The given orientation is kept if it is the standard one,
-        otherwise the symmetry axes are searched among the directions of the atoms, of the sums and of the cross
-        products of their positions. The directions of the atoms are tried first, so the x-axis passes through an atom
-        when the point group allows it (e.g. the C2' axes of D6h through the atoms of benzene), which fixes labels like B1/B2.
+        The matrices are written for the standard orientation of the point group, with the principal
+        axis along z (for ``Td`` the C3 axes lie along the cube body diagonals, e.g. (1, 1, 1), and the S4
+        axes along x, y and z). If the geometry of a molecule is given, they are rotated onto the
+        symmetry axes of the molecule. The given orientation is kept if it is the standard one,
+        otherwise the symmetry axes are searched among the directions of the atoms, of the sums and of
+        the cross products of their positions. The directions of the atoms are tried first, so the
+        x-axis passes through an atom when the point group allows it (e.g. the C2' axes of D6h through
+        the atoms of benzene), which fixes labels like B1/B2.
+
+        Parameters
+        ----------
+        pg : PointGroup
+        geometry : list, optional
+            Molecular geometry, e.g. ``[("H", (0.0, 0.0, 0.35)), ("H", (0.0, 0.0, -0.35))]``.
+
+        Returns
+        -------
+        PointGroupRepresentation
+
+        Raises
+        ------
+        ValueError
+            If an operation of ``pg`` is not supported.
         """
 
         operation_dict: dict[str, NDArray[numpy.float64]] = {

@@ -1,3 +1,5 @@
+"""Splitting circuits into independent qubit clusters and factorizing expectation values over them."""
+
 from __future__ import annotations
 
 import sys
@@ -12,19 +14,27 @@ sys.setrecursionlimit(10000)
 def make_decomposed_clusters(
     circuit: tq.QCircuit, grouping: int | list | None = None
 ) -> list:
-    """
-    Args
-    ----
-    grouping: int, list, or None
-        Determines how qubits are clustered:
-        - int: Target cluster size. Try to merge smaller clusters to reach this size +-1.
-        - list: User-defined clusters, returned as-is.
-        - None: Clusters are determined automatically based on the circuit's connectivity.
-    circuit: QCircuit
+    """Find groups of qubits that are not connected by any gate of the circuit.
+
+    Parameters
+    ----------
+    circuit : tq.QCircuit
+        Circuit to analyze.
+    grouping : int or list, optional
+        How qubits are clustered:
+
+        - int: target cluster size; smaller clusters are merged to reach this size +-1.
+        - list: user-defined clusters (e.g. ``[{0, 1}, {2, 3}]``), returned as-is.
+        - None: connected components of the circuit.
 
     Returns
     -------
-    List of qubit sets, eg. [{0,1}, {2,3}, {4,5}]
+    list of set of int
+        Qubit clusters, e.g. ``[{0, 1}, {2, 3}, {4, 5}]``.
+
+    Examples
+    --------
+    >>> clusters = sun.SPAFP.make_decomposed_clusters(U, 12)
     """
     if isinstance(grouping, list):
         return grouping
@@ -61,9 +71,23 @@ def make_decomposed_circuits(
     grouping: int | list | None = None,
     clusters: list | None = None,
 ) -> list:
-    """
-    Given a global circuit return a list of local sub-circuits based on qubit clusters.
-    Note: If a gate acts on qubits spanning two or more clusters, then it is NOT added to any sub-circuit!
+    """Split a circuit into one sub-circuit per qubit cluster.
+
+    Gates acting on qubits of more than one cluster are not added to any sub-circuit.
+
+    Parameters
+    ----------
+    U : tq.QCircuit
+        Global circuit.
+    grouping : int or list, optional
+        Clustering rule, see ``make_decomposed_clusters``. Used only if ``clusters`` is None.
+    clusters : list, optional
+        Explicit qubit clusters.
+
+    Returns
+    -------
+    list of tq.QCircuit
+        Local circuits, in the order of the clusters.
     """
     if clusters is None:
         clusters = make_decomposed_clusters(U, grouping)
@@ -82,29 +106,34 @@ def decompose(
     nolist=True,
     grouping: int | list | None = None,
 ):
-    r"""
-    In the case where U is a tensor product: U = U_0 * U_1 * U_2 ...
-    Since H = c_0 + \sum_k (c_k P_k)
-    where each global Pauli string is a tensor product of local Pauli strings:
-    P_k = P_k,0 * P_k,1 * P_k,2 ...
+    r"""Build expectation values of a Hamiltonian that factorize over independent circuit clusters.
 
-    We can decompose the global expectation value:
-    <H>_U --> c_0 + \sum_k (c_k <P_k,0>_U0 * <P_k,1>_U1 * <P_k,2>_U2 ...)
+    If ``U = U_0 * U_1 * ...`` is a tensor product and ``H = c_0 + sum_k c_k P_k``
+    with ``P_k = P_k,0 * P_k,1 * ...``, then
+    ``<H>_U = c_0 + sum_k c_k <P_k,0>_U0 * <P_k,1>_U1 * ...``.
+    Pauli strings acting outside the clusters on anything but Z vanish and are skipped.
 
-    Args
-    ----
-    nolist: bool, optional
-        If True, treats H as a single Hamiltonian and returns a 1D QTensor.
-        If False, H is expected to be a list of Hamiltonians. Default is True.
-    grouping: int, list, or None, optional
-        Determines how qubits are clustered:
-        - int: Target cluster size. Try to merge smaller clusters to reach this size +-1.
-        - list: User-defined clusters (e.g., [{0,1}, {2,3}]).
-        - None: Clusters are determined automatically based on the circuit's connectivity.
+    Parameters
+    ----------
+    H : tq.QubitHamiltonian or list of tq.QubitHamiltonian
+        Hamiltonian, or a list of them if ``nolist`` is False.
+    U : tq.QCircuit
+        Circuit preparing the state.
+    nolist : bool, optional
+        If True, ``H`` is a single Hamiltonian. If False, it is a list.
+        Default is True.
+    grouping : int or list, optional
+        Clustering rule, see ``make_decomposed_clusters``.
 
     Returns
     -------
-    QTensor containing the decomposed ExpectationValue.
+    tq.QTensor
+        One-dimensional tensor with one factorized objective per Hamiltonian.
+
+    Examples
+    --------
+    >>> from sunrise.spafastprototype import decompose
+    >>> E = decompose(H=H, U=U, grouping=6)
     """
 
     all_expvals = {}

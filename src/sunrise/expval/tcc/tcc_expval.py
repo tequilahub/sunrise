@@ -1,3 +1,10 @@
+"""Fermionic backend ``"tcc"``: simulation with TenCirChem in CI space.
+
+``TCCBraket`` wraps a TCC ``EXPVAL`` object. The remaining functions convert
+excitation indices and initial states between sunrise/tequila and TCC
+conventions (TCC angles are ``-theta/2`` of the tequila values).
+"""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -39,6 +46,7 @@ from ..fermionic_braket import FermBraketImpl
 
 def _is_pyscf_molecule(molecule) -> bool:
     # imported here and not at the top: sunrise.molecules imports sunrise.expval while it loads
+    """Return True if the molecule is backed by PySCF."""
     from sunrise.molecules.fermionic_base.pyscf_interface import (
         QuantumChemistryPySCF as FermionicPySCF,
     )
@@ -51,6 +59,33 @@ def _is_pyscf_molecule(molecule) -> bool:
 
 
 class TCCBraket:
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"tcc"`` backend.
+
+    Parameters
+    ----------
+    braket : FermBraketImpl
+        Braket to evaluate. Its molecule is required.
+    backend_kwargs : dict, optional
+        Passed as keyword argument. Accepted keys are ``engine`` (one of
+        "statevector", "tensornetwork", "civector", "civector-large", "pyscf";
+        default "pyscf"), ``backend`` (tensorcircuit backend, default "numpy") and
+        ``dtype``.
+    name : str, optional
+        Label used when printing. Passed as keyword argument.
+    *args, **kwargs
+        Ignored apart from the keywords above.
+
+    Attributes
+    ----------
+    BK : EXPVAL
+        Underlying TCC object holding integrals, excitation operators and
+        parameters.
+
+    References
+    ----------
+    W. Li et al., J. Chem. Theory Comput. 19, 3966 (2023).
+    """
+
     def __init__(self, braket: FermBraketImpl, *args, **kwargs):
         self.operator = None
         if "backend_kwargs" in kwargs:
@@ -149,11 +184,29 @@ class TCCBraket:
             self.operator = self.build_operator(operator)
 
     def __call__(self, variables: list | dict | None = None, *args, **kwargs) -> float:
+        """Evaluate the braket, see ``simulate``."""
         if variables is None:
             variables = {}
         return self.simulate(variables=variables)
 
     def simulate(self, variables: list | dict | None = None) -> float:
+        """Evaluate the braket for the given variable values.
+
+        Parameters
+        ----------
+        variables : dict or Variables, optional
+            Values of the circuit variables.
+
+        Returns
+        -------
+        float
+            Value of the braket.
+
+        Raises
+        ------
+        TequilaException
+            If a variable value is missing.
+        """
         check_variables = {k: k in variables for k in self.extract_variables()}
         if not all(list(check_variables.values())):
             raise TequilaException(
@@ -182,10 +235,7 @@ class TCCBraket:
         )
 
     def extract_variables(self) -> list:
-        """
-        Extract all variables on which the objective depends
-        :return: List of all Variables
-        """
+        """Return the unique variables the braket depends on."""
         v = []
         for d in self.params:
             if isinstance(d, FixedVariable):
@@ -202,6 +252,7 @@ class TCCBraket:
 
     @property
     def energy(self) -> float:
+        """float : energy of the last optimization result."""
         if isinstance(self.opt_res, dict):
             return self.opt_res["e"]
         else:
@@ -209,16 +260,13 @@ class TCCBraket:
 
     @property
     def bra(self):
-        """
-        Excitation operators applied to the bra.
+        """list of list of tuple of int : excitation operators of the bra, in tequila format. Can be
+        set from an FCircuit or from indices ``[[(0, 2), (1, 3)], ...]`` in up-then-down order.
         """
         return indices_tcc_to_tq(self.BK.ex_ops_bra)
 
     @bra.setter
     def bra(self, bra: list[list[tuple[int]]] | FCircuit | None):
-        """
-        Expected FCircuit or indices in [[(0,2),(1,3),...],[(a,b),(c,d),...],...] Format (Upthendown order)
-        """
         if isinstance(bra, FCircuit):
             if bra.initial_state is not None:
                 ini_bra = init_state_from_wavefunction(bra.initial_state)
@@ -239,16 +287,13 @@ class TCCBraket:
 
     @property
     def ket(self):
-        """
-        Excitation operators applied to the ket.
+        """list of list of tuple of int : excitation operators of the ket, in tequila format. Can be
+        set from an FCircuit or from indices ``[[(0, 2), (1, 3)], ...]`` in up-then-down order.
         """
         return indices_tcc_to_tq(self.BK.ex_ops_ket)
 
     @ket.setter
     def ket(self, ket: list[list[tuple[int]]] | FCircuit | None):
-        """
-        Expected FCircuit or indices in [[(0,2),(1,3),...],[(a,b),(c,d),...],...] Format (Upthendown order)
-        """
         if isinstance(ket, FCircuit):
             if ket.initial_state is not None:
                 ini_ket = init_state_from_wavefunction(ket.initial_state)
@@ -269,7 +314,7 @@ class TCCBraket:
 
     @property
     def variables_bra(self) -> dict:
-        """Tequila Circuit Bra variables."""
+        """dict : tequila variables of the bra circuit."""
         bar: dict = deepcopy(self.BK.var_to_param_bra)
         if bar is not None:
             for i, v in bar.items():  # Here to tequila
@@ -279,7 +324,7 @@ class TCCBraket:
 
     @property
     def params_bra(self):
-        """TCC Circuit Bra parameters (values after minimization or variables name)."""
+        """list : TCC parameters of the bra (variable names, or values for fixed angles)."""
         if self.variables_bra is None:
             return []
         d = {v: k for k, v in self.variables_bra.items()}
@@ -292,9 +337,6 @@ class TCCBraket:
 
     @variables_bra.setter
     def variables_bra(self, variables_bra):
-        """
-        See TCC variables
-        """
         for idx, i in enumerate(variables_bra):
             if isinstance(assign_variable(i), (Number, FixedVariable)):
                 variables_bra[idx] = assign_variable(-0.5 * (i % (2 * pi)))
@@ -302,7 +344,7 @@ class TCCBraket:
 
     @property
     def variables_ket(self):
-        """Tequila circuit Ket parameters."""
+        """dict : tequila variables of the ket circuit."""
         bar = deepcopy(self.BK.var_to_param_ket)
         if bar is not None:
             for i in bar:  # to tequila
@@ -312,7 +354,7 @@ class TCCBraket:
 
     @property
     def params_ket(self):
-        """TCC Circuit Ket parameters (values after minimization or variables name)."""
+        """list : TCC parameters of the ket (variable names, or values for fixed angles)."""
         d = {v: k for k, v in self.variables_ket.items()}
         return [
             assign_variable(-2 * v)
@@ -323,9 +365,6 @@ class TCCBraket:
 
     @variables_ket.setter
     def variables_ket(self, variables_ket):
-        """
-        See TCC variables
-        """
         for idx, i in enumerate(variables_ket):
             if isinstance(assign_variable(i), (Number, FixedVariable)):
                 variables_ket[idx] = assign_variable(-0.5 * (i % (2 * pi)))
@@ -333,7 +372,7 @@ class TCCBraket:
 
     @property
     def variables(self) -> dict:
-        """Tequila circuit variables."""
+        """dict : tequila variables of the circuits."""
         bar: dict = deepcopy(self.BK.var_to_param)
         if bar is not None:
             for i, v in bar.items():  # Here to tequila
@@ -343,7 +382,7 @@ class TCCBraket:
 
     @property
     def params(self):
-        """TCC parameters (values after minimization or variables name)."""
+        """list : TCC parameters of bra and ket."""
         k = self.params_ket
         if self.BK.params_bra is None:
             return k
@@ -351,7 +390,6 @@ class TCCBraket:
 
     @variables.setter
     def variables(self, variables):
-        """Tequila circuit variables."""
         for idx, i in enumerate(variables):
             if isinstance(assign_variable(i), (Number, FixedVariable)):
                 variables[idx] = assign_variable(-0.5 * (i % (2 * pi)))
@@ -359,35 +397,23 @@ class TCCBraket:
 
     @property
     def init_state_bra(self):
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
+        """Tensor : initial state of the bra before the excitations, usually Hartree-Fock.
 
-        See Also
-        --------
-        BK.get_init_state_dataframe: Returns initial state information dataframe.
+        See ``BK.get_init_state_dataframe`` for a readable form.
         """
         return self.BK.init_state_bra
 
     @property
     def init_state_ket(self):
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
+        """Tensor : initial state of the ket before the excitations, usually Hartree-Fock.
 
-        See Also
-        --------
-        BK.get_init_state_dataframe: Returns initial state information dataframe.
+        See ``BK.get_init_state_dataframe`` for a readable form.
         """
         return self.BK.init_state_ket
 
     @property
     def init_state(self):
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
-
-        See Also
-        --------
-        BK.get_init_state_dataframe: Returns initial state information dataframe.
-        """
+        """tuple : initial states of bra and ket. Setting it sets both."""
         return self.BK.init_state_bra, self.BK.init_state_ket
 
     @init_state_bra.setter
@@ -405,9 +431,7 @@ class TCCBraket:
 
     @property
     def init_guess(self):
-        """
-        Initial Angle Value for minimization, default all 0.
-        """
+        """list of float : initial variable values for minimization in tequila units, default all 0."""
         return [-2 * i for i in self.BK.init_guess]
 
     @init_guess.setter
@@ -416,6 +440,7 @@ class TCCBraket:
 
     @property
     def param_to_ex_ops_bra(self):
+        """dict : maps each bra variable to the excitation operators using it."""
         if self.params_bra is None:
             return {}
         d = defaultdict(list)
@@ -429,6 +454,7 @@ class TCCBraket:
 
     @property
     def param_to_ex_ops_ket(self):
+        """dict : maps each ket variable to the excitation operators using it."""
         d = defaultdict(list)
         for i, j in enumerate(self.params_ket):
             if hasattr(j, "extract_variables"):
@@ -440,12 +466,14 @@ class TCCBraket:
 
     @property
     def param_to_ex_ops(self):
+        """dict : maps each variable to the excitation operators using it."""
         db = self.param_to_ex_ops_bra if self.params_bra is not None else {}
         dk = self.param_to_ex_ops_ket
         db.update(dk)
         return db
 
     def __str__(self):
+        """Return a readable description of bra, ket and their variables."""
         res = ""
         if self.is_diagonal:
             res += f"{self._name} with indices: {self.ket} with variables {self.params_ket}"
@@ -461,17 +489,21 @@ class TCCBraket:
 
     @property
     def is_diagonal(self):
+        """bool : True if bra and ket are the same, i.e. the braket is an expectation value."""
         return self.BK.is_diagonal()
 
     @property
     def U(self):
-        "Dummy function to work with tequila Objectives"
+        """FCircuit or list of FCircuit : the ket if diagonal, otherwise ``[bra, ket]``. Needed by
+        tequila Objectives.
+        """
         if self.is_diagonal:
             return self.ket
         else:
             return [self.bra, self.ket]
 
     def count_measurements(self) -> int:
+        """Return a cost measure of the braket: the number of integrals (or the CI-vector length)."""
         mes = 0
         if self.BK.int1e is not None:
             mes += prod(self.BK.int1e.shape)
@@ -487,20 +519,40 @@ class TCCBraket:
     def build_operator(
         self, operator: str | FermionOperator | QubitHamiltonian | Number | None = None
     ) -> Callable | None:
-        """
-        Build the expectation value operator.
-        Even if it is accepted a QubitHamiltonian, we disencorage its use here since TCC works on fermionic states.
-        It will be applied to the ci_vector and kept these results which doesn't leave the ci_vector space with REAL Coeff.
+        """Build the operator applied to the ket.
 
-        For a FermionOperator, the operator is applied directly in CI space: a spin-restricted
-        1-/2-body operator (e.g. most physical Hamiltonians/observables) is contracted via PySCF's
-        FCI machinery (:func:`get_h_fcifunc_from_integral`); any other operator (higher-body terms,
+        A FermionOperator is applied directly in CI space: a spin-restricted one- or two-body
+        operator (e.g. most physical Hamiltonians and observables) is contracted with PySCF's FCI
+        machinery (``get_h_fcifunc_from_integral``); any other operator (higher-body terms,
         non-Hermitian excitation operators, ...) falls back to a Jordan-Wigner sparse matrix built
-        once and restricted to the CI-string basis. Both avoid ever materializing a dense
-        2**n_qubits qubit wavefunction, unlike the QubitHamiltonian path below.
+        once and restricted to the CI-string basis. Neither path ever builds a dense
+        ``2**n_qubits`` qubit wavefunction.
+
+        A QubitHamiltonian is accepted but discouraged, since TCC works on fermionic states: it is
+        applied to the CI vector through a dense qubit wavefunction, keeping only the results that
+        stay in the CI space, with real coefficients.
+
+        Parameters
+        ----------
+        operator : str or FermionOperator or QubitHamiltonian or number, optional
+            "I" (identity), "H" (molecular Hamiltonian, the default of the backend), "HCB"
+            (hard-core boson Hamiltonian, through restricted integrals, no speedup), a
+            FermionOperator, a QubitHamiltonian or a constant.
+
+        Returns
+        -------
+        callable or number or None
+            Function mapping a CI vector to the operator applied to it, the constant itself for a
+            number, or None for the Hamiltonian stored in ``BK``.
+
+        Raises
+        ------
+        TequilaException
+            If the operator is not supported.
         """
 
         def from_string(operator: str):
+            """Set up ``BK`` for the string operator "I", "H" or "HCB"."""
             if operator.upper() == "I":
                 # identity as N/n_elec: exact on the fixed particle-number CI space
                 nmo = len(self.BK.aslst)
@@ -575,6 +627,7 @@ class TCCBraket:
             n_qubits: int,
             ket: list[float],
         ) -> list[float]:
+            """Apply a QubitHamiltonian to a CI vector through a qubit wavefunction."""
             hket = zeros(len(ci_vect))
             wfv = QubitWaveFunction(
                 n_qubits=n_qubits, numbering=BitNumbering.LSB, dense=True
@@ -591,6 +644,7 @@ class TCCBraket:
 
 
 def init_state_from_wavefunction(wvf: QubitWaveFunction):
+    """Return the initial state as a list of ``[bitstring, amplitude]`` pairs, in TCC format."""
     if not isinstance(wvf._state, dict):
         return init_state_from_array(wvf=wvf)
     init_state = []
@@ -603,9 +657,7 @@ def init_state_from_wavefunction(wvf: QubitWaveFunction):
 
 
 def init_state_from_array(wvf: QubitWaveFunction, tol=1e-6):
-    """
-    Expected Initial State in UptheDown
-    """
+    """Return a dense wavefunction in up-then-down order as ``[bitstring, amplitude]`` pairs, dropping amplitudes below ``tol``."""
     if isinstance(wvf._state, dict):
         return init_state_from_wavefunction(wvf)
     init_state = []
@@ -623,9 +675,18 @@ def init_state_from_array(wvf: QubitWaveFunction, tol=1e-6):
 
 
 def indices_tq_to_tcc(indices: list[list[tuple[int]]] | None = None):
-    """
-    Expected indices like [[(0,1),(n_mo+0,n_mo+1),...],[(a,b),(c,d),...],...] (in upthendown)
-    Returned [(...,n_mo+0,0,1,n_mo+1,...),(...,c,a,b,d,...)]
+    """Convert tequila excitation indices into TCC excitation operators.
+
+    Parameters
+    ----------
+    indices : list of list of tuple of int, optional
+        Excitations in up-then-down order, e.g. ``[[(0, 1), (n_mo, n_mo + 1)], ...]``.
+
+    Returns
+    -------
+    tuple
+        ``(ex_ops, params, param_ids)`` with ex_ops as ``[(..., n_mo, 0, 1, n_mo + 1, ...), ...]``,
+        or three Nones if ``indices`` is None.
     """
     if indices is None:
         return None, None, None
@@ -653,9 +714,19 @@ def indices_tq_to_tcc(indices: list[list[tuple[int]]] | None = None):
 def indices_tcc_to_tq(
     indices: list[list[tuple[int]]] | None = None,
 ) -> list[list[tuple[int]]]:
-    """
-    Expected indices like [(...,n_mo+0,0,1,n_mo+1,...),(...,c,a,b,d,...)]
-    Returned [[(0,1),(n_mo+0,n_mo+1),...],[(a,b),(c,d),...],...] (in upthendown)
+    """Convert TCC excitation operators into tequila excitation indices.
+
+    Inverse of ``indices_tq_to_tcc``.
+
+    Parameters
+    ----------
+    indices : list of tuple of int, optional
+        TCC format, e.g. ``[(..., n_mo, 0, 1, n_mo + 1, ...), ...]``.
+
+    Returns
+    -------
+    list of list of tuple of int or None
+        Excitations in up-then-down order, e.g. ``[[(0, 1), (n_mo, n_mo + 1)], ...]``.
     """
     if indices is None:
         return None
@@ -674,6 +745,7 @@ def indices_tcc_to_tq(
 
 
 def map_variables(x: list[Variable, Objective], dvariables: dict):
+    """Return the value of ``x``, evaluating it with ``dvariables`` if it is a Variable or Objective."""
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):

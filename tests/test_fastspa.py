@@ -2,7 +2,7 @@ import pytest
 import tequila as tq
 from numpy import isclose
 
-import sunrise as sn
+import sunrise as sun
 
 
 @pytest.mark.parametrize(
@@ -14,13 +14,13 @@ import sunrise as sn
 )
 @pytest.mark.parametrize("nature", ["qubit", "hybrid"])
 def test_fast_spa_opt(geom, nature):
-    tqmol = sn.Molecule(geometry=geom, basis_set="sto-3g", units="a", backend="pyscf")
-    snmol = sn.Molecule(
+    tqmol = sun.Molecule(geometry=geom, basis_set="sto-3g", units="a", backend="pyscf")
+    snmol = sun.Molecule(
         geometry=geom, basis_set="sto-3g", units="a", nature=nature, backend="pyscf"
     )
 
-    tqmol, tqedges = sn.CLPO.generate_CLPO_molecule_edges(mol=tqmol)
-    snmol, snedges = sn.CLPO.generate_CLPO_molecule_edges(mol=snmol)
+    tqmol, tqedges = sun.CLPO.generate_CLPO_molecule_edges(mol=tqmol)
+    snmol, snedges = sun.CLPO.generate_CLPO_molecule_edges(mol=snmol)
 
     tqU = tqmol.make_ansatz("SPA", edges=tqedges) + tqmol.UC(1, 2, "a")
     snU = snmol.make_ansatz("SPA", edges=snedges) + snmol.UC(1, 2, "a")
@@ -28,8 +28,8 @@ def test_fast_spa_opt(geom, nature):
     tqres = tq.minimize(
         tq.ExpectationValue(H=tqmol.make_hamiltonian(), U=tqU), silent=True
     )
-    snres = sn.minimize(
-        sn.SPAFP.decompose(H=snmol.make_hamiltonian(), U=snU, grouping=4),
+    snres = sun.minimize(
+        sun.SPAFP.decompose(H=snmol.make_hamiltonian(), U=snU, grouping=4),
         silent=True,
         gradient="2-point",
         method_options={"finite_diff_rel_step": 1.0e-4},
@@ -47,21 +47,21 @@ def test_fast_spa_opt(geom, nature):
 )
 @pytest.mark.parametrize("nature", ["qubit", "hybrid"])
 def test_fast_spa_opt_orb(geom, nature):
-    tqmol = sn.Molecule(geometry=geom, basis_set="sto-3g", units="a", backend="pyscf")
-    snmol = sn.Molecule(
+    tqmol = sun.Molecule(geometry=geom, basis_set="sto-3g", units="a", backend="pyscf")
+    snmol = sun.Molecule(
         geometry=geom, basis_set="sto-3g", units="a", nature=nature, backend="pyscf"
     )
 
-    tqmol, tqedges = sn.CLPO.generate_CLPO_molecule_edges(mol=tqmol)
-    snmol, snedges = sn.CLPO.generate_CLPO_molecule_edges(mol=snmol)
+    tqmol, tqedges = sun.CLPO.generate_CLPO_molecule_edges(mol=tqmol)
+    snmol, snedges = sun.CLPO.generate_CLPO_molecule_edges(mol=snmol)
 
-    tqopt = sn.optimize_orbitals(
+    tqopt = sun.optimize_orbitals(
         molecule=tqmol,
         circuit=tqmol.make_ansatz("HCB-SPA", edges=tqedges),
         silent=True,
         use_hcb=True,
     )
-    snopt = sn.SPAFP.run_spa(
+    snopt = sun.SPAFP.run_spa(
         mol=snmol, edges=snedges, silent=True, initial_guess=False, grouping=4
     )
 

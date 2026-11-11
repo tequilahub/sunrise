@@ -1,17 +1,23 @@
-"""
-ffsim backend: the states are dense ffsim CI vectors of one (n_alpha, n_beta) sector, on which
-every FCircuit gate exp(i*theta/2*G) acts through ffsim.linear_operator(G).
+r"""Fermionic backend ``"ffsim"``: dense CI vectors simulated with ffsim.
+
+The states are dense ffsim CI vectors of one :math:`(n_\alpha, n_\beta)` sector, in up-then-down
+spin orbital ordering. Every FCircuit gate :math:`e^{i \frac{\theta}{2} G}` acts through
+``ffsim.linear_operator(G)``, with ``G`` from ``make_excitation_generator_op`` (minus the generator
+of ``FermionicExcitation``, so it is the same gate).
 
 Limits compared to spex, which keeps only the determinants it reaches:
-- gates and measured FermionOperators must conserve the particle number and S_z (ffsim's
-  linear_operator only works within one sector): spin-flip excitations like a+_alpha a_beta, or
-  operators changing N, raise a TequilaException. Spin-mixed doubles that keep S_z are fine.
-- an initial_state mixing different (n_alpha, n_beta) sectors raises a TequilaException.
-- the CI vector is dense, binom(norb, n_alpha) * binom(norb, n_beta) * 16 bytes
-  (about 38 GB for H18 in STO-3G).
-- ffsim has no Pauli operators: a tequila QubitHamiltonian (e.g. the hardcore-boson Hamiltonian)
-  is applied in python on the up-then-down QubitWaveFunction of the ket and projected back on
-  the CI sector, which is exact for <bra|H|ket> but slow.
+
+- Gates and measured FermionOperators must conserve the particle number and :math:`S_z`
+  (ffsim's ``linear_operator`` only works within one sector): spin-flip excitations like
+  :math:`a^\dagger_\alpha a_\beta`, or operators changing N, raise a TequilaException.
+  Spin-mixed doubles that keep :math:`S_z` are fine.
+- An initial state mixing different :math:`(n_\alpha, n_\beta)` sectors raises a
+  TequilaException.
+- The CI vector is dense, :math:`\binom{n_{orb}}{n_\alpha} \binom{n_{orb}}{n_\beta} \cdot 16`
+  bytes (about 38 GB for H18 in STO-3G).
+- ffsim has no Pauli operators: a tequila QubitHamiltonian (e.g. the hard-core boson
+  Hamiltonian) is applied in Python on the up-then-down QubitWaveFunction of the ket and
+  projected back on the CI sector, which is exact for :math:`\langle bra|H|ket \rangle` but slow.
 """
 
 from __future__ import annotations
@@ -45,6 +51,22 @@ from ..spex.spex_expval import _civect_to_qwvf, _qwvf_to_civect
 
 
 class FFS_EXPVAL:
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"ffsim"`` backend.
+
+    The molecule is converted to ``ffsim.MolecularData``. Circuits are converted once to ffsim
+    linear operators of their generators and applied to the initial state (Hartree-Fock unless a
+    circuit defines one; if only one side defines it, the other side starts from zero, as in spex).
+
+    Parameters
+    ----------
+    braket : FermBraketImpl
+        Braket to evaluate. Its molecule (sunrise molecule or PySCF ``Mole``) is required.
+    name : str, optional
+        Label used when printing. Passed as keyword argument.
+    *args, **kwargs
+        Ignored apart from ``name``.
+    """
+
     def __init__(
         self,
         braket: FermBraketImpl,
@@ -131,11 +153,29 @@ class FFS_EXPVAL:
     def __call__(
         self, variables: list | dict | Variables = None, *args, **kwargs
     ) -> float:
+        """Evaluate the braket, see ``simulate``."""
         if variables is None:
             variables = {}
         return self.simulate(variables=variables)
 
     def simulate(self, variables: list | dict | None = None) -> float:
+        """Evaluate the braket for the given variable values.
+
+        Parameters
+        ----------
+        variables : dict or Variables, optional
+            Values of the circuit variables, keyed by Variable or name.
+
+        Returns
+        -------
+        float
+            Real part of the braket.
+
+        Raises
+        ------
+        TequilaException
+            If a variable value is missing.
+        """
         bra, ket = self.states(variables)
         # no operator: overlap <bra|ket>
         if self.operator is not None:
@@ -143,8 +183,24 @@ class FFS_EXPVAL:
         return float(real(vdot(bra, ket)))
 
     def states(self, variables: list | dict | None = None) -> tuple[ndarray, ndarray]:
-        """
-        The CI vectors of bra and ket after applying their circuits.
+        """Return the CI vectors of bra and ket after applying their circuits.
+
+        Parameters
+        ----------
+        variables : dict or Variables, optional
+            Values of the circuit variables, keyed by Variable or name.
+
+        Returns
+        -------
+        bra : numpy.ndarray
+            CI vector of the bra (the ket if the braket is diagonal).
+        ket : numpy.ndarray
+            CI vector of the ket.
+
+        Raises
+        ------
+        TequilaException
+            If a variable value is missing.
         """
         if variables is None:
             variables = {}
@@ -182,10 +238,7 @@ class FFS_EXPVAL:
         return bra, ket
 
     def extract_variables(self) -> list[Variable]:
-        """
-        Extract all variables on which the objective depends
-        :return: List of all Variables
-        """
+        """Return the unique variables of bra and ket."""
         variables_bra = []
         variables_ket = []
         uniques_bra = []
@@ -200,16 +253,15 @@ class FFS_EXPVAL:
 
     @property
     def bra(self) -> FCircuit:
-        """
-        Excitation operators applied to the bra.
+        """FCircuit or None : circuit preparing the bra state, in up-then-down ordering.
+
+        Setting it requires an FCircuit: its initial state, if any, becomes the bra initial state, and
+        the ffsim generators of its gates are built.
         """
         return self._bra
 
     @bra.setter
     def bra(self, bra: FCircuit):
-        """
-        Expected FCircuit.
-        """
         assert isinstance(bra, FCircuit), (
             f"FCircuit expected, received {type(bra).__name__}"
         )
@@ -223,16 +275,15 @@ class FFS_EXPVAL:
 
     @property
     def ket(self) -> FCircuit:
-        """
-        Excitation operators applied to the ket.
+        """FCircuit or None : circuit preparing the ket state, in up-then-down ordering.
+
+        Setting it requires an FCircuit: its initial state, if any, becomes the ket initial state, and
+        the ffsim generators of its gates are built.
         """
         return self._ket
 
     @ket.setter
     def ket(self, ket: FCircuit):
-        """
-        Expected FCircuit
-        """
 
         assert isinstance(ket, FCircuit), (
             f"FCircuit expected, received {type(ket).__name__}"
@@ -247,39 +298,33 @@ class FFS_EXPVAL:
 
     @property
     def variables_bra(self) -> list[Variable]:
-        """Tequila Circuit Bra variables."""
+        """list of Variable : variables of the bra circuit."""
         return self.bra.variables
 
     @property
     def variables_ket(self) -> list[Variable]:
-        """Tequila circuit Ket parameters."""
+        """list of Variable : variables of the ket circuit."""
         return self.ket.variables
 
     @property
     def variables(self) -> list[Variable]:
-        """Tequila circuit variables."""
+        """list of Variable : variables of bra followed by ket, possibly with repetitions."""
         return self.variables_bra + self.variables_ket
 
     @property
     def init_state_bra(self) -> QubitWaveFunction:
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
-        """
+        """QubitWaveFunction : initial state of the bra before the excitations, usually Hartree-Fock."""
         return self.__civect_to_qwvf(self._init_state_bra)
 
     @property
     def init_state_ket(self) -> QubitWaveFunction:
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
-        """
+        """QubitWaveFunction : initial state of the ket before the excitations, usually Hartree-Fock."""
 
         return self.__civect_to_qwvf(self._init_state_ket)
 
     @property
     def init_state(self) -> tuple[QubitWaveFunction, QubitWaveFunction]:
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
-        """
+        """tuple of QubitWaveFunction : initial states of bra and ket. Setting it sets both."""
         return self.init_state_bra, self.init_state_ket
 
     @init_state_bra.setter
@@ -309,6 +354,7 @@ class FFS_EXPVAL:
 
     @property
     def is_diagonal(self):
+        """bool : True if bra and ket are the same (or one is missing), i.e. the braket is an expectation value."""
         if self.bra is None:
             return True
         if self.ket is None:
@@ -317,13 +363,16 @@ class FFS_EXPVAL:
 
     @property
     def U(self):
-        "Dummy function to work with tequila Objectives"
+        """FCircuit or list of FCircuit : the ket if diagonal, otherwise ``[bra, ket]``. Needed by
+        tequila Objectives.
+        """
         if self.is_diagonal:
             return self.ket
         else:
             return [self.bra, self.ket]
 
     def count_measurements(self) -> int:
+        """Return a cost measure of the braket: the number of integrals (or the CI-vector length)."""
         mes = 0
         if self.molecule.one_body_integrals is not None:
             mes += self.molecule.one_body_integrals.size
@@ -346,10 +395,28 @@ class FFS_EXPVAL:
     def build_operator(
         self, operator: str | FermionOperator | QubitHamiltonian = None
     ) -> None | Callable | LinearOperator:
-        """
-        Build the expectation value operator.
-        Even if it is accepted a QubitHamiltonian, we disencorage its use here for fermionic states limitations.
-        It will be applied to the ci_vector and kept these results which doesn't leave the ci_vector.
+        """Convert an operator into an ffsim linear operator on the CI vector.
+
+        Parameters
+        ----------
+        operator : str or number or FermionOperator or QubitHamiltonian
+            "I" (identity), "H" (molecular Hamiltonian), "HCB" (hard-core boson Hamiltonian), a
+            constant, an ffsim FermionOperator, an openfermion FermionOperator (interleaved spin
+            orbital ordering) or a tequila QubitHamiltonian.
+
+        Returns
+        -------
+        scipy.sparse.linalg.LinearOperator
+
+        Raises
+        ------
+        TequilaException
+            If the operator is not supported or does not conserve N and :math:`S_z`.
+
+        Notes
+        -----
+        A QubitHamiltonian is accepted but discouraged: it is applied to the CI vector through a
+        QubitWaveFunction, keeping only the part inside the CI sector, which is slow.
         """
         norb, nelec = self.molecule.norb, self.molecule.nelec
 
@@ -407,6 +474,7 @@ class FFS_EXPVAL:
 
 
 def map_variables(x: list[Variable, Objective], dvariables: dict):
+    """Return the value of ``x``, evaluating it with ``dvariables`` if it is a Variable or Objective."""
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):
@@ -417,6 +485,10 @@ def map_variables(x: list[Variable, Objective], dvariables: dict):
 def _qwvf_to_ffsim(wvf: QubitWaveFunction, norb: int, nelec: tuple) -> ndarray:
     # spin orbital p of the up-then-down ordering is orbital p % norb, beta if p >= norb:
     # the bit order of ffsim's strings, so the LSB integer keys are ffsim strings
+    """Convert an up-then-down QubitWaveFunction to a dense ffsim CI vector of the sector ``nelec``.
+
+    Raises a TequilaException if the state has components outside the sector.
+    """
     state = _qwvf_to_civect(wvf, 2 * norb)
     for k in state:
         if (bin(k & ((1 << norb) - 1)).count("1"), bin(k >> norb).count("1")) != nelec:
@@ -432,6 +504,7 @@ def _qwvf_to_ffsim(wvf: QubitWaveFunction, norb: int, nelec: tuple) -> ndarray:
 
 
 def _linear_operator(op: FermionOperator, norb: int, nelec: tuple) -> LinearOperator:
+    """Return ``ffsim.linear_operator(op)``, raising a TequilaException if ``op`` does not conserve N and :math:`S_z`."""
     if not (op.conserves_particle_number() and op.conserves_spin_z()):
         raise TequilaException(
             f"FFSim BraKet: ffsim only supports operators conserving N and S_z, received {op}"
@@ -440,7 +513,11 @@ def _linear_operator(op: FermionOperator, norb: int, nelec: tuple) -> LinearOper
 
 
 def _hcb_operator(molecule: ffsim.MolecularData) -> FermionOperator:
-    # same terms as SpexExpval._build_hcb_hamiltonian; keys are (creation, beta, orbital)
+    """Return the hard-core boson Hamiltonian as ffsim FermionOperator, with the terms of ``SpexExpval._build_hcb_hamiltonian``.
+
+    Each electron pair lives on the two spin orbitals of a spatial orbital. The keys of the terms
+    are ``(creation, beta, orbital)``.
+    """
     h, g = molecule.one_body_integrals, molecule.two_body_integrals
     terms = {(): molecule.core_energy}
     for i in range(molecule.norb):
@@ -470,7 +547,10 @@ def _hcb_operator(molecule: ffsim.MolecularData) -> FermionOperator:
 
 
 def _build_generators(circuit: FCircuit, norb: int, nelec: tuple) -> list:
-    # per gate, per term of gate.indices: (is_number_operator, ffsim linear operator of its generator)
+    """Return, per gate and per term of ``gate.indices``, ``(is_number_operator, generator)``.
+
+    The generator is the ffsim linear operator of the excitation generator of the term.
+    """
     generators = []
     for gate in circuit.gates:
         terms = []
@@ -491,6 +571,15 @@ def _build_generators(circuit: FCircuit, norb: int, nelec: tuple) -> list:
 def _apply_circuit_to_state(
     state: ndarray, circuit: FCircuit, generators: list, dvariables: dict
 ) -> ndarray:
+    r"""Apply the gates of ``circuit`` to the CI vector ``state`` with the values in ``dvariables``.
+
+    Since :math:`G^3 = G`, each generator acts as
+
+    .. math::
+        e^{i \frac{\theta}{2} G} = 1 + i \sin\frac{\theta}{2} G + \left(\cos\frac{\theta}{2} - 1\right) G^2,
+
+    and number operators (``Phase`` gates) as :math:`1 + (e^{-i \theta / 2} - 1) N`, as in spex.
+    """
     result = state.astype(complex128)
     if circuit is None:
         return result
@@ -512,6 +601,30 @@ def _apply_circuit_to_state(
 def ffsim_circuit_simulator(
     U: FCircuit, variables, n_orb: int | None = None, **backend_kwargs
 ) -> QubitWaveFunction:
+    r"""Simulate an FCircuit with ffsim and return the final wavefunction.
+
+    Parameters
+    ----------
+    U : FCircuit
+        Circuit to simulate. Its initial state fixes the :math:`(n_\alpha, n_\beta)` sector;
+        without one an empty wavefunction is returned.
+    variables : dict, optional
+        Values of the circuit variables.
+    n_orb : int, optional
+        Number of spatial orbitals. Default is inferred from the circuit.
+    **backend_kwargs
+        Ignored.
+
+    Returns
+    -------
+    QubitWaveFunction
+        Final state.
+
+    Raises
+    ------
+    TequilaException
+        If a gate does not conserve N and :math:`S_z`.
+    """
     if n_orb is None:
         n_orb = int(ceil((U.max_qubit() + 1) / 2))
     n_qubits = 2 * n_orb
