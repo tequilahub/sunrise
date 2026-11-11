@@ -178,7 +178,10 @@ def test_qubit_braket_matches_tequila():
     variables = {v: 0.3 for v in ket.extract_variables()} | {"b": 1.1}
     pairs = [
         (sun.ExpectationValue(H="H", U=ket, mol=mol), tq.ExpectationValue(H=H, U=ket)),
-        (sun.Braket(ket=ket, bra=bra, mol=mol), tq.BraKet(ket=ket, bra=bra, operator=H)),
+        (
+            sun.Braket(ket=ket, bra=bra, mol=mol),
+            tq.BraKet(ket=ket, bra=bra, operator=H),
+        ),
         (sun.Overlap(ket=ket, bra=bra), tq.BraKet(ket=ket, bra=bra)),
         (sun.Fidelity(ket=ket, bra=bra), tq.Fidelity(bra=bra, ket=ket)),
         (
