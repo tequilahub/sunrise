@@ -571,6 +571,20 @@ def test_simulate_fcircuit_initial_state_qulacs():
     )
 
 
+def test_simulate_nested_lists():
+    pytest.importorskip("qulacs")
+    U = tq.gates.X(target=0)
+    result = sn.simulate([U, [U, []]], backend="qulacs", initial_state=1)
+    expected = tq.QubitWaveFunction.from_string("1.0|0>")
+    assert len(result) == 2
+    assert len(result[1]) == 2
+    assert result[0].isclose(expected)
+    assert result[1][0].isclose(expected)
+    assert result[1][1] == []
+    with pytest.raises(tq.TequilaException, match="forgot to pass down the variables"):
+        sn.simulate([[tq.gates.Ry(angle="a", target=0)]], backend="qulacs")
+
+
 def test_simulate_fcircuit_uses_picked_backend():
     picked = sn.pick_backend()
     if picked not in sn_simulate_circuit.INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR:

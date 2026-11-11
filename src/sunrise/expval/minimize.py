@@ -170,11 +170,6 @@ def simulate(
 
     variables = format_variable_dictionary(variables)
 
-    if variables is None and not (len(objective.extract_variables()) == 0):
-        raise TequilaException(
-            f"You called simulate for a parametrized type but forgot to pass down the variables: {objective.extract_variables()}"
-        )
-
     if isinstance(objective, list):
         return [
             simulate(
@@ -190,6 +185,11 @@ def simulate(
             )
             for op in objective
         ]
+    if variables is None and not (len(objective.extract_variables()) == 0):
+        raise TequilaException(
+            f"You called simulate for a parametrized type but forgot to pass down the variables: {objective.extract_variables()}"
+        )
+
     if isinstance(objective, FCircuit):
         return simulate_fcircuit(
             *args,
