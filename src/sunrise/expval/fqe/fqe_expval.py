@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from ctypes import ArgumentError
+from numbers import Number
 
 import fqe
 import tequila as tq
 from fqe.hamiltonians.diagonal_coulomb import DiagonalCoulomb
 from fqe.hamiltonians.sparse_hamiltonian import SparseHamiltonian
 from numpy import ndarray
-from tequila import QubitWaveFunction, TequilaException
+from tequila import QubitHamiltonian, QubitWaveFunction, TequilaException
+from tequila.hamiltonian.paulis import from_string
 
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.utils.fermionic_utils import *
@@ -28,6 +30,7 @@ class FQEBraKet:
         self.bra_original_obj = None
         self.bra_generator = None
         self.fermion_operator = None
+        self.overlap_factor = 1.0  # result without h_fqe: overlap_factor * <bra|ket>
 
         ket = braket.ket
         bra = braket.bra
@@ -35,6 +38,34 @@ class FQEBraKet:
         operator = braket.operator
         self.n_ele = mol.n_electrons
         self.n_orbitals = mol.n_orbitals
+
+        if isinstance(operator, str) and operator.lower() not in [
+            "h",
+            "hamiltonian",
+            "hcb",
+            "i",
+            "identity",
+        ]:
+            operator = from_string(operator)
+        if isinstance(operator, QubitHamiltonian):
+            # Jordan-Wigner with up-then-down qubits back to fermions, as for the other backends
+            n_modes = 2 * self.n_orbitals
+            fop = openfermion.reverse_jordan_wigner(
+                operator.to_openfermion(), n_qubits=n_modes
+            )
+            fop = openfermion.reorder(
+                fop, openfermion.up_then_down, num_modes=n_modes, reverse=True
+            )
+            # terms changing the number of alpha or beta electrons leave the (n_ele, 0) sector of fqe
+            operator = openfermion.FermionOperator()
+            for term, coeff in fop.terms.items():
+                if all(
+                    sum(1 if a else -1 for p, a in term if p % 2 == spin) == 0
+                    for spin in (0, 1)
+                ):
+                    operator += openfermion.FermionOperator(term, coeff)
+            if all(term == () for term in operator.terms):
+                operator = operator.terms.get((), 0.0)
 
         if isinstance(operator, str):
             if operator.lower() == "h" or operator.lower() == "hamiltonian":
@@ -60,8 +91,6 @@ class FQEBraKet:
                 )
             elif operator.lower() == "i" or operator.lower() == "identity":
                 self.h_fqe = None
-            else:
-                raise TequilaException(f"Not implemented operator {operator}")
         elif isinstance(
             operator, openfermion.ops.operators.fermion_operator.FermionOperator
         ):
@@ -69,11 +98,10 @@ class FQEBraKet:
                 operator, norb=mol.n_orbitals
             )
             self.fermion_operator = operator
-        elif isinstance(operator, float):
-            operator = openfermion.ops.FermionOperator(term=None, coefficient=operator)
-            self.h_fqe = fqe.get_hamiltonian_from_openfermion(
-                operator, norb=mol.n_orbitals
-            )
+        elif isinstance(operator, Number):
+            # fqe drops the constant of a Hamiltonian without other terms
+            self.h_fqe = None
+            self.overlap_factor = operator
         else:
             raise TequilaException(f"Not recognized format {type(operator)}")
 
@@ -198,7 +226,7 @@ class FQEBraKet:
                 self.h_fqe = SparseHamiltonian(self.fermion_operator)
                 result = fqe.expectationValue(wfn=ket_t, ops=self.h_fqe, brawfn=bra_t)
         else:
-            result = fqe.dot(bra_t, ket_t)
+            result = self.overlap_factor * fqe.dot(bra_t, ket_t)
         return result.real
 
     def print_ket(self):

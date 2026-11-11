@@ -34,6 +34,7 @@ from tequila import (
     Variable,
     simulate,
 )
+from tequila.hamiltonian import paulis
 from tequila.objective.objective import Variables
 
 from sunrise.molecules.qubit_base import qc_base
@@ -366,11 +367,10 @@ class FFS_EXPVAL:
             elif operator.upper() == "HCB":
                 # applied term by term: ~2*norb**2 terms instead of contracting all integrals
                 return _linear_operator(_hcb_operator(self.molecule), norb, nelec)
-            else:
-                raise TequilaException(
-                    f"No operator str {operator} supported on FFSim BraKet"
-                )
 
+        if isinstance(operator, str) and operator.upper() not in ["I", "H", "HCB"]:
+            # a Pauli string, as on the tequila backend
+            operator = paulis.from_string(operator)
         if isinstance(operator, str):
             operator = from_string(operator)
         elif isinstance(operator, Number):
@@ -392,7 +392,17 @@ class FFS_EXPVAL:
 
             def f(v):
                 wvf = self.__civect_to_qwvf(v).apply_qubitoperator(H)
-                return self.__qwvf_to_civect(wvf)
+                # the part outside the (n_alpha, n_beta) sector has no overlap with the bra
+                state = {
+                    k: a
+                    for k, a in _qwvf_to_civect(wvf, 2 * norb).items()
+                    if (
+                        bin(k & ((1 << norb) - 1)).count("1"),
+                        bin(k >> norb).count("1"),
+                    )
+                    == nelec
+                }
+                return self.__qwvf_to_civect(_civect_to_qwvf(state, 2 * norb))
 
             H = operator
             operator = LinearOperator(
