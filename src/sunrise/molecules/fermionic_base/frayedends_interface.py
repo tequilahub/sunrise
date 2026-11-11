@@ -5,9 +5,9 @@ import warnings
 from tequila import TequilaWarning
 
 from sunrise.molecules.qubit_base import ParametersQC
-from sunrise.molecules.qubit_base.madness_interface import (
-    MadnessPNOMixin,
-    TequilaMadnessException,
+from sunrise.molecules.qubit_base.frayedends_interface import (
+    FrayedEndsMixin,
+    SunriseFrayedEndsException,
 )
 
 from ...expval import ExpectationValue
@@ -15,7 +15,7 @@ from ...fermionic_operations import FCircuit
 from .fer_base import FermionicBase
 
 
-class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
+class QuantumChemistryFrayed(FrayedEndsMixin, FermionicBase):
     """
     Fermionic molecule with MRA-PNO orbitals computed by madness
     The madness calculation (or the read-in of name_htensor.npy, name_gtensor.npy and name_pnoinfo.txt with n_pno="read")
@@ -24,7 +24,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
     """
 
     def __init__(self, parameters: ParametersQC, *args, **kwargs):
-        self._init_madness(super().__init__, parameters, *args, **kwargs)
+        super().__init__(parameters, *args, **kwargs)
 
     def get_spa_edges(self, *args, **kwargs):
         """
@@ -135,7 +135,7 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
         excitations = name.split("-")[-1]
 
         if "HCB" in name and "S" in excitations:
-            raise TequilaMadnessException(
+            raise SunriseFrayedEndsException(
                 f"name={name}, HCB + Singles can't be realized"
             )
 

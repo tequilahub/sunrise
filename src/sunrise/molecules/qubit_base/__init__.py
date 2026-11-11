@@ -7,7 +7,6 @@ from tequila import TequilaWarning
 
 from .chemistry_tools import NBodyTensor, ParametersQC
 from .encodings import known_encodings
-from .madness_interface import QuantumChemistryMadness
 from .qc_base import QuantumChemistryBase
 
 __all__ = [
@@ -17,16 +16,21 @@ __all__ = [
     "NBodyTensor",
     "ParametersQC",
     "QuantumChemistryBase",
-    "QuantumChemistryMadness",
     "known_encodings",
     "show_available_modules",
     "show_supported_modules",
 ]
 
-SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "psi4", "madness", "pyscf"]
+SUPPORTED_QCHEMISTRY_BACKENDS = [
+    "base",
+    "psi4",
+    "frayedends",
+    "madness",
+    "frayed",
+    "pyscf",
+]
 INSTALLED_QCHEMISTRY_BACKENDS = {
     "base": QuantumChemistryBase,
-    "madness": QuantumChemistryMadness,
 }
 
 try:
@@ -40,6 +44,16 @@ try:
     from .pyscf_interface import QuantumChemistryPySCF
 
     INSTALLED_QCHEMISTRY_BACKENDS["pyscf"] = QuantumChemistryPySCF
+except ImportError:
+    pass
+
+try:
+    from .frayedends_interface import QuantumChemistryFrayed
+
+    INSTALLED_QCHEMISTRY_BACKENDS["frayedends"] = QuantumChemistryFrayed
+    INSTALLED_QCHEMISTRY_BACKENDS["madness"] = QuantumChemistryFrayed
+    INSTALLED_QCHEMISTRY_BACKENDS["frayed"] = QuantumChemistryFrayed
+
 except ImportError:
     pass
 
@@ -126,13 +140,19 @@ def Molecule(
         backend = "base"
 
     if backend is None:
-        if basis_set is None or basis_set.lower() in ["madness", "mra", "pno"]:
-            backend = "madness"
+        if basis_set is None or basis_set.lower() in [
+            "madness",
+            "mra",
+            "pno",
+            "frayed",
+            "frayedends",
+        ]:
+            backend = "frayedends"
             basis_set = "mra"
             parameters.basis_set = basis_set
             if orbital_type is not None and orbital_type.lower() not in [
                 "pno",
-                "mra-pno",
+                "mra-pno",  # TODO: Add something? Do it also in hybrid/fermionic inits
             ]:
                 warnings.warn(
                     f"only PNOs supported as orbital_type without basis set. Setting to pno - You gave={orbital_type}",
@@ -182,7 +202,7 @@ def Molecule(
 
     if (
         basis_set is None
-        and backend.lower() not in ["base", "madness"]
+        and backend.lower() not in ["base", "madness", "frayed", "frayedends"]
         and not integrals_provided
     ):
         raise ValueError(f"no basis_set or integrals provided for backend={backend}")

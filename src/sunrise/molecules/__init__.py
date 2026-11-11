@@ -199,6 +199,12 @@ def load_molecule(
             if "backend_data" in f
             else None
         )
+        if "mra_orbitals" in f:
+            # frayedends MRA orbitals, raw bytes next to the json (see FrayedEndsMixin.save)
+            backend_data["mra_orbitals"] = [
+                f["mra_orbitals"][str(i)][()].tobytes()
+                for i in range(len(f["mra_orbitals"]))
+            ]
     integrals["two_body_integrals"] = NBodyTensor(
         elems=integrals["two_body_integrals"], ordering="chem"
     )

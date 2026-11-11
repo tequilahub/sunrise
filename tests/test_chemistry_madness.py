@@ -1,4 +1,6 @@
 import os
+import subprocess
+import sys
 
 import numpy
 import pytest
@@ -8,21 +10,31 @@ import sunrise as sun
 from sunrise.molecules.qubit_base import INSTALLED_QCHEMISTRY_BACKENDS
 
 has_pyscf = "pyscf" in INSTALLED_QCHEMISTRY_BACKENDS
+has_frayedends = "frayedends" in INSTALLED_QCHEMISTRY_BACKENDS
 
-executable = sun.chemistry.madness_interface.QuantumChemistryMadness.find_executable()
-root = os.environ.get("MAD_ROOT_DIR")
-if executable is None:
-    executable = (
-        sun.chemistry.madness_interface.QuantumChemistryMadness.find_executable(root)
+# madness runs only in the frayedends worker process, check once that it starts (e.g. MRA_DATA_DIR pointing to a missing folder breaks it)
+madness_error = None
+if has_frayedends:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import frayedends as fe; world = fe.MadWorld(ndims=3); del world",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,  # the error is reported by test_madness_runs
     )
-print("root = ", root)
-print("executable = ", executable)
+    if proc.returncode != 0:
+        madness_error = proc.stderr[-2000:]
+has_madness = has_frayedends and madness_error is None
 
 
-def test_executable():
-    if root is not None and executable is None:
+def test_madness_runs():
+    # frayedends installed but madness does not start: fail here instead of skipping all madness tests silently
+    if has_frayedends and madness_error is not None:
         raise tq.TequilaException(
-            "Found no pno_integrals executable but found MAD_ROOT_DIR={root}\nSeems like you wanted that tested"
+            f"frayedends is installed but madness does not start:\n{madness_error}"
         )
 
 
@@ -42,7 +54,7 @@ def test_madness_he_data():
     assert numpy.isclose(-2.87761809, result.energy, atol=1.0e-5)
 
 
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 def test_madness_frozen_core():
     molecule = sun.chemistry.Molecule(
         geometry="Li 0.0 0.0 0.0\nLi 0.0 0.0 1.6", units="angstrom"
@@ -51,7 +63,7 @@ def test_madness_frozen_core():
     assert molecule.parameters.get_number_of_core_electrons() == 4
 
 
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 def test_madness_full_he():
     # relies on madness being compiled and MAD_ROOT_DIR exported
     # or pno_integrals in the path
@@ -60,14 +72,14 @@ def test_madness_full_he():
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
-    assert numpy.isclose(-2.861522e00, EHF, atol=1.0e-5)
+    assert numpy.isclose(-2.8616792, EHF, atol=1.0e-5)  # numerical HF limit -2.8616800
     U = molecule.make_upccgsd_ansatz()
     E = tq.ExpectationValue(H=H, U=U)
     result = tq.minimize(method="bfgs", objective=E, initial_values=0.0, silent=True)
-    assert numpy.isclose(-2.87761809, result.energy, atol=1.0e-5)
+    assert numpy.isclose(-2.8777604, result.energy, atol=1.0e-5)
 
 
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 def test_madness_data_io():
     sun.Molecule(geometry="he 0.0 0.0 0.0", units="angstrom")
     sun.Molecule(geometry="he 0.0 0.0 0.0", n_pno="read", units="angstrom")
@@ -89,7 +101,7 @@ def test_madness_data_io():
     )
 
 
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 def test_madness_full_li_plus():
     # relies on madness being compiled and MAD_ROOT_DIR exported
     # or pno_integrals in the path
@@ -105,14 +117,14 @@ def test_madness_full_li_plus():
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
-    assert numpy.isclose(-7.236247e00, EHF, atol=1.0e-5)
+    assert numpy.isclose(-7.2364144, EHF, atol=1.0e-5)  # numerical HF limit -7.2364152
     U = molecule.make_upccgsd_ansatz()
     E = tq.ExpectationValue(H=H, U=U)
     result = tq.minimize(method="bfgs", objective=E, initial_values=0.0, silent=True)
-    assert numpy.isclose(-7.251177798, result.energy, atol=1.0e-5)
+    assert numpy.isclose(-7.2513397, result.energy, atol=1.0e-5)
 
 
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 def test_madness_full_be():
     # relies on madness being compiled and MAD_ROOT_DIR exported
     # or pno_integrals in the path
@@ -123,7 +135,9 @@ def test_madness_full_be():
     H = molecule.make_hamiltonian()
     UHF = molecule.prepare_reference()
     EHF = tq.simulate(tq.ExpectationValue(H=H, U=UHF))
-    assert numpy.isclose(-14.57269300, EHF, atol=1.0e-5)
+    assert numpy.isclose(
+        -14.5730220, EHF, atol=1.0e-5
+    )  # numerical HF limit -14.5730232
     U = molecule.make_upccgsd_ansatz()
     E = tq.ExpectationValue(H=H, U=U)
     result = tq.minimize(method="bfgs", objective=E, initial_values=0.0, silent=True)
@@ -141,12 +155,12 @@ def test_madness_full_be():
     ],
 )
 @pytest.mark.skipif(
-    executable is None and not os.path.isfile("balanced_be_gtensor.npy"),
+    not has_madness and not os.path.isfile("balanced_be_gtensor.npy"),
     reason="madness was not found",
 )
 def test_madness_upccgsd(trafo):
     n_pno = 2
-    if os.path.isfile("balanced_be_gtensor.npy"):
+    if os.path.isfile("balanced_be_gtensor.npy"): # Idea will fix the tests so far but waiting to improved  behaviour on frayed
         n_pno = "read"
     mol = sun.chemistry.Molecule(
         name="balanced_be",
@@ -226,7 +240,7 @@ def test_madness_upccgsd(trafo):
 @pytest.fixture(scope="module")
 def madness_be_dir(tmp_path_factory):
     # one madness calculation, the molecules of the natures read its files
-    if executable is None:
+    if not has_madness:
         pytest.skip("madness was not found")
     path = tmp_path_factory.mktemp("madness_be")
     cwd = os.getcwd()
@@ -310,7 +324,7 @@ def test_madness_upccgsd_natures(case, nature, select, request, monkeypatch):
         )
 
 
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 def test_madness_save_load(tmp_path, monkeypatch):
     # the PNO pair structure is saved with the molecule, it is loaded without madness files
     monkeypatch.chdir(tmp_path)
@@ -360,8 +374,134 @@ def test_madness_save_load(tmp_path, monkeypatch):
             assert loaded.select == mol.select
 
 
+@pytest.mark.skipif(not has_frayedends, reason="frayedends not installed")
 @pytest.mark.skipif(not has_pyscf, reason="PySCF not installed")
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+def test_frayed_save_load(tmp_path, monkeypatch):
+    # the MRA orbitals (SavedFct bytes) and their world parameters are saved with the molecule
+    # built from integrals, so no madness worker is needed
+    geometry = "Li 0.0 0.0 0.0\nH 0.0 0.0 1.6"
+    c, h, g = sun.Molecule(
+        geometry=geometry, basis_set="sto-3g", backend="pyscf", frozen_core=False
+    ).get_integrals()
+    mra_orbitals = [bytes([i, 0, 255]) * (i + 1) for i in range(h.shape[0])]
+    mra_parameters = {"L": 30.0, "k": 7, "thresh": 1.0e-5}
+    mol = sun.Molecule(
+        geometry=geometry,
+        basis_set="sto-3g",
+        backend="frayedends",
+        one_body_integrals=h,
+        two_body_integrals=g,
+        nuclear_repulsion=c,
+        active_orbitals=[1, 2, 3, 4, 5],
+        transformation="ReorderedJordanWigner",
+        mra_orbitals=mra_orbitals,
+        mra_parameters=mra_parameters,
+    )
+    mol.save(str(tmp_path / "lih.h5"))
+    (tmp_path / "other").mkdir()
+    monkeypatch.chdir(tmp_path / "other")
+    loaded = sun.load_molecule(str(tmp_path / "lih.h5"))
+
+    assert type(loaded) is type(mol)
+    assert loaded.mra_orbitals == mra_orbitals
+    assert loaded.mra_parameters == mra_parameters
+    assert [o.idx_total for o in loaded.integral_manager.active_orbitals] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+    ]
+    assert loaded.make_hamiltonian() == mol.make_hamiltonian()
+
+
+@pytest.mark.skipif(not has_frayedends, reason="frayedends not installed")
+@pytest.mark.skipif(not has_pyscf, reason="PySCF not installed")
+def test_frayed_pno_read_and_save(tmp_path, monkeypatch):
+    # PNO route without madness: the worker result is faked (HF orbitals 0, 1 and two PNOs of the pair (1, 1))
+    import json
+    import tempfile
+
+    from sunrise.molecules.qubit_base import _frayed_worker
+
+    geometry = "Li 0.0 0.0 0.0\nH 0.0 0.0 1.6"
+    c, h, g = sun.Molecule(
+        geometry=geometry, basis_set="sto-3g", backend="pyscf", frozen_core=False
+    ).get_integrals(ordering="mulliken")
+    requests = []
+
+    def fake_run_frayed(request):
+        requests.append(request)
+        workdir = tempfile.mkdtemp(dir=tmp_path)
+        for i in range(4):
+            with open(os.path.join(workdir, f"orbital_{i}"), "wb") as f:
+                f.write(bytes([i]) * 5)
+        with open(os.path.join(workdir, "mra_parameters.json"), "w") as f:
+            json.dump({"L": 50.0, "k": 7}, f)
+        return {
+            "h": h[:4, :4],
+            "g": g.elems[:4, :4, :4, :4],
+            "nuclear_repulsion": numpy.float64(c),
+            "occ": numpy.array([2.0, 2.0, 0.1, 0.05]),
+            "pair": numpy.array([(0, 0), (1, 1), (1, 1), (1, 1)]),
+            "workdir": workdir,
+        }
+
+    monkeypatch.setattr(_frayed_worker, "run_frayed", fake_run_frayed)
+    monkeypatch.chdir(tmp_path)
+    mol = sun.Molecule(
+        geometry=geometry, backend="frayedends", name="lih", n_pno=2, pno={"maxrank": 2}
+    )
+
+    assert requests[0]["n_orbitals"] == 4
+    assert requests[0]["madness"] == {"dft": {"charge": 0}, "pno": {"maxrank": 2}}
+    # the Li 1s (no PNOs) is not active
+    assert [o.idx_total for o in mol.integral_manager.active_orbitals] == [1, 2, 3]
+    assert list(mol.integral_manager.active_space.reference_orbitals) == [0, 1]
+    o1 = mol.integral_manager.orbitals[1]
+    assert [x.idx_total for x in mol.get_pair_orbitals(o1, o1, exclude=o1)] == [2, 3]
+
+    read = sun.Molecule(
+        geometry=geometry, backend="frayedends", name="lih", n_pno="read"
+    )
+    assert len(requests) == 1
+    assert read.make_hamiltonian() == mol.make_hamiltonian()
+    assert read.mra_orbitals == mol.mra_orbitals
+    assert [o.pair for o in read.integral_manager.orbitals] == [
+        o.pair for o in mol.integral_manager.orbitals
+    ]
+
+    mol.save_mra_orbitals("act_SPA_orb", "orbs")
+    assert sorted(os.listdir("orbs")) == [f"act_SPA_orb{i}.data" for i in range(4)]
+
+
+@pytest.mark.skipif(not has_pyscf, reason="PySCF not installed")
+@pytest.mark.parametrize("solver", ["fci", "dmrg"])
+def test_frayed_state_average_rdms(solver):
+    # the state average rdms (dirac) give the mean energy of the roots
+    from sunrise.molecules.qubit_base._frayed_worker import _SA_SOLVERS
+
+    if solver == "dmrg":
+        pytest.importorskip("pyblock2")
+    mol = sun.Molecule(
+        geometry="H 0.0 0.0 -1.5\nH 0.0 0.0 -0.5\nH 0.0 0.0 0.5\nH 0.0 0.0 1.5",
+        basis_set="6-31g",
+        backend="pyscf",
+    )
+    c, h, g = mol.get_integrals(ordering="chem")
+    energies, rdm1, rdm2 = _SA_SOLVERS[solver](c, h, g.elems, mol.n_electrons, 3)
+    e_rdm = (
+        c
+        + numpy.einsum("pq,pq", h, rdm1)
+        + 0.5 * numpy.einsum("pqrs,prqs", rdm2, g.elems)
+    )
+    assert len(energies) == 3
+    assert numpy.isclose(numpy.trace(rdm1), mol.n_electrons)
+    assert numpy.isclose(e_rdm, numpy.mean(energies), atol=1.0e-8)
+
+
+@pytest.mark.skipif(not has_pyscf, reason="PySCF not installed")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 def test_madness_pyscf_bridge():
     mol = sun.chemistry.Molecule(
         geometry="Be 0.0 0.0 0.0",
@@ -382,7 +522,7 @@ def test_madness_pyscf_bridge():
 
 
 @pytest.mark.skipif(condition=not has_pyscf, reason="pyscf not found")
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 @pytest.mark.parametrize("restrict_to_hcb", [False, True])
 def test_orbital_optimization(restrict_to_hcb):
     name = "data/beh2_{R}"
@@ -417,7 +557,7 @@ def test_orbital_optimization(restrict_to_hcb):
     assert success
 
 
-@pytest.mark.skipif(executable is None, reason="madness was not found")
+@pytest.mark.skipif(not has_madness, reason="madness was not found")
 @pytest.mark.skipif(condition=not has_pyscf, reason="pyscf not found")
 def test_orbital_optimization_adapt():
     name = "data/beh2_{R}"

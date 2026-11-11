@@ -7,12 +7,17 @@ from tequila import TequilaWarning
 from sunrise.molecules.qubit_base.chemistry_tools import ParametersQC
 
 from .fer_base import FermionicBase
-from .madness_interface import QuantumChemistryMadness
 
-SUPPORTED_QCHEMISTRY_BACKENDS = ["base", "pyscf", "psi4", "madness"]
+SUPPORTED_QCHEMISTRY_BACKENDS = [
+    "base",
+    "psi4",
+    "frayedends",
+    "madness",
+    "frayed",
+    "pyscf",
+]
 INSTALLED_QCHEMISTRY_BACKENDS = {
     "base": FermionicBase,
-    "madness": QuantumChemistryMadness,
 }
 
 try:
@@ -26,6 +31,16 @@ try:
     from .pyscf_interface import QuantumChemistryPySCF
 
     INSTALLED_QCHEMISTRY_BACKENDS["pyscf"] = QuantumChemistryPySCF
+except ImportError:
+    pass
+
+try:
+    from .frayedends_interface import QuantumChemistryFrayed
+
+    INSTALLED_QCHEMISTRY_BACKENDS["frayedends"] = QuantumChemistryFrayed
+    INSTALLED_QCHEMISTRY_BACKENDS["madness"] = QuantumChemistryFrayed
+    INSTALLED_QCHEMISTRY_BACKENDS["frayed"] = QuantumChemistryFrayed
+
 except ImportError:
     pass
 
@@ -98,8 +113,14 @@ def FerMolecule(
     if integrals_provided and backend is None:
         backend = "base"
     if backend is None:
-        if basis_set is None or basis_set.lower() in ["madness", "mra", "pno"]:
-            backend = "madness"
+        if basis_set is None or basis_set.lower() in [
+            "madness",
+            "mra",
+            "pno",
+            "frayed",
+            "frayedends",
+        ]:
+            backend = "frayedends"
             basis_set = "mra"
             parameters.basis_set = basis_set
             if orbital_type is not None and orbital_type.lower() not in [
@@ -153,7 +174,7 @@ def FerMolecule(
 
     if (
         basis_set is None
-        and backend.lower() not in ["base", "madness"]
+        and backend.lower() not in ["base", "madness", "frayed", "frayedends"]
         and not integrals_provided
     ):
         raise ValueError(f"no basis_set or integrals provided for backend={backend}")
