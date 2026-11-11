@@ -103,8 +103,7 @@ class PointGroup:
 #
 # The degenerate irreps (E, T) work there too - the character projector lands on
 # the whole carrier space of the irrep, and the symmetrizer orthonormalizes within
-# each irrep sector afterwards. Note that ProjectionIrrepAssigner only labels states
-# with <psi|O|psi> = +/-1 for every operation, i.e. states of one-dimensional irreps.
+# each irrep sector afterwards.
 
 # D4h. Convention: the C4 axis is z, the molecule lies in the xy-plane. C2' are taken
 # along x and y, C2'' along the diagonals y = +/- x. For a square whose atoms sit

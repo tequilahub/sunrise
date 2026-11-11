@@ -451,6 +451,21 @@ def test_SALC_symmetrization_correctness() -> None:
         )
 
 
+# Tests that the projection assigner labels states of degenerate irreps: an electron added to the degenerate pair
+# of canonical orbitals of H3+ gives an E' state
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+def test_projection_degenerate_irrep() -> None:
+    mol = sun.Molecule(
+        geometry="H 1. 0. 0. \n H -0.5 0.8660254038 0. \n H -0.5 -0.8660254038 0.",
+        basis_set="sto-3g",
+        backend="pyscf",
+        charge=1,
+    )
+    assigner = IrrepAssigner(mol, "projection")
+    assert FockSpaceState(mol, "110000", assigner).irrep == "A1'"
+    assert FockSpaceState(mol, "111000", assigner).irrep == "E'"
+
+
 # Tests SALC symmetrization when the operations mix orbitals: C3 mixes the degenerate canonical orbitals of H3+,
 # and every SALC is kept by the projector of its irrep, (d / |G|) sum_g chi(g) g
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
