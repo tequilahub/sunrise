@@ -615,8 +615,9 @@ class FCircuit:
                 bits = [0] * n
                 for q, b in enumerate(k.array):
                     bits[qubit_map.get(q, q)] = b
+                # the bitstring class of the keys, tequila names it differently depending on the bit numbering
                 basis = v * QubitWaveFunction.from_basis_state(
-                    n, BitString.from_array(bits)
+                    n, type(k).from_array(bits)
                 )
                 initial_state = (
                     basis if initial_state is None else initial_state + basis
