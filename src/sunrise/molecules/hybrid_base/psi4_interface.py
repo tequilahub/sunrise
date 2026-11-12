@@ -36,4 +36,3 @@ class QuantumChemistryPsi4(Psi4Mixin, HybridBase):
             self._select = {}
             self.transformation = self._initialize_transformation(*args, **kwargs)
         self.update_select(select, n_orb=self.n_orbitals)
-        self.up_then_down = self.transformation.up_then_down
