@@ -685,9 +685,14 @@ class FCircuit:
         """
         U = deepcopy(self)
         if molecule is not None:
+            assert molecule.transformation is not None, (
+                "A fermionic molecule has no qubit transformation, use a qubit or hybrid molecule"
+            )
             res = QCircuit()
             U = U.to_udud(molecule.n_orbitals)
-            molecule.transformation.up_then_down = True
+            # the tequila molecules have no up_then_down
+            if hasattr(molecule, "up_then_down"):
+                molecule.up_then_down = True
             if self.initial_state is not None:
                 states = [k for k, v in self.initial_state.items() if abs(v) > 1.0e-6]
                 if len(states) > 1:

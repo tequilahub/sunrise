@@ -133,7 +133,6 @@ class HybridBase(qc_base):
         else:
             self.transformation: EncodingBase = transformation
         self.update_select(select, n_orb=self.n_orbitals)
-        self.up_then_down = self.transformation.up_then_down
 
     # Select Related Functions
     def update_select(

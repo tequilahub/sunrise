@@ -289,6 +289,20 @@ def test_to_qcircuit_jordan_wigner():
     wfn = tq.simulate(U.to_qcircuit(mol), variables=variables)
     expected = sn.simulate(U, variables=variables, backend="tequila", n_orb=2)
     assert np.allclose(wfn.to_array(), expected.to_array())
+    # the molecule follows the ordering of the circuit
+    assert mol.up_then_down
+
+
+def test_fermionic_molecule_up_then_down():
+    # the fermionic molecules are always ordered up then down and have no qubit circuit
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    assert mol.up_then_down
+    with pytest.raises(tq.TequilaException):
+        mol.up_then_down = False
+    with pytest.raises(AssertionError):
+        sn.FCircuit().to_qcircuit(mol)
 
 
 def test_to_qcircuit_initial_state():
