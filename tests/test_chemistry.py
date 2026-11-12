@@ -87,7 +87,7 @@ def test_base(trafo):
     H = molecule.make_hamiltonian()
     eigvals = numpy.linalg.eigvalsh(H.to_matrix())
     assert numpy.isclose(eigvals[0], -2.87016214e00)
-    if "trafo" in standard_trafos:  # others change spectrum outside of the groundstate
+    if trafo in standard_trafos:  # others change spectrum outside of the groundstate
         assert numpy.isclose(eigvals[-1], 7.10921141e-01)
         assert len(eigvals) == 16
 
@@ -454,7 +454,7 @@ def test_upccgsd(geometry, trafo):
         geometry=geometry, units="angstrom", basis_set="sto-3g", transformation=trafo
     )
     if not molecule.supports_ucc():
-        return
+        pytest.skip(f"{trafo} has no UCC support")
     energy = do_test_upccgsd(molecule)
     fci = molecule.compute_energy("fci")
     assert numpy.isclose(fci, energy, atol=1.0e-3)
@@ -1356,13 +1356,12 @@ def test_spa_consistency(geometry, name, optimize, transformation):
         transformation=transformation,
     ).use_native_orbitals()
 
-    # test compares HCB and non-HCB SPA implementations
-    # conversion needs to be implemented for comparisson
-    # if not, HCB is not used in  circuit optimization anyways
+    # test compares HCB and non-HCB SPA implementations, the HCB one needs hcb_to_me
+    # (without it, HCB is not used in circuit optimization anyway)
     try:
         mol.transformation.hcb_to_me()
     except tq.TequilaException:
-        return
+        pytest.skip(f"{transformation} has no hcb_to_me")
 
     # doesn't need to make physical sense for the test
     edges = []
@@ -1388,6 +1387,33 @@ def test_spa_consistency(geometry, name, optimize, transformation):
         print(UX)
 
     assert numpy.isclose(F, 1.0)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize(
+    "transformation", ["BravyiKitaevTree", "ReorderedBravyiKitaevTree"]
+)
+def test_bravyi_kitaev_tree_me_to_jw(transformation):
+    # me_to_jw turns the Hamiltonian into the Jordan-Wigner one (6 spin orbitals, not a power of 2)
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0"
+    mol, jw = [
+        sun.Molecule(
+            geometry=geometry,
+            basis_set="sto-3g",
+            backend="pyscf",
+            charge=1,
+            transformation=t,
+        )
+        for t in [
+            transformation,
+            transformation.replace("BravyiKitaevTree", "JordanWigner"),
+        ]
+    ]
+    U = mol.transformation.me_to_jw()
+    U.n_qubits = 2 * mol.n_orbitals
+    U = U.to_matrix()
+    H, H_jw = mol.make_hamiltonian().to_matrix(), jw.make_hamiltonian().to_matrix()
+    assert numpy.allclose(U @ H @ U.conj().T, H_jw)
 
 
 @pytest.mark.skipif(
