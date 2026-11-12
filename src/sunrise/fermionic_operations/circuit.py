@@ -670,7 +670,7 @@ class FCircuit:
         idle = max(2 * n_orb - U.n_qubits, 0)
         return kron(U.to_matrix(variables=variables), eye(2**idle))
 
-    def add_controls(self, control, inpl: bool = False) -> FCircuit | None:  # TODO
+    def add_controls(self, control, inplace: bool = False) -> FCircuit | None:  # TODO
         pass
 
     def to_qcircuit(
