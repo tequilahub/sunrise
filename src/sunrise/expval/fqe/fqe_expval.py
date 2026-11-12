@@ -338,8 +338,8 @@ def set_init_state(
         indices, values = init_state_from_wavefunction(
             wvf=init_state, n_orb=n_orb, bin_dict=bin_dict
         )
-        for i, index in enumerate(indices):
-            coeff[index][index] = values[i]
+        for (alpha, beta), value in zip(indices, values):
+            coeff[alpha][beta] = value
 
         wfn.set_wfn(strategy="from_data", raw_data={(n_ele, 0): coeff})
         wfn.normalize()
@@ -357,14 +357,11 @@ def init_state_from_wavefunction(wvf: QubitWaveFunction, n_orb: int, bin_dict: d
     values = []
     for idx, i in wvf.items():
         if abs(i) > 1e-6:
-            vec = idx.binary
-            if len(vec) < n_orb:
-                vec = "0" * (n_orb - len(vec)) + vec
-            if len(vec) > n_orb:
-                vec = vec[:n_orb]
-            vec = vec[::-1]
-            # vec = vec[len(vec)//2:]
-            indices.append(bin_dict[vec])
-            values.append(abs(i))  # todo not sure about this
+            # up-then-down: the first n_orb qubits are alpha, the last n_orb beta
+            vec = "".join(str(b) for b in idx.array).ljust(2 * n_orb, "0")
+            # fqe strings have orbital 0 as the rightmost bit
+            alpha, beta = vec[:n_orb][::-1], vec[n_orb:][::-1]
+            indices.append((bin_dict[alpha], bin_dict[beta]))
+            values.append(i)
 
     return indices, values
