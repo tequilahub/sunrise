@@ -52,6 +52,7 @@ from sunrise import ADAPT
 from sunrise import ADAPT as adapt
 from sunrise import graph_selection
 from sunrise import utils
+from sunrise import excited_states
 
 __all__ = [
     "ADAPT",
@@ -76,6 +77,7 @@ __all__ = [
     "adapt",
     "chemistry",
     "draw",
+    "excited_states",
     "gates",
     "generate_CLPO_molecule_edges",
     "generate_HAO_molecule",
