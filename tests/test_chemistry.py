@@ -1671,10 +1671,32 @@ def test_clpo_pyscf_ao_order():
     )
     pfmol = sun.MoleculeToPyscf(mol)
     mf = scf.RHF(pfmol).run()
-    aho, clpo, _, _ = _run_janpa_pipeline(pfmol, mf.mo_coeff, mf.mo_occ, mf.mo_energy)
+    aho, clpo, _, _, _ = _run_janpa_pipeline(
+        pfmol, mf.mo_coeff, mf.mo_occ, mf.mo_energy
+    )
     s = pfmol.intor("int1e_ovlp")
     assert numpy.allclose(aho.T @ s @ aho, numpy.eye(pfmol.nao), atol=1.0e-8)
     assert numpy.allclose(clpo.T @ s @ clpo, numpy.eye(pfmol.nao), atol=1.0e-8)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_hao_molecule_edges_pyscf():
+    # the bonds of BeH2 are (Be hybrid, H), the HAOs are the two hybrids followed by the two H s orbitals
+    mol = sun.Molecule(
+        geometry="Be 0 0 0\nH 0 0 1.326\nH 0 0 -1.326",
+        basis_set="sto-3g",
+        backend="pyscf",
+        active_orbitals=[1, 2, 5, 6],
+    )
+    hao, edges = sun.CLPO.generate_HAO_molecule_edges(mol)
+    assert edges == [(0, 2), (1, 3)]
+    ref = sun.CLPO.generate_HAO_molecule(mol)
+    assert numpy.allclose(
+        hao.integral_manager.orbital_coefficients,
+        ref.integral_manager.orbital_coefficients,
+    )
+    _, edges = mol.use_HAO_orbitals_and_edges()
+    assert edges == [(0, 2), (1, 3)]
 
 
 @pytest.mark.skipif(
