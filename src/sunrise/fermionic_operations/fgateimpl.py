@@ -24,12 +24,10 @@ class FGateImpl:
         | FixedVariable
         | None = None,
         reordered: bool = False,
-        control: int | list | tuple | None = None,
     ):
         self.reordered = reordered
         self._indices = indices
         self.variables = variables
-        self.control = control
         self._name = "GenericFermionic"
         self.verify()
 
@@ -38,20 +36,7 @@ class FGateImpl:
         return self._name
 
     def is_controlled(self):
-        return len(self.control) > 0
-
-    @property
-    def control(self) -> tuple:
-        return self._control
-
-    @control.setter
-    def control(self, control: int | list | tuple | None):
-        # qubits of the qubit circuit (see FCircuit.to_qcircuit), not spin orbitals: to_upthendown/to_udud leave them alone
-        if control is None:
-            control = ()
-        elif isinstance(control, numbers.Integral):
-            control = (control,)
-        self._control = tuple(sorted(set(control)))
+        return False  # TODO: at some point we should
 
     def to_upthendown(self, norb: int):
         if not self.reordered:
@@ -84,8 +69,7 @@ class FGateImpl:
         return self
 
     def __str__(self):
-        control = f" ,control = {self.control}" if self.is_controlled() else ""
-        return f"{self.name}(indices = {self.indices} ,variables = {self.variables!r}{control})"
+        return f"{self.name}(indices = {self.indices} ,variables = {self.variables!r})"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -96,8 +80,6 @@ class FGateImpl:
         if self.reordered != other.reordered:
             return False
         if self.variables != other.variables:
-            return False
-        if self.control != other.control:
             return False
         return self.indices == other.indices
 
@@ -174,7 +156,6 @@ class FGateImpl:
             [(qubit_map[idx[0]], qubit_map[idx[1]]) for idx in gate]
             for gate in self._indices
         ]
-        self.control = [qubit_map.get(c, c) for c in self.control]
         return self
 
     def map_variables(self, var_map: dict | None = None):
@@ -243,9 +224,8 @@ class FermionicExcitationImpl(FGateImpl):
         | FixedVariable
         | None = None,
         reordered: bool = False,
-        control: int | list | tuple | None = None,
     ):
-        super().__init__(indices, variables, reordered, control)
+        super().__init__(indices, variables, reordered)
         self._name = "FermionicExcitation"
 
     def _render(self, state, style, show_spatial_orbitals=True):
@@ -351,11 +331,8 @@ class URImpl(FGateImpl):
         | Variable
         | FixedVariable
         | None = None,
-        control: int | list | tuple | None = None,
     ):
-        super().__init__(
-            [[(2 * i, 2 * j)], [(2 * i + 1, 2 * j + 1)]], variables, False, control
-        )
+        super().__init__([[(2 * i, 2 * j)], [(2 * i + 1, 2 * j + 1)]], variables, False)
         self._name = "UR"
 
     def verify(self):
@@ -427,11 +404,8 @@ class UCImpl(FGateImpl):
         | Variable
         | FixedVariable
         | None = None,
-        control: int | list | tuple | None = None,
     ):
-        super().__init__(
-            [[(2 * i, 2 * j), (2 * i + 1, 2 * j + 1)]], variables, False, control
-        )
+        super().__init__([[(2 * i, 2 * j), (2 * i + 1, 2 * j + 1)]], variables, False)
         self._name = "UC"
 
     def _render(self, state, style, show_spatial_orbitals=True):
@@ -478,14 +452,12 @@ class PhaseImpl(FGateImpl):
         | FixedVariable
         | None = None,
         reordered: bool = False,
-        control: int | list | tuple | None = None,
     ):
-        super().__init__([[(i, i)]], variables, reordered, control)
+        super().__init__([[(i, i)]], variables, reordered)
         self._name = "Ph"
 
     def __str__(self):
-        control = f", control = {self.control}" if self.is_controlled() else ""
-        return f"{self.name}(target = {(self.indices[0][0][0],)}, variable = {self.variables!r}{control})"
+        return f"{self.name}(target = {(self.indices[0][0][0],)}, variable = {self.variables!r})"
 
     def _render(self, state, style, show_spatial_orbitals=True):
         norb = state.n_orbitals  # Moved to top
