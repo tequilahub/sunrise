@@ -3,7 +3,7 @@
 import sunrise as sun
 from sunrise.symmetry_adaptation import (
     FockSpaceState,
-    IrrepProvider,
+    IrrepAssigner,
     SpinSymmetrizationProcedure,
     SymmetryAdaptedLinearCombintationSymmetrization,
 )
@@ -13,13 +13,15 @@ mol = sun.chemistry.Molecule(
     geometry="H 0. 0. 0. \n H 0. 0. 0.74804", basis_set="sto-3g", backend="pyscf"
 )
 
-# Create an irrep provider to indicate that the FockSpaceStates
+# Create an irrep assigner to indicate that the FockSpaceStates
 # are in the localized/naturalized orbital basis corresponding to
 # mol.use_native_orbitals() to provide the irrep labels for the states
-provider_local = IrrepProvider(mol, "loc")
+assigner_projection = IrrepAssigner(mol, "projection")
 
 # Create a list of non-ionic states for the molecule
-states_list: list[FockSpaceState] = FockSpaceState.non_ionic_states(mol, provider_local)
+states_list: list[FockSpaceState] = FockSpaceState.non_ionic_states(
+    mol, assigner_projection
+)
 
 # Symmetrize the states with respect to SALCs
 SALC_symm_list: list[FockSpaceState] = SymmetryAdaptedLinearCombintationSymmetrization(

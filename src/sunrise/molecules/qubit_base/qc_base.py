@@ -14,6 +14,7 @@ import numpy
 import pyscf
 import tequila
 import tequila.grouping.fermionic_functions as ff
+from scipy.spatial.transform import Rotation
 from tequila import BitString, QTensor, TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
@@ -1306,8 +1307,8 @@ class QuantumChemistryBase:
         Builds the representation of the point group where the symmetry operations are matrices acting on the active
         orbitals and the states are QubitWaveFunctions with 2 * n_orbitals qubits.
 
-        The geometric operations are projected into the basis of the active orbitals with exact AO rotation matrices
-        (s and p orbitals): the operation g transforms the orbitals as g phi_j = sum_i D[i, j] phi_i with
+        The geometric operations are projected into the basis of the active orbitals with exact AO rotation matrices:
+        the operation g transforms the orbitals as g phi_j = sum_i D[i, j] phi_i with
         D[i, j] = <phi_i|g phi_j>. D is a signed permutation if g maps every orbital onto another one (e.g. localized
         orbitals in the standard orientation), in general it mixes orbitals (e.g. degenerate canonical orbitals or
         p orbitals under C3). The operations act directly on the bitstrings of the states, no circuits are needed.
@@ -1335,9 +1336,16 @@ class QuantumChemistryBase:
 
         operations = {}
         for label, R_3x3 in geom_repr.operations.items():
-            # exact AO transformation matrix: atom A is moved onto atom B, its s orbitals
-            # keep their sign and its p orbitals transform like x, y, z
+            # exact AO transformation matrix: atom A is moved onto atom B, and its shells of angular momentum l
+            # rotate with the Wigner D matrix of the real spherical harmonics, an improper operation being the
+            # inversion (-1)^l times a proper rotation
             coords_rot = (coords - center) @ R_3x3.T + center
+            det = numpy.linalg.det(R_3x3)
+            # the ZYZ Euler angles of scipy follow the convention of pyscf.symm.Dmatrix; scipy warns about the gimbal
+            # lock of rotations about z, whose angles are still correct
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                euler_angles = Rotation.from_matrix(det * R_3x3).as_euler("ZYZ")
             U_AO = numpy.zeros((n_ao, n_ao))
             for A, c_rot in enumerate(coords_rot):
                 dists = numpy.linalg.norm(coords - c_rot, axis=1)
@@ -1350,14 +1358,9 @@ class QuantumChemistryBase:
                     l = pyscf_mol.bas_angular(sh_A)
                     ao_A = slice(pyscf_mol.ao_loc[sh_A], pyscf_mol.ao_loc[sh_A + 1])
                     ao_B = slice(pyscf_mol.ao_loc[sh_B], pyscf_mol.ao_loc[sh_B + 1])
-                    if l == 0:
-                        U_AO[ao_B, ao_A] = 1.0
-                    elif l == 1:
-                        U_AO[ao_B, ao_A] = R_3x3
-                    else:
-                        raise NotImplementedError(
-                            f"Angular momentum l={l} not supported."
-                        )
+                    U_AO[ao_B, ao_A] = round(det) ** l * pyscf.symm.Dmatrix.Dmatrix(
+                        l, *euler_angles, reorder_p=True
+                    )
 
             D = C_mo.T @ S_ao @ U_AO @ C_mo
 
@@ -1448,9 +1451,43 @@ class QuantumChemistryBase:
             self.integral_manager.orbital_coefficients
         )[:, [orbital.idx_total for orbital in self.orbitals]]
 
-        return pyscf.symm.label_orb_symm(
+        labels = pyscf.symm.label_orb_symm(
             pyscf_mol, pyscf_mol.irrep_name, pyscf_mol.symm_orb, orbital_coefficients
-        ).tolist()
+        )
+
+        # PySCF labels in its own frame (e.g. it turns water from the xz into the yz plane, swapping B1 and B2): write
+        # the characters for the operations of the geometry's frame, the one mo_representation uses
+        table = self.abelian_point_group.character_table
+        frame_operations = PointGroupRepresentation.get_geometric_representation(
+            self.abelian_point_group, self.parameters.get_geometry()
+        ).operations
+        pyscf_operations = pyscf.symm.geom.symm_ops(
+            self.abelian_point_group.schoenflies_label
+        )
+        axes = pyscf_mol._symm_axes
+        order = []
+        for op in table.operation_symbols:
+            # PySCF gives the inversion as the number -1, it is the same in every frame
+            if op == "i":
+                R = -numpy.eye(3)
+            else:
+                R = axes.T @ pyscf_operations[op] @ axes
+            matches = [
+                i
+                for i, frame_op in enumerate(table.operation_symbols)
+                if numpy.allclose(frame_operations[frame_op], R)
+            ]
+            # PySCF may take other axes for the Abelian subgroup (e.g. the diagonals of a square instead of x and y),
+            # then there is no common frame and its labels are kept
+            if not matches:
+                return labels.tolist()
+            order.append(matches[0])
+        irreps = []
+        for label in labels:
+            characters = numpy.zeros(len(order), dtype=numpy.complex128)
+            characters[order] = table.dict[label]
+            irreps.append(table.vec_to_str(characters))
+        return irreps
 
     def do_make_molecule(self, *args, **kwargs):
         """
