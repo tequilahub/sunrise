@@ -24,7 +24,7 @@ HAS_MADNESS = (
 )
 
 standard_trafos = ["JordanWigner", "ReorderedJordanWigner", "BravyiKitaev"]
-trafos = standard_trafos
+trafos = standard_trafos + ["BravyiKitaevFast"]
 # trafos = list(known_encodings().keys() # currently issues with openfermion
 
 
@@ -97,6 +97,10 @@ def test_base(trafo):
 )
 @pytest.mark.parametrize("trafo", trafos)
 def test_prepare_reference(trafo):
+    if trafo == "BravyiKitaevFast":
+        pytest.skip(
+            "BravyiKitaevFast needs one qubit per pair of spin orbitals, too many for LiH"
+        )
     geometry = "Li 0.0 0.0 0.0\nH 0.0 0.0 1.5"
     basis_set = "sto-3g"
     mol = sun.Molecule(
@@ -220,7 +224,8 @@ def do_test_h2_hamiltonian(qc_interface):
 @pytest.mark.parametrize(
     "backend, trafo",
     [
-        (k, t)
+        # the symbolic simulator is slow
+        pytest.param(k, t, marks=pytest.mark.slow) if k == "symbolic" else (k, t)
         for k in tequila.simulators.simulator_api.INSTALLED_SIMULATORS
         for t in trafos
         if (k, t) != ("symbolic", "BravyiKitaev")
@@ -444,6 +449,23 @@ def test_rdms_psi4():
     assert numpy.allclose(rdm2, rdm2_ref, atol=1e-8)
 
 
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize("trafo", trafos)
+def test_rdms_encodings(trafo):
+    # the rdms of the same state do not depend on the encoding
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6"
+    jw = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf")
+    mol = sun.Molecule(
+        geometry=geometry, basis_set="sto-3g", backend="pyscf", transformation=trafo
+    )
+    U = {m: m.make_ansatz("UpCCGSD") for m in [jw, mol]}
+    variables = {v: 0.1 * (k + 1) for k, v in enumerate(U[jw].extract_variables())}
+    for m in [jw, mol]:
+        m.compute_rdms(U=U[m], variables=variables)
+    assert numpy.allclose(jw.rdm1, mol.rdm1, atol=1.0e-6)
+    assert numpy.allclose(jw.rdm2, mol.rdm2, atol=1.0e-6)
+
+
 @pytest.mark.skipif(
     condition=not HAS_PSI4 and not HAS_PYSCF, reason="psi4/pyscf not found"
 )
@@ -654,6 +676,10 @@ def test_fermionic_gates(assume_real, trafo):
 )
 @pytest.mark.parametrize("trafo", trafos)
 def test_hcb(trafo):
+    if trafo == "BravyiKitaevFast":
+        pytest.skip(
+            "BravyiKitaevFast needs one qubit per pair of spin orbitals, too many for BeH2"
+        )
     geomstring = "Be 0.0 0.0 0.0\n H 0.0 0.0 1.6\n H 0.0 0.0 -1.6"
     mol1 = sun.Molecule(
         geometry=geomstring,
@@ -1551,6 +1577,10 @@ def test_orbital_optimization_hcb(geometry):
 @pytest.mark.parametrize("transformation", trafos)
 @pytest.mark.parametrize("size", [2, 8])
 def test_givens_on_molecule(size, transformation):
+    if transformation == "BravyiKitaevFast":
+        pytest.skip(
+            "the random test circuit acts on spin orbitals, BravyiKitaevFast has one qubit per pair of them"
+        )
     # dummy one-electron integrals
     h = numpy.ones(shape=[size, size])
     # dummy two-electron integrals
