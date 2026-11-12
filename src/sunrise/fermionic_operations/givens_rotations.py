@@ -317,10 +317,21 @@ def reconstruct_matrix_from_circuit(
                 and U.gates[i + 1].name == "Ph"
                 and U.gates[i + 1].indices[0][0][0] // 2 == gate.indices[0][0][0] // 2
             ):
-                if (
-                    isinstance(gate.variables, (Variable, Objective))
-                    and isinstance(U.gates[i + 1].variables, (Variable, Objective))
-                ):  # Not sure if I can check the to Objectives to be the same, so I just go on
+                if isinstance(gate.variables, (Variable, Objective)) and isinstance(
+                    U.gates[i + 1].variables, (Variable, Objective)
+                ):
+                    # == can't compare symbolic angles: evaluate both at the same random values
+                    values = {
+                        v: numpy.random.uniform(-numpy.pi, numpy.pi)
+                        for v in gate.variables.extract_variables()
+                        + U.gates[i + 1].variables.extract_variables()
+                    }
+                    if not numpy.isclose(
+                        gate.variables(values), U.gates[i + 1].variables(values)
+                    ):
+                        raise TequilaException(
+                            "Phase gates must come in pairs with the same angle to be converted to matrix."
+                        )
                     phi_list.append((-0.5 * gate.variables, gate.indices[0][0][0] // 2))
                 elif (
                     isinstance(gate.variables, numbers.Number)
@@ -350,10 +361,21 @@ def reconstruct_matrix_from_circuit(
                 and gate.indices[0][0][0] // 2 == U.gates[i + 1].indices[0][0][0] // 2
                 and gate.indices[0][0][1] // 2 == U.gates[i + 1].indices[0][0][1] // 2
             ):
-                if (
-                    isinstance(gate.variables, (Variable, Objective))
-                    and isinstance(U.gates[i + 1].variables, (Variable, Objective))
-                ):  # Not sure if I can check the to Objectives to be the same, so I just go on
+                if isinstance(gate.variables, (Variable, Objective)) and isinstance(
+                    U.gates[i + 1].variables, (Variable, Objective)
+                ):
+                    # == can't compare symbolic angles: evaluate both at the same random values
+                    values = {
+                        v: numpy.random.uniform(-numpy.pi, numpy.pi)
+                        for v in gate.variables.extract_variables()
+                        + U.gates[i + 1].variables.extract_variables()
+                    }
+                    if not numpy.isclose(
+                        gate.variables(values), U.gates[i + 1].variables(values)
+                    ):
+                        raise TequilaException(
+                            "FermionicExcitation gates must come in pairs with the same angle to be converted to UR gates."
+                        )
                     theta_list.append(
                         (
                             -0.5 * gate.variables,
