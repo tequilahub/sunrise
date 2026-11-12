@@ -100,7 +100,7 @@ class EXPVAL(UCC):
             mol=mol,
             init_method=init_method,
             active_space=active_space,
-            aslst=aslst,  # if breaking bcs here, try installing tcc-ng from github, not sure why it may install regular tcc, not ng
+            aslst=aslst,  # needs TenCirChem-NG, plain tcc breaks here: see the README for installing it
             mo_coeff=mo_coeff,
             mode=mode,
             engine=engine,

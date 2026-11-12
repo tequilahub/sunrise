@@ -1,0 +1,144 @@
+{
+ "spex": [
+  {
+   "n": 2,
+   "energy": -1.1205602812999877,
+   "seconds": 0.11331870593130589,
+   "iterations": 4,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.156268138175748,
+   "seconds": 1.4180416220333427,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.195842895865572,
+   "seconds": 106.85946763295215,
+   "iterations": 88,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "timeout": true
+  }
+ ],
+ "tcc": [
+  {
+   "n": 2,
+   "energy": -1.1205602812999886,
+   "seconds": 0.4526079590432346,
+   "iterations": 4,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.1562681381757574,
+   "seconds": 33.059161191107705,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.1958428958655665,
+   "seconds": 867.6198093639687,
+   "iterations": 88,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "timeout": true
+  }
+ ],
+ "fqe": [
+  {
+   "n": 2,
+   "energy": -1.120560281299988,
+   "seconds": 0.41849335201550275,
+   "iterations": 4,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.156268138175756,
+   "seconds": 31.023723748978227,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.195842895865574,
+   "seconds": 753.1468442090554,
+   "iterations": 88,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "timeout": true
+  }
+ ],
+ "ffsim": [
+  {
+   "n": 2,
+   "energy": -1.1205602812999884,
+   "seconds": 0.14733924204483628,
+   "iterations": 4,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.156268138175758,
+   "seconds": 2.4799078560899943,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.1958428958655727,
+   "seconds": 42.63665967795532,
+   "iterations": 88,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "energy": -4.237863253191403,
+   "seconds": 456.5148914270103,
+   "iterations": 120,
+   "converged": true
+  },
+  {
+   "n": 10,
+   "timeout": true
+  }
+ ],
+ "qulacs": [
+  {
+   "n": 2,
+   "energy": -1.1205602812999829,
+   "seconds": 0.4931445550173521,
+   "iterations": 4,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.1562681381757183,
+   "seconds": 7.902760734083131,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.1958428958653693,
+   "seconds": 328.34115051093977,
+   "iterations": 88,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "timeout": true
+  }
+ ]
+}
