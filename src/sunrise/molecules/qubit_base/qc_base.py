@@ -1176,6 +1176,37 @@ class QuantumChemistryBase:
         else:
             return hao_mol
 
+    def use_HAO_orbitals_and_edges(
+        self, use_active: bool = True, inplace: bool = False, *args, **kwargs
+    ):
+        """
+        Same as `use_HAO_orbitals`, but the edges of the CLPO graph, written on the HAOs, are returned along with the
+        molecule, so that the JANPA pipeline is only executed once.
+
+        Returns
+        -------
+        Tuple of the molecule in the HAO basis and the corresponding list of edges: (hybrid, H) for each bond
+        """
+        from sunrise.CLPO.orbital_transformation import generate_HAO_molecule_edges
+
+        hao_mol, hao_edges = generate_HAO_molecule_edges(
+            self, use_active=use_active, silent=True, **kwargs
+        )
+
+        if inplace:
+            self.integral_manager.orbital_coefficients = (
+                hao_mol.integral_manager.orbital_coefficients.copy()
+            )
+            try:
+                # hybrid molecules also take the encoding of the new molecule
+                self.transformation = hao_mol.transformation
+                self.update_select(hao_mol.select)
+            except AttributeError:
+                pass
+            return self, hao_edges
+        else:
+            return hao_mol, hao_edges
+
     def use_CLPO_orbitals(
         self,
         use_active: bool = True,

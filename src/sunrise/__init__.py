@@ -44,6 +44,7 @@ from sunrise import CLPO
 from sunrise.CLPO.orbital_transformation import (
     generate_CLPO_molecule_edges,
     generate_HAO_molecule,
+    generate_HAO_molecule_edges,
 )
 from sunrise.MCVBT.gnm import mcvbt
 from sunrise import spafastprototype as SPAFP
@@ -78,6 +79,7 @@ __all__ = [
     "gates",
     "generate_CLPO_molecule_edges",
     "generate_HAO_molecule",
+    "generate_HAO_molecule_edges",
     "giuseppe",
     "giuseppe_bar",
     "grad",

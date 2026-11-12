@@ -128,6 +128,9 @@ class MadnessPNOMixin:
     def use_HAO_orbitals(self, *args, **kwargs):
         raise NotImplementedError
 
+    def use_HAO_orbitals_and_edges(self, *args, **kwargs):
+        raise NotImplementedError
+
     def make_spa_ansatz(self, label=None, hcb=False, edges=None, **kwargs):
         """
         Shortcut for convenience
