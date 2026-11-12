@@ -10,7 +10,10 @@ from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS, Braket, Overlap
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
-def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
+def solve_gem(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
+    """
+    # todo add description and rename function evtl.
+    """
     transition_matrix = np.eye(len(circuits))
     overlap_matrix = np.eye(len(circuits))
 
