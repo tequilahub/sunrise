@@ -300,6 +300,12 @@ def test_reconstruct_matrix_symbolic_angles():
     U += sn.gates.FermionicExcitation(indices=[(1, 3)], variables=b)
     with pytest.raises(tq.TequilaException):
         reconstruct_matrix_from_circuit(U, norb=2)
+    # angles with expectation values are not evaluated (that simulates circuits), a warning says so
+    E = tq.ExpectationValue(H=tq.paulis.Z(0), U=tq.gates.Ry("c", 0))
+    U = sn.gates.FermionicExcitation(indices=[(0, 2)], variables=a * E)
+    U += sn.gates.FermionicExcitation(indices=[(1, 3)], variables=a * E)
+    with pytest.warns(tq.TequilaWarning):
+        reconstruct_matrix_from_circuit(U, norb=2)
 
 
 @pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")

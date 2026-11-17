@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import numbers
+import warnings
 
 import numpy
-from tequila import Objective, QTensor, TequilaException, Variable
+from tequila import (
+    Objective,
+    QTensor,
+    TequilaException,
+    TequilaWarning,
+    Variable,
+)
 
 from sunrise import fermionic_operations as fe
 
@@ -320,18 +327,29 @@ def reconstruct_matrix_from_circuit(
                 if isinstance(gate.variables, (Variable, Objective)) and isinstance(
                     U.gates[i + 1].variables, (Variable, Objective)
                 ):
-                    # == can't compare symbolic angles: evaluate both at the same random values
-                    values = {
-                        v: numpy.random.uniform(-numpy.pi, numpy.pi)
-                        for v in gate.variables.extract_variables()
-                        + U.gates[i + 1].variables.extract_variables()
-                    }
-                    if not numpy.isclose(
-                        gate.variables(values), U.gates[i + 1].variables(values)
-                    ):
-                        raise TequilaException(
-                            "Phase gates must come in pairs with the same angle to be converted to matrix."
-                        )
+                    alpha, beta = gate.variables, U.gates[i + 1].variables
+                    if alpha is not beta:
+                        if any(
+                            isinstance(x, Objective) and x.has_expectationvalues()
+                            for x in (alpha, beta)
+                        ):
+                            # evaluating an expectation value simulates a circuit, which can take arbitrarily long
+                            warnings.warn(
+                                f"The angles of the Phase gates {i} and {i + 1} contain expectation values and "
+                                "are not compared, they are assumed to be the same.",
+                                TequilaWarning,
+                            )
+                        else:
+                            # == can't compare symbolic angles: evaluate both at the same random values
+                            values = {
+                                v: numpy.random.uniform(-numpy.pi, numpy.pi)
+                                for v in alpha.extract_variables()
+                                + beta.extract_variables()
+                            }
+                            if not numpy.isclose(alpha(values), beta(values)):
+                                raise TequilaException(
+                                    "Phase gates must come in pairs with the same angle to be converted to matrix."
+                                )
                     phi_list.append((-0.5 * gate.variables, gate.indices[0][0][0] // 2))
                 elif (
                     isinstance(gate.variables, numbers.Number)
@@ -364,18 +382,29 @@ def reconstruct_matrix_from_circuit(
                 if isinstance(gate.variables, (Variable, Objective)) and isinstance(
                     U.gates[i + 1].variables, (Variable, Objective)
                 ):
-                    # == can't compare symbolic angles: evaluate both at the same random values
-                    values = {
-                        v: numpy.random.uniform(-numpy.pi, numpy.pi)
-                        for v in gate.variables.extract_variables()
-                        + U.gates[i + 1].variables.extract_variables()
-                    }
-                    if not numpy.isclose(
-                        gate.variables(values), U.gates[i + 1].variables(values)
-                    ):
-                        raise TequilaException(
-                            "FermionicExcitation gates must come in pairs with the same angle to be converted to UR gates."
-                        )
+                    alpha, beta = gate.variables, U.gates[i + 1].variables
+                    if alpha is not beta:
+                        if any(
+                            isinstance(x, Objective) and x.has_expectationvalues()
+                            for x in (alpha, beta)
+                        ):
+                            # evaluating an expectation value simulates a circuit, which can take arbitrarily long
+                            warnings.warn(
+                                f"The angles of the FermionicExcitation gates {i} and {i + 1} contain expectation values and "
+                                "are not compared, they are assumed to be the same.",
+                                TequilaWarning,
+                            )
+                        else:
+                            # == can't compare symbolic angles: evaluate both at the same random values
+                            values = {
+                                v: numpy.random.uniform(-numpy.pi, numpy.pi)
+                                for v in alpha.extract_variables()
+                                + beta.extract_variables()
+                            }
+                            if not numpy.isclose(alpha(values), beta(values)):
+                                raise TequilaException(
+                                    "FermionicExcitation gates must come in pairs with the same angle to be converted to UR gates."
+                                )
                     theta_list.append(
                         (
                             -0.5 * gate.variables,
