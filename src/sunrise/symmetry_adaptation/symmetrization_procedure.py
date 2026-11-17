@@ -14,7 +14,7 @@ from sympy import Rational
 from sympy.physics.wigner import clebsch_gordan
 
 from .fock_space_state import FockSpaceState
-from .irrep_provider import IrrepProviderBase
+from .irrep_assigner import IrrepAssignerBase
 from .point_group_representation import PointGroupRepresentation
 
 if TYPE_CHECKING:
@@ -46,9 +46,9 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
         else:
             state_list = list(states)
 
-        # assume the IrrepProviderBase is the same for all states; it is not used in the S2
+        # assume the IrrepAssignerBase is the same for all states; it is not used in the S2
         # diagonalization below, only propagated to the output states.
-        irrep_provider = state_list[0].irrep_provider
+        irrep_assigner = state_list[0].irrep_assigner
 
         # Create an empty dataframe with the same columns as df
         diagonalised_states: list[FockSpaceState] = []
@@ -120,7 +120,7 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
                         FockSpaceState(
                             mol=self.mol,
                             wavefunction=new_wfn,
-                            provider=irrep_provider,
+                            assigner=irrep_assigner,
                             S2=numpy.round(eigvals[k], decimals=10),
                             m_s=ms_val,
                         )
@@ -152,10 +152,10 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
         else:
             state_list = list(states)
 
-        # assume the IrrepProviderBase is the same for all states; the SALC construction below
-        # uses the character table of the point group of self.mol, not irrep_provider, which is only propagated to
+        # assume the IrrepAssignerBase is the same for all states; the SALC construction below
+        # uses the character table of the point group of self.mol, not irrep_assigner, which is only propagated to
         # the output states.
-        irrep_provider = state_list[0].irrep_provider
+        irrep_assigner = state_list[0].irrep_assigner
 
         n_orbitals = self.mol.n_orbitals
         n_qubits = 2 * n_orbitals
@@ -305,7 +305,7 @@ class SymmetryAdaptedLinearCombintationSymmetrization(SymmetrizationProcedure):
                     FockSpaceState(
                         mol=self.mol,
                         wavefunction=new_wfn,
-                        provider=irrep_provider,
+                        assigner=irrep_assigner,
                         irrep=irrep,
                         S2=s2_val if is_eigenstate else None,
                         m_s=ms_val,
@@ -330,7 +330,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
        state based on physical intuition and returns a FockSpaceState.
     """
 
-    irrep_provider: IrrepProviderBase | None = None
+    irrep_assigner: IrrepAssignerBase | None = None
 
     def build_physical_state(
         self,
@@ -462,7 +462,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
         return FockSpaceState(
             mol=self.mol,
             wavefunction=wfn.normalize(),
-            provider=self.irrep_provider,
+            assigner=self.irrep_assigner,
             S2=float(S * (S + 1)),
             m_s=float(m_s),
         )
@@ -481,7 +481,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
             else list(states)
         )
 
-        irrep_provider = state_list[0].irrep_provider or self.irrep_provider
+        irrep_assigner = state_list[0].irrep_assigner or self.irrep_assigner
         n_electrons = round(sum(state_list[0].mo_occ))
 
         all_states: list[FockSpaceState] = []
@@ -509,7 +509,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
                 state = FockSpaceState(
                     self.mol,
                     wfn,
-                    irrep_provider,
+                    irrep_assigner,
                     S2=0.0,
                     m_s=0.0,
                 )
@@ -540,7 +540,7 @@ class SpinCGSymmetrizationProcedure(SymmetrizationProcedure):
                         state = self.build_physical_state(
                             open_shell, S2 / 2, M2 / 2, tree, closed_shell
                         )
-                        state.irrep_provider = irrep_provider
+                        state.irrep_assigner = irrep_assigner
                         state.coupling_path = tuple(p / 2 for p in path[1:])
                         all_states.append(state)
 

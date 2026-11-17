@@ -1,0 +1,214 @@
+{
+ "spex": [
+  {
+   "n": 2,
+   "energy": -1.1205602812999864,
+   "seconds": 0.15538413694594055,
+   "iterations": 2,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.165477261116172,
+   "seconds": 3.356847752002068,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.2159827499575098,
+   "seconds": 8.427223816979676,
+   "iterations": 13,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "energy": -4.267397245364651,
+   "seconds": 32.84238139493391,
+   "iterations": 14,
+   "converged": true
+  },
+  {
+   "n": 10,
+   "energy": -5.3195352502141935,
+   "seconds": 116.96822355000768,
+   "iterations": 17,
+   "converged": true
+  },
+  {
+   "n": 12,
+   "energy": -6.3719771730531924,
+   "seconds": 320.78616233204957,
+   "iterations": 17,
+   "converged": true
+  },
+  {
+   "n": 14,
+   "energy": -7.424587159603094,
+   "seconds": 831.782123883022,
+   "iterations": 17,
+   "converged": true
+  },
+  {
+   "n": 16,
+   "energy": -8.47728695329944,
+   "seconds": 1920.8969214379322,
+   "iterations": 17,
+   "converged": true
+  },
+  {
+   "n": 18,
+   "error": "AssertionError"
+  }
+ ],
+ "tcc": [
+  {
+   "n": 2,
+   "energy": -1.1205602812999869,
+   "seconds": 0.5341756470734254,
+   "iterations": 2,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.165477261116177,
+   "seconds": 16.0836067419732,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.215982749957516,
+   "seconds": 43.45617356803268,
+   "iterations": 13,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "energy": -4.267397245364634,
+   "seconds": 309.35190557094757,
+   "iterations": 14,
+   "converged": true
+  },
+  {
+   "n": 10,
+   "timeout": true
+  }
+ ],
+ "fqe": [
+  {
+   "n": 2,
+   "energy": -1.1205602812999866,
+   "seconds": 0.46756118501070887,
+   "iterations": 2,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.165477261116176,
+   "seconds": 21.263090235064737,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.215982749957507,
+   "seconds": 73.86827916104812,
+   "iterations": 13,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "energy": -4.267397245364629,
+   "seconds": 372.3172802310437,
+   "iterations": 14,
+   "converged": true
+  },
+  {
+   "n": 10,
+   "energy": -5.319535250214187,
+   "seconds": 2595.52084328793,
+   "iterations": 17,
+   "converged": true
+  },
+  {
+   "n": 12,
+   "timeout": true
+  }
+ ],
+ "ffsim": [
+  {
+   "n": 2,
+   "energy": -1.120560281299987,
+   "seconds": 0.2666277290554717,
+   "iterations": 2,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.165477261116176,
+   "seconds": 5.64405063202139,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.215982749957511,
+   "seconds": 16.1729793070117,
+   "iterations": 13,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "energy": -4.267397245364633,
+   "seconds": 115.78277421800885,
+   "iterations": 14,
+   "converged": true
+  },
+  {
+   "n": 10,
+   "energy": -5.319535250214194,
+   "seconds": 1628.3673599590547,
+   "iterations": 17,
+   "converged": true
+  },
+  {
+   "n": 12,
+   "timeout": true
+  }
+ ],
+ "qulacs": [
+  {
+   "n": 2,
+   "energy": -1.120560281299983,
+   "seconds": 0.5837115989997983,
+   "iterations": 2,
+   "converged": true
+  },
+  {
+   "n": 4,
+   "energy": -2.1654772611161643,
+   "seconds": 11.920334157999605,
+   "iterations": 25,
+   "converged": true
+  },
+  {
+   "n": 6,
+   "energy": -3.2159827499574933,
+   "seconds": 42.9563281419687,
+   "iterations": 13,
+   "converged": true
+  },
+  {
+   "n": 8,
+   "energy": -4.267397245364599,
+   "seconds": 960.328091389034,
+   "iterations": 14,
+   "converged": true
+  },
+  {
+   "n": 10,
+   "timeout": true
+  }
+ ]
+}

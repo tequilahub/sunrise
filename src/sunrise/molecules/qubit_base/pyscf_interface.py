@@ -118,6 +118,7 @@ class PySCFMixin:
             kwargs["one_body_integrals"] = h_ao
             kwargs["orbital_coefficients"] = mo_coeff
             kwargs["orbital_type"] = "hf"
+            kwargs.setdefault("basis_convention", "pyscf")
 
             if "nuclear_repulsion" not in kwargs:
                 kwargs["nuclear_repulsion"] = mol.energy_nuc()

@@ -32,7 +32,6 @@ def fast_rdm(U, mol, clusters, variables, test=False, backend="qulacs"):
     n_MOs = mol.n_orbitals
     circuits = make_decomposed_circuits(U, clusters=clusters)
 
-    # needs hackend version that gives back the raw qops
     qops, _asd = compute_rdms(self=mol, U=U, use_hcb=True, evaluate=False)
 
     all_ps = [ps for op in qops for ps in op.paulistrings]

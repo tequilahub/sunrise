@@ -44,8 +44,8 @@ def extract_clpo_graph(
     i = 0
     aviso = []
     while i < n_lo:
-        lo_type = lo_types[i]
-        occ = round(occupancies[i], 5)
+        lo_type = int(lo_types[i])
+        occ = float(round(occupancies[i], 5))
 
         if lo_type == LO_TYPE_LP:
             if 0.5 < occ < 1.5:
@@ -63,9 +63,9 @@ def extract_clpo_graph(
             if i + 1 >= n_lo or lo_types[i + 1] != LO_TYPE_NB:
                 raise ValueError(f"BD orbital {i} without following NB orbital")
             bd_occ = occ
-            nb_occ = round(occupancies[i + 1], 5)
+            nb_occ = float(round(occupancies[i + 1], 5))
             if bd_occ + nb_occ < 1.7:
-                aviso.append((lo_type, i, bd_occ + nb_occ))
+                aviso.append((lo_type, (i, i + 1), bd_occ + nb_occ))
             nodes.append((i, i + 1))
             i += 2
 
@@ -110,6 +110,16 @@ def _run_janpa_pipeline(
                 npa_res.sds_nao, npa_res.nao, molden_file.centers, clpo_opts
             )
             graph, aviso = extract_clpo_graph(npa_res, clpo_res, avisar)
+            # the same graph on the hybrids: each CLPO is made of the hybrids with non zero weight
+            hao_graph = [
+                tuple(
+                    np.flatnonzero(
+                        np.abs(clpo_res.clpo.lo_to_hybrids[list(node)]).sum(axis=0)
+                        > 1.0e-8
+                    ).tolist()
+                )
+                for node in graph
+            ]
 
             # CRITICAL: These matrices have shape (n_orb, n_ao) where ROWS are orbitals.
             # Tequila expects (n_ao, n_orb) where COLUMNS are orbitals.
@@ -125,7 +135,7 @@ def _run_janpa_pipeline(
             aho_to_ao = aho_to_ao.T
             clpo_to_ao = clpo_to_ao.T
 
-    return aho_to_ao, clpo_to_ao, graph, aviso
+    return aho_to_ao, clpo_to_ao, graph, aviso, hao_graph
 
 
 def generate_CLPO_molecule_edges_pyscf(
@@ -208,7 +218,7 @@ def generate_CLPO_molecule_edges_pyscf(
         custom_edges = [tuple([int(e) for e in edge]) for edge in edges]
 
     # clpo_to_ao is now (n_ao, n_clpo) after the transpose fix in _run_janpa_pipeline
-    _, clpo_to_ao_full, graph_full, aviso = _run_janpa_pipeline(
+    _, clpo_to_ao_full, graph_full, aviso, _ = _run_janpa_pipeline(
         pfmol,
         mf.mo_coeff,
         mf.mo_occ,
@@ -262,6 +272,7 @@ def generate_HAO_molecule_pyscf(
     use_active: bool = True,
     ret2act: bool = False,
     use_mp2: bool = False,
+    return_edges: bool = False,
     **kwargs,
 ) -> QuantumChemistryBase:
     r"""
@@ -278,10 +289,14 @@ def generate_HAO_molecule_pyscf(
     use_mp2 (bool): Whether to use mp2 or HF mo_occ to initialize the janpa pipeline. It can be also provided a custom pyscf
                     with the keyword pyscf_object, or to provide custom mo_coeff, mo_occ, mo_energy. If not, pyscf
                     HF will be run.
+    return_edges (bool): Whether to also return the edges of the CLPO graph (SPA format) on the HAOs: (hybrid, H) for each
+                    bond, (hybrid,) for each lone pair. With use_active, the indices are those of the active space,
+                    otherwise those of the full HAO list.
 
     Returns:
     ----------
     Sunrise Molecule (same instance as input) with HAO orbitals.
+    If ret2act the dictionary, and then if return_edges the edges.
     """
 
     pfmol = MoleculeToPyscf(mol)
@@ -326,7 +341,7 @@ def generate_HAO_molecule_pyscf(
 
     # aho_to_ao_full is now (n_ao, n_hyb) after the transpose fix in _run_janpa_pipeline
     # aviso indexes the CLPOs, not the HAOs returned here, so it is warned and returned in full CLPO indices
-    aho_to_ao_full, _, _, _ = _run_janpa_pipeline(
+    aho_to_ao_full, _, _, _, hao_edges = _run_janpa_pipeline(
         pfmol,
         mf.mo_coeff,
         mf.mo_occ,
@@ -349,8 +364,14 @@ def generate_HAO_molecule_pyscf(
         # full HAO index -> active space index (core orbitals need not be the first ones)
         tot2act = {o.idx_total: o.idx for o in mol_out.integral_manager.orbitals}
         to_active = {k: tot2act[v] for k, v in to_active.items()}
+        edges = [tuple([to_active[i] for i in e if i in to_active]) for e in hao_edges]
+        edges = [e for e in edges if len(e)]
+        if ret2act and return_edges:
+            return mol_out, to_active, edges
         if ret2act:
             return mol_out, to_active
+        if return_edges:
+            return mol_out, edges
         return mol_out
     else:
         mo_matrix = orthogonalize(
@@ -359,7 +380,27 @@ def generate_HAO_molecule_pyscf(
         mol_out = deepcopy(mol)
         mol_out.integral_manager.orbital_coefficients = mo_matrix
         mol_out.integral_manager._orbital_type = "HAO"
+        if return_edges:
+            return mol_out, hao_edges
         return mol_out
+
+
+def generate_HAO_molecule_edges_pyscf(
+    mol: QuantumChemistryBase,
+    thres: Number = 1.0e-9,
+    silent: bool = True,
+    use_active: bool = True,
+    ret2act: bool = False,
+    use_mp2: bool = False,
+    **kwargs,
+) -> tuple[QuantumChemistryBase, list]:
+    """
+    Same as generate_HAO_molecule_pyscf, but the edges of the CLPO graph on the HAOs are returned along with the molecule
+    (the ret2act dictionary goes between them), so that the JANPA pipeline is only executed once.
+    """
+    return generate_HAO_molecule_pyscf(
+        mol, thres, silent, use_active, ret2act, use_mp2, return_edges=True, **kwargs
+    )
 
 
 def generate_CLPO_molecule_pyscf(
@@ -410,19 +451,27 @@ def generate_CLPO_molecule_pyscf(
 
 
 def __map_aviso(
-    aviso: list[tuple[int, int, float]],
+    aviso: list[tuple[int, int | tuple[int, int], float]],
     to_active: dict[int, int] | None,
     ncore: int = 0,
-) -> list[tuple[int, int, float]]:
+) -> list[tuple[int, int | tuple[int, int], float]]:
     """Moves the aviso orbital indices from the full CLPO list to the active space, None for those in the frozen core."""
+
+    def move(idx):
+        return to_active[idx] - ncore if idx in to_active else None
+
     return [
-        (lo_type, to_active[idx] - ncore if idx in to_active else None, occ)
+        (
+            lo_type,
+            tuple(move(i) for i in idx) if isinstance(idx, tuple) else move(idx),
+            occ,
+        )
         for lo_type, idx, occ in aviso
     ]
 
 
 def __raise_aviso(
-    aviso: list[tuple[int, int, float]],
+    aviso: list[tuple[int, int | tuple[int, int], float]],
     to_active: dict[int, int] | None = None,
     ncore: int = 0,
 ):
@@ -441,4 +490,7 @@ def __raise_aviso(
         return f"frozen (CLPO {idx})"
 
     for lo_type, idx, occ in aviso:
-        warn(warnings[lo_type].format(i=name(idx), j=name(idx + 1), occ=occ))
+        if lo_type == LO_TYPE_BD:
+            warn(warnings[lo_type].format(i=name(idx[0]), j=name(idx[1]), occ=occ))
+        else:
+            warn(warnings[lo_type].format(i=name(idx), occ=occ))

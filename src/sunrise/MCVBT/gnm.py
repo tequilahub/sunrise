@@ -4,12 +4,12 @@ from copy import deepcopy
 
 import numpy as np
 import tequila as tq
-from tequila import SUPPORTED_BACKENDS, QCircuit, TequilaException, TequilaWarning
+from tequila import SUPPORTED_BACKENDS, TequilaWarning
 
 import sunrise as sn
 from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS, Braket
 from sunrise.MCVBT.big_exp import BigExpVal
-from sunrise.MCVBT.gem import gem_fast
+from sunrise.MCVBT.gem import solve_gem
 from sunrise.molecules.fermionic_base import FermionicBase
 from sunrise.molecules.qubit_base import QuantumChemistryBase
 
@@ -27,6 +27,8 @@ class mcvbt:
         silent=False,
     ):
 
+        if strategy not in (None, "shift"):
+            raise ValueError(f"Unknown strategy {strategy}")
         self.mol = mol
         self.graphs = graphs
         self.strategy = strategy
@@ -72,7 +74,6 @@ class mcvbt:
         else:
             raise ValueError(f"Unknown init_strategy {init_strategy}")
 
-        # self.strategy="shift" #todo check strategy
         if self.strategy is not None:
             self.__add_delocalization(variables_preopt=variables_preopt)
 
@@ -88,7 +89,7 @@ class mcvbt:
             if not self.silent:
                 print(f"Start G({n},0) optimization")
                 print("variables preopt", variables_preopt)
-            v, _ = gem_fast(
+            v, _ = solve_gem(
                 circuits=self.circuits[:n],
                 solver=self.solver,
                 variables=variables_preopt,
@@ -227,8 +228,6 @@ class mcvbt:
     def __add_delocalization(self, variables_preopt: dict[tq.Variable, float]):
         aux_circuits = []
         for i, circ in enumerate(self.circuits):
-            if isinstance(circ, QCircuit):
-                raise TequilaException("Strategies not implemented for QCircuit yet.")
             if self.strategy == "shift":
                 flat = [x for tup in self.graphs[i] for x in tup]
 
@@ -253,11 +252,6 @@ class mcvbt:
                         variables=f"shift{i}_{edge}",
                     )
 
-            elif self.strategy == "triangle":
-                raise NotImplementedError
-            else:
-                raise NotImplementedError
-
             aux_circuits.append(circ)
             filtered_variables = [
                 x for x in circ.variables if x not in variables_preopt
@@ -274,7 +268,6 @@ class mcvbt:
 
 
 def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=None):
-    # circuits = [x for x in circuits]
     N = len(circuits)
     if M is None:
         M = len(circuits)
@@ -292,7 +285,7 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
 
     variables = {**{k: 0.0 for k in vkeys if k not in variables}, **variables}
 
-    v, vv = gem_fast(circuits=circuits, variables=variables, mol=mol, solver=solver)
+    v, vv = solve_gem(circuits=circuits, variables=variables, mol=mol, solver=solver)
     x0 = {k: variables[k] for k in vkeys}
 
     coeffs = []
@@ -345,7 +338,7 @@ def GNM(circuits, variables, solver, mol, filename, silent=True, max_iter=10, M=
                 callback=callback,
                 backend=solver,
             )
-        v, vv = gem_fast(
+        v, vv = solve_gem(
             circuits=circuits, variables=result.variables, mol=mol, solver=solver
         )
 

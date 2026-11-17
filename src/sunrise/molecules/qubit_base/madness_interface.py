@@ -128,6 +128,9 @@ class MadnessPNOMixin:
     def use_HAO_orbitals(self, *args, **kwargs):
         raise NotImplementedError
 
+    def use_HAO_orbitals_and_edges(self, *args, **kwargs):
+        raise NotImplementedError
+
     def make_spa_ansatz(self, label=None, hcb=False, edges=None, **kwargs):
         """
         Shortcut for convenience
@@ -461,6 +464,8 @@ class MadnessPNOMixin:
             # given (e.g. by sun.load_molecule) instead of the doubly occupied orbitals
             reference_orbitals = kwargs.pop("reference_orbitals")
         kwargs.pop("reference_orbitals", None)
+        # TODO: when frayed_molecule is merged, label the projected AOs of the frayedends backend with
+        #  kwargs.setdefault("basis_convention", "frayedends") (next to orbital_type = "hf"), these PNOs have no AOs (None)
         build(
             *args,
             parameters=parameters,

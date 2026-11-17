@@ -243,6 +243,10 @@ def load_molecule(
     # the orbital data is set afterwards, on init the orbital type "native" would transform the orbitals again
     mol.integral_manager._basis_name = data["basis_name"]
     mol.integral_manager._orbital_type = data["orbital_type"]
+    # files saved before keep the convention of the backend
+    mol.integral_manager._basis_convention = data.get(
+        "basis_convention", mol.integral_manager._basis_convention
+    )
     for o, stored in zip(mol.integral_manager.orbitals, data["orbitals"]):
         # idx is the index in the active space, already set by it
         o.irrep, o.idx_irrep, o.idx_total, o.energy, o.occ = (
@@ -387,6 +391,7 @@ def MoleculeFromPyscf(
     kwargs["two_body_integrals"] = g_ao
     kwargs["one_body_integrals"] = h_ao
     kwargs["orbital_coefficients"] = mo_coeff
+    kwargs.setdefault("basis_convention", "pyscf")
 
     if "nuclear_repulsion" not in kwargs:
         kwargs["nuclear_repulsion"] = molecule.energy_nuc()
