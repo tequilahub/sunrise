@@ -21,7 +21,7 @@ from typing import Callable
 
 import ffsim
 from ffsim import FermionOperator
-from numpy import ceil, complex128, cos, exp, ndarray, real, sin, vdot, zeros
+from numpy import ceil, complex128, cos, exp, ndarray, real, sin, unique, vdot, zeros
 from openfermion import FermionOperator as OFFermionOperator
 from pyscf.gto import Mole
 from pyscf.scf import RHF
@@ -34,6 +34,7 @@ from tequila import (
     Variable,
     simulate,
 )
+from tequila.hamiltonian import paulis
 from tequila.objective.objective import Variables
 
 from sunrise.molecules.qubit_base import qc_base
@@ -366,11 +367,10 @@ class FFS_EXPVAL:
             elif operator.upper() == "HCB":
                 # applied term by term: ~2*norb**2 terms instead of contracting all integrals
                 return _linear_operator(_hcb_operator(self.molecule), norb, nelec)
-            else:
-                raise TequilaException(
-                    f"No operator str {operator} supported on FFSim BraKet"
-                )
 
+        if isinstance(operator, str) and operator.upper() not in ["I", "H", "HCB"]:
+            # a Pauli string, as on the tequila backend
+            operator = paulis.from_string(operator)
         if isinstance(operator, str):
             operator = from_string(operator)
         elif isinstance(operator, Number):
@@ -392,7 +392,17 @@ class FFS_EXPVAL:
 
             def f(v):
                 wvf = self.__civect_to_qwvf(v).apply_qubitoperator(H)
-                return self.__qwvf_to_civect(wvf)
+                # the part outside the (n_alpha, n_beta) sector has no overlap with the bra
+                state = {
+                    k: a
+                    for k, a in _qwvf_to_civect(wvf, 2 * norb).items()
+                    if (
+                        bin(k & ((1 << norb) - 1)).count("1"),
+                        bin(k >> norb).count("1"),
+                    )
+                    == nelec
+                }
+                return self.__qwvf_to_civect(_civect_to_qwvf(state, 2 * norb))
 
             H = operator
             operator = LinearOperator(
@@ -510,7 +520,11 @@ def _apply_circuit_to_state(
 
 
 def ffsim_circuit_simulator(
-    U: FCircuit, variables, n_orb: int | None = None, **backend_kwargs
+    U: FCircuit,
+    variables,
+    n_orb: int | None = None,
+    samples: int | None = None,
+    **backend_kwargs,
 ) -> QubitWaveFunction:
     if n_orb is None:
         n_orb = int(ceil((U.max_qubit() + 1) / 2))
@@ -535,6 +549,16 @@ def ffsim_circuit_simulator(
                 v[k] = val
 
     state = _apply_circuit_to_state(state, U, _build_generators(U, n_orb, nelec), v)
+    if samples is not None:
+        # measured counts, the bitstrings are the strings of addresses_to_strings
+        shots = ffsim.sample_state_vector(
+            state,
+            norb=n_orb,
+            nelec=nelec,
+            shots=samples,
+            bitstring_type=ffsim.BitstringType.INT,
+        )
+        return _civect_to_qwvf(dict(zip(*unique(shots, return_counts=True))), n_qubits)
     strings = ffsim.addresses_to_strings(
         range(len(state)), n_orb, nelec, bitstring_type=ffsim.BitstringType.INT
     )

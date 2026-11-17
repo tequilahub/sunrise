@@ -9,6 +9,7 @@ import spex_tequila as spex
 from numpy import ceil, exp, real
 from openfermion import FermionOperator, normal_ordered
 from tequila import QubitHamiltonian, QubitWaveFunction, TequilaException, Variable
+from tequila.hamiltonian import paulis
 from tequila.objective.objective import Objective, Variables
 from tequila.utils.bitstrings import BitNumbering, reverse_int_bits
 
@@ -220,7 +221,7 @@ class SpexExpval:
         | list[spex.FermionTerm]
         | None = None,
     ) -> None | Callable | list[spex.FermionTerm]:
-        # Supported: "I"/"H", openfermion FermionOperator, tequila QubitHamiltonian (callable on state dict)
+        # Supported: "I"/"H"/"HCB" or a Pauli string, openfermion FermionOperator, tequila QubitHamiltonian (callable on state dict)
         #             list of supported operators, spex.FermionTerm or list of it.
 
         def from_string(operator: str) -> Callable | list[spex.FermionTerm]:
@@ -230,11 +231,10 @@ class SpexExpval:
                 return self._cached_terms("H", self._build_hamiltonian)
             elif operator.upper() == "HCB":
                 return self._cached_terms("HCB", self._build_hcb_hamiltonian)
-            else:
-                raise TequilaException(
-                    f"No operator str {operator} supported on Spex BraKet"
-                )
 
+        if isinstance(operator, str) and operator.upper() not in ["I", "H", "HCB"]:
+            # a Pauli string, as on the tequila backend
+            operator = paulis.from_string(operator)
         if isinstance(operator, list):
             if all(isinstance(op, spex.FermionTerm) for op in operator):
                 return operator

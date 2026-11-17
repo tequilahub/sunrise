@@ -1,3 +1,5 @@
+from numbers import Number
+
 from openfermion import FermionOperator
 from tequila import BraKet, ExpectationValue, Objective
 from tequila.hamiltonian.paulis import I, from_string
@@ -35,6 +37,8 @@ def TequilaBraket(braket: FermBraketImpl, *args, **kwargs) -> Objective:
             operator = from_string(operator)
     elif isinstance(operator, FermionOperator):
         operator = mol.transformation(operator)
+    elif isinstance(operator, Number):
+        operator = operator * I()
     if braket.is_diagonal:
         return ExpectationValue(*args, U=ket, H=operator, **kwargs)
     return BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)

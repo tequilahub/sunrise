@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from numpy import ceil, zeros
+from numpy.random import multinomial
 from tequila import SUPPORTED_BACKENDS, QCircuit, QubitWaveFunction, TequilaException
 from tequila import simulate as tq_simulate
 from tequila.objective import format_variable_dictionary
@@ -58,6 +61,16 @@ def simulate_fcircuit(
         variables = {}
     if isinstance(U, QCircuit):
         return tq_simulate(U, variables, backend=backend, **kwargs)
+    initial_state = kwargs.pop("initial_state", None)
+    if initial_state is not None:
+        U = deepcopy(U)
+        n_orb = kwargs.get("n_orb")
+        mol = kwargs.get("mol", kwargs.get("molecule"))
+        if n_orb is None and mol is not None:
+            n_orb = mol.n_orbitals
+        if n_orb is not None:
+            U.n_qubits = max(U.n_qubits, 2 * n_orb)
+        U.initial_state = deepcopy(initial_state)
     variables = format_variable_dictionary(variables)
     if variables is None and not (len(U.extract_variables()) == 0):
         raise TequilaException(
@@ -70,7 +83,17 @@ def simulate_fcircuit(
     if backend in SUPPORTED_FERMIONIC_CIRCUIT_SIMULATOR:
         if backend in INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR:
             simulator = INSTALLED_FERMIONIC_CIRCUIT_SIMULATOR[backend]
-            return simulator(U=U, variables=variables, **kwargs)
+            samples = kwargs.pop("samples", None)
+            if backend == "ffsim":
+                # ffsim samples its state vector itself
+                return simulator(U=U, variables=variables, samples=samples, **kwargs)
+            wfn = simulator(U=U, variables=variables, **kwargs)
+            if samples is None:
+                return wfn
+            # measured counts in the computational basis, as tequila returns them
+            probabilities = abs(wfn.to_array()) ** 2
+            counts = multinomial(samples, probabilities / probabilities.sum())
+            return QubitWaveFunction.from_array(counts)
         else:
             raise TequilaException(f"Backend {backend} not installed.")
     elif (
