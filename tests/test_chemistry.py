@@ -1603,9 +1603,9 @@ def test_orbital_optimization_hcb(geometry):
 @pytest.mark.parametrize("transformation", trafos)
 @pytest.mark.parametrize("size", [2, 8])
 def test_givens_on_molecule(size, transformation):
-    if transformation == "BravyiKitaevFast":
+    if transformation == "BravyiKitaevFast" and size > 2:
         pytest.skip(
-            "the random test circuit acts on spin orbitals, BravyiKitaevFast has one qubit per pair of them"
+            "BravyiKitaevFast has one qubit per pair of spin orbitals: 120 qubits for 8 orbitals"
         )
     # dummy one-electron integrals
     h = numpy.ones(shape=[size, size])
@@ -1648,7 +1648,15 @@ def test_givens_on_molecule(size, transformation):
     UR = mol.get_givens_circuit(U)  # Works!
 
     # test circuit
-    circuit = rg.make_random_circuit(size)
+    if transformation == "BravyiKitaevFast":
+        # a random qubit circuit leaves the code space of BravyiKitaevFast: a fermionic state instead
+        circuit = mol.prepare_reference()
+        for indices in [[(0, 2)], [(1, 3)], [(0, 2), (1, 3)]]:
+            circuit += mol.make_excitation_gate(
+                indices=indices, angle=numpy.random.uniform(0, 2 * numpy.pi)
+            )
+    else:
+        circuit = rg.make_random_circuit(size)
 
     # create expectation values and see if they are the same
     E1 = tq.ExpectationValue(U=circuit, H=tH)

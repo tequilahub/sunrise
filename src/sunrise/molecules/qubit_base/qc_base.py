@@ -1602,37 +1602,38 @@ class QuantumChemistryBase:
         Compute number operator on spin-orbital in qubit representation
         Spin-orbital order is always (up,down,up,down,...)
         """
-        num_op = self.make_creation_op(orbital) * self.make_annihilation_op(orbital)
-        return num_op
+        # transformed as a whole: BravyiKitaevFast maps parity-preserving operators only, not a^dagger and a alone
+        return self.transformation(
+            openfermion.ops.FermionOperator(f"{orbital}^ {orbital}")
+        )
 
     def make_sz_op(self):
         """
         Compute the spin_z operator of the molecule in qubit representation
         """
-        sz = QubitHamiltonian()
+        sz = openfermion.ops.FermionOperator()
         for i in range(0, self.n_orbitals * 2, 2):
-            one = 0.5 * self.make_creation_op(i) * self.make_annihilation_op(i)
-            two = 0.5 * self.make_creation_op(i + 1) * self.make_annihilation_op(i + 1)
-            sz += one - two
-        return sz
+            sz += openfermion.ops.FermionOperator(f"{i}^ {i}", 0.5)
+            sz += openfermion.ops.FermionOperator(f"{i + 1}^ {i + 1}", -0.5)
+        return self.transformation(sz)
 
     def make_sp_op(self):
         """
         Compute the spin+ operator of the molecule in qubit representation
         """
-        sp = QubitHamiltonian()
+        sp = openfermion.ops.FermionOperator()
         for i in range(self.n_orbitals):
-            sp += self.make_creation_op(i * 2) * self.make_annihilation_op(i * 2 + 1)
-        return sp
+            sp += openfermion.ops.FermionOperator(f"{i * 2}^ {i * 2 + 1}")
+        return self.transformation(sp)
 
     def make_sm_op(self):
         """
         Compute the spin- operator of the molecule in qubit representation
         """
-        sm = QubitHamiltonian()
+        sm = openfermion.ops.FermionOperator()
         for i in range(self.n_orbitals):
-            sm += self.make_creation_op(i * 2 + 1) * self.make_annihilation_op(i * 2)
-        return sm
+            sm += openfermion.ops.FermionOperator(f"{i * 2 + 1}^ {i * 2}")
+        return self.transformation(sm)
 
     def make_s2_op(self):
         """
