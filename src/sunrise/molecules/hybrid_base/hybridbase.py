@@ -7,7 +7,7 @@ from itertools import product
 
 import numpy
 from openfermion import FermionOperator
-from tequila import BitString, TequilaException, TequilaWarning
+from tequila import TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
 from tequila.hamiltonian.paulis import Zero
@@ -20,7 +20,6 @@ from sunrise.molecules.hybrid_base.fermionicgateimpl import FermionicGateImpl
 from sunrise.molecules.qubit_base.chemistry_tools import (
     NBodyTensor,
     ParametersQC,
-    prepare_product_state,
 )
 from sunrise.molecules.qubit_base.encodings import EncodingBase
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as qc_base
@@ -1955,17 +1954,9 @@ class HybridBase(qc_base):
         """
         if state is None:
             state = self._reference_state()
-        reference_state = BitString.from_array(
-            self.transformation.map_state(state=state)
-        )
-        U = prepare_product_state(reference_state)
+        U = self.transformation.prepare_state(state=state)
         # prevent trace out in direct wfn simulation
-        if not self.condense or self.two_qubit:
-            U.n_qubits = self.n_orbitals * 2  # adapt when tapered transformations work
-        else:
-            U.n_qubits = len(self.FER_SO) + len(
-                self.BOS_MO
-            )  # adapt when tapered transformations work
+        U.n_qubits = self.transformation.n_qubits
         return U
 
     def prepare_hardcore_boson_reference(self) -> QCircuit:
@@ -2150,7 +2141,7 @@ class HybridBase(qc_base):
                             )
                         previous = q1
         if not self.condense:
-            U.n_qubits = 2 * self.n_orbitals
+            U.n_qubits = self.transformation.n_qubits
         return U
 
     def make_upccgsd_ansatz(
@@ -2300,7 +2291,7 @@ class HybridBase(qc_base):
                 firts_double=firts_double,
             )
         if not self.condense:
-            U.n_qubits = 2 * self.n_orbitals
+            U.n_qubits = self.transformation.n_qubits
         return U
 
     def make_upccgsd_layer(
