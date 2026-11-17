@@ -99,7 +99,7 @@ def test_base(trafo):
 def test_prepare_reference(trafo):
     if trafo == "BravyiKitaevFast":
         pytest.skip(
-            "BravyiKitaevFast needs one qubit per pair of spin orbitals, too many for LiH"
+            "BravyiKitaevFast needs one qubit per edge between two spin orbitals, N(N-1)/2: 45 for LiH"
         )
     geometry = "Li 0.0 0.0 0.0\nH 0.0 0.0 1.5"
     basis_set = "sto-3g"
@@ -678,7 +678,7 @@ def test_fermionic_gates(assume_real, trafo):
 def test_hcb(trafo):
     if trafo == "BravyiKitaevFast":
         pytest.skip(
-            "BravyiKitaevFast needs one qubit per pair of spin orbitals, too many for BeH2"
+            "BravyiKitaevFast needs one qubit per edge between two spin orbitals, N(N-1)/2: 66 for BeH2"
         )
     geomstring = "Be 0.0 0.0 0.0\n H 0.0 0.0 1.6\n H 0.0 0.0 -1.6"
     mol1 = sun.Molecule(
@@ -1605,7 +1605,7 @@ def test_orbital_optimization_hcb(geometry):
 def test_givens_on_molecule(size, transformation):
     if transformation == "BravyiKitaevFast" and size > 2:
         pytest.skip(
-            "BravyiKitaevFast has one qubit per pair of spin orbitals: 120 qubits for 8 orbitals"
+            "BravyiKitaevFast needs one qubit per edge between two spin orbitals, N(N-1)/2: 120 for 8 orbitals"
         )
     # dummy one-electron integrals
     h = numpy.ones(shape=[size, size])
