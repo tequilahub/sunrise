@@ -1,4 +1,4 @@
-"""Irrep providers: objects that assign a point-group irreducible representation to a Fock-space state."""
+"""Irrep assigners: objects that assign a point-group irreducible representation to a Fock-space state."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class IrrepProviderBase(ABC):
-    """Abstract base class of the irrep providers.
+class IrrepAssignerBase(ABC):
+    """Abstract base class of the irrep assigners.
 
     Parameters
     ----------
@@ -43,13 +43,18 @@ class IrrepProviderBase(ABC):
         """
 
 
-class LocalizedIrrepProvider(IrrepProviderBase):
-    r"""Irrep provider that applies the symmetry operations to the state and compares with the character table.
+class ProjectionIrrepAssigner(IrrepAssignerBase):
+    r"""Irrep assigner that applies the symmetry operations to the state and compares with the character table.
 
     The operations act on the orbitals of the molecule (see ``mol.mo_representation``), which can be
     any orbitals the operations map onto themselves as a set, e.g. canonical, native or hybrid
-    orbitals. Only states of one-dimensional irreps are labelled: :math:`\langle\psi|O|\psi\rangle = \pm 1`
-    for every operation :math:`O`, otherwise the irrep is None.
+    orbitals. The state is labelled with the irrep :math:`\Gamma` whose projector keeps it whole,
+
+    .. math::
+        \langle\psi|P_\Gamma|\psi\rangle = 1, \qquad
+        P_\Gamma = \frac{d_\Gamma}{|G|} \sum_O \chi_\Gamma(O)^* \, O,
+
+    otherwise (a mix of irreps) the irrep is None.
 
     Parameters
     ----------
@@ -69,7 +74,7 @@ class LocalizedIrrepProvider(IrrepProviderBase):
         return self._representation
 
     def get_irrep(self, state) -> str | None:
-        """Return the irrep of ``state`` from its character vector.
+        """Return the irrep whose projector keeps ``state`` whole.
 
         Parameters
         ----------
@@ -79,19 +84,25 @@ class LocalizedIrrepProvider(IrrepProviderBase):
         Returns
         -------
         str or None
-            Irrep name, None if the state is not an eigenstate of every operation (characters other
-            than +1 or -1) or matches no irrep.
+            Irrep name, None if the state is a mix of irreps.
         """
-        character_vector = self.representation.character_vector(state.wavefunction)
-        # a state that is not an eigenstate of every operation belongs to no one-dimensional irrep
-        if not numpy.allclose(numpy.abs(character_vector), 1.0, atol=1e-4):
-            return None
-        irrep = self.pg.character_table.vec_to_str(numpy.round(character_vector))
-        return irrep if irrep is not None else None
+        expectation_values = self.representation.character_vector(state.wavefunction)
+        table = self.pg.character_table
+        for irrep in table.irreps:
+            characters = numpy.asarray(table.dict[irrep], dtype=numpy.complex128)
+            # <psi|P_irrep|psi> with the projector P_irrep = dim / order * sum_O chi_irrep(O)^* O
+            weight = (
+                characters[0]
+                * numpy.vdot(characters, expectation_values)
+                / self.pg.order
+            )
+            if numpy.isclose(weight.real, 1.0, atol=1e-4):
+                return irrep
+        return None
 
 
-class PySCFCanonicalIrrepProvider(IrrepProviderBase):
-    """Irrep provider based on the canonical molecular orbitals labelled by PySCF.
+class PySCFIrrepAssigner(IrrepAssignerBase):
+    """Irrep assigner based on the canonical molecular orbitals labelled by PySCF.
 
     PySCF only labels orbitals in Abelian groups, so the states are labelled in
     ``mol.abelian_point_group``, e.g. in D2h for a molecule with D4h symmetry. The irrep of a
@@ -114,10 +125,6 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
         return self._mol_irreps
 
     def get_irrep(self, state) -> str | None:
-        # Canonical irrep assignment only works for states with integer occupations
-        # (single determinants or superpositions within the same occupation sector).
-        # Fractional occupations indicate a superposition across sectors, which
-        # requires the LocalizedIrrepProvider's character-vector approach instead.
         """Return the irrep of ``state`` as the product of the irreps of its occupied orbitals.
 
         Parameters
@@ -134,15 +141,19 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
         ------
         ValueError
             If an orbital occupation is fractional, e.g. for a superposition of different occupation
-            sectors. Use the ``"loc"`` provider in that case.
+            sectors. Use the ``"projection"`` assigner in that case.
         """
+        # Canonical irrep assignment only works for states with integer occupations
+        # (single determinants or superpositions within the same occupation sector).
+        # Fractional occupations indicate a superposition across sectors, which
+        # requires the ProjectionIrrepAssigner's character-vector approach instead.
         for i, occ in enumerate(state.mo_occ):
             if abs(occ - round(occ)) > 1e-4:
                 raise ValueError(
-                    f"PySCFCanonicalIrrepProvider cannot determine the irrep of a state "
+                    f"PySCFIrrepAssigner cannot determine the irrep of a state "
                     f"with fractional occupation {occ:.4f} on orbital {i}. "
                     f"This typically means the state is a superposition across occupation "
-                    f"sectors. Use IrrepProvider(mol, 'loc') instead."
+                    f"sectors. Use IrrepAssigner(mol, 'projection') instead."
                 )
 
         character_vector = numpy.ones(self.pg.order)
@@ -156,52 +167,51 @@ class PySCFCanonicalIrrepProvider(IrrepProviderBase):
         return irrep if irrep is not None else None
 
 
-SUPPORTED_IRREP_PROVIDERS = ["loc", "canon"]
-INSTALLED_IRREP_PROVIDERS = {
-    "loc": LocalizedIrrepProvider,
-    "canon": PySCFCanonicalIrrepProvider,
+SUPPORTED_IRREP_ASSIGNERS = ["projection", "pyscf"]
+INSTALLED_IRREP_ASSIGNERS = {
+    "projection": ProjectionIrrepAssigner,
+    "pyscf": PySCFIrrepAssigner,
 }
 
 
 def show_available_modules():
-    """Print the names of the irrep providers installed on this system."""
-    print("Available Irrep Providers")
-    for k in INSTALLED_IRREP_PROVIDERS:
+    """Print the names of the irrep assigners installed on this system."""
+    print("Available Irrep Assigners")
+    for k in INSTALLED_IRREP_ASSIGNERS:
         print(k)
 
 
 def show_supported_modules():
-    """Print the names of the supported irrep providers."""
-    print(SUPPORTED_IRREP_PROVIDERS)
+    """Print the names of the supported irrep assigners."""
+    print(SUPPORTED_IRREP_ASSIGNERS)
 
 
-# TODO: change "provider" with a better keyword
-def IrrepProvider(
-    mol: QuantumChemistryBase, provider: str = "canon", *args, **kwargs
-) -> IrrepProviderBase:
-    """Create the irrep provider that assigns irreducible representations to the FockSpaceStates of a molecule.
+def IrrepAssigner(
+    mol: QuantumChemistryBase, method: str = "pyscf", *args, **kwargs
+) -> IrrepAssignerBase:
+    """Create the irrep assigner that assigns irreducible representations to the FockSpaceStates of a molecule.
 
     Parameters
     ----------
     mol : QuantumChemistryBase
         Molecule whose point group defines the irreps.
-    provider : str {"canon", "loc"}
-        ``"canon"`` (``PySCFCanonicalIrrepProvider``) uses the irreps PySCF assigns to the canonical
-        orbitals, in ``mol.abelian_point_group``, for states with integer occupations. ``"loc"``
-        (``LocalizedIrrepProvider``) applies the symmetry operations to the state, in
-        ``mol.point_group``, for any orbitals the operations map onto themselves (e.g. native or
-        hybrid orbitals), and only for states of one-dimensional irreps.
+    method : str {"pyscf", "projection"}
+        ``"pyscf"`` (``PySCFIrrepAssigner``) uses the irreps PySCF assigns to the canonical
+        orbitals, in ``mol.abelian_point_group``, for states with integer occupations.
+        ``"projection"`` (``ProjectionIrrepAssigner``) applies the symmetry operations to the
+        state, in ``mol.point_group``, for any orbitals the operations map onto themselves (e.g.
+        native or hybrid orbitals).
     *args, **kwargs
-        Passed to the provider class.
+        Passed to the assigner class.
 
     Returns
     -------
-    IrrepProviderBase
+    IrrepAssignerBase
 
     Examples
     --------
-    >>> provider = IrrepProvider(mol, "canon")
-    >>> states = FockSpaceState.non_ionic_states(mol, provider)
+    >>> assigner = IrrepAssigner(mol, "pyscf")
+    >>> states = FockSpaceState.non_ionic_states(mol, assigner)
     """
     # any kwargs should be managed inside each class
-    return INSTALLED_IRREP_PROVIDERS[provider.lower()](*args, mol=mol, **kwargs)
+    return INSTALLED_IRREP_ASSIGNERS[method.lower()](*args, mol=mol, **kwargs)

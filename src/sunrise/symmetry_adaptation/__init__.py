@@ -1,10 +1,10 @@
 """Spin and point-group adapted many-electron states built from Fock-space determinants."""
 
 from sunrise.symmetry_adaptation.fock_space_state import FockSpaceState
-from sunrise.symmetry_adaptation.irrep_provider import (
-    IrrepProvider,
-    LocalizedIrrepProvider,
-    PySCFCanonicalIrrepProvider,
+from sunrise.symmetry_adaptation.irrep_assigner import (
+    IrrepAssigner,
+    ProjectionIrrepAssigner,
+    PySCFIrrepAssigner,
 )
 
 from .point_group import PointGroup
@@ -17,11 +17,11 @@ from .symmetrization_procedure import (
 
 __all__ = [
     "FockSpaceState",
-    "IrrepProvider",
-    "LocalizedIrrepProvider",
+    "IrrepAssigner",
     "PointGroup",
     "PointGroupRepresentation",
-    "PySCFCanonicalIrrepProvider",
+    "ProjectionIrrepAssigner",
+    "PySCFIrrepAssigner",
     "SpinCGSymmetrizationProcedure",
     "SpinSymmetrizationProcedure",
     "SymmetryAdaptedLinearCombinationSymmetrization",

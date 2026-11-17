@@ -3,7 +3,7 @@
 Builds many-electron states that respect the molecule's symmetries: total spin ($S^2$) and spatial point group. Starting from Fock-space determinants, it forms linear combinations that transform as a single irreducible representation (*irrep*) — useful as reference states and to restrict ansätze to the right symmetry sector.
 
 - `FockSpaceState` – a determinant/linear combination; `FockSpaceState.dataframe(...)` prints a table
-- `IrrepProvider` – assigns irreps to orbitals (canonical or localized)
+- `IrrepAssigner` – assigns irreps to states (from the PySCF canonical orbitals or by projection)
 - `PointGroup`, `PointGroupRepresentation` – character tables
 - `SpinSymmetrizationProcedure`, `SpinCGSymmetrizationProcedure` (Clebsch–Gordan), `SymmetryAdaptedLinearCombinationSymmetrization` ([SALC](https://en.wikipedia.org/wiki/Symmetry-adapted_linear_combination))
 
@@ -11,12 +11,12 @@ Builds many-electron states that respect the molecule's symmetries: total spin (
 import sunrise as sun
 from sunrise.symmetry_adaptation import (
     FockSpaceState,
-    IrrepProvider,
+    IrrepAssigner,
     SpinSymmetrizationProcedure,
 )
 
 mol = sun.Molecule(geometry="H 0 0 0\nH 0 0 0.748", basis_set="sto-3g", backend="pyscf")
-states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
+states = FockSpaceState.non_ionic_states(mol, IrrepAssigner(mol, "pyscf"))
 print(FockSpaceState.dataframe(SpinSymmetrizationProcedure(mol).symmetrize(states)))
 ```
 

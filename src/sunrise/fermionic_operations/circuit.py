@@ -13,7 +13,7 @@ from typing import Callable
 from numpy import argwhere, array, isclose, ndarray, pi, where
 from tequila import (
     BitNumbering,
-    BitString,
+    BitStringLSB,
     QCircuit,
     QubitWaveFunction,
     Variable,
@@ -617,7 +617,7 @@ class FCircuit:
                 if ladder:
                     previous = i
         if include_reference:
-            reference[BitString.from_array(n_state)] = 1.0
+            reference[BitStringLSB.from_array(n_state)] = 1.0
         return cls(gates=operations._gates, initial_state=reference)
 
     @staticmethod

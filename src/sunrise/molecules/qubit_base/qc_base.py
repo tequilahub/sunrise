@@ -16,6 +16,7 @@ import numpy
 import pyscf
 import tequila
 import tequila.grouping.fermionic_functions as ff
+from scipy.spatial.transform import Rotation
 from tequila import BitString, QTensor, TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
@@ -1296,6 +1297,55 @@ class QuantumChemistryBase:
         else:
             return hao_mol
 
+    def use_HAO_orbitals_and_edges(
+        self, use_active: bool = True, inplace: bool = False, *args, **kwargs
+    ):
+        """Return the molecule in HAOs together with the SPA edges on the HAOs.
+
+        Same as ``use_HAO_orbitals``, JANPA runs only once. The edges are those of the CLPO graph:
+        ``(hybrid, H)`` for each bond and ``(hybrid,)`` for each lone pair.
+
+        Parameters
+        ----------
+        use_active : bool, optional
+            Restrict to the active space. Default is True.
+        inplace : bool, optional
+            Update the current molecule instead of returning a new one. Default is False.
+        **kwargs
+            Passed on to ``generate_HAO_molecule_edges``.
+
+        Returns
+        -------
+        mol : QuantumChemistryBase
+            Molecule in the HAO basis.
+        edges : list of tuple of int
+            SPA edges on the HAOs.
+
+        Examples
+        --------
+        >>> mol, edges = mol.use_HAO_orbitals_and_edges()
+        >>> U = mol.make_ansatz("SPA", edges=edges)
+        """
+        from sunrise.CLPO.orbital_transformation import generate_HAO_molecule_edges
+
+        hao_mol, hao_edges = generate_HAO_molecule_edges(
+            self, use_active=use_active, silent=True, **kwargs
+        )
+
+        if inplace:
+            self.integral_manager.orbital_coefficients = (
+                hao_mol.integral_manager.orbital_coefficients.copy()
+            )
+            try:
+                # hybrid molecules also take the encoding of the new molecule
+                self.transformation = hao_mol.transformation
+                self.update_select(hao_mol.select)
+            except AttributeError:
+                pass
+            return self, hao_edges
+        else:
+            return hao_mol, hao_edges
+
     def use_CLPO_orbitals(
         self,
         use_active: bool = True,
@@ -1449,8 +1499,8 @@ class QuantumChemistryBase:
 
         The symmetry operations are matrices acting on the active orbitals and the states are
         QubitWaveFunctions with ``2 * n_orbitals`` qubits. The geometric operations are projected into
-        the basis of the active orbitals with exact AO rotation matrices (s and p orbitals): the operation
-        :math:`g` transforms the orbitals as
+        the basis of the active orbitals with exact AO rotation matrices (Wigner D matrices of the real
+        spherical harmonics, for any angular momentum): the operation :math:`g` transforms the orbitals as
 
         .. math::
             g \phi_j = \sum_i D_{ij} \phi_i, \qquad D_{ij} = \langle \phi_i | g \phi_j \rangle.
@@ -1470,8 +1520,6 @@ class QuantumChemistryBase:
             If an atom is not mapped onto an atom, or an operation maps the active orbitals out of the
             active space (choose active orbitals that the operations map onto each other, e.g. all
             orbitals of a degenerate set).
-        NotImplementedError
-            For basis functions beyond p orbitals.
 
         Examples
         --------
@@ -1501,9 +1549,16 @@ class QuantumChemistryBase:
 
         operations = {}
         for label, R_3x3 in geom_repr.operations.items():
-            # exact AO transformation matrix: atom A is moved onto atom B, its s orbitals
-            # keep their sign and its p orbitals transform like x, y, z
+            # exact AO transformation matrix: atom A is moved onto atom B, and its shells of angular momentum l
+            # rotate with the Wigner D matrix of the real spherical harmonics, an improper operation being the
+            # inversion (-1)^l times a proper rotation
             coords_rot = (coords - center) @ R_3x3.T + center
+            det = numpy.linalg.det(R_3x3)
+            # the ZYZ Euler angles of scipy follow the convention of pyscf.symm.Dmatrix; scipy warns about the gimbal
+            # lock of rotations about z, whose angles are still correct
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                euler_angles = Rotation.from_matrix(det * R_3x3).as_euler("ZYZ")
             U_AO = numpy.zeros((n_ao, n_ao))
             for A, c_rot in enumerate(coords_rot):
                 dists = numpy.linalg.norm(coords - c_rot, axis=1)
@@ -1516,14 +1571,9 @@ class QuantumChemistryBase:
                     l = pyscf_mol.bas_angular(sh_A)
                     ao_A = slice(pyscf_mol.ao_loc[sh_A], pyscf_mol.ao_loc[sh_A + 1])
                     ao_B = slice(pyscf_mol.ao_loc[sh_B], pyscf_mol.ao_loc[sh_B + 1])
-                    if l == 0:
-                        U_AO[ao_B, ao_A] = 1.0
-                    elif l == 1:
-                        U_AO[ao_B, ao_A] = R_3x3
-                    else:
-                        raise NotImplementedError(
-                            f"Angular momentum l={l} not supported."
-                        )
+                    U_AO[ao_B, ao_A] = round(det) ** l * pyscf.symm.Dmatrix.Dmatrix(
+                        l, *euler_angles, reorder_p=True
+                    )
 
             D = C_mo.T @ S_ao @ U_AO @ C_mo
 
@@ -1600,7 +1650,15 @@ class QuantumChemistryBase:
         """Return the irreducible representations of the active orbitals.
 
         They are determined by PySCF in the Abelian point group of the molecule, so the
-        orbitals have to be symmetry adapted (e.g. canonical orbitals).
+        orbitals have to be symmetry adapted (e.g. canonical orbitals). The labels refer to the
+        frame of the geometry, the one ``mo_representation`` uses (PySCF may rotate the molecule,
+        e.g. swapping B1 and B2 of water). If PySCF takes other axes for the Abelian subgroup
+        (e.g. the diagonals of a square), there is no common frame and PySCF's labels are kept.
+
+        Returns
+        -------
+        list of str
+            Irrep label of each active orbital.
 
         Examples
         --------
@@ -1619,9 +1677,43 @@ class QuantumChemistryBase:
             self.integral_manager.orbital_coefficients
         )[:, [orbital.idx_total for orbital in self.orbitals]]
 
-        return pyscf.symm.label_orb_symm(
+        labels = pyscf.symm.label_orb_symm(
             pyscf_mol, pyscf_mol.irrep_name, pyscf_mol.symm_orb, orbital_coefficients
-        ).tolist()
+        )
+
+        # PySCF labels in its own frame (e.g. it turns water from the xz into the yz plane, swapping B1 and B2): write
+        # the characters for the operations of the geometry's frame, the one mo_representation uses
+        table = self.abelian_point_group.character_table
+        frame_operations = PointGroupRepresentation.get_geometric_representation(
+            self.abelian_point_group, self.parameters.get_geometry()
+        ).operations
+        pyscf_operations = pyscf.symm.geom.symm_ops(
+            self.abelian_point_group.schoenflies_label
+        )
+        axes = pyscf_mol._symm_axes
+        order = []
+        for op in table.operation_symbols:
+            # PySCF gives the inversion as the number -1, it is the same in every frame
+            if op == "i":
+                R = -numpy.eye(3)
+            else:
+                R = axes.T @ pyscf_operations[op] @ axes
+            matches = [
+                i
+                for i, frame_op in enumerate(table.operation_symbols)
+                if numpy.allclose(frame_operations[frame_op], R)
+            ]
+            # PySCF may take other axes for the Abelian subgroup (e.g. the diagonals of a square instead of x and y),
+            # then there is no common frame and its labels are kept
+            if not matches:
+                return labels.tolist()
+            order.append(matches[0])
+        irreps = []
+        for label in labels:
+            characters = numpy.zeros(len(order), dtype=numpy.complex128)
+            characters[order] = table.dict[label]
+            irreps.append(table.vec_to_str(characters))
+        return irreps
 
     def do_make_molecule(self, *args, **kwargs):
         """Return the openfermion MolecularData built from the integrals, called by ``make_molecule``.

@@ -158,6 +158,10 @@ class MadnessPNOMixin:
         """Not supported with MADNESS orbitals."""
         raise NotImplementedError
 
+    def use_HAO_orbitals_and_edges(self, *args, **kwargs):
+        """Not supported with MADNESS orbitals."""
+        raise NotImplementedError
+
     def make_spa_ansatz(self, label=None, hcb=False, edges=None, **kwargs):
         """Return the default SPA ansatz, equivalent to PNO-UpCCD with the MADNESS PNOs.
 

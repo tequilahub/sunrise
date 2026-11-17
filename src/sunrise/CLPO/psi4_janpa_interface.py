@@ -148,6 +148,16 @@ def _run_janpa_pipeline(
 
             # 5. Extract Graph
             graph, aviso = extract_clpo_graph(npa_res, clpo_res, avisar)
+            # the same graph on the hybrids: each CLPO is made of the hybrids with non zero weight
+            hao_graph = [
+                tuple(
+                    np.flatnonzero(
+                        np.abs(clpo_res.clpo.lo_to_hybrids[list(node)]).sum(axis=0)
+                        > 1.0e-8
+                    ).tolist()
+                )
+                for node in graph
+            ]
 
             # 6. Get Transformation Matrices
             aho_to_ao = clpo_res.clpo.nao_to_hybrids.T @ npa_res.nao_to_ao
@@ -159,7 +169,7 @@ def _run_janpa_pipeline(
     clpo_psi4 = np.zeros_like(clpo_to_ao)
     clpo_psi4[:, perm] = clpo_to_ao
     # (n_orb, n_ao) -> (n_ao, n_orb), columns are orbitals
-    return aho_psi4.T, clpo_psi4.T, graph, aviso
+    return aho_psi4.T, clpo_psi4.T, graph, aviso, hao_graph
 
 
 def generate_CLPO_molecule_edges_psi4(
@@ -245,7 +255,7 @@ def generate_CLPO_molecule_edges_psi4(
     if edges is not None:
         custom_edges = [tuple([int(e) for e in edge]) for edge in edges]
 
-    _, clpo_to_ao_full, graph_full, aviso = _run_janpa_pipeline(
+    _, clpo_to_ao_full, graph_full, aviso, _ = _run_janpa_pipeline(
         wfn,
         thres=thres,
         silent=silent,
@@ -296,6 +306,7 @@ def generate_HAO_molecule_psi4(
     use_active: bool = True,
     ret2act: bool = False,
     use_mp2: bool = False,
+    return_edges: bool = False,
     **kwargs,
 ) -> QuantumChemistryBase:
     """Generate a molecule with HAO (hybrid atomic orbital) orbitals via Psi4.
@@ -318,6 +329,10 @@ def generate_HAO_molecule_psi4(
         in the full list to its index after the active-space transformation.
     use_mp2 : bool
         If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
+    return_edges : bool
+        If True, also return the edges of the CLPO graph on the HAOs (SPA format): ``(hybrid, H)``
+        for each bond and ``(hybrid,)`` for each lone pair. With ``use_active`` the indices are
+        those of the active space, otherwise those of the full HAO list.
     **kwargs
         ``wfn`` (custom Psi4 wavefunction) is currently not supported and is ignored.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
@@ -329,6 +344,8 @@ def generate_HAO_molecule_psi4(
         Molecule with HAO orbitals.
     to_active : dict of int to int, optional
         Only if ``ret2act`` and ``use_active`` are True.
+    edges : list of tuple of int, optional
+        Only if ``return_edges`` is True.
     """
 
     # TODO: support a custom wfn (check kwargs.pop("wfn") first) and fix use_mp2 on psi4 molecules
@@ -347,7 +364,7 @@ def generate_HAO_molecule_psi4(
             name="mp2", return_wfn=True, molecule=psi4mol, guess_wfn=wfn
         )
 
-    aho_to_ao_full, _, _, _ = _run_janpa_pipeline(
+    aho_to_ao_full, _, _, _, hao_edges = _run_janpa_pipeline(
         wfn,
         thres=thres,
         silent=silent,
@@ -367,8 +384,14 @@ def generate_HAO_molecule_psi4(
         # full HAO index -> active space index (core orbitals need not be the first ones)
         tot2act = {o.idx_total: o.idx for o in mol_out.integral_manager.orbitals}
         to_active = {k: tot2act[v] for k, v in to_active.items()}
+        edges = [tuple([to_active[i] for i in e if i in to_active]) for e in hao_edges]
+        edges = [e for e in edges if len(e)]
+        if ret2act and return_edges:
+            return mol_out, to_active, edges
         if ret2act:
             return mol_out, to_active
+        if return_edges:
+            return mol_out, edges
         return mol_out
     else:
         mo_matrix = orthogonalize(
@@ -377,7 +400,36 @@ def generate_HAO_molecule_psi4(
         mol_out = deepcopy(mol)
         mol_out.integral_manager.orbital_coefficients = mo_matrix
         mol_out.integral_manager._orbital_type = "HAO"
+        if return_edges:
+            return mol_out, hao_edges
         return mol_out
+
+
+def generate_HAO_molecule_edges_psi4(
+    mol: QuantumChemistryBase,
+    thres: Number = 1.0e-9,
+    silent: bool = True,
+    use_active: bool = True,
+    ret2act: bool = False,
+    use_mp2: bool = False,
+    **kwargs,
+) -> tuple[QuantumChemistryBase, list]:
+    """Generate a molecule with HAO orbitals and the SPA edges on the HAOs via Psi4.
+
+    Same as ``generate_HAO_molecule_psi4`` with ``return_edges=True``: JANPA runs only once.
+
+    Returns
+    -------
+    mol : QuantumChemistryBase
+        Molecule with HAO orbitals.
+    to_active : dict of int to int, optional
+        Only if ``ret2act`` and ``use_active`` are True.
+    edges : list of tuple of int
+        SPA edges on the HAOs.
+    """
+    return generate_HAO_molecule_psi4(
+        mol, thres, silent, use_active, ret2act, use_mp2, return_edges=True, **kwargs
+    )
 
 
 def generate_CLPO_molecule_psi4(

@@ -81,7 +81,7 @@ class FermBraketImpl(QuantumArg):
         """Raise an error: the braket is symbolic and must be simulated through an Objective."""
         raise TequilaException(
             "FermBraketImpl is symbolic and should not be evaluated directly. "
-            "Use sm.simulate(FermBraketImpl(...)) for backend execution."  # TODO or BraKet(...)[0/1] for symbolic objectives. this is from tequila, should we?
+            "Use sm.simulate(FermBraketImpl(...)) for backend execution."
         )
 
     def compile(self) -> tuple:

@@ -84,6 +84,7 @@ Each module in [`src/sunrise`](src/sunrise) has a short README with an introduct
 | [graph_selection](src/sunrise/graph_selection) | choosing SPA edges |
 | [spafastprototype](src/sunrise/spafastprototype) | splits (HCB) expectation values into smaller pieces to speed up SPA |
 | [MCVBT](src/sunrise/MCVBT) | multi-configurational valence bond theory |
+| [excited_states](src/sunrise/excited_states) | excited states with variational quantum deflation (VQD) |
 | [measurement](src/sunrise/measurement) | optimized measurements with hard-core bosons |
 | [orbital_correlation](src/sunrise/orbital_correlation) | orbital entanglement and correlation measures |
 | [symmetry_adaptation](src/sunrise/symmetry_adaptation) | spin and point-group adapted states |

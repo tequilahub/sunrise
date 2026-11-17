@@ -18,6 +18,7 @@ try:
     from .pyscf_janpa_interface import (
         generate_CLPO_molecule_edges_pyscf,
         generate_CLPO_molecule_pyscf,
+        generate_HAO_molecule_edges_pyscf,
         generate_HAO_molecule_pyscf,
     )
 except ImportError:
@@ -27,6 +28,7 @@ try:
     from .psi4_janpa_interface import (
         generate_CLPO_molecule_edges_psi4,
         generate_CLPO_molecule_psi4,
+        generate_HAO_molecule_edges_psi4,
         generate_HAO_molecule_psi4,
     )
 except ImportError:
@@ -210,6 +212,87 @@ def generate_HAO_molecule(
         )
     else:
         return generate_HAO_molecule_pyscf(
+            mol=mol,
+            thres=thres,
+            silent=silent,
+            use_active=use_active,
+            ret2act=ret2act,
+            use_mp2=use_mp2,
+            **kwargs,
+        )
+
+
+def generate_HAO_molecule_edges(
+    mol: QuantumChemistryBase,
+    thres: Number = 1.0e-9,
+    silent: bool = True,
+    use_active: bool = True,
+    ret2act: bool = False,
+    use_mp2: bool = False,
+    backend: str = "pyscf",
+    **kwargs,
+) -> tuple[QuantumChemistryBase, list]:
+    """Generate a molecule with HAO orbitals together with the SPA edges on the HAOs.
+
+    The edges are those of the CLPO graph (see ``generate_CLPO_molecule_edges``), written on the
+    HAOs: ``(hybrid, H)`` for each bond and ``(hybrid,)`` for each lone pair. JANPA runs only once.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Any sunrise molecule.
+    thres : float
+        Convergence threshold of the JANPA hybrid-orbital optimization.
+    silent : bool
+        If True, suppress the JANPA output.
+    use_active : bool
+        If True, keep the active space of ``mol``. Otherwise all orbitals are replaced by the
+        orthogonalized HAOs.
+    ret2act : bool
+        If True and ``use_active`` is True, also return the dictionary mapping the HAO index
+        in the full list to its index after the active-space transformation.
+    use_mp2 : bool
+        If True, use MP2 to initialize JANPA, otherwise Hartree-Fock.
+    backend : {"pyscf", "psi4"}, optional
+        Chemistry backend for the HF/MP2 calculation and the MOLDEN file. If None it is guessed
+        from the molecule type, the kwargs or the installed backends.
+    **kwargs
+        Passed to the backend, see ``generate_HAO_molecule``.
+
+    Returns
+    -------
+    mol : QuantumChemistryBase
+        Molecule with HAO orbitals.
+    to_active : dict of int to int, optional
+        Only if ``ret2act`` and ``use_active`` are True.
+    edges : list of tuple of int
+        SPA edges, with active-space indices if ``use_active``, otherwise indices in the full
+        HAO list.
+
+    See Also
+    --------
+    generate_HAO_molecule : HAO molecule without the edges.
+    generate_CLPO_molecule_edges : CLPOs together with their SPA edges.
+
+    Examples
+    --------
+    >>> mol, edges = sun.CLPO.generate_HAO_molecule_edges(mol, silent=True)
+    >>> U = mol.make_ansatz("SPA", edges=edges)
+    """
+    if backend is None:
+        backend = __pick_chem_backend(mol, **kwargs)
+    if backend.lower() == "psi4":
+        return generate_HAO_molecule_edges_psi4(
+            mol=mol,
+            thres=thres,
+            silent=silent,
+            use_active=use_active,
+            ret2act=ret2act,
+            use_mp2=use_mp2,
+            **kwargs,
+        )
+    else:
+        return generate_HAO_molecule_edges_pyscf(
             mol=mol,
             thres=thres,
             silent=silent,

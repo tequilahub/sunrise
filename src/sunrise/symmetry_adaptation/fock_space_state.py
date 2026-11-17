@@ -12,7 +12,7 @@ import numpy
 import tequila
 from pandas import DataFrame
 
-from sunrise.symmetry_adaptation.irrep_provider import IrrepProviderBase
+from sunrise.symmetry_adaptation.irrep_assigner import IrrepAssignerBase
 
 if TYPE_CHECKING:
     # only for type hints, importing it at runtime would be circular
@@ -33,19 +33,19 @@ class FockSpaceState:
         Molecule defining the orbitals.
     wavefunction : str or tequila.QubitWaveFunction
         State to describe. A string is read as a bitstring, e.g. ``"1100"``.
-    provider : IrrepProviderBase
-        Provider used to compute the irrep.
+    assigner : IrrepAssignerBase
+        Assigner used to compute the irrep.
     S2 : float, optional
         Precomputed value of :math:`S^2`, otherwise computed from the wavefunction.
     irrep : str, optional
-        Precomputed irrep, otherwise computed with ``provider``.
+        Precomputed irrep, otherwise computed with ``assigner``.
     m_s : float, optional
         Precomputed spin projection, otherwise computed from the wavefunction.
     """
 
     mol: QuantumChemistryBase
     wavefunction: tequila.QubitWaveFunction
-    irrep_provider: IrrepProviderBase
+    irrep_assigner: IrrepAssignerBase
     _S2: float | None = None
     _irrep: str | None = None
 
@@ -53,7 +53,7 @@ class FockSpaceState:
         self,
         mol: QuantumChemistryBase,
         wavefunction: str | tequila.QubitWaveFunction,
-        provider: IrrepProviderBase,
+        assigner: IrrepAssignerBase,
         S2=None,
         irrep=None,
         m_s=None,
@@ -65,7 +65,7 @@ class FockSpaceState:
             )
         else:
             self.wavefunction = wavefunction
-        self.irrep_provider = provider
+        self.irrep_assigner = assigner
         self._S2 = S2
         self._irrep = irrep
         self._m_s = m_s
@@ -171,23 +171,23 @@ class FockSpaceState:
 
     @cached_property
     def irrep(self):
-        """str or None : irrep label of the state, the given one or computed with the irrep provider.
+        """str or None : irrep label of the state, the given one or computed with the irrep assigner.
 
         Raises
         ------
         TypeError
-            If no irrep was given and ``irrep_provider`` is not an ``IrrepProviderBase``.
+            If no irrep was given and ``irrep_assigner`` is not an ``IrrepAssignerBase``.
         """
         if self._irrep is not None:
             return self._irrep
-        if not isinstance(self.irrep_provider, IrrepProviderBase):
+        if not isinstance(self.irrep_assigner, IrrepAssignerBase):
             raise TypeError(
-                f"Cannot determine the irrep of this FockSpaceState: irrep_provider is "
-                f"{self.irrep_provider!r}, not an IrrepProviderBase. Construct the state with a real "
-                f"IrrepProviderBase (e.g. LocalizedIrrepProvider or PySCFCanonicalIrrepProvider) if irrep "
+                f"Cannot determine the irrep of this FockSpaceState: irrep_assigner is "
+                f"{self.irrep_assigner!r}, not an IrrepAssignerBase. Construct the state with a real "
+                f"IrrepAssignerBase (e.g. ProjectionIrrepAssigner or PySCFIrrepAssigner) if irrep "
                 f"information is needed."
             )
-        return self.irrep_provider.get_irrep(self)
+        return self.irrep_assigner.get_irrep(self)
 
     @classmethod
     def dataframe(cls, states: list[FockSpaceState]) -> DataFrame:
@@ -200,7 +200,7 @@ class FockSpaceState:
         Returns
         -------
         pandas.DataFrame
-            Columns bitstring, wavefunction, mo_occ, m_s, S2, spin multiplicity, irrep, irrep_provider.
+            Columns bitstring, wavefunction, mo_occ, m_s, S2, spin multiplicity, irrep, irrep_assigner.
 
         Examples
         --------
@@ -217,7 +217,7 @@ class FockSpaceState:
                     state.S2,
                     state.spin_multiplicity,
                     state.irrep,
-                    state.irrep_provider,
+                    state.irrep_assigner,
                 ]
                 for state in states
             ],
@@ -229,39 +229,39 @@ class FockSpaceState:
                 "S2",
                 "spin multiplicity",
                 "irrep",
-                "irrep_provider",
+                "irrep_assigner",
             ],
         )
 
     @classmethod
     def all_states(
-        cls, mol: QuantumChemistryBase, provider: IrrepProviderBase
+        cls, mol: QuantumChemistryBase, assigner: IrrepAssignerBase
     ) -> list[FockSpaceState]:
         """Generate all Fock-space states of a molecule (including ionic ones).
 
         Parameters
         ----------
         mol : QuantumChemistryBase
-        provider : IrrepProviderBase
+        assigner : IrrepAssignerBase
 
         Returns
         -------
         list of FockSpaceState
         """
-        return cls.by_filter(mol, provider)
+        return cls.by_filter(mol, assigner)
 
     @classmethod
     def non_ionic_states(
         cls,
         mol: QuantumChemistryBase,
-        provider: IrrepProviderBase,
+        assigner: IrrepAssignerBase,
     ) -> list[FockSpaceState]:
         """Generate all non-ionic states, i.e. with the electron number of the molecule.
 
         Parameters
         ----------
         mol : QuantumChemistryBase
-        provider : IrrepProviderBase
+        assigner : IrrepAssignerBase
 
         Returns
         -------
@@ -269,7 +269,7 @@ class FockSpaceState:
 
         Examples
         --------
-        >>> states = FockSpaceState.non_ionic_states(mol, IrrepProvider(mol, "canon"))
+        >>> states = FockSpaceState.non_ionic_states(mol, IrrepAssigner(mol, "pyscf"))
         >>> [s.irrep for s in states]
         """
         n_qubits = 2 * mol.n_orbitals
@@ -278,13 +278,13 @@ class FockSpaceState:
             "".join("1" if p in ones_positions else "0" for p in range(n_qubits))
             for ones_positions in combinations(range(n_qubits), mol.n_electrons)
         )
-        return cls.by_filter(mol, provider, bitstring_generator=gen)
+        return cls.by_filter(mol, assigner, bitstring_generator=gen)
 
     @classmethod
     def by_filter(
         cls,
         mol: QuantumChemistryBase,
-        provider: IrrepProviderBase,
+        assigner: IrrepAssignerBase,
         mo_occ: list[int] | None = None,
         m_s: int | None = None,
         S2: int | None = None,
@@ -299,7 +299,7 @@ class FockSpaceState:
         Parameters
         ----------
         mol : QuantumChemistryBase
-        provider : IrrepProviderBase
+        assigner : IrrepAssignerBase
         mo_occ : list of int, optional
             Required occupation (0, 1 or 2) of each spatial orbital. Also speeds up the search.
         m_s : float, optional
@@ -373,7 +373,7 @@ class FockSpaceState:
 
             # if generator delivers a range of integers, convert to bitstring, otherwise assume it's already a bitstring
             bitstring = i if isinstance(i, str) else format(i, f"0{n_qubits}b")
-            state = cls(mol, bitstring, provider)
+            state = cls(mol, bitstring, assigner)
             if non_ionic and sum(state.mo_occ) != mol.n_electrons:
                 continue
             if mo_occ is not None and state.mo_occ != mo_occ:

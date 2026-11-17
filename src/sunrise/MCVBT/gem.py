@@ -12,7 +12,7 @@ from sunrise.expval import SUPPORTED_FERMIONIC_BACKENDS, Braket, Overlap
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
-def gem_fast(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
+def solve_gem(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
     """Solve the generalized eigenvalue problem ``H c = E S c`` in the basis of the circuit states.
 
     The Hamiltonian and overlap matrices are evaluated with the chosen backend.
