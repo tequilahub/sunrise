@@ -62,7 +62,7 @@ def show_available_modules():
 
 
 def show_supported_modules():
-    """Print the names of the supported fermionic backends, in order of preference."""
+    """Print the names of the supported fermionic backends."""
     print(SUPPORTED_FERMIONIC_BACKENDS)
 
 
