@@ -1,7 +1,14 @@
+import copy
+
 import numpy as np
 import tequila as tq
 
-from sunrise.molecules.qubit_base import Molecule as QubitMolecule
+from sunrise.expval import ExpectationValue
+from sunrise.expval.minimize import simulate
+from sunrise.fermionic_operations.circuit import FCircuit
+from sunrise.molecules import Molecule
+from sunrise.molecules.fermionic_base.fer_base import FermionicBase
+from sunrise.molecules.hybrid_base.hybridbase import HybridBase
 
 
 class input_state:
@@ -49,26 +56,32 @@ def gates_to_orb_rot(
     rotation_circuit: tq.QCircuit, dim: int, isReordered: bool = False, core: int = 0
 ) -> np.array:
     """
-    rotation_circuit: a circuit with ONLY UR gates
+    rotation_circuit: a circuit (QCircuit or FCircuit) with ONLY UR gates
     dim: the dimension of the spatial orbital space, i.e., the number of orbitals
     core: number of core orbitals, already counted on dim. This is bcs these core orbitals are not included on the UR qubit count
     Output: a matrix that rotates the orbital coefficients
     """
 
+    # an FCircuit UR is one gate on both spins, indexed (up, down, up, down, ...) like in rotate_molecule
+    is_fcircuit = isinstance(rotation_circuit, FCircuit)
+    if is_fcircuit:
+        isReordered = False
+
     # Extract parameters and indices from gates
     params = []
     indices = []
     for gate in reversed(rotation_circuit.gates):
-        params.append(gate.parameter)
+        params.append(gate.variables if is_fcircuit else gate.parameter)
         g = []
-        for idx in gate.indices:
+        for idx in gate.indices[0] if is_fcircuit else gate.indices:
             g.append(tuple([i + core + core * (not isReordered) for i in idx]))
         indices.append(g)
 
     # Select only odd values
     # Because UR gates rotate molecular orbitals
-    params = params[1::2]
-    indices = indices[1::2]
+    if not is_fcircuit:
+        params = params[1::2]
+        indices = indices[1::2]
 
     # Refactor as a list
     tmp = []
@@ -121,14 +134,21 @@ def fold_rotators(mol, UR, *args, **kwargs):
     tg = np.einsum("ixkl, jx -> ijkl", tg, UR_matrix, optimize="greedy")
     tg = np.einsum("xjkl, ix -> ijkl", tg, UR_matrix, optimize="greedy")
 
-    tmol = QubitMolecule(
-        parameters=mol.parameters,
+    # rebuild a molecule of the same nature (and select, for hybrid molecules)
+    nature = {"nature": "qubit"}
+    if isinstance(mol, FermionicBase):
+        nature = {"nature": "fermionic"}
+    elif isinstance(mol, HybridBase):
+        nature = {"nature": "hybrid", "select": mol.select}
+    tmol = Molecule(
+        parameters=copy.deepcopy(mol.parameters),
         transformation=mol.transformation,
         n_electrons=mol.n_electrons,
         nuclear_repulsion=c,
         one_body_integrals=th,
         two_body_integrals=tg,
         ordering="openfermion",
+        **nature,
     )
 
     return tmol
@@ -166,24 +186,32 @@ def get_hcb_part(mol):
                     else:
                         res_g[i][j][k][l] = g.elems[i][j][k][l]
 
+    # rebuild a molecule of the same nature (and select, for hybrid molecules)
+    nature = {"nature": "qubit"}
+    if isinstance(mol, FermionicBase):
+        nature = {"nature": "fermionic"}
+    elif isinstance(mol, HybridBase):
+        nature = {"nature": "hybrid", "select": mol.select}
     # Create the HCB and residual molecule
-    hcb_mol = QubitMolecule(
-        parameters=mol.parameters,
+    hcb_mol = Molecule(
+        parameters=copy.deepcopy(mol.parameters),
         transformation=mol.transformation,
         n_electrons=mol.n_electrons,
         nuclear_repulsion=c,
         one_body_integrals=hcb_h,
         two_body_integrals=hcb_g,
         ordering="openfermion",
+        **nature,
     )
-    res_mol = QubitMolecule(
-        parameters=mol.parameters,
+    res_mol = Molecule(
+        parameters=copy.deepcopy(mol.parameters),
         transformation=mol.transformation,
         n_electrons=mol.n_electrons,
         nuclear_repulsion=0,
         one_body_integrals=res_h,
         two_body_integrals=res_g,
         ordering="openfermion",
+        **nature,
     )
 
     return hcb_mol, res_mol
@@ -230,7 +258,7 @@ def rotate_and_hcb(
     # General procedure, loop over the list of rotators
     hcb_mols = []
     approx = 0.0
-    old_UR = tq.QCircuit()
+    old_UR = FCircuit() if isinstance(rotators[0], FCircuit) else tq.QCircuit()
     for i, UR in enumerate(rotators):
         # Rotate the two body part
         tmol = fold_rotators(molecule, old_UR.dagger() + UR, *args, **kwargs)
@@ -241,8 +269,8 @@ def rotate_and_hcb(
 
         if not silent:
             # Compute expectation values and error
-            EX = tq.ExpectationValue(U=tcircuit, H=hcb_mol.make_hamiltonian())
-            incr = tq.simulate(
+            EX = ExpectationValue(U=tcircuit, mol=hcb_mol)
+            incr = simulate(
                 EX,
                 *args,
                 variables=variables,
@@ -316,7 +344,8 @@ def compute_num_meas(
                     H2 += tq.QubitHamiltonian().from_paulistrings(p)
                 else:
                     H3 += tq.QubitHamiltonian().from_paulistrings(p)
-        meas_groups = [H1, H2, H3]
+        # skip groups without qubits, e.g. hard-core boson qubits have no H3 terms
+        meas_groups = [H for H in [H1, H2, H3] if H.qubits]
 
     # Compute group number of measurements
     M_tot = 0

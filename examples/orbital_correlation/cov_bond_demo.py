@@ -21,7 +21,7 @@ print(f"Mutual information: {(I / np.log(2)).round(2)} ln2")
 # P-SSR:   I = 3ln2
 # N-SSR:   I = 5/2ln2
 # Entanglement with subsystems (E)
-E = one_orb_entanglement(mol, HF, orb_a=0, orb_b=1, PSSR=False, NSSR=False)
+E = one_orb_entanglement(mol, HF, orb_a=0, PSSR=False, NSSR=False)
 print(f"Entanglement: {(E / np.log(2)).round(2)} ln2")
 # No SSR: E = 2ln2
 # P-SSR:  E = ln2
@@ -42,7 +42,7 @@ U3 = tq.gates.X([0, 1, 2]) + mol.make_excitation_gate(
 )  # Psi3 (Eq.43)
 U4 = tq.gates.X([0, 1, 2, 3])
 # Compute entanglement (E)
-E = one_orb_entanglement(mol, U1, orb_a=0, orb_b=1, PSSR=False, NSSR=False)
+E = one_orb_entanglement(mol, U1, orb_a=0, PSSR=False, NSSR=False)
 print(f"Entanglement: {(E / np.log(2)).round(2)} ln2")
 # E(Psi1) = ln2
 # E(Psi2) = 2ln2

@@ -1,4 +1,6 @@
 # From https://iopscience.iop.org/article/10.1088/2058-9565/aca4ee/meta Table 2
+import math
+
 import numpy as np
 
 import sunrise as sun
