@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from openfermion.ops.operators.fermion_operator import FermionOperator
-from tequila import Objective, TequilaException
+from tequila import BraKet as tq_BraKet
+from tequila import ExpectationValue as tq_ExpectationValue
+from tequila import Fidelity as tq_Fidelity
+from tequila import Objective, QCircuit, TequilaException
 from tequila.objective.objective import identity
 
 from sunrise.fermionic_operations.circuit import FCircuit
@@ -63,7 +66,6 @@ def pick_backend(
     ----------
     backend: str, optional:
         what backend to choose or verify. if None: choose for the user, following the order of SUPPORTED_FERMIONIC_BACKENDS.
-        'random' chooses one of the installed backends at random.
     samples: int, optional:
         if int and not None, choose (verify) a backend which supports sampling.
     noise: str or NoiseModel, optional:
@@ -94,13 +96,6 @@ def pick_backend(
 
     if hasattr(backend, "lower"):
         backend = backend.lower()
-
-    if backend == "random":
-        if needs_tequila:
-            return "tequila"
-        import random
-
-        return random.choice(list(INSTALLED_FERMIONIC_BACKENDS.keys()))
 
     if backend not in SUPPORTED_FERMIONIC_BACKENDS:
         raise TequilaException(f"Fermionic backend {backend} not supported")
@@ -143,6 +138,9 @@ def Fidelity(
     A tq.Objective that evaluated to the fidelity between the two states
 
     """
+    if isinstance(ket, QCircuit):
+        # qubit circuits: the tequila fidelity (one expectation value instead of the complex braket)
+        return tq_Fidelity(*args, bra=bra, ket=ket, **kwargs)
     return Objective(
         args=[
             Braket(*args, ket=ket, bra=bra, molecule=mol, operator="I", **kwargs).args[
@@ -228,6 +226,17 @@ def Braket(
         # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
     if bra is None and operator is None:
         return Objective() + 1.0
+    if isinstance(ket, QCircuit):
+        # qubit circuits: the tequila objectives, with the qubit Hamiltonian of the molecule for "H"
+        if isinstance(operator, str) and operator == "H":
+            if mol is None:
+                raise TequilaException("operator 'H' needs a molecule")
+            operator = mol.make_hamiltonian()
+        elif isinstance(operator, str) and operator == "I":
+            operator = None
+        if bra is None:
+            return tq_ExpectationValue(*args, U=ket, H=operator, **kwargs)
+        return tq_BraKet(*args, ket=ket, bra=bra, operator=operator, **kwargs)
     return Objective(
         args=[
             FermBraketImpl(
@@ -284,10 +293,21 @@ def RealBraKet(
     Tequila objectives to be simulated or compiled.
 
     """
-    return Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+    braket = Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+    if isinstance(ket, QCircuit) and bra is not None:
+        # the complex tequila braket, its real part taken like in tq.RealBraKet (differentiable)
+        return braket.args[-1].compile()[0]
+    return braket
 
 
-def ImagBraKet(*args, **kwargs):
+def ImagBraKet(
+    ket: FCircuit,
+    bra: FCircuit | None = None,
+    operator: str | list[FermionOperator] | FermionOperator | None = None,
+    mol: QuantumChemistryBase | None = None,
+    *args,
+    **kwargs,
+):
     """
     Function that calculates the Imaginary part of a given Expectation Value of an Hamiltonian operator for a given quantum states.
     Defined just for consistency with Tequila, since chemistry molecules should be always real
@@ -303,4 +323,8 @@ def ImagBraKet(*args, **kwargs):
     Tequila objectives to be simulated or compiled.
 
     """
+    if isinstance(ket, QCircuit) and bra is not None:
+        # the complex tequila braket, its imaginary part taken like in tq.ImagBraKet (differentiable)
+        braket = Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
+        return braket.args[-1].compile()[1]
     return Objective()

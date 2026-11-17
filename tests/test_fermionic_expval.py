@@ -515,12 +515,10 @@ def test_pick_backend_verifies(backend):
             sn.pick_backend(backend, samples=100)
 
 
-def test_pick_backend_samples_noise_random():
+def test_pick_backend_samples_noise():
     assert sn.pick_backend(samples=100) == "tequila"
     assert sn.pick_backend(noise="device") == "tequila"
     assert sn.pick_backend("tequila", samples=100) == "tequila"
-    assert sn.pick_backend("random") in INSTALLED_FERMIONIC_BACKENDS
-    assert sn.pick_backend("random", samples=100) == "tequila"
     with pytest.raises(tq.TequilaException):
         sn.pick_backend("qulacs")
 

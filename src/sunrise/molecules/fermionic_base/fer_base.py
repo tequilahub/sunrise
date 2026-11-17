@@ -9,7 +9,7 @@ from numbers import Number
 import numpy
 from tequila import (
     BitNumbering,
-    BitString,
+    BitStringLSB,
     QTensor,
     QubitWaveFunction,
     TequilaException,
@@ -737,7 +737,7 @@ class FermionicBase(QuantumChemistryBase):
         w = QubitWaveFunction(
             n_qubits=2 * self.n_orbitals, dense=False, numbering=BitNumbering.LSB
         )
-        w[BitString.from_array(n_state)] = 1.0
+        w[BitStringLSB.from_array(n_state)] = 1.0
         # n_state = prepare_product_state(BitString.from_array(n_state))
         U = FCircuit()
         U.initial_state = w
