@@ -7,7 +7,7 @@ import tequila as tq
 from fqe.hamiltonians.diagonal_coulomb import DiagonalCoulomb
 from fqe.hamiltonians.sparse_hamiltonian import SparseHamiltonian
 from numpy import ndarray
-from tequila import QubitWaveFunction, TequilaException
+from tequila import BitNumbering, QubitWaveFunction, TequilaException
 
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.utils.fermionic_utils import *
@@ -357,10 +357,11 @@ def init_state_from_wavefunction(wvf: QubitWaveFunction, n_orb: int, bin_dict: d
     values = []
     for idx, i in wvf.items():
         if abs(i) > 1e-6:
-            # up-then-down: the first n_orb qubits are alpha, the last n_orb beta
-            vec = "".join(str(b) for b in idx.array).ljust(2 * n_orb, "0")
-            # fqe strings have orbital 0 as the rightmost bit
-            alpha, beta = vec[:n_orb][::-1], vec[n_orb:][::-1]
+            # up-then-down with qubit q as bit q: alpha in the low n_orb bits, beta in the high ones,
+            # written like the keys of bin_dict with orbital 0 as the rightmost bit
+            k = idx.to_integer(numbering=BitNumbering.LSB)
+            alpha = format(k & ((1 << n_orb) - 1), f"0{n_orb}b")
+            beta = format(k >> n_orb, f"0{n_orb}b")
             indices.append((bin_dict[alpha], bin_dict[beta]))
             values.append(i)
 

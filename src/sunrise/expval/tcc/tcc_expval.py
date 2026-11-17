@@ -598,8 +598,8 @@ def init_state_from_wavefunction(wvf: QubitWaveFunction, tol=1e-6):
     init_state = []
     for idx, coeff in wvf.items():
         if abs(coeff) > tol:
-            # tcc reads qubit 0 as the rightmost bit
-            vec = "".join(str(b) for b in idx.array[::-1]).zfill(nq)
+            # tcc reads qubit 0 as the rightmost bit, like the binary string of the LSB integer
+            vec = format(idx.to_integer(numbering=BitNumbering.LSB), f"0{nq}b")
             init_state.append(
                 [vec, coeff.real]
             )  # tcc automatically does this, but with an anoying message everytime
