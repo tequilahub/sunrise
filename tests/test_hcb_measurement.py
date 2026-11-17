@@ -106,11 +106,18 @@ def test_hcb_measurement_linearH4_scenario2(backend):
         silent=True,
     )
 
+    hcb_mols, res_mol, circuits = result
     test_energy = 0
-    for i, molecule in enumerate(result[0]):
-        E = tq.ExpectationValue(H=molecule.make_hamiltonian(), U=U + rotators[i])
+    for molecule, circuit in zip(hcb_mols, circuits):
+        E = tq.ExpectationValue(H=molecule.make_hamiltonian(), U=circuit)
         test_energy += tq.simulate(E, variables=variables)
     assert np.isclose(test_energy, energy, 10**-3)
+    # the residual is in the basis of the last rotator, with it the energy is exact
+    E = tq.ExpectationValue(H=res_mol.make_hamiltonian(), U=circuits[-1])
+    assert np.isclose(
+        test_energy + tq.simulate(E, variables=variables),
+        tq.simulate(tq.ExpectationValue(H=H, U=U), variables=variables),
+    )
 
 
 @pytest.mark.parametrize("backend", BACKENDS)

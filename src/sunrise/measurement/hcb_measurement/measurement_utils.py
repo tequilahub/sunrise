@@ -242,7 +242,10 @@ def rotate_and_hcb(
     approx: the initial approximation of the energy
     target: the target energy
 
-    Return a list of HCB molecules and the last residual molecule
+    Return a list of HCB molecules, the last residual molecule and the circuits to measure them with.
+    Each molecule is written in the orbitals rotated by its UR gates, so hcb_mols[i] is measured with circuits[i]
+    (circuit + rotators[i]) and the residual molecule with circuits[-1] (circuit + rotators[-1]).
+    With an initial_state the circuits start from a dummy circuit and are simulated with that initial_state.
     """
 
     # Initialize the input state in a wrapper class
@@ -257,6 +260,7 @@ def rotate_and_hcb(
 
     # General procedure, loop over the list of rotators
     hcb_mols = []
+    circuits = []
     approx = 0.0
     old_UR = FCircuit() if isinstance(rotators[0], FCircuit) else tq.QCircuit()
     for i, UR in enumerate(rotators):
@@ -288,10 +292,11 @@ def rotate_and_hcb(
 
         # Update values
         hcb_mols.append(hcb_mol)
+        circuits.append(tcircuit)
         molecule = res_mol
         old_UR = UR
 
-    return hcb_mols, res_mol
+    return hcb_mols, res_mol, circuits
 
 
 def compute_num_meas(

@@ -66,12 +66,15 @@ result = sun.measurement.rotate_and_hcb(
     target=full_energy,
     silent=False,
 )
-print(result)  # the list of HCB molecules to measure and the residual element discarded
+print(
+    result
+)  # the HCB molecules, the discarded residual and the circuits to measure them with
 
 # Compute the energy
 energy = 0
-for i, hcb_mol in enumerate(result[0]):
-    expval = tq.ExpectationValue(U=U + rotators[i], H=hcb_mol.make_hamiltonian())
+hcb_mols, res_mol, circuits = result
+for hcb_mol, circuit in zip(hcb_mols, circuits):
+    expval = tq.ExpectationValue(U=circuit, H=hcb_mol.make_hamiltonian())
     energy += tq.simulate(expval, variables=variables)
 
 print(f"Energy of the accumulated HCB contributions: {energy}")
