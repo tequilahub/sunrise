@@ -48,7 +48,7 @@ def minimize(
         # TODO: remove this check once tequilahub/tequila#482 is in tequila master (or in a new tequila release)
         if not hasattr(Variables, "load"):
             raise TequilaException(
-                "save_to needs a tequila version with tequilahub/tequila#482, older versions would silently ignore it"
+                "save_to is not available yet: wait for tequilahub/tequila#482 to be released in tequila"
             )
         kwargs["save_to"] = save_to
     if "fbackend" in kwargs:
