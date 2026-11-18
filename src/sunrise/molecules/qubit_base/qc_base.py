@@ -1270,6 +1270,43 @@ class QuantumChemistryBase:
         else:
             return clpo_mol, clpo_edges
 
+    def use_MEAO_orbitals(
+        self, use_active: bool = True, inplace: bool = False, *args, **kwargs
+    ):
+        """
+        Transforms the molecule to use Maximally Entangled Atomic Orbitals (MEAO) computed by the original MEAO code,
+        see `sunrise.MEAO.generate_MEAO_molecule`.
+
+        Parameters
+        ----------
+        use_active: keep the frozen core and active space of the molecule
+        inplace: update current molecule or return a new instance
+        minao (in kwargs): minimal reference basis of the MEAOs, default "minao"
+
+        Returns
+        -------
+        New molecule in the MEAO basis
+        """
+        from sunrise.MEAO import generate_MEAO_molecule
+
+        meao_mol = generate_MEAO_molecule(
+            self, use_active=use_active, silent=True, **kwargs
+        )
+
+        if inplace:
+            self.integral_manager.orbital_coefficients = (
+                meao_mol.integral_manager.orbital_coefficients.copy()
+            )
+            try:
+                # hybrid molecules also take the encoding of the new molecule
+                self.transformation = meao_mol.transformation
+                self.update_select(meao_mol.select)
+            except AttributeError:
+                pass
+            return self
+        else:
+            return meao_mol
+
     @property
     def point_group(self):
         """
