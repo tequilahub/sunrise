@@ -604,8 +604,6 @@ class ParametersQC:
                     "x:",
                     "x-",
                     "x_",
-                    "gh(",
-                    "@",
                 ]
                 if detected_prefix in pyscf_valid:
                     orig_prefix = string[: len(detected_prefix)]
