@@ -31,6 +31,7 @@ from sunrise.expval import (
 from sunrise.fermionic_operations import gates
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.expval.minimize import grad, minimize, simulate
+from tequila.objective.objective import Variables
 from sunrise.expval.orbital_optimizer import optimize_orbitals
 from sunrise import graphical
 from sunrise.expval import (
@@ -77,6 +78,7 @@ __all__ = [
     "ParametersQC",
     "QuantumChemistryBase",
     "RealBraKet",
+    "Variables",
     "adapt",
     "chemistry",
     "draw",
