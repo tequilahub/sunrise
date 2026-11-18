@@ -75,11 +75,10 @@ pip install git+https://github.com/davibinco/TenCirChem-NG.git
 Note that the link above is not the original repo but our own fork, fixing [this issue](https://github.com/tensorcircuit/TenCirChem-NG/pull/4) for parameter consistency with other backends. Furthermore, it has been extended to support excitations of more of 2 electrons. Furthermore, it has been customized to allow the phase gates action required to [sunrise/tequila gradient computation](https://arxiv.org/abs/2011.05938).
 
 ## MEAO Orbitals
-`use_MEAO_orbitals` needs the [MEAO](https://github.com/schilling-group/MEAO) package, which is not installed with sunrise. Until [this PR](https://github.com/schilling-group/MEAO/pull/1) is merged, install it from the branch of that PR with:
+`use_MEAO_orbitals` needs the [MEAO](https://github.com/schilling-group/MEAO) package, which is not installed with sunrise. Install it with:
 ```bash
-pip install "MEAO @ git+https://github.com/davibinco/MEAO_davide.git@pip-installable"
+pip install "MEAO @ git+https://github.com/schilling-group/MEAO"
 ```
-<!-- TODO: once the PR is merged, install from https://github.com/schilling-group/MEAO instead -->
 
 ## Fermionic Circuit
 The FCircuit has been developed in order to preserve abstract fermionic layers. This circuit consists of two main parts, the `initial_state` and the circuit itself. The `initial_state` relies on a tequila `QubitWaveFunction`, whose states are checked to be particle conserving. It can be set through any way of creating a `tq.QubitWaveFunction`, either with a `FCircuit` or `QCircuit` with already mapped variables, or the options available in `QubitWaveFunction.convert_from()`. **It is important to take into account that both FQE and TCC work with `initial_states` in upthendown format, i.e., Reordered Jordan-Wigner, therefore we are keeping it here as mandatory**. In order to create the circuit itself, some gates have been already defined at sunrise.gates.

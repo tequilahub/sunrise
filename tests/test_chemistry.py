@@ -1746,7 +1746,7 @@ def test_clpo_psi4():
 def test_meao_orbitals():
     # the MEAOs only rotate the active orbitals, and the symmetry operations map them onto each other
     pytest.importorskip("MEAO.meao")
-    from sunrise.symmetry_adaptation import FockSpaceState, IrrepProvider
+    from sunrise.symmetry_adaptation import FockSpaceState, IrrepAssigner
 
     mol = sun.Molecule(
         geometry="O 0.0 0.0 0.117790\nH 0.0 0.755453 -0.471161\nH 0.0 -0.755453 -0.471161",
@@ -1759,7 +1759,9 @@ def test_meao_orbitals():
     s = meao_mol.integral_manager.overlap_integrals
     assert numpy.allclose(c.T @ s @ c, numpy.eye(c.shape[1]), atol=1.0e-8)
     assert numpy.isclose(meao_mol.compute_energy("fci"), mol.compute_energy("fci"))
-    states = FockSpaceState.non_ionic_states(meao_mol, IrrepProvider(meao_mol, "meao"))
+    states = FockSpaceState.non_ionic_states(
+        meao_mol, IrrepAssigner(meao_mol, "projection")
+    )
     assert "A1" in {state.irrep for state in states}
 
 

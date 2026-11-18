@@ -27,9 +27,7 @@ def generate_MEAO_molecule(
     """
     Interface sunrise molecules with the original MEAO code (https://github.com/schilling-group/MEAO) for the
     generation of Maximally Entangled Atomic Orbitals (MEAO, L. Ding, E. Matito, C. Schilling, arXiv:2501.15699) via pyscf.
-    MEAO is not installed with sunrise (see the README). TODO: once https://github.com/schilling-group/MEAO/pull/1
-    is merged, the install hint in the error below and in the README should point to schilling-group/MEAO instead of
-    the branch of that PR.
+    MEAO is not installed with sunrise (see the README).
 
     Parameters:
     ----------
@@ -51,8 +49,7 @@ def generate_MEAO_molecule(
     except ImportError as e:
         raise TequilaException(
             "MEAO not found, install it with "
-            'pip install "MEAO @ git+https://github.com/davibinco/MEAO_davide.git@pip-installable" '
-            "(https://github.com/schilling-group/MEAO/pull/1)"
+            'pip install "MEAO @ git+https://github.com/schilling-group/MEAO"'
         ) from e
 
     pfmol = MoleculeToPyscf(mol)
