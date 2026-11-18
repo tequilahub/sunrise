@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy
 import tequila
+from openfermion import jordan_wigner, s_squared_operator, sz_operator
 from pandas import DataFrame
 
 from sunrise.symmetry_adaptation.irrep_assigner import IrrepAssignerBase
@@ -93,8 +94,12 @@ class FockSpaceState:
         """Returns the total spin projection (m_s or ⟨S_z⟩) of the state."""
         if self._m_s is not None:
             return self._m_s
+        # the bitstrings are spin-orbital occupations (up, down, ...), i.e. Jordan-Wigner for every molecule nature
+        sz_op = tequila.QubitHamiltonian.from_openfermion(
+            jordan_wigner(sz_operator(self.mol.n_orbitals))
+        )
         return numpy.round(
-            self.wavefunction.inner(self.mol.make_sz_op()(self.wavefunction)).real,
+            self.wavefunction.inner(sz_op(self.wavefunction)).real,
             decimals=10,
         )
 
@@ -103,8 +108,11 @@ class FockSpaceState:
         """Returns the expectation value of the total spin squared operator (⟨S^2⟩) for the state."""
         if self._S2 is not None:
             return self._S2
+        s2_op = tequila.QubitHamiltonian.from_openfermion(
+            jordan_wigner(s_squared_operator(self.mol.n_orbitals))
+        )
         return numpy.round(
-            self.wavefunction.inner(self.mol.make_s2_op()(self.wavefunction)).real,
+            self.wavefunction.inner(s2_op(self.wavefunction)).real,
             decimals=10,
         )
 

@@ -5,6 +5,7 @@ from scipy.optimize import minimize as scp_min
 from tequila import QCircuit, QubitWaveFunction
 from tequila.objective.objective import Variables
 
+from sunrise.expval.minimize import simulate
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.orbital_correlation.density_matrix_utils import *
 
@@ -237,7 +238,7 @@ def total_mutual_info(
         one_entropies.append(quantum_entropy(one_rdm))
     one_entropy = sum(one_entropies)
 
-    state = tq.simulate(circuit, variables=variables, initial_state=initial_state)
+    state = simulate(circuit, variables=variables, initial_state=initial_state)
     rho = tq.paulis.Projector(state).to_matrix().real
     system_entropy = quantum_entropy(rho)
 

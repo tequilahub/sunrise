@@ -635,3 +635,18 @@ def test_fermionic_swap_correctness() -> None:
     ).T
     H = mol.make_hamiltonian().to_matrix()
     assert np.allclose(H @ R, R @ H)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize("nature, select", [("fermionic", None), ("hybrid", "FBBF")])
+def test_spin_of_fermionic_and_hybrid_molecules(nature, select) -> None:
+    geometry = "H 0 0 0\nH 0 0 1.5\nH 0 0 3.0\nH 0 0 4.5"
+    qmol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend="pyscf")
+    kwargs = {"select": select} if select else {}
+    mol = sun.Molecule(
+        geometry=geometry, basis_set="sto-3g", backend="pyscf", nature=nature, **kwargs
+    )
+    for bitstring in ["10011100", "10101100", "01101100"]:
+        ref = FockSpaceState(qmol, bitstring, IrrepAssigner(qmol, "projection"))
+        state = FockSpaceState(mol, bitstring, IrrepAssigner(mol, "projection"))
+        assert (state.m_s, state.S2, state.irrep) == (ref.m_s, ref.S2, ref.irrep)
