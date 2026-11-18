@@ -117,7 +117,9 @@ class PySCFMixin:
             kwargs["two_body_integrals"] = g_ao
             kwargs["one_body_integrals"] = h_ao
             kwargs["orbital_coefficients"] = mo_coeff
-            kwargs["orbital_type"] = "hf"
+            # keep "native": the base class transforms the hf orbitals to it after init
+            if str(kwargs.get("orbital_type")).lower() != "native":
+                kwargs["orbital_type"] = "hf"
             kwargs.setdefault("basis_convention", "pyscf")
 
             if "nuclear_repulsion" not in kwargs:
