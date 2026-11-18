@@ -478,3 +478,98 @@ class PhaseImpl(FGateImpl):
         i, _j = self._indices[0][0]
         result = f" a{spatial_of(i)} P:fill={gcol}:shape={shape} \\textcolor{{{tcol.name}}}{{}} "
         return result
+
+
+class FSwapImpl(FGateImpl):
+    def __init__(
+        self,
+        i,
+        j,
+        variables: typing.Hashable
+        | numbers.Real
+        | Variable
+        | FixedVariable
+        | None = None,
+    ):
+        # indices = []
+        # for k in range(i, j):
+        #     l = k + 1
+        #     indices.extend(
+        #         [
+        #             (2 * k + 1, 2 * l),
+        #             (2 * l, 2 * l + 1),
+        #             (2 * k, 2 * k + 1),
+        #             (2 * k + 1, 2 * l),
+        #         ]
+        #     )
+        # for k in range(i, j - 1)[::-1]:
+        #     l = k + 1
+        #     indices.extend(
+        #         [
+        #             (2 * k + 1, 2 * l),
+        #             (2 * l, 2 * l + 1),
+        #             (2 * k, 2 * k + 1),
+        #             (2 * k + 1, 2 * l),
+        #         ]
+        #     )
+        # super().__init__(indices, pi, True)
+        self._name = "FSwap"
+
+    def __str__(self):
+        return super().__str__()
+
+    def _render(self, state, style, show_spatial_orbitals=True):
+        raise NotImplementedError
+
+
+class PairFSwapImpl(FGateImpl):
+    def __init__(
+        self,
+        i,
+        j,
+        variables: typing.Hashable
+        | numbers.Real
+        | Variable
+        | FixedVariable
+        | None = None,
+    ):
+        # indices = []
+        # for k in range(i, j):
+        #     l = k + 1
+        #     indices.extend(
+        #         [
+        #             (2 * k + 1, 2 * l),
+        #             (2 * l, 2 * l + 1),
+        #             (2 * k, 2 * k + 1),
+        #             (2 * k + 1, 2 * l),
+        #         ]
+        #     )
+        # for k in range(i, j - 1)[::-1]:
+        #     l = k + 1
+        #     indices.extend(
+        #         [
+        #             (2 * k + 1, 2 * l),
+        #             (2 * l, 2 * l + 1),
+        #             (2 * k, 2 * k + 1),
+        #             (2 * k + 1, 2 * l),
+        #         ]
+        #     )
+        # super().__init__(indices, pi, False)
+        self._name = "Pair-FSwap"
+
+    def __str__(self):
+        return super().__str__()
+
+    def _render(self, state, style, show_spatial_orbitals=True):
+        raise NotImplementedError
+
+
+class FromGeneratorImpl(FGateImpl):
+    def __init__(self, generator, variables=None, reordered=False):
+        super().__init__(generator, variables, reordered)
+
+    def __str__(self):
+        return super().__str__()
+
+    def _render(self, state, style, show_spatial_orbitals=True):
+        raise NotImplementedError
