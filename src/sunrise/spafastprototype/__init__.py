@@ -2,7 +2,7 @@ from .decompose import decompose, make_decomposed_circuits, make_decomposed_clus
 from .fast_qtensor import fast_qtensor
 from .fast_rdm import fast_rdm
 from .spa import SPASolver, run_spa
-from .spa_classical_solver import spa_angles_for_graph, spa_rdms, spa_solve_graph
+from .spa_classical_solver import spa_angles_for_graph, spa_rdms, spa_solve_graph, spa_rdms_bosonic
 
 __all__ = [
     "SPASolver",
@@ -14,5 +14,6 @@ __all__ = [
     "run_spa",
     "spa_angles_for_graph",
     "spa_rdms",
+    "spa_rdms_bosonic",
     "spa_solve_graph",
 ]

@@ -317,3 +317,74 @@ def spa_rdms(
     rdm2[p, q, p, q] += 4.0 * P
     rdm2[p, q, q, p] += -2.0 * P
     return rdm1, rdm2
+
+
+def spa_rdms_bosonic(
+    edges: list[tuple[int]],
+    variables: Variables,
+    n_orbitals: int | None = None,
+    label=None,
+):
+    """
+    Classical evaluation of the bosonic 1- and 2-RDMs of the
+    SPA wavefunction.
+
+    The returned quantities are
+        rdm1[i, j] = <b_i† b_j>
+        rdm2[i, j] = <b_i† b_i b_j† b_j> = <n_i n_j>
+
+    The non-zero elements are:
+    rdm1[i,j] = c_i c_j          (i and j on the same edge)
+    rdm2[i,j] = n_i n_j          (i and j on different edges)
+    rdm2[i,i] = n_i              (diagonal; n_i**2 = n_i)
+
+    Unlike spa_rdms, rdm1 is not necessarily diagonal, and rdm2
+    is a two-index matrix rather than a four-index tensor.
+    Please don't confuse with the spin-free HCB-SPA RDMs.
+
+    Parameters
+    ----------
+    edges : list of tuple of int
+        Orbital pairs (or longer chains).
+    variables : dict
+        Angles keyed by ``((i, j), "D", label)`` (keys may be tequila Variables).
+    n_orbitals : int, optional
+        Number of orbitals. Default is the highest orbital index in ``edges`` plus one.
+    label : optional
+        Label in the variable keys.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        ``(rdm1, rdm2)`` with shapes (n, n) and (n, n).
+    """
+    # TODO: add test when frayedends interface implemented
+    if n_orbitals is None:
+        n_orbitals = max(max(edge) for edge in edges) + 1
+    values = {getattr(k, "name", k): float(v) for k, v in variables.items()}
+    c = np.zeros(n_orbitals)
+    edge_id = np.full(n_orbitals, -1)
+
+    for e, edge in enumerate(edges):
+        amp = 1.0
+        for i in range(1, len(edge)):
+            angle = values[((edge[i - 1], edge[i]), "D", label)]
+            c[edge[i - 1]] = amp * np.cos(angle / 2)
+            amp *= np.sin(angle / 2)
+
+        c[edge[-1]] = amp
+        edge_id[list(edge)] = e
+
+    n = c**2
+    same_edge = (edge_id[:, None] == edge_id[None, :]) & (edge_id[:, None] >= 0)
+
+    # <b_i† b_j>
+    rdm1 = np.where(same_edge, np.outer(c, c), 0.0)
+
+    # <n_i n_j>
+    rdm2 = np.where(same_edge, 0.0, np.outer(n, n))
+
+    # n_i² = n_i
+    np.fill_diagonal(rdm2, n)
+
+    return rdm1, rdm2
