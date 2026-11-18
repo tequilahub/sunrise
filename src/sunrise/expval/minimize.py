@@ -32,8 +32,21 @@ def minimize(
     maxiter: int | None = None,
     silent: bool = True,
     *args,
+    save_to: str | None = None,
     **kwargs,
 ):
+    """
+    Minimize a tequila or sunrise objective, see tequila.minimize for the common arguments
+
+    Parameters
+    ----------
+    save_to: str:
+       if given, write the history to save_to + "_history.txt" (readable table)
+       and the final variables to save_to + "_variables.json" (load with sn.Variables.load)
+    """
+    # only passed on when given, so tequila versions without save_to keep working
+    if save_to is not None:
+        kwargs["save_to"] = save_to
     if "fbackend" in kwargs:
         fbackend = kwargs["fbackend"]
     elif "fermionic_backend" in kwargs:
