@@ -214,7 +214,7 @@ def rotate_and_hcb(
     approx: the initial approximation of the energy
     target: the target energy
 
-    Return a list of HCB molecules and the last residual molecule
+    Return a list of HCB molecules and the last residual molecule rotated back to the original frame
     """
 
     # Initialize the input state in a wrapper class
@@ -262,7 +262,7 @@ def rotate_and_hcb(
         hcb_mols.append(hcb_mol)
         molecule = res_mol
         old_UR = UR
-
+    res_mol = fold_rotators(molecule, old_UR.dagger(), *args, **kwargs)
     return hcb_mols, res_mol
 
 
