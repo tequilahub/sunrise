@@ -1273,19 +1273,35 @@ class QuantumChemistryBase:
     def use_MEAO_orbitals(
         self, use_active: bool = True, inplace: bool = False, *args, **kwargs
     ):
-        """
-        Transforms the molecule to use Maximally Entangled Atomic Orbitals (MEAO) computed by the original MEAO code,
-        see `sunrise.MEAO.generate_MEAO_molecule`.
+        """Return the molecule in Maximally Entangled Atomic Orbitals (MEAO).
+
+        The orbitals come from the original MEAO code, see ``sunrise.MEAO.generate_MEAO_molecule``,
+        which has to be installed separately (see the README).
 
         Parameters
         ----------
-        use_active: keep the frozen core and active space of the molecule
-        inplace: update current molecule or return a new instance
-        minao (in kwargs): minimal reference basis of the MEAOs, default "minao"
+        use_active : bool, optional
+            Keep the frozen core and the active space of the molecule (the MEAOs are rotated into it).
+            Default is True.
+        inplace : bool, optional
+            Update the current molecule instead of returning a new one. Default is False.
+        **kwargs
+            Passed to ``generate_MEAO_molecule``, e.g. ``minao`` (the reference basis of the MEAOs,
+            default ``"minao"``) or ``pyscf_object``.
 
         Returns
         -------
-        New molecule in the MEAO basis
+        QuantumChemistryBase
+            Molecule in the MEAO basis.
+
+        Notes
+        -----
+        With a frozen core (the default of ``Molecule``) the MEAOs are not the ones of the original MEAO code,
+        use ``frozen_core=False`` to obtain those, see ``generate_MEAO_molecule``.
+
+        Examples
+        --------
+        >>> mol = mol.use_MEAO_orbitals()
         """
         from sunrise.MEAO import generate_MEAO_molecule
 

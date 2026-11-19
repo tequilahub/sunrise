@@ -16,6 +16,11 @@ from sunrise.molecules.hybrid_base import HybridBase
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 from sunrise.utils.orbital_transformation import orthogonalize, transform
 
+try:
+    from MEAO.meao import MEAO
+except ImportError:
+    MEAO = None
+
 
 def generate_MEAO_molecule(
     mol: QuantumChemistryBase,
@@ -24,33 +29,49 @@ def generate_MEAO_molecule(
     use_active: bool = True,
     **kwargs,
 ) -> QuantumChemistryBase:
-    """
-    Interface sunrise molecules with the original MEAO code (https://github.com/schilling-group/MEAO) for the
-    generation of Maximally Entangled Atomic Orbitals (MEAO, L. Ding, E. Matito, C. Schilling, arXiv:2501.15699) via pyscf.
-    MEAO is not installed with sunrise (see the README).
+    """Generate a molecule with MEAO (maximally entangled atomic orbital) orbitals.
 
-    Parameters:
-    ----------
-    mol (QuantumChemistryBase): any instance of sunrise molecule
-    minao (str): minimal reference basis of the intrinsic atomic orbitals (IAO) the MEAOs are optimized in. pyscf's
-                 minao has no p shell on s-block atoms (e.g. Be in BeH2), "sto-3g" can be used there.
-                 For basis sets larger than minao the MEAOs are completed by their orthonormal complement
-    silent (bool): Whether to hide the output of the MEAO optimization
-    use_active (bool): Whether to transform the MEAOs to keep the active space defined by the input molecule
-    Keywords:
-        - pyscf_object: pyscf mean field object whose occupied orbitals define the IAOs. If not, pyscf HF will be run.
+    Interface with the original MEAO code (https://github.com/schilling-group/MEAO, L. Ding,
+    E. Matito, C. Schilling, arXiv:2501.15699) through PySCF. The MEAOs are optimized in the space of
+    the intrinsic atomic orbitals (IAOs) of the Hartree-Fock occupied orbitals. MEAO is not installed
+    with sunrise, see the README.
 
-    Returns:
+    Parameters
     ----------
-    Sunrise Molecule (same instance as input) with MEAO orbitals.
+    mol : QuantumChemistryBase
+        Any sunrise molecule.
+    minao : str or dict, optional
+        Reference basis defining the IAOs, as in the examples of MEAO (the basis of the molecule can be
+        larger, e.g. cc-pVDZ). Any basis accepted by PySCF, a name or a dict with one basis per element.
+        The PySCF ``"minao"`` has no p shell on s-block atoms (e.g. Be in BeH2), ``"sto-3g"`` can be used
+        there. Default is ``"minao"``.
+    silent : bool
+        If True, suppress the output of the MEAO optimization.
+    use_active : bool
+        If True, keep the frozen core and the active space of ``mol`` (the MEAOs are rotated into it).
+        Otherwise all orbitals are replaced by the MEAOs.
+    **kwargs
+        ``pyscf_object`` (a PySCF mean-field object) whose occupied orbitals define the IAOs, otherwise
+        a PySCF restricted Hartree-Fock is run.
+
+    Returns
+    -------
+    mol : QuantumChemistryBase
+        Molecule with MEAO orbitals. For basis sets larger than ``minao`` the MEAOs are completed by their
+        orthonormal complement.
+
+    Notes
+    -----
+    With a frozen core, which is the default of ``Molecule``, the MEAOs are rotated to keep the frozen core
+    and the active space, so they are not the ones of the original MEAO code (which uses all orbitals).
+    To obtain those, use ``frozen_core=False`` when creating the molecule: the first orbitals of the
+    result are then the MEAOs, in the order of the original, and the rest is the complement.
     """
-    try:
-        from MEAO.meao import MEAO
-    except ImportError as e:
+    if MEAO is None:
         raise TequilaException(
             "MEAO not found, install it with "
             'pip install "MEAO @ git+https://github.com/schilling-group/MEAO"'
-        ) from e
+        )
 
     pfmol = MoleculeToPyscf(mol)
     if "pyscf_object" in kwargs:
