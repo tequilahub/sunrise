@@ -1296,8 +1296,9 @@ class QuantumChemistryBase:
 
         Notes
         -----
-        With a frozen core (the default of ``Molecule``) the MEAOs are not the ones of the original MEAO code,
-        use ``frozen_core=False`` to obtain those, see ``generate_MEAO_molecule``.
+        With a frozen core (the default of ``Molecule``) the valence MEAOs are practically, but not exactly,
+        those of the original MEAO code and the core MEAOs are replaced by the canonical core orbitals. Use
+        ``frozen_core=False`` to obtain exactly the orbitals of the original code, see ``generate_MEAO_molecule``.
 
         Examples
         --------

@@ -62,10 +62,13 @@ def generate_MEAO_molecule(
 
     Notes
     -----
-    With a frozen core, which is the default of ``Molecule``, the MEAOs are rotated to keep the frozen core
-    and the active space, so they are not the ones of the original MEAO code (which uses all orbitals).
-    To obtain those, use ``frozen_core=False`` when creating the molecule: the first orbitals of the
-    result are then the MEAOs, in the order of the original, and the rest is the complement.
+    With a frozen core, which is the default of ``Molecule``, the core MEAOs are replaced by the canonical core
+    orbitals of ``mol`` (kept frozen) and the valence MEAOs are made orthogonal to them. The valence MEAOs
+    (e.g. the bonding hybrids) are then practically the same as those of the original MEAO code (which uses
+    all orbitals), but not exactly, and neither are quantities that depend on them, such as orbital entropies
+    and mutual information. To obtain exactly the orbitals of the original code, use ``frozen_core=False``
+    when creating the molecule: the first orbitals of the result are then the MEAOs, in the order of the
+    original, and the rest is the complement.
     """
     if MEAO is None:
         raise TequilaException(
