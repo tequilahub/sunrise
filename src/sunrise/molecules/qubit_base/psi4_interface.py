@@ -478,6 +478,7 @@ class Psi4Mixin:
             kwargs["one_body_integrals"] = h
             kwargs["constant_term"] = c
             kwargs["orbital_coefficients"] = Ca
+            kwargs["orbital_type"] = "hf"
             kwargs["basis_name"] = self.parameters.basis_set
         kwargs["basis_type"] = "GBS"
         kwargs.setdefault("basis_convention", "psi4")

@@ -15,7 +15,7 @@ from tequila import SUPPORTED_BACKENDS, QCircuit, QubitWaveFunction, TequilaExce
 from tequila import grad as tqgrad
 from tequila.circuit.noise import NoiseModel
 from tequila.objective import QTensor, format_variable_dictionary
-from tequila.objective.objective import Objective, Variable, assign_variable
+from tequila.objective.objective import Objective, Variable, Variables, assign_variable
 from tequila.optimizers import minimize as tminimize
 from tequila.simulators.simulator_api import compile as tq_compile
 from tequila.simulators.simulator_base import BackendCircuit
@@ -38,6 +38,7 @@ def minimize(
     maxiter: int | None = None,
     silent: bool = True,
     *args,
+    save_to: str | None = None,
     **kwargs,
 ):
     """Minimize an objective, using fermionic backends for sunrise Objectives.
@@ -62,6 +63,10 @@ def minimize(
         Maximum number of iterations.
     silent : bool
         If True, do not print optimization progress. Default is True.
+    save_to : str, optional
+        If given, write the history to ``save_to + "_history.txt"`` (readable table) and the
+        final variables to ``save_to + "_variables.json"`` (load them with ``sun.Variables.load``).
+        Needs a tequila release with tequilahub/tequila#482.
     *args, **kwargs
         Passed on to ``tequila.minimize``.
 
@@ -69,6 +74,11 @@ def minimize(
     -------
     OptimizerResults
         Tequila optimization result (energy, optimal variables, history).
+
+    Raises
+    ------
+    TequilaException
+        If ``save_to`` is given and the installed tequila does not support it.
 
     See Also
     --------
@@ -82,6 +92,13 @@ def minimize(
     >>> result = sun.minimize(E, silent=True)
     >>> result.energy, result.variables
     """
+    if save_to is not None:
+        # TODO: remove this check once tequilahub/tequila#482 is in tequila master (or in a new tequila release)
+        if not hasattr(Variables, "load"):
+            raise TequilaException(
+                "save_to is not available yet: wait for tequilahub/tequila#482 to be released in tequila"
+            )
+        kwargs["save_to"] = save_to
     if "fbackend" in kwargs:
         fbackend = kwargs["fbackend"]
     elif "fermionic_backend" in kwargs:

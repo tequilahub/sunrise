@@ -593,3 +593,21 @@ def test_compile_keeps_spex_for_tequila(kwargs, fermionic, qubit):
         sn_minimize.compile(E, **kwargs)
     assert {c.kwargs["backend"] for c in fspy.call_args_list} == {fermionic}
     assert {c.kwargs["backend"] for c in qspy.call_args_list} == {qubit}
+
+
+def test_minimize_save_to(tmp_path):
+    # TODO: once tequilahub/tequila#482 is in tequila master (or in a new tequila release), remove this skip
+    if not hasattr(sun.Variables, "load"):
+        pytest.skip("change when tequilahub/tequila#482 is in tequila master")
+    # the saved variables have to load back into a new circuit with the same energy
+    geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
+    mol = sun.Molecule(
+        geometry=geom, basis_set="sto-3g", transformation="reordered-jordan-wigner"
+    ).use_native_orbitals()
+    fmol = sun.Molecule(geometry=geom, basis_set="sto-3g", nature="fermionic")
+    E = Braket(molecule=mol, ket=fmol.make_ansatz("UpCCD"))
+    result = sun.minimize(E, silent=True, save_to=str(tmp_path / "run"))
+    assert (tmp_path / "run_history.txt").read_text().startswith("iteration\tenergy")
+    variables = sun.Variables.load(tmp_path / "run_variables.json")
+    E2 = Braket(molecule=mol, ket=fmol.make_ansatz("UpCCD"))
+    assert isclose(sun.simulate(E2, variables=variables), result.energy)
