@@ -111,7 +111,7 @@ def test_hcb_measurement_linearH4_scenario2(backend):
     assert np.isclose(test_energy, energy, 10**-3)
     
     # Test test_energy + residual expectation value = fci
-    wfn = tq.simulate(U)
+    wfn = tq.simulate(U, variables=variables)
     H_res = result[1].make_hamiltonian()
     assert np.isclose(test_energy + wfn.inner(H_res * wfn).real, energy, 10**-7)
 
