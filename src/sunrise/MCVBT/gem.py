@@ -13,9 +13,14 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 def solve_gem(circuits, solver, variables, mol: QuantumChemistryBase, silent=True):
-    """Solve the generalized eigenvalue problem ``H c = E S c`` in the basis of the circuit states.
+    r"""Solve the generalized eigenvalue problem in the basis of the circuit states.
 
-    The Hamiltonian and overlap matrices are evaluated with the chosen backend.
+    .. math::
+        H c = E S c, \qquad H_{ij} = \langle\psi_i|H|\psi_j\rangle, \qquad
+        S_{ij} = \langle\psi_i|\psi_j\rangle,
+
+    with :math:`|\psi_i\rangle` the state of the i-th circuit. The matrices are evaluated with
+    the chosen backend.
 
     Parameters
     ----------

@@ -429,6 +429,10 @@ def spa_rdms(
     -------
     tuple of numpy.ndarray
         ``(rdm1, rdm2)`` with shapes (n, n) and (n, n, n, n).
+
+    See Also
+    --------
+    spa_rdms_bosonic : Bosonic (hard-core boson) 1- and 2-RDM of the same state.
     """
     if n_orbitals is None:
         n_orbitals = max(max(edge) for edge in edges) + 1
@@ -464,22 +468,19 @@ def spa_rdms_bosonic(
     n_orbitals: int | None = None,
     label=None,
 ):
-    """
-    Classical evaluation of the bosonic 1- and 2-RDMs of the
-    SPA wavefunction.
+    """Compute the bosonic (hard-core boson) 1- and 2-RDM of an SPA state classically.
 
-    The returned quantities are
-        rdm1[i, j] = <b_i† b_j>
-        rdm2[i, j] = <b_i† b_i b_j† b_j> = <n_i n_j>
+    The pairs are the bosons, ``b_p^+`` creates the electron pair in orbital ``p``. The
+    coefficients ``c_p`` of each edge are those of ``spa_rdms``. With ``n_p = c_p**2`` the
+    returned matrices are::
 
-    The non-zero elements are:
-    rdm1[i,j] = c_i c_j          (i and j on the same edge)
-    rdm2[i,j] = n_i n_j          (i and j on different edges)
-    rdm2[i,i] = n_i              (diagonal; n_i**2 = n_i)
+        rdm1[p, q] = <b_p^+ b_q> = c_p c_q    (p, q on the same edge, includes p == q)
+        rdm2[p, q] = <n_p n_q>   = n_p n_q    (p, q on different edges)
+        rdm2[p, p] = n_p                      (n_p**2 = n_p)
 
-    Unlike spa_rdms, rdm1 is not necessarily diagonal, and rdm2
-    is a two-index matrix rather than a four-index tensor.
-    Please don't confuse with the spin-free HCB-SPA RDMs.
+    and zero otherwise (each edge holds one pair, so ``<n_p n_q> = 0`` on the same edge).
+    Unlike ``spa_rdms``, ``rdm1`` is not diagonal and ``rdm2`` is a matrix; these are not the
+    spin-free RDMs of the HCB-SPA state.
 
     Parameters
     ----------
@@ -495,7 +496,15 @@ def spa_rdms_bosonic(
     Returns
     -------
     tuple of numpy.ndarray
-        ``(rdm1, rdm2)`` with shapes (n, n) and (n, n).
+        ``(rdm1, rdm2)``, both with shape (n, n).
+
+    See Also
+    --------
+    spa_rdms : Spin-free 1- and 2-RDM of the same state.
+
+    Examples
+    --------
+    >>> rdm1, rdm2 = spa_rdms_bosonic(edges=[(0, 1), (2, 3)], variables=result.variables)
     """
     # TODO: add test when frayedends interface implemented
     if n_orbitals is None:

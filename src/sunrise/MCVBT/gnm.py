@@ -32,8 +32,9 @@ class mcvbt:
         One list of edges ``[(i, j), ...]`` (spatial orbital pairs) per circuit.
     circuits : list of QCircuit or FCircuit, optional
         Custom circuits, one per graph. Created from the graphs if not given.
-    strategy : str, optional
-        Extra "delocalization" gates added to each circuit. Only ``"shift"`` is implemented
+    strategy : {None, "shift"}, optional
+        Extra "delocalization" gates added to each circuit. ``"shift"`` shifts the orbitals of the
+        graph cyclically by one and adds a spin-up and a spin-down excitation on each new edge
         (fermionic circuits only). Default is None.
     solver : str, optional
         Backend used for the simulation, a fermionic one (e.g. ``"FQE"``, default) or a tequila backend.
@@ -47,7 +48,7 @@ class mcvbt:
     Raises
     ------
     ValueError
-        If ``circuits`` and ``graphs`` have different lengths.
+        If ``circuits`` and ``graphs`` have different lengths, or ``strategy`` is unknown.
 
     Examples
     --------

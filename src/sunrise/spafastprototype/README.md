@@ -8,7 +8,7 @@ It is qubit based and does not mix with fermionic expectation values for now.
 - `run_spa` – optimize an SPA circuit together with the orbitals, using the decomposition for the RDMs. `grouping=` sets the clusters: None follows the circuit connectivity, a number groups blocks of about that size, a list sets them by hand.
 - `decompose`, `make_decomposed_clusters`, `make_decomposed_circuits` – split a circuit and its expectation values into independent clusters
 - `fast_rdm`, `fast_qtensor` – RDMs and tensors of expectation values from the decomposed circuits
-- `spa_solve_graph`, `spa_angles_for_graph`, `spa_rdms` – classical SPA solution of a graph, without simulating any circuit
+- `spa_solve_graph`, `spa_angles_for_graph`, `spa_rdms`, `spa_rdms_bosonic` – classical SPA solution of a graph and its (spin-free or bosonic) RDMs, without simulating any circuit
 
 ```python
 import sunrise as sun

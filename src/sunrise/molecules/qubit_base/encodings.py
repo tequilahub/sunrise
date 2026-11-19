@@ -325,7 +325,12 @@ class BravyiKitaevTree(EncodingBase):
         )
 
     def me_to_jw(self) -> QCircuit:
-        # the encoding maps the Jordan-Wigner bits x to A x (mod 2): undo A with CNOTs (Gaussian elimination)
+        r"""Return the circuit from this encoding to Jordan-Wigner.
+
+        The encoding maps the Jordan-Wigner bits linearly, :math:`x \mapsto A x \pmod 2`, so
+        :math:`A` is undone with CNOTs (Gaussian elimination over GF(2)). This also gives
+        ``hcb_to_me``.
+        """
         n = 2 * self.n_orbitals
         jw = JordanWigner(
             n_electrons=self.n_electrons,

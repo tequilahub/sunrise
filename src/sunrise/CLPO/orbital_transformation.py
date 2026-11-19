@@ -79,9 +79,10 @@ def generate_CLPO_molecule_edges(
         Chemistry backend for the HF/MP2 calculation and the MOLDEN file. If None it is guessed
         from the molecule type, the kwargs or the installed backends.
     **kwargs
-        Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``.
-        Psi4: ``wfn``. The result is then the responsibility of the user, JANPA only considers
-        HF or MP2 references.
+        Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``
+        replace the internal Hartree-Fock run, the result is then the responsibility of the user
+        (JANPA only considers HF or MP2 references). Psi4: a custom ``wfn`` is currently not
+        supported.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
         on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
@@ -176,9 +177,10 @@ def generate_HAO_molecule(
         Chemistry backend for the HF/MP2 calculation and the MOLDEN file. If None it is guessed
         from the molecule type, the kwargs or the installed backends.
     **kwargs
-        Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``.
-        Psi4: ``wfn``. The result is then the responsibility of the user, JANPA only considers
-        HF or MP2 references.
+        Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``
+        replace the internal Hartree-Fock run, the result is then the responsibility of the user
+        (JANPA only considers HF or MP2 references). Psi4: a custom ``wfn`` is currently not
+        supported.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
         on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 
@@ -343,9 +345,10 @@ def generate_CLPO_molecule(
         Chemistry backend for the HF/MP2 calculation and the MOLDEN file. If None it is guessed
         from the molecule type, the kwargs or the installed backends.
     **kwargs
-        Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``.
-        Psi4: ``wfn``. The result is then the responsibility of the user, JANPA only considers
-        HF or MP2 references.
+        Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``
+        replace the internal Hartree-Fock run, the result is then the responsibility of the user
+        (JANPA only considers HF or MP2 references). Psi4: a custom ``wfn`` is currently not
+        supported.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
         on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
 

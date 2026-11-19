@@ -181,12 +181,16 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
 
 @dataclass
 class SymmetryAdaptedLinearCombinationSymmetrization(SymmetrizationProcedure):
-    """Symmetrize states by building symmetry-adapted linear combinations (SALCs).
+    r"""Symmetrize states by building symmetry-adapted linear combinations (SALCs).
 
-    Each state is projected onto every irrep of ``mol.point_group`` with the characters of the
-    symmetry operations, which act on the orbitals as given by ``mol.mo_representation`` (they may
-    mix orbitals). The results are grouped by (irrep, :math:`S^2`, m_s), deduplicated and orthonormalized
-    within each group.
+    Each state is projected onto every irrep :math:`\Gamma` of ``mol.point_group``,
+
+    .. math::
+        P_\Gamma = \frac{d_\Gamma}{|G|} \sum_O \chi_\Gamma(O)^* \, O,
+
+    with the symmetry operations :math:`O` acting on the orbitals as given by
+    ``mol.mo_representation`` (they may mix orbitals). The results are grouped by
+    (irrep, :math:`S^2`, m_s), deduplicated and orthonormalized within each group.
 
     Parameters
     ----------

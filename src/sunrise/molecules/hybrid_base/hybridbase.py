@@ -58,7 +58,8 @@ class HybridBase(qc_base):
     frozen_orbitals : list of int, optional
         Orbitals removed from the active orbitals.
     orbital_type : str, optional
-        Type of the orbitals, e.g. "hf" or "native".
+        Kind of the orbitals, e.g. ``"hf"``, ``"native"``. Default is ``"unknown"``.
+        With ``"native"`` the orbitals are transformed to the (orthonormalized) native basis on init.
     reference_orbitals : list of int, optional
         Orbitals considered occupied when creating an active space, as total indices. Default
         are the first ``n_electrons // 2``.

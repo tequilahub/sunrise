@@ -64,7 +64,7 @@ def Molecule(
         Type of molecule. Default is ``"qubit"``. Short forms ``"q"``, ``"h"``, ``"f"`` work;
         ``"tequila"`` and ``"t"`` are aliases of ``"qubit"``.
     orbital_type : str, optional
-        Orbitals to use, e.g. ``"hf"``, ``"native"``, ``"pno"``. Default depends on the backend.
+        Orbitals to use: "hf" (default) or "native" with a basis set, "pno" with MADNESS.
     backend : str, optional
         Quantum chemistry backend (``"pyscf"``, ``"psi4"``, ``"madness"`` or ``"base"`` if the integrals are given).
         Default is the first installed one that fits.

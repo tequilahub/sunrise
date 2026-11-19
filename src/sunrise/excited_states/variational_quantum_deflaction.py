@@ -37,7 +37,8 @@ def vqd_projection_method(
     circuit_list : list of tq.QCircuit
         Circuits :math:`V_k` of the previously optimized states.
     constant_list : list of float
-        Penalty weights :math:`\beta_k`, one per previous state.
+        Penalty weights :math:`\beta_k`, one per previous state. They must exceed the energy gap
+        to the wanted state, otherwise the minimum is a lower state plus the penalty.
 
     Returns
     -------

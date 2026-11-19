@@ -18,7 +18,7 @@ Everything needed to evaluate $\langle\psi|H|\psi\rangle$ (and overlaps $\langle
   for consistency with the other backends, supports excitations of more than 2 electrons and the phase gates needed
   for the [sunrise/tequila gradients](https://doi.org/10.1039/D0SC06627C).
 
-- `minimize` – optimize the circuit parameters.
+- `minimize` – optimize the circuit parameters; `save_to="run"` writes the history and the final variables (load them back with `sun.Variables.load("run_variables.json")`, needs tequilahub/tequila#482).
 - `optimize_orbitals` – orbital optimization around a fixed circuit, a cheap way to boost compact ansätze such as SPA ([Mizukami et al., PRR 2020](https://doi.org/10.1103/PhysRevResearch.2.033421)).
 
 ```python

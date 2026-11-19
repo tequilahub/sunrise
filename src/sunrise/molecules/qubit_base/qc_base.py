@@ -81,7 +81,8 @@ class QuantumChemistryBase:
     frozen_orbitals : list of int, optional
         Orbitals removed from the active orbitals.
     orbital_type : str, optional
-        Type of the orbitals, e.g. "native". Default is "unknown".
+        Kind of the orbitals, e.g. ``"hf"``, ``"native"``. Default is ``"unknown"``.
+        With ``"native"`` the orbitals are transformed to the (orthonormalized) native basis on init.
     reference_orbitals : list of int, optional
         Orbitals considered occupied when the active space is created, as total
         indices (frozen orbitals included). Default is the first ``N//2``.
@@ -1268,7 +1269,7 @@ class QuantumChemistryBase:
         Parameters
         ----------
         use_active : bool, optional
-            Restrict to the active space. Default is True.
+            Keep the active space of the molecule (the orbitals are rotated into it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
         **kwargs
@@ -1278,6 +1279,10 @@ class QuantumChemistryBase:
         -------
         QuantumChemistryBase
             Molecule in the HAO basis.
+
+        See Also
+        --------
+        use_HAO_orbitals_and_edges : The same, together with the SPA edges.
         """
         from sunrise.CLPO.orbital_transformation import generate_HAO_molecule
 
@@ -1304,13 +1309,14 @@ class QuantumChemistryBase:
     ):
         """Return the molecule in HAOs together with the SPA edges on the HAOs.
 
-        Same as ``use_HAO_orbitals``, JANPA runs only once. The edges are those of the CLPO graph:
-        ``(hybrid, H)`` for each bond and ``(hybrid,)`` for each lone pair.
+        Same as ``use_HAO_orbitals``, but the edges found by the same run are returned too, so
+        JANPA runs only once. The edges are those of the CLPO graph: ``(hybrid, H)`` for each bond
+        and ``(hybrid,)`` for each lone pair.
 
         Parameters
         ----------
         use_active : bool, optional
-            Restrict to the active space. Default is True.
+            Keep the active space of the molecule (the orbitals are rotated into it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
         **kwargs
@@ -1364,16 +1370,23 @@ class QuantumChemistryBase:
         Parameters
         ----------
         use_active : bool, optional
-            Restrict to the active space. Default is True.
+            Keep the active space of the molecule (the orbitals are rotated into it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
-        edges : list, optional
-            Edges the CLPO algorithm is restricted to. Default is determined by JANPA.
+        edges : list of tuple of int, optional
+            Bonds imposed on the CLPOs, as 0-based atom indices (see ``generate_CLPO_molecule_edges``);
+            the other bonds come from the atom connectivity.
+        **kwargs
+            Passed on to ``generate_CLPO_molecule_edges``.
 
         Returns
         -------
         QuantumChemistryBase
             Molecule in the CLPO basis.
+
+        See Also
+        --------
+        use_CLPO_orbitals_and_edges : The same, together with the SPA edges.
         """
         clpo_mol, _ = self.use_CLPO_orbitals_and_edges(
             *args, use_active=use_active, inplace=inplace, edges=edges, **kwargs
@@ -1391,22 +1404,26 @@ class QuantumChemistryBase:
         """Return the CLPO molecule together with its SPA edges.
 
         Same as ``use_CLPO_orbitals``, but the edges found by the same run are returned
-        too, so JANPA is executed only once.
+        too, so JANPA runs only once.
 
         Parameters
         ----------
         use_active : bool, optional
-            Keep the active space of the molecule (the CLPOs are rotated into it). Default is True.
+            Keep the active space of the molecule (the orbitals are rotated into it). Default is True.
         inplace : bool, optional
-            Change this molecule instead of returning a new one. Default is False.
+            Update the current molecule instead of returning a new one. Default is False.
         edges : list of tuple of int, optional
             Bonds imposed on the CLPOs, as 0-based atom indices (see ``generate_CLPO_molecule_edges``);
             the other bonds come from the atom connectivity.
+        **kwargs
+            Passed on to ``generate_CLPO_molecule_edges``.
 
         Returns
         -------
-        tuple
-            Molecule in the CLPO basis and the orbital pairs of each bond, to use as SPA edges.
+        mol : QuantumChemistryBase
+            Molecule in the CLPO basis.
+        edges : list of tuple of int
+            Orbital pairs of each bond, to use as SPA edges.
 
         Examples
         --------

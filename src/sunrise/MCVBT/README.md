@@ -4,7 +4,7 @@ A single pair-ansatz circuit (e.g. SPA) describes one "bonding pattern" of a mol
 
 $$|\Psi\rangle = \sum_k c_k\, U_k |0\rangle$$
 
-and finds the coefficients $c_k$ by solving a small generalized eigenvalue problem (`gem.py`) built from the overlaps and Hamiltonian matrix elements between the circuits (`big_exp.py`).
+and finds the coefficients $c_k$ by solving a small generalized eigenvalue problem (`solve_gem` in `gem.py`) built from the overlaps and Hamiltonian matrix elements between the circuits (`big_exp.py`).
 
 ```python
 import sunrise as sun

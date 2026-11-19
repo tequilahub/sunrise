@@ -1553,7 +1553,8 @@ class IntegralManager:
     basis_name : str, optional
         Name of the basis.
     orbital_type : str, optional
-        Kind of orbitals, e.g. "HF", "PNO", "native".
+        Kind of the orbitals, e.g. ``"hf"``, ``"pno"``, ``"native"`` or
+        ``"orthonormalized-<basis>-basis"``. Default is ``"unknown"``.
     constant_term : float, optional
         Constant energy term, usually the nuclear repulsion.
     orbital_coefficients : numpy.ndarray, optional
@@ -1581,7 +1582,7 @@ class IntegralManager:
     _two_body_integrals: NBodyTensor | None = None
     _constant_term: float | None = None
     _basis_name: str = "unknown"
-    _orbital_type: str = "unknown"  # e.g. "HF", "PNO", "native"
+    _orbital_type: str = "unknown"  # e.g. "hf", "pno", "native"
     # the program whose AO ordering the rows of the orbital coefficients follow, set by the backend
     # ("pyscf", "psi4", "frayedends"), "custom" for an own AO basis, None if unknown or without AOs
     _basis_convention: str | None = None
