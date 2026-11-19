@@ -1685,9 +1685,19 @@ def test_ghost_atom():
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
 def test_ghost_atom_compute_fci_pyscf():
-    # psi4 style ghost atoms (@Li, Gh(Li)) have to become ghosts in pyscf too
+    # every ghost input (also the psi4 style ones) has to become a ghost in pyscf
     energies = []
-    for ghost in ["ghost:Li", "@Li", "Gh(Li)"]:
+    for ghost in [
+        "ghost:Li",
+        "ghost-Li",
+        "ghost_Li",
+        "ghostLi",
+        "X:Li",
+        "X-Li",
+        "X_Li",
+        "Gh(Li)",
+        "@Li",
+    ]:
         mol = sun.Molecule(
             geometry=f"H 0.0 0.0 0.0\nH 0.0 0.0 0.75\n{ghost} 0.0 0.0 2.0",
             basis_set="sto-3g",
@@ -1696,6 +1706,19 @@ def test_ghost_atom_compute_fci_pyscf():
         assert mol.n_electrons == 2
         energies.append(mol.compute_fci())
     assert numpy.allclose(energies, energies[0])
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_compute_energy_orbital_invariant_pyscf():
+    # the hf reference is solved, so the energies don't depend on the orbitals of the molecule
+    mol = sun.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0\nH 0.0 0.0 4.5",
+        basis_set="sto-3g",
+        backend="pyscf",
+    )
+    nmol = mol.use_native_orbitals()
+    for method in ["hf", "mp2", "cisd", "ccsd", "ccsd(t)"]:
+        assert numpy.isclose(mol.compute_energy(method), nmol.compute_energy(method))
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
