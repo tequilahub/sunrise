@@ -1684,6 +1684,31 @@ def test_ghost_atom():
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_ghost_atom_compute_fci_pyscf():
+    # every ghost input (also the psi4 style ones) has to become a ghost in pyscf
+    energies = []
+    for ghost in [
+        "ghost:Li",
+        "ghost-Li",
+        "ghost_Li",
+        "ghostLi",
+        "X:Li",
+        "X-Li",
+        "X_Li",
+        "Gh(Li)",
+        "@Li",
+    ]:
+        mol = sun.Molecule(
+            geometry=f"H 0.0 0.0 0.0\nH 0.0 0.0 0.75\n{ghost} 0.0 0.0 2.0",
+            basis_set="sto-3g",
+            backend="pyscf",
+        )
+        assert mol.n_electrons == 2
+        energies.append(mol.compute_fci())
+    assert numpy.allclose(energies, energies[0])
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
 def test_clpo_pyscf_ao_order():
     # cc-pVDZ has d shells, whose MOLDEN order (used by janpa) differs from the pyscf one
     from pyscf import scf

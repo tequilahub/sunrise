@@ -418,7 +418,7 @@ def MoleculeFromPyscf(
 
 
 def MoleculeToPyscf(molecule: QuantumChemistryBase, **kwargs) -> pyscf.gto.Mole:
-    geometry = molecule.parameters.get_geometry()
+    geometry = molecule.parameters.get_geometry(ghost="pyscf")
     pyscf_geomstring = ""
     for atom in geometry:
         pyscf_geomstring += f"{atom[0]} {atom[1][0]} {atom[1][1]} {atom[1][2]};"
