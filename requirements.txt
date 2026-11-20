@@ -6,6 +6,7 @@ qulacs
 pytest
 setuptools
 qpic
+matplotlib
 pyscf
 networkx
 # h5py <= 3.1

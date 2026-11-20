@@ -58,7 +58,19 @@ def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
 
     # Route to Sunrise FCircuit engine, or fallback to Tequila for standard QCircuits
     if hasattr(circuit, "export_to"):
-        circuit.export_to(filename, *args, **kwargs)
+        from sunrise.fermionic_operations.circuit import FCircuit
+
+        try:
+            circuit.export_to(filename, *args, **kwargs)
+        except Exception:
+            # FCircuits already fall back to matplotlib, tequila circuits need qpic
+            if isinstance(circuit, FCircuit):
+                raise
+            import tequila as tq
+
+            print("Could not draw the circuit as an image (is qpic installed?):")
+            tq.draw(circuit)
+            return
     else:
         import tequila as tq
 

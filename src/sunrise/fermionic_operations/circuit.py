@@ -877,8 +877,10 @@ class FCircuit:
             label = labels.get(wire, str(wire))
             color = wire_colors.get(wire, "black")
             result += f"color={color} a{wire} W {label}\n"
-        for wire in range(max_wire + 1):
-            result += f"a{wire} /\n"
+        # a slash marks a wire as a bundle: one spatial orbital holds two spin orbitals
+        if show_spatial_orbitals:
+            for wire in range(max_wire + 1):
+                result += f"a{wire} /\n"
 
         state_obj = CircuitState(self.n_qubits // 2)
         result += self.render(state_obj, style_obj, show_spatial_orbitals) + "\n"
