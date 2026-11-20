@@ -59,7 +59,7 @@ def fqe_circuit_simulatorU(
                 beta_str = self._core.string_beta(indb)
 
                 wfn = BitStringLSB.from_binary(
-                    bin(alpha_str)[2:].zfill(n_orb) + bin(beta_str)[2:].zfill(n_orb),
+                    bin(beta_str)[2:].zfill(n_orb) + bin(alpha_str)[2:].zfill(n_orb),
                     nbits=2 * n_orb,
                 )
                 res[wfn.to_integer(numbering=BitNumbering.LSB)] = self.coeff[inda, indb]
