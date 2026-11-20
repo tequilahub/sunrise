@@ -329,7 +329,13 @@ def reconstruct_matrix_from_circuit(
                 ):
                     alpha, beta = gate.variables, U.gates[i + 1].variables
                     if alpha is not beta:
-                        if any(
+                        if isinstance(alpha, Variable) and isinstance(beta, Variable):
+                            # two variables are the same angle exactly when they have the same name
+                            if alpha != beta:
+                                raise TequilaException(
+                                    "Phase gates must come in pairs with the same angle to be converted to matrix."
+                                )
+                        elif any(
                             isinstance(x, Objective) and x.has_expectationvalues()
                             for x in (alpha, beta)
                         ):
@@ -384,7 +390,13 @@ def reconstruct_matrix_from_circuit(
                 ):
                     alpha, beta = gate.variables, U.gates[i + 1].variables
                     if alpha is not beta:
-                        if any(
+                        if isinstance(alpha, Variable) and isinstance(beta, Variable):
+                            # two variables are the same angle exactly when they have the same name
+                            if alpha != beta:
+                                raise TequilaException(
+                                    "FermionicExcitation gates must come in pairs with the same angle to be converted to UR gates."
+                                )
+                        elif any(
                             isinstance(x, Objective) and x.has_expectationvalues()
                             for x in (alpha, beta)
                         ):
