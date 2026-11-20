@@ -1,3 +1,5 @@
+"""Hybrid molecule with integrals and classical methods from Psi4."""
+
 import typing
 
 from sunrise.molecules.qubit_base.psi4_interface import Psi4Mixin
@@ -6,15 +8,14 @@ from .hybridbase import HybridBase
 
 
 class QuantumChemistryPsi4(Psi4Mixin, HybridBase):
-    """
-    Hybrid molecule with the integrals and the classical methods of psi4
-    see sunrise.molecules.qubit_base.psi4_interface for all options
+    """Hybrid molecule with integrals and classical methods from Psi4, see ``Psi4Mixin`` for the
+    backend options.
     """
 
     def _update_after_active_space(self, *args, **kwargs):
-        """
-        HybridBase built the select and the transformation for all orbitals, psi4 set the active space afterwards
-        select can be given for all orbitals (then the entries of the frozen ones are dropped) or for the active ones
+        """Rebuild the select and the transformation for the active orbitals, as HybridBase set them up for all orbitals before Psi4 set the active space.
+
+        ``select`` can be given for all orbitals (the entries of the frozen ones are dropped) or for the active ones only.
         """
         n_total = self.integral_manager.one_body_integrals.shape[0]
         if self.n_orbitals == n_total:

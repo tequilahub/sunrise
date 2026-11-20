@@ -1,3 +1,5 @@
+"""Simulation of FCircuits with the fermionic or tequila backends."""
+
 from __future__ import annotations
 
 from numpy import ceil, zeros
@@ -46,13 +48,33 @@ def simulate_fcircuit(
     backend: str | None = None,
     **kwargs,
 ) -> QubitWaveFunction:
-    """
-    Interface with Fermionic Backends to sumulate FCircuits
-    :param U: Fcircuit to simulate
-    :param variables: dictionary of {variable:value} to simulate
-    :param backend: name of the desired backend, if None chosen by pick_backend
+    """Simulate an FCircuit and return the final wavefunction.
 
-    If qubit based backend (see tequila.SUPPORTED_BACKENDS) the n_orb/molecule/FCircuit->QCircuit callable is required.
+    Parameters
+    ----------
+    U : FCircuit
+        Circuit to simulate.
+    variables : dict, optional
+        Values of the circuit variables, {variable: value}.
+    backend : str, optional
+        "spex", "tcc", "fqe" or "ffsim" for the fermionic simulators. A tequila qubit
+        backend is selected as "tequila" (default qubit backend) or
+        "tequila-<name>" / "t-<name>". If None, ``pick_backend`` chooses.
+    **kwargs
+        Passed on to the simulator. For tequila backends, one of ``mol``,
+        ``molecule``, ``transformation`` or ``n_orb`` is needed to map the circuit
+        to qubits; if none is given, the number of orbitals is guessed.
+        ``samples`` and ``noise`` are used to pick the backend if none is given.
+
+    Returns
+    -------
+    QubitWaveFunction
+        Final state.
+
+    Raises
+    ------
+    TequilaException
+        If variables are missing, or the backend is unknown or not installed.
     """
     if variables is None:
         variables = {}
@@ -113,6 +135,7 @@ def simulate_fcircuit(
 
 
 def __generate_dummy_mol(n_orb: int):
+    """Return a molecule with zero integrals, only used to map FCircuits to qubits."""
     h = zeros(shape=(n_orb, n_orb))
     g = zeros(shape=(n_orb, n_orb, n_orb, n_orb))
     geo = "".join([f"H 0. 0. {i}\n" for i in range(n_orb)])

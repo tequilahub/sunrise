@@ -1,3 +1,5 @@
+"""PySCF-engine energy and gradient routines, extending tencirchem's evolve_pyscf to handle a bra different from the ket."""
+
 from tencirchem.static.evolve_pyscf import *
 from tencirchem.static.evolve_pyscf import _get_gradients_pyscf
 from tequila import grad, simulate
@@ -18,7 +20,36 @@ def get_expval_and_grad_pyscf(
     ex_ops_bra: Tuple = None,
     init_state_bra=None,
 ):
+    """Return the expectation value, its gradient and the bra-ket overlap using the PySCF engine.
 
+    Parameters
+    ----------
+    angles : array_like
+        Values of ``total_variables`` (tcc angles).
+    hamiltonian : callable
+        Operator applied to the states.
+    n_qubits : int
+        Number of spin orbitals.
+    n_elec_s : int or tuple of int
+        Number of electrons (per spin).
+    total_variables : list of Variable
+        All variables, in the order of ``angles``.
+    params : list
+        Gate parameters of the ket (Variables, Objectives or numbers).
+    ex_ops : tuple
+        Excitation operators of the ket.
+    mode : str
+        Fermion encoding mode of tencirchem. Default is "fermion".
+    init_state : array_like, optional
+        Initial ket state.
+    params_bra, ex_ops_bra, init_state_bra : optional
+        Same as the ket quantities, for the bra. Default is the ket ones.
+
+    Returns
+    -------
+    tuple
+        (<bra|H|ket>, gradient, <bra|ket>).
+    """
     if ex_ops_bra is None:
         ex_ops_bra = ex_ops
     if params_bra is None:
@@ -101,7 +132,34 @@ def get_energy_and_grad_pyscf(
     mode: str = "fermion",
     init_state=None,
 ):
+    """Return the energy and its gradient using the PySCF engine.
 
+    Parameters
+    ----------
+    angles : array_like
+        Values of ``total_variables`` (tcc angles).
+    hamiltonian : callable
+        Operator applied to the states.
+    n_qubits : int
+        Number of spin orbitals.
+    n_elec_s : int or tuple of int
+        Number of electrons (per spin).
+    total_variables : list of Variable
+        All variables, in the order of ``angles``.
+    params : list
+        Gate parameters of the ket (Variables, Objectives or numbers).
+    ex_ops : tuple
+        Excitation operators of the ket.
+    mode : str
+        Fermion encoding mode of tencirchem. Default is "fermion".
+    init_state : array_like, optional
+        Initial ket state.
+
+    Returns
+    -------
+    tuple
+        (energy, gradient).
+    """
     assert len(angles) == len(total_variables)
     map_params = params_to_tcc(params, angles, total_variables)
     theta = tequila_values(angles, total_variables)
@@ -126,6 +184,7 @@ def get_energy_and_grad_pyscf(
 
 
 def map_variables(x: list[Variable, Objective], dvariables: dict):
+    """Return the value of x, evaluating it with dvariables if it is a Variable or Objective."""
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):
@@ -134,16 +193,31 @@ def map_variables(x: list[Variable, Objective], dvariables: dict):
 
 
 def tequila_values(angles, total_variables) -> dict:
-    """{variable name: value in tequila units}, from the tcc angles (angle = -theta/2)"""
+    """Return {variable name: value} in tequila units from tcc angles (angle = -theta/2)."""
     return {total_variables[i].name: -2.0 * angles[i] for i in range(len(angles))}
 
 
 def params_to_tcc(params, angles, total_variables):
-    """
-    Gate parameters as tcc angles. Variables and Objectives are expressions in tequila units, e.g. theta + pi/2
-    from a shift rule, so they are evaluated in tequila units first and converted afterwards: -(theta + s)/2.
-    Evaluating them directly at the tcc angles would give -theta/2 + s instead.
-    Numbers/FixedVariables were already converted to tcc angles in TCCBraket.variables_bra/ket.
+    """Return the gate parameters as tcc angles.
+
+    Variables and Objectives are expressions in tequila units (for example
+    theta + pi/2 from a shift rule), so they are evaluated in tequila units
+    and then converted to -(theta + s)/2. Numbers and FixedVariables are already
+    tcc angles.
+
+    Parameters
+    ----------
+    params : list
+        Gate parameters.
+    angles : array_like
+        Values of total_variables (tcc angles).
+    total_variables : list of Variable
+        All variables, in the order of angles.
+
+    Returns
+    -------
+    numpy.ndarray
+        Gate angles in tcc convention.
     """
     theta = tequila_values(angles, total_variables)
     pa = [

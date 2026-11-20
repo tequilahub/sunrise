@@ -1,3 +1,5 @@
+"""Point groups and their character tables, used to label and symmetrize states (representations in ``point_group_representation``)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,7 +11,15 @@ from pandas import DataFrame
 
 @dataclass(frozen=True)
 class IrreducibleRepresentation:
-    """An irreducible representation of a group."""
+    """An irreducible representation of a group, given by its characters.
+
+    Parameters
+    ----------
+    mulliken_symbol : str
+        Name of the irrep, e.g. ``"B1g"``.
+    characters : numpy.ndarray
+        Character of the irrep for each symmetry operation, in the order of the character table.
+    """
 
     mulliken_symbol: str
     characters: NDArray[numpy.complex128]
@@ -17,20 +27,28 @@ class IrreducibleRepresentation:
 
 @dataclass(frozen=True)
 class CharacterTable:
-    """The character table of a point group."""
+    """The character table of a point group.
+
+    Parameters
+    ----------
+    irrep_data : list of IrreducibleRepresentation
+        Rows of the table.
+    operation_symbols : list of str
+        Labels of the symmetry operations (columns of the table).
+    """
 
     irrep_data: list[IrreducibleRepresentation]
     operation_symbols: list[str]
 
     @property
     def dict(self) -> dict[str, NDArray[numpy.complex128]]:
-        """A dictionary mapping Mulliken symbols to irreducible representations."""
+        """dict of str to numpy.ndarray : Mulliken symbol mapped to the characters of the irrep."""
 
         return {irrep.mulliken_symbol: irrep.characters for irrep in self.irrep_data}
 
     @property
     def dataframe(self) -> DataFrame:
-        """A pandas DataFrame representation of the character table."""
+        """pandas.DataFrame : the table, with irreps as rows and operations as columns."""
 
         return DataFrame(
             data=[irrep.characters for irrep in self.irrep_data],
@@ -40,18 +58,24 @@ class CharacterTable:
 
     @property
     def matrix(self) -> NDArray[numpy.complex128]:
-        """A NumPy array representation of the character table."""
+        """numpy.ndarray : the characters as a matrix, one row per irrep."""
 
         return numpy.array([irrep.characters for irrep in self.irrep_data])
 
     @property
     def irreps(self) -> list[str]:
-        """A list of the irreducible representations of the character table."""
+        """list of str : Mulliken symbols of the irreps."""
 
         return [irrep.mulliken_symbol for irrep in self.irrep_data]
 
     def vec_to_str(self, vec: NDArray[numpy.complex128]) -> str | None:
-        """Given a vector of characters, return the corresponding Mulliken symbol."""
+        """Return the Mulliken symbol whose characters equal ``vec``, None if there is none.
+
+        Parameters
+        ----------
+        vec : numpy.ndarray
+            Characters, one per operation.
+        """
 
         for irrep in self.irrep_data:
             if numpy.allclose(irrep.characters, vec):
@@ -62,18 +86,42 @@ class CharacterTable:
 
 @dataclass
 class PointGroup:
+    """A point group, with its Schoenflies label and character table.
+
+    The non-Abelian groups, which PySCF does not provide, are class attributes: ``PointGroup.C3v``,
+    ``C4v``, ``D2d``, ``D3h``, ``D3d``, ``D4h``, ``D6h``, ``D8h``, ``Td`` and ``Oh``. The Abelian groups
+    are built from PySCF with ``PointGroup.from_pyscf``, e.g. ``PointGroup.from_pyscf("D2h")``.
+
+    Parameters
+    ----------
+    schoenflies_label : str
+        Name of the group, e.g. ``"D2h"``.
+    character_table : CharacterTable
+    """
+
     schoenflies_label: str
     character_table: CharacterTable
 
     @property
     def order(self) -> int:
-        """The order of the point group, i.e. the number of symmetry operations."""
+        """int : order of the group, i.e. the number of symmetry operations."""
 
         return len(self.character_table.operation_symbols)
 
     @classmethod
     def from_pyscf(cls, point_group_name: str) -> PointGroup:
-        """Construct a PointGroup from with PySCF as source of truth."""
+        """Construct a PointGroup using PySCF as the source of the character table.
+
+        Parameters
+        ----------
+        point_group_name : str
+            Schoenflies label of an Abelian group known to PySCF, e.g. ``"D2h"``.
+
+        Examples
+        --------
+        >>> pg = PointGroup.from_pyscf("D2h")
+        >>> pg.character_table.matrix
+        """
 
         from pyscf.symm import param
 
@@ -96,7 +144,7 @@ class PointGroup:
 # The Abelian point groups are taken from PySCF with PointGroup.from_pyscf, the
 # non-Abelian ones below are not in PySCF and are defined here. They are written as
 # the published class table plus the class sizes, and expanded to one column per
-# operation, which is what SymmetryAdaptedLinearCombintationSymmetrization expects:
+# operation, which is what SymmetryAdaptedLinearCombinationSymmetrization expects:
 # it forms
 #     |psi_irrep> = sum_operations chi_irrep(op) . O_op |psi>
 # and every operation in a class carries that class's character.
