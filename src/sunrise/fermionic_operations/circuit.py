@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from copy import deepcopy
 from typing import Callable
 
-from numpy import argwhere, array, isclose, ndarray, pi, where
+from numpy import argwhere, eye, isclose, kron, ndarray, pi
 from tequila import (
     BitNumbering,
     BitStringLSB,
@@ -608,7 +608,21 @@ class FCircuit:
         new_gates = [gate.map_qubits(qubit_map) for gate in self.gates]
         # could speed up by applying qubit_map to parameter_map here
         # currently its recreated in the init function
-        return FCircuit(gates=new_gates)  # TODO: initial state?
+        initial_state = None
+        if self.initial_state is not None:
+            n = max([self.n_qubits] + [q + 1 for q in qubit_map.values()])
+            for k, v in self.initial_state.items():
+                bits = [0] * n
+                for q, b in enumerate(k.array):
+                    bits[qubit_map.get(q, q)] = b
+                # the bitstring class of the keys, tequila names it differently depending on the bit numbering
+                basis = v * QubitWaveFunction.from_basis_state(
+                    n, type(k).from_array(bits)
+                )
+                initial_state = (
+                    basis if initial_state is None else initial_state + basis
+                )
+        return FCircuit(gates=new_gates, initial_state=initial_state)
 
     def map_variables(self, variables: dict, *args, **kwargs):
         """
@@ -642,10 +656,22 @@ class FCircuit:
 
         return FCircuit(gates=new_gates, initial_state=self.initial_state)
 
-    def to_matrix(self, variables=None):  # TODO:  Should we?
-        pass
+    def to_matrix(self, variables=None):
+        """
+        Unitary matrix of the circuit gates (the initial state is not included)
+        :param variables dictionary with the values of the circuit variables
+        :return numpy array in the up-then-down (reordered Jordan-Wigner) qubit ordering
+        """
+        from sunrise.expval.simulate_circuit import _generate_dummy_mol
 
-    def add_controls(self, control, inpl: bool = False) -> FCircuit | None:  # TODO
+        n_orb = (self.n_qubits + 1) // 2
+        molecule = _generate_dummy_mol(n_orb=n_orb)
+        U = FCircuit(gates=self.gates).to_qcircuit(molecule=molecule)
+        # tequila stops at the highest qubit the gates act on, the remaining qubits are idle
+        idle = max(2 * n_orb - U.n_qubits, 0)
+        return kron(U.to_matrix(variables=variables), eye(2**idle))
+
+    def add_controls(self, control, inplace: bool = False) -> FCircuit | None:  # TODO
         pass
 
     def to_qcircuit(
@@ -660,28 +686,23 @@ class FCircuit:
         """
         U = deepcopy(self)
         if molecule is not None:
+            assert molecule.transformation is not None, (
+                "A fermionic molecule has no qubit transformation, use a qubit or hybrid molecule"
+            )
             res = QCircuit()
             U = U.to_udud(molecule.n_orbitals)
-            molecule.transformation.upthendown = True
+            # the tequila molecules have no up_then_down
+            if hasattr(molecule, "up_then_down"):
+                molecule.up_then_down = True
             if self.initial_state is not None:
-                idx = where(array(self._initial_state.to_array()) > 1.0e-6)[
-                    0
-                ]  # TODO change to dict
-                if not len(idx):
-                    pass
-                elif len(idx) > 1:
+                states = [k for k, v in self.initial_state.items() if abs(v) > 1.0e-6]
+                if len(states) > 1:
                     warnings.warn(
                         "Don't now how to prepare the circuit initial state, skyped for safety",
                         TequilaWarning,
                     )
-                else:
-                    res += X(
-                        target=[
-                            i
-                            for i in range(len(bin(idx[0])[2:]))
-                            if bin(idx[0])[2:][i] == "1"
-                        ]
-                    )
+                elif states:
+                    res += X(target=[q for q, b in enumerate(states[0].array) if b])
             for gate in U.gates:
                 if gate.name == "UR":
                     res += molecule.make_excitation_gate(

@@ -88,12 +88,10 @@ def simulate_fcircuit(
         if "mol" in kwargs:
             mol = kwargs["mol"]
             kwargs.pop("mol")
-            mol.transformation.up_then_down = True
             U = U.to_qcircuit(molecule=mol)
         elif "molecule" in kwargs:
             mol = kwargs["molecule"]
             kwargs.pop("molecule")
-            mol.transformation.up_then_down = True
             U = U.to_qcircuit(molecule=mol)
         elif "transformation" in kwargs:
             transformation = kwargs["transformation"]
@@ -102,17 +100,17 @@ def simulate_fcircuit(
         elif "n_orb" in kwargs:
             n_orb = kwargs["n_orb"]
             kwargs.pop("n_orb")
-            mol = __generate_dummy_mol(n_orb)
+            mol = _generate_dummy_mol(n_orb)
             U = U.to_qcircuit(mol)
         else:
-            n_orb = int(ceil(U.max_qubit() + 1 / 2))
-            U = U.to_qcircuit(molecule=__generate_dummy_mol(n_orb=n_orb))
+            n_orb = int(ceil((U.max_qubit() + 1) / 2))
+            U = U.to_qcircuit(molecule=_generate_dummy_mol(n_orb=n_orb))
         return tq_simulate(U, backend=backend, variables=variables, **kwargs)
     else:
         raise TequilaException(f"Not recognised backed: {backend}.")
 
 
-def __generate_dummy_mol(n_orb: int):
+def _generate_dummy_mol(n_orb: int):
     h = zeros(shape=(n_orb, n_orb))
     g = zeros(shape=(n_orb, n_orb, n_orb, n_orb))
     geo = "".join([f"H 0. 0. {i}\n" for i in range(n_orb)])

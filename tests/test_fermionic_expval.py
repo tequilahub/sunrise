@@ -255,6 +255,67 @@ def test_circuit_simulate(geom, backend):
     assert isclose(tq_wfn.inner(sn_wfn), 1)
 
 
+def test_map_qubits_keeps_initial_state():
+    U = sn.FCircuit(initial_state="0.6|1100> - 0.8|0011>")
+    mapped = U.map_qubits({0: 2, 1: 3, 2: 0, 3: 1})
+    expected = tq.QubitWaveFunction.from_string("0.6|0011> - 0.8|1100>")
+    assert mapped.initial_state.isclose(expected)
+
+
+def test_to_matrix():
+    U = sn.FCircuit.from_edges(edges=[(0, 1)], n_orb=2) + sn.gates.UR(0, 1, "r")
+    variables = {v: 0.3 for v in U.extract_variables()}
+    M = U.to_matrix(variables=variables)
+    assert np.allclose(M.conj().T @ M, np.eye(16))
+    # the column of the initial state |1010> is the simulated wavefunction
+    wfn = sn.simulate(U, variables=variables, backend="tequila", n_orb=2)
+    assert np.allclose(M[:, 0b1010], wfn.to_array())
+    # an alpha-only excitation does not act on the last qubits, which are still included
+    G = sn.FCircuit() + sn.gates.FermionicExcitation(indices=[(0, 2)], variables="a")
+    M = G.to_matrix(variables={"a": 0.7})
+    assert M.shape == (16, 16)
+    U = sn.FCircuit(gates=G.gates, initial_state="1.0|1001>")
+    wfn = sn.simulate(U, {"a": 0.7}, backend="tequila", n_orb=2)
+    assert np.allclose(M[:, 0b1001], wfn.to_array())
+
+
+def test_to_qcircuit_jordan_wigner():
+    # to_qcircuit has to switch a plain Jordan-Wigner molecule to up-then-down ordering
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="q"
+    )
+    U = sn.FCircuit.from_edges(edges=[(0, 1)], n_orb=2) + sn.gates.UR(0, 1, "r")
+    variables = {v: 0.3 for v in U.extract_variables()}
+    wfn = tq.simulate(U.to_qcircuit(mol), variables=variables)
+    expected = sn.simulate(U, variables=variables, backend="tequila", n_orb=2)
+    assert np.allclose(wfn.to_array(), expected.to_array())
+    # the molecule follows the ordering of the circuit
+    assert mol.up_then_down
+
+
+def test_fermionic_molecule_up_then_down():
+    # the fermionic molecules are always ordered up then down and have no qubit circuit
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="f"
+    )
+    assert mol.up_then_down
+    with pytest.raises(tq.TequilaException):
+        mol.up_then_down = False
+    with pytest.raises(AssertionError):
+        sn.FCircuit().to_qcircuit(mol)
+
+
+def test_to_qcircuit_initial_state():
+    # empty first qubits and negative amplitudes are prepared too
+    mol = sn.Molecule(
+        geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6", basis_set="sto-3g", nature="q"
+    )
+    for init, occupied in [("1.0|0110>", "0110"), ("-1.0|1010>", "1010")]:
+        U = sn.FCircuit(initial_state=init)
+        wfn = tq.simulate(U.to_qcircuit(mol))
+        assert wfn.isclose(tq.QubitWaveFunction.from_string(f"1.0|{occupied}>"))
+
+
 @pytest.mark.skipif(not HAS_SPEX, reason="spex not installed")
 def test_givens_circuit_signed_permutation():
     # swapping orbitals 0 and 3 needs rotations by pi/2 and a phase of pi on orbital 3
