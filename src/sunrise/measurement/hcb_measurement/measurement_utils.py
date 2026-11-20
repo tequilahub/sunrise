@@ -293,7 +293,7 @@ def rotate_and_hcb(
     hcb_mols : list of QubitMolecule
         One HCB molecule per rotator.
     res_mol : QubitMolecule
-        Residual molecule after the last rotator.
+        Residual molecule after the last rotator, rotated back to the frame of ``molecule``.
 
     Raises
     ------
@@ -356,7 +356,7 @@ def rotate_and_hcb(
         hcb_mols.append(hcb_mol)
         molecule = res_mol
         old_UR = UR
-
+    res_mol = fold_rotators(molecule, old_UR.dagger(), *args, **kwargs)
     return hcb_mols, res_mol
 
 

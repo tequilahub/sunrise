@@ -1449,6 +1449,60 @@ class QuantumChemistryBase:
         else:
             return clpo_mol, clpo_edges
 
+    def use_MEAO_orbitals(
+        self, use_active: bool = True, inplace: bool = False, *args, **kwargs
+    ):
+        """Return the molecule in Maximally Entangled Atomic Orbitals (MEAO).
+
+        The orbitals come from the original MEAO code, see ``sunrise.MEAO.generate_MEAO_molecule``,
+        which has to be installed separately (see the README).
+
+        Parameters
+        ----------
+        use_active : bool, optional
+            Keep the frozen core and the active space of the molecule (the MEAOs are rotated into it).
+            Default is True.
+        inplace : bool, optional
+            Update the current molecule instead of returning a new one. Default is False.
+        **kwargs
+            Passed to ``generate_MEAO_molecule``, e.g. ``minao`` (the reference basis of the MEAOs,
+            default ``"minao"``) or ``pyscf_object``.
+
+        Returns
+        -------
+        QuantumChemistryBase
+            Molecule in the MEAO basis.
+
+        Notes
+        -----
+        With a frozen core (the default of ``Molecule``) the valence MEAOs are practically, but not exactly,
+        those of the original MEAO code and the core MEAOs are replaced by the canonical core orbitals. Use
+        ``frozen_core=False`` to obtain exactly the orbitals of the original code, see ``generate_MEAO_molecule``.
+
+        Examples
+        --------
+        >>> mol = mol.use_MEAO_orbitals()
+        """
+        from sunrise.MEAO import generate_MEAO_molecule
+
+        meao_mol = generate_MEAO_molecule(
+            self, use_active=use_active, silent=True, **kwargs
+        )
+
+        if inplace:
+            self.integral_manager.orbital_coefficients = (
+                meao_mol.integral_manager.orbital_coefficients.copy()
+            )
+            try:
+                # hybrid molecules also take the encoding of the new molecule
+                self.transformation = meao_mol.transformation
+                self.update_select(meao_mol.select)
+            except AttributeError:
+                pass
+            return self
+        else:
+            return meao_mol
+
     @property
     def point_group(self):
         """PointGroup : point group of the molecule.

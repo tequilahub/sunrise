@@ -1742,6 +1742,45 @@ def test_clpo_psi4():
     assert numpy.allclose(h[0], h[1], atol=1.0e-5)
 
 
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_meao_orbitals():
+    # the MEAOs only rotate the active orbitals, and the symmetry operations map them onto each other
+    pytest.importorskip("MEAO.meao")
+    from sunrise.symmetry_adaptation import FockSpaceState, IrrepAssigner
+
+    mol = sun.Molecule(
+        geometry="O 0.0 0.0 0.117790\nH 0.0 0.755453 -0.471161\nH 0.0 -0.755453 -0.471161",
+        basis_set="sto-3g",
+        backend="pyscf",
+        frozen_core=True,
+    )
+    meao_mol = mol.use_MEAO_orbitals()
+    c = meao_mol.integral_manager.orbital_coefficients
+    s = meao_mol.integral_manager.overlap_integrals
+    assert numpy.allclose(c.T @ s @ c, numpy.eye(c.shape[1]), atol=1.0e-8)
+    assert numpy.isclose(meao_mol.compute_energy("fci"), mol.compute_energy("fci"))
+    states = FockSpaceState.non_ionic_states(
+        meao_mol, IrrepAssigner(meao_mol, "projection")
+    )
+    assert "A1" in {state.irrep for state in states}
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_meao_orbitals_complement():
+    # beyond the minimal basis the MEAOs are completed by their orthonormal complement
+    pytest.importorskip("MEAO.meao")
+    mol = sun.Molecule(
+        geometry="O 0.0 0.0 0.117790\nH 0.0 0.755453 -0.471161\nH 0.0 -0.755453 -0.471161",
+        basis_set="6-31g",
+        backend="pyscf",
+    )
+    mol.use_MEAO_orbitals(inplace=True)
+    c = mol.integral_manager.orbital_coefficients
+    s = mol.integral_manager.overlap_integrals
+    assert c.shape == (13, 13)
+    assert numpy.allclose(c.T @ s @ c, numpy.eye(13), atol=1.0e-8)
+
+
 def save_and_load(mol, tmp_path, monkeypatch):
     mol.save(str(tmp_path / "molecule.h5"))
     # load it from another directory, the file must not depend on where it was written

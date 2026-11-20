@@ -11,7 +11,7 @@ They can be simulated with fermionic backends or compiled to qubit circuits for 
 - **Molecules** of three natures: qubit (tequila circuits), fermionic and hybrid (some orbitals as hard-core bosons), with integrals from PySCF, Psi4 or MADNESS.
 - **Fermionic circuits** and ansätze such as SPA, UpCCGSD and UCCSD.
 - **Expectation values** and minimization with fermionic backends (spex, FQE, TenCirChem, ffsim) or tequila.
-- **Orbitals**: orbital optimization, localized bond orbitals (CLPO, HAO) and automatic SPA edges.
+- **Orbitals**: orbital optimization, localized bond orbitals (CLPO, HAO), maximally entangled atomic orbitals (MEAO) and automatic SPA edges.
 - Orbital correlation measures, symmetry adaptation, optimized measurements and circuit drawing.
 
 # Installation
@@ -49,6 +49,12 @@ pip install -e .
 
 `sun.show_available_modules()` lists the installed ones.
 
+## MEAO orbitals
+`use_MEAO_orbitals` needs the [MEAO](https://github.com/schilling-group/MEAO) package, which is not installed with sunrise:
+```bash
+pip install "MEAO @ git+https://github.com/schilling-group/MEAO"
+```
+
 # Quick start
 ```python
 import sunrise as sun
@@ -81,6 +87,7 @@ Each module in [`src/sunrise`](src/sunrise) has a short README with an introduct
 | [expval](src/sunrise/expval) | expectation values, fermionic backends, orbital optimization |
 | [ADAPT](src/sunrise/ADAPT) | adaptive circuit construction (ADAPT-VQE) |
 | [CLPO](src/sunrise/CLPO) | Chemist's Localized Property-optimized Orbitals (CLPO) and hybrid atomic orbitals (HAO) |
+| [MEAO](src/sunrise/MEAO) | maximally entangled atomic orbitals (MEAO), through the original MEAO code |
 | [graph_selection](src/sunrise/graph_selection) | choosing SPA edges |
 | [spafastprototype](src/sunrise/spafastprototype) | splits (HCB) expectation values into smaller pieces to speed up SPA |
 | [MCVBT](src/sunrise/MCVBT) | multi-configurational valence bond theory |
