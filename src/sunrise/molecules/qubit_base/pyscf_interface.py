@@ -269,24 +269,22 @@ class PySCFMixin:
     def compute_energy(self, method: str, *args, **kwargs) -> float:
         method = method.lower()
 
-        if method == "fci":
-            return self.compute_fci(**kwargs)
-
-        # solve hf: the current orbitals (e.g. localized ones) are not the hf reference
-        hf = self._get_hf(do_not_solve=False, **kwargs)
         if method == "hf":
-            return hf.e_tot
+            return self._get_hf(do_not_solve=False, **kwargs).e_tot
         elif method == "mp2":
-            return self._run_mp2(hf=hf, **kwargs).e_tot
+            return self._run_mp2(**kwargs).e_tot
         elif method == "cisd":
+            hf = self._get_hf(do_not_solve=False, **kwargs)
             return self._run_cisd(hf=hf, **kwargs).e_tot
         elif method == "ccsd":
-            return self._run_ccsd(hf=hf, **kwargs).e_tot
+            return self._run_ccsd(**kwargs).e_tot
         elif method == "ccsd(t)":
-            ccsd = self._run_ccsd(hf=hf, **kwargs)
+            ccsd = self._run_ccsd(**kwargs)
             return ccsd.e_tot + self._compute_perturbative_triples_correction(
                 ccsd=ccsd, **kwargs
             )
+        elif method == "fci":
+            return self.compute_fci(**kwargs)
         else:
             raise ValueError(f"unknown method: {method}")
 
