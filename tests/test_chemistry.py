@@ -1708,7 +1708,6 @@ def test_ghost_atom_compute_fci_pyscf():
     assert numpy.allclose(energies, energies[0])
 
 
-
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
 def test_clpo_pyscf_ao_order():
     # cc-pVDZ has d shells, whose MOLDEN order (used by janpa) differs from the pyscf one
