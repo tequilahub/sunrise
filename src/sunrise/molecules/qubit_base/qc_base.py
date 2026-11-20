@@ -1269,7 +1269,8 @@ class QuantumChemistryBase:
         Parameters
         ----------
         use_active : bool, optional
-            Keep the active space of the molecule (the orbitals are rotated into it). Default is True.
+            Keep the frozen core and the active space of the molecule (the orbitals are rotated into
+            it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
         **kwargs
@@ -1316,7 +1317,8 @@ class QuantumChemistryBase:
         Parameters
         ----------
         use_active : bool, optional
-            Keep the active space of the molecule (the orbitals are rotated into it). Default is True.
+            Keep the frozen core and the active space of the molecule (the orbitals are rotated into
+            it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
         **kwargs
@@ -1370,7 +1372,8 @@ class QuantumChemistryBase:
         Parameters
         ----------
         use_active : bool, optional
-            Keep the active space of the molecule (the orbitals are rotated into it). Default is True.
+            Keep the frozen core and the active space of the molecule (the orbitals are rotated into
+            it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
         edges : list of tuple of int, optional
@@ -1409,7 +1412,8 @@ class QuantumChemistryBase:
         Parameters
         ----------
         use_active : bool, optional
-            Keep the active space of the molecule (the orbitals are rotated into it). Default is True.
+            Keep the frozen core and the active space of the molecule (the orbitals are rotated into
+            it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
         edges : list of tuple of int, optional
@@ -1454,18 +1458,18 @@ class QuantumChemistryBase:
     ):
         """Return the molecule in Maximally Entangled Atomic Orbitals (MEAO).
 
-        The orbitals come from the original MEAO code, see ``sunrise.MEAO.generate_MEAO_molecule``,
-        which has to be installed separately (see the README).
+        The orbitals come from the original MEAO code (installed separately, see the README),
+        through ``sunrise.MEAO.generate_MEAO_molecule``.
 
         Parameters
         ----------
         use_active : bool, optional
-            Keep the frozen core and the active space of the molecule (the MEAOs are rotated into it).
-            Default is True.
+            Keep the frozen core and the active space of the molecule (the orbitals are rotated into
+            it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
         **kwargs
-            Passed to ``generate_MEAO_molecule``, e.g. ``minao`` (the reference basis of the MEAOs,
+            Passed on to ``generate_MEAO_molecule``, e.g. ``minao`` (the reference basis of the MEAOs,
             default ``"minao"``) or ``pyscf_object``.
 
         Returns

@@ -904,7 +904,8 @@ class FCircuit:
         style : dict, optional
             Drawing style options.
         show_spatial_orbitals : bool, optional
-            Draw one wire per spatial orbital instead of per spin orbital. Default is True.
+            Draw one wire per spatial orbital (a slashed wire holding both spin orbitals) instead
+            of one per spin orbital. Default is True.
         labels, colors, wire_colors : dict, optional
             Custom gate labels, colors and wire colors.
         select : dict, optional
@@ -1000,6 +1001,9 @@ class FCircuit:
     def export_to(self, filename: str, *args, **kwargs):
         """Draw the circuit to a file.
 
+        PDF and PNG are made with ``qpic``, or with matplotlib if ``qpic`` or ``pdflatex`` is
+        missing or fails (see ``sunrise.graphical.qpic_to_pdf``).
+
         Parameters
         ----------
         filename : str
@@ -1007,7 +1011,8 @@ class FCircuit:
         n_orb : int, optional
             Number of spatial orbitals. Default is ``n_qubits // 2``.
         show_spatial_orbitals : bool, optional
-            One wire per spatial orbital. Default is True.
+            Draw one wire per spatial orbital (a slashed wire holding both spin orbitals) instead
+            of one per spin orbital. Default is True.
         **kwargs
             Passed to ``export_qpic``.
             ``filepath`` is the directory of the output file; ``n_qubits_is_double`` is an old

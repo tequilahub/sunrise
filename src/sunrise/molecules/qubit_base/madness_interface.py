@@ -163,6 +163,7 @@ class MadnessPNOMixin:
         raise NotImplementedError
 
     def use_MEAO_orbitals(self, *args, **kwargs):
+        """Not supported with MADNESS orbitals."""
         raise NotImplementedError
 
     def make_spa_ansatz(self, label=None, hcb=False, edges=None, **kwargs):

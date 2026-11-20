@@ -7,8 +7,9 @@ import os
 def draw(circuit, filename=None, width=None, height=300, *args, **kwargs):
     """Draw an FCircuit, QCircuit or tequila Objective as a PNG image.
 
-    FCircuits are rendered with the Sunrise engine (via ``FCircuit.export_to``),
-    plain tequila QCircuits fall back to ``tq.draw``. For an Objective, every
+    FCircuits are rendered with the Sunrise engine (via ``FCircuit.export_to``), with
+    matplotlib if ``qpic`` or ``pdflatex`` is missing. Tequila QCircuits use tequila's qpic export
+    and are printed as text with ``tq.draw`` if that fails. For an Objective, every
     distinct expectation value circuit is drawn to ``<filename>_<i>.png``. In
     Jupyter the image is displayed inline, otherwise its path is printed.
 

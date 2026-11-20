@@ -348,6 +348,11 @@ def reconstruct_matrix_from_circuit(
     with the same angle; single-excitation ``FermionicExcitation`` gates are accepted in the
     same paired form instead of ``UR`` gates.
 
+    Symbolic angles of a pair are compared without simulating anything: two Variables by name,
+    other expressions by evaluating both at the same random values. Angles containing expectation
+    values are not compared (evaluating them would simulate a circuit) and are assumed to be the
+    same, with a warning.
+
     Parameters
     ----------
     U : FCircuit
@@ -372,6 +377,11 @@ def reconstruct_matrix_from_circuit(
     TequilaException
         If the circuit contains other gates, or ``Phase`` or excitation gates do not come in
         matching pairs.
+
+    Warns
+    -----
+    TequilaWarning
+        If the angles of a pair contain expectation values and are not compared.
     """
     U = U.to_udud(norb)
     if norb is None:
