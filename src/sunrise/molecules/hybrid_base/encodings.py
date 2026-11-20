@@ -253,9 +253,9 @@ class JordanWigner(EB):
 
     @property
     def n_qubits(self) -> int:
-        if not self.condense or self.two_qubit:
-            return 2 * self.n_orbitals
-        return len(self.FER_SO) + list(self.select.values()).count("B")
+        # two qubits per fermionic orbital, one per bosonic orbital unless not condensed (two_qubit implies that)
+        select = list(self.select.values())
+        return 2 * select.count("F") + select.count("B") * (1 + (not self.condense))
 
     @property
     def fer_qubits(self) -> list:
