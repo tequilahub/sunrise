@@ -9,7 +9,7 @@ from copy import deepcopy
 
 import numpy
 import openfermion
-from tequila import QubitHamiltonian
+from tequila import QubitHamiltonian, TequilaException
 from tequila.circuit.circuit import QCircuit
 from tequila.circuit.gates import X
 from tequila.hamiltonian.paulis import Sm, Sp, Z
@@ -24,6 +24,7 @@ def known_encodings():
         "JordanWigner": JordanWigner,
         "BravyiKitaev": BravyiKitaev,
         "BravyiKitaevTree": BravyiKitaevTree,
+        "BravyiKitaevFast": BravyiKitaevFast,
         "TaperedBinary": TaperedBinary,
         "TaperedBravyiKitaev": TaperedBravyiKitaev,
     }
@@ -141,9 +142,11 @@ class JordanWigner(EB):
                     self.select[term[0] // 2] == "B" and (term[0] % 2)
                 ):
                     pass
-                elif type(self) in (BravyiKitaev, BravyiKitaevTree) and (
-                    self.two_qubit or self.select[term[0] // 2] == "F"
-                ):
+                elif type(self) in (
+                    BravyiKitaev,
+                    BravyiKitaevTree,
+                    BravyiKitaevFast,
+                ) and (self.two_qubit or self.select[term[0] // 2] == "F"):
                     # encoded below with the qubit_base encoding of the same name, the modes are the positions in FER_SO
                     fer.append((self.FER_SO.index(self.pos[term[0]]), term[1]))
                 else:
@@ -156,7 +159,7 @@ class JordanWigner(EB):
                 temp *= getattr(qubit_encodings, type(self).__name__)(
                     n_electrons=self.n_electrons, n_orbitals=len(self.FER_SO) // 2
                 )(openfermion.FermionOperator(tuple(fer))).map_qubits(
-                    dict(enumerate(self.FER_SO))
+                    dict(enumerate(self.fer_qubits))
                 )
             qop += temp
         return qop
@@ -247,6 +250,17 @@ class JordanWigner(EB):
             return state
         else:
             return state
+
+    @property
+    def n_qubits(self) -> int:
+        # two qubits per fermionic orbital, one per bosonic orbital unless not condensed (two_qubit implies that)
+        select = list(self.select.values())
+        return 2 * select.count("F") + select.count("B") * (1 + (not self.condense))
+
+    @property
+    def fer_qubits(self) -> list:
+        """The qubits the fermionic modes (the spin orbitals in FER_SO) are encoded on"""
+        return self.FER_SO
 
     def up(self, i):
         return self.pos[2 * i]
@@ -379,6 +393,63 @@ class BravyiKitaev(JordanWigner):
 
 class BravyiKitaevTree(JordanWigner):
     """OpenFermion::bravyi_kitaev_tree on the fermionic orbitals"""
+
+
+class BravyiKitaevFast(JordanWigner):
+    """
+    OpenFermion::bravyi_kitaev_fast on the fermionic orbitals, one qubit per edge between their spin orbitals
+    The edges take the qubits of the fermionic spin orbitals and then new qubits after the last one,
+    the bosonic orbitals keep their qubit
+    """
+
+    def __init__(self, n_electrons, n_orbitals, select: dict, *args, **kwargs):
+        if "up_then_down" in kwargs:
+            raise TequilaException(
+                f"Don't pass up_then_down argument to {type(self).__name__}, it can't be changed"
+            )
+        super().__init__(n_electrons, n_orbitals, select, False, *args, **kwargs)
+
+    @property
+    def fer_qubits(self) -> list:
+        n_edges = len(self.FER_SO) * (len(self.FER_SO) - 1) // 2
+        n = super().n_qubits
+        return (self.FER_SO + list(range(n, n + n_edges)))[:n_edges]
+
+    @property
+    def n_qubits(self) -> int:
+        return max([super().n_qubits, *(q + 1 for q in self.fer_qubits)])
+
+    def map_state(self, state: list, *args, **kwargs):
+        raise TequilaException(
+            f"{type(self).__name__} encodes no basis state as a qubit basis state, use prepare_state"
+        )
+
+    def prepare_state(self, state: list) -> QCircuit:
+        state = state + [0] * (2 * self.n_orbitals - len(state))
+        fer = [0] * len(self.FER_SO)
+        U = QCircuit()
+        for i, occ in enumerate(state):
+            if self.two_qubit or self.select[i // 2] == "F":
+                fer[self.FER_SO.index(self.pos[i])] = occ
+            elif state[i - i % 2] != state[i - i % 2 + 1]:
+                raise ValueError("Incompatible state and encoding selection")
+            elif i % 2 == 0 and occ:
+                U += X(target=self.pos[i])
+        if len(self.FER_SO):
+            U += (
+                qubit_encodings.BravyiKitaevFast(
+                    n_electrons=self.n_electrons, n_orbitals=len(self.FER_SO) // 2
+                )
+                .prepare_state(fer)
+                .map_qubits(dict(enumerate(self.fer_qubits)))
+            )
+        return U
+
+    def hcb_to_me(self, *args, **kwargs):
+        raise TequilaException(f"{type(self).__name__}::hcb_to_me: unimplemented")
+
+    def jw_to_me(self) -> QCircuit:
+        raise TequilaException(f"{type(self).__name__}::jw_to_me: unimplemented")
 
 
 class TaperedLinearEncoding(JordanWigner):

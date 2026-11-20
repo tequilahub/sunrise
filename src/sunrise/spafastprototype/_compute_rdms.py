@@ -142,14 +142,6 @@ def compute_rdms_hybrid(
     # Check whether unitary circuit is not 0
     if U is None:
         raise TequilaException("Need to specify a Quantum Circuit.")
-    # Check whether transformation is BKSF.
-    # Issue here: when a single operator acts only on a subset of qubits, BKSF might not yield the correct
-    # transformation, because it computes the number of qubits incorrectly in this case.
-    # A hotfix such as for symmetry_conserving_bravyi_kitaev would require deeper changes, thus omitted for now
-    if type(self.transformation).__name__ == "BravyiKitaevFast":
-        raise TequilaException(
-            "The Bravyi-Kitaev-Superfast transformation does not support general FermionOperators yet."
-        )
 
     def _get_of_op(operator_tuple):
         """Returns operator given by a operator tuple as OpenFermion - Fermion operator"""
@@ -877,14 +869,6 @@ def compute_rdms_tequila(
     # Check whether unitary circuit is not 0
     if U is None:
         raise TequilaException("Need to specify a Quantum Circuit.")
-    # Check whether transformation is BKSF.
-    # Issue here: when a single operator acts only on a subset of qubits, BKSF might not yield the correct
-    # transformation, because it computes the number of qubits incorrectly in this case.
-    # A hotfix such as for symmetry_conserving_bravyi_kitaev would require deeper changes, thus omitted for now
-    if type(self.transformation).__name__ == "BravyiKitaevFast":
-        raise TequilaException(
-            "The Bravyi-Kitaev-Superfast transformation does not support general FermionOperators yet."
-        )
     # Set up number of spin-orbitals and molecular orbitals respectively
     n_SOs = 2 * self.n_orbitals
     n_MOs = self.n_orbitals

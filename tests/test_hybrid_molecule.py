@@ -263,6 +263,8 @@ def test_UCCSD_FER():
         ("BravyiKitaev", {"select": "BFFB", "condense": False}),
         ("ReorderedBravyiKitaev", {"select": "FBFB"}),
         ("BravyiKitaevTree", {"select": "FBBF", "two_qubit": True}),
+        ("BravyiKitaevFast", {"select": "FBFB"}),
+        ("BravyiKitaevFast", {"select": "BFFB", "condense": False}),
         ("TaperedBinary", {"select": "FFFB"}),
         ("TaperedBravyiKitaev", {"select": "FBFB"}),
         ("TaperedBravyiKitaev", {"select": "BFFB", "two_qubit": True}),
@@ -289,8 +291,12 @@ def test_encodings(transformation, encoding):
         transformation=transformation,
         **encoding,
     )
-    # BravyiKitaevTree has no hcb_to_me
-    name = "SPA" if transformation == "BravyiKitaevTree" else "UpCCGSD"
+    # BravyiKitaevTree and BravyiKitaevFast have no hcb_to_me
+    name = (
+        "SPA"
+        if transformation in ("BravyiKitaevTree", "BravyiKitaevFast")
+        else "UpCCGSD"
+    )
     U_jw = mol_jw.make_ansatz(name)
     variables = {k: 0.1 * (i + 1) for i, k in enumerate(U_jw.extract_variables())}
     E_jw = tq.simulate(
