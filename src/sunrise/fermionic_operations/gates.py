@@ -78,3 +78,34 @@ def Givens(
     Customized matrix decomposition can be specified by: ordering
     """
     return get_givens_circuit(unitary, tol, ordering)
+
+
+def FSwap(
+    i: int,
+    j: int,
+    variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
+):
+    """
+    Fermionic Swap Gate from Spin Orbital i to j #TODO Raise warning if tcc. Any other?
+    """
+    return FCircuit.wrap_gate(FSwapImpl(i=i, j=j, variables=variables))
+
+
+def PairFSwapImpl(
+    i: int,
+    j: int,
+    variables: typing.Hashable | numbers.Real | Variable | FixedVariable | None = None,
+):
+    """
+    Fermionic Swap Gate from Spatial Orbital i to j #TODO Raise warning if tcc. Any other?
+    """
+    return FCircuit.wrap_gate(PairFSwapImpl(i=i, j=j, variables=variables))
+
+
+def FromGenerator(generator, variables=None, reordered=False):
+    """
+    Gate generated from custom generator. #TODO Raise warning if tcc. Any other?
+    """
+    return FCircuit.wrap_gate(
+        FromGeneratorImpl(generator=generator, variables=variables, reordered=reordered)
+    )
