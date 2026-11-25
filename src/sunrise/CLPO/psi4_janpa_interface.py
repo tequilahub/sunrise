@@ -224,6 +224,11 @@ def generate_CLPO_molecule_edges_psi4(
     aviso : list of tuple, optional
         Only if ``return_aviso`` is True. See Notes.
 
+    Raises
+    ------
+    TypeError
+        If both ``atom_edges`` and ``edges`` are given.
+
     Notes
     -----
     Each aviso entry is ``(mo_type, orb_idx, occupation)``. It lists the orbitals that do not have
@@ -486,6 +491,11 @@ def generate_CLPO_molecule_psi4(
         Molecule with CLPO orbitals.
     aviso : list of tuple, optional
         Only if ``return_aviso`` is True. See Notes.
+
+    Raises
+    ------
+    TypeError
+        If both ``atom_edges`` and ``edges`` are given.
 
     Notes
     -----

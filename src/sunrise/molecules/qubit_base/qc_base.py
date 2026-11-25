@@ -1388,6 +1388,11 @@ class QuantumChemistryBase:
         QuantumChemistryBase
             Molecule in the CLPO basis.
 
+        Raises
+        ------
+        TypeError
+            If both ``atom_edges`` and ``edges`` are given.
+
         See Also
         --------
         use_CLPO_orbitals_and_edges : The same, together with the SPA edges.
@@ -1434,6 +1439,11 @@ class QuantumChemistryBase:
             Molecule in the CLPO basis.
         edges : list of tuple of int
             Orbital pairs of each bond, to use as SPA edges.
+
+        Raises
+        ------
+        TypeError
+            If both ``atom_edges`` and ``edges`` are given.
 
         Examples
         --------

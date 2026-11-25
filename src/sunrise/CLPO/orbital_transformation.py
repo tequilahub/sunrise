@@ -97,6 +97,11 @@ def generate_CLPO_molecule_edges(
     aviso : list of tuple, optional
         Only if ``return_aviso`` is True. See Notes.
 
+    Raises
+    ------
+    TypeError
+        If both ``atom_edges`` and ``edges`` are given.
+
     See Also
     --------
     generate_CLPO_molecule : Only the molecule, without edges.
@@ -360,6 +365,11 @@ def generate_CLPO_molecule(
         Molecule with CLPO orbitals.
     aviso : list of tuple, optional
         Only if ``return_aviso`` is True. See Notes.
+
+    Raises
+    ------
+    TypeError
+        If both ``atom_edges`` and ``edges`` are given.
 
     See Also
     --------
