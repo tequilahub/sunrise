@@ -75,6 +75,10 @@ sun.plot_MO(mol, filename="N2_CLPO")  # look at the orbitals
 pip install "MEAO @ git+https://github.com/schilling-group/MEAO"
 ```
 
+<p align="center"><img src="meao_beh2.png" width="750" alt="MEAOs of BeH2"/></p>
+
+*Valence MEAOs of BeH₂ (example below): two Be hybrids (1, 4), each pointing at one H, and the H 1s orbitals (5, 6). The Be 1s core (0) and the Be 2p perpendicular to the bond axis (2, 3) are not shown.*
+
 | Function | Returns |
 |---|---|
 | `generate_MEAO_molecule(mol, minao="minao")` | molecule in MEAO basis; for basis sets larger than `minao` the MEAOs are completed by their orthonormal complement |
