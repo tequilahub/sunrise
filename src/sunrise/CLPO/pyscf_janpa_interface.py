@@ -1,3 +1,5 @@
+"""Generation of CLPO and HAO orbitals with JANPA on top of PySCF."""
+
 from __future__ import annotations
 
 import contextlib
@@ -33,7 +35,24 @@ class __custom_mf_conteiner:
 def extract_clpo_graph(
     npa_res, clpo_res, avisar: bool = True
 ) -> tuple[list[tuple[int, ...]], str]:
-    """Extracts the CLPO graph (edges) directly from janpa-py results."""
+    """Extract the CLPO graph from JANPA results.
+
+    Parameters
+    ----------
+    npa_res : object
+        JANPA natural population analysis result, from ``janpa.npa.npa.run_npa``.
+    clpo_res : object
+        JANPA CLPO result, from ``janpa.clpo.lpo.create_clpos``.
+    avisar : bool
+        If True, warn about orbitals that do not have the expected double occupancy.
+
+    Returns
+    -------
+    nodes : list of tuple of int
+        Orbital indices of each graph node: ``(i,)`` for a lone pair, ``(i, i + 1)`` for a bond.
+    aviso : list of tuple
+        ``(lo_type, index, occupation)`` of the orbitals without the expected double occupancy.
+    """
     Q = clpo_res.clpo.nao_to_hybrids @ clpo_res.clpo.lo_to_hybrids.T
     sds_clpo = Q.T @ npa_res.sds_nao @ Q
     occupancies = np.diag(sds_clpo)
@@ -87,7 +106,7 @@ def _run_janpa_pipeline(
     custom_edges=None,
     avisar: bool = True,
 ):
-    """Internal helper to run the JANPA pipeline entirely in memory/tempfiles."""
+    """Run JANPA (NPA and CLPO) on PySCF orbitals through a temporary MOLDEN file and return the AHO and CLPO coefficients (n_ao, n_orb), the graph and the aviso list."""
     with tempfile.TemporaryDirectory() as tmpdir, open(os.devnull, "w") as devnull:
         molden_in = os.path.join(tmpdir, "temp.molden")
         ctx = (
@@ -148,33 +167,60 @@ def generate_CLPO_molecule_edges_pyscf(
     use_mp2: bool = False,
     **kwargs,
 ) -> tuple[QuantumChemistryBase, list]:
-    """
-    Interface sunrise molecules with janpa for CLPO molecule generation via pyscf.
+    """Generate a molecule with CLPO orbitals and the corresponding graph edges via PySCF.
 
-    Parameters:
-    ----------
-    mol (QuantumChemistryBase): any instance of sunrise molecule
-    atom_edges (List[tuple[int]]): Optional. Custom molecule connectivity as tuples of atom indices (not orbital
-                            indices). I.e. for linear H4, [(0,3),(1,2)] would return 2nd graph orbitals.
-                            If not given, it is determined by JANPA. The former keyword ``edges`` is still accepted
-                            in **kwargs.
-    thres (Number): Orbital janpa orbital threshold, where orbitals are rotated to accomodate the electrond density
-    silent (bool): Whether to print all janpa output
-    use_active (bool): Whether to transform the janpa result orbitals to keep the active space defined by the input molecule
-    return_aviso: (bool): Wether to return the data of the dangerours orbitals (same info showed on the warnings)
-    use_mp2 (bool): Whether to use mp2 or HF mo_occ to initialize the janpa pipeline. It can be also provided a custom pyscf
-                    with the keyword pyscf_object, or to provide custom mo_coeff, mo_occ, mo_energy. If not, pyscf
-                    HF will be run.
+    CLPOs (Chemist's Localized Property-optimized Orbitals) are built with JANPA from a natural population analysis; they
+    are bonds, lone pairs and their antibonding partners, and define the graph used by SPA.
 
-    Returns:
+    Parameters
     ----------
-    Sunrise Molecule (same instance as input) with CLPO orbitals.
-    Edges already in SPA format: orbital indices of the returned molecule (not atom indices).
-    If return_aviso a list with content (mo_type, orb_idx, mo_occ) for those orbitals with dangerous occupation.
-        mo_type 1 for lone pairs not doubly occupied and mo_type 2 for bonding/antibonding pairs (idx, idx+1)
-        whose summed occupation is not close two 2e-. With use_active, orb_idx is the active space index
-        (None if the orbital ended up in the frozen core), otherwise the index in the full CLPO list.
+    mol : QuantumChemistryBase
+        Any sunrise molecule.
+    atom_edges : list of tuple of int, optional
+        Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
+        for linear H4 (repeat a pair for a double bond). The bonds
+        between the other atom pairs are found automatically from the Hartree-Fock density
+        (MP2 with ``use_mp2``).
+    thres : float
+        Convergence threshold of the JANPA hybrid-orbital optimization.
+    silent : bool
+        If True, suppress the JANPA output.
+    use_active : bool
+        If True, keep the active space of ``mol`` (the CLPOs are rotated into it). Otherwise
+        all orbitals are replaced by the orthogonalized CLPOs.
+    return_aviso : bool
+        If True, also return the orbitals that do not have the expected double occupancy
+        (the same information as the emitted warnings).
+    use_mp2 : bool
+        If True, use the MP2 density to initialize JANPA, otherwise the Hartree-Fock one.
+    **kwargs
+        ``edges`` is the former name of ``atom_edges`` and is still accepted.
+        ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
+        and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
+        the responsibility of the user, JANPA only considers HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+
+    Returns
+    -------
+    mol : QuantumChemistryBase
+        Molecule with CLPO orbitals.
+    edges : list of tuple of int
+        Graph edges (pairs of orbital indices in the active space, or single indices for
+        lone pairs), ready for SPA.
+    aviso : list of tuple, optional
+        Only if ``return_aviso`` is True. See Notes.
+
+    Notes
+    -----
+    Each aviso entry is ``(mo_type, orb_idx, occupation)``. It lists the orbitals that do not have
+    the expected double occupancy: ``mo_type`` 1 is a lone pair with occupation between 0.5
+    and 1.5, 2 a bonding/antibonding pair whose summed occupation is below 1.7, with ``orb_idx``
+    the tuple ``(idx, idx + 1)``.
+    With ``use_active``, ``orb_idx`` is the active-space index (None if the orbital ended up in
+    the frozen core), otherwise the index in the full CLPO list.
     """
+
     legacy_edges = kwargs.pop("edges", None)  # former name of atom_edges
     if legacy_edges is not None:
         if atom_edges is not None:
@@ -281,28 +327,45 @@ def generate_HAO_molecule_pyscf(
     return_edges: bool = False,
     **kwargs,
 ) -> QuantumChemistryBase:
-    r"""
-    Interface sunrise molecules with janpa for HAO molecule generation  via pyscf.
+    """Generate a molecule with HAO (hybrid atomic orbital) orbitals via PySCF.
 
-    Parameters:
-    ----------
-    mol (QuantumChemistryBase): any instance of sunrise molecule
-    thres (Number): Orbital janpa orbital threshold, where orbitals are rotated to accomodate the electrond density
-    silent (bool): Whether to print all janpa output
-    use_active (bool): Whether to transform the janpa result orbitals to keep the active space defined by the input molecule
-    ret2act: (bool): Wether to return (if use active was true) the dictionary defined by:
-                    {idx_before_active: idx_after_active for orbital in active_space}
-    use_mp2 (bool): Whether to use mp2 or HF mo_occ to initialize the janpa pipeline. It can be also provided a custom pyscf
-                    with the keyword pyscf_object, or to provide custom mo_coeff, mo_occ, mo_energy. If not, pyscf
-                    HF will be run.
-    return_edges (bool): Whether to also return the edges of the CLPO graph (SPA format) on the HAOs: (hybrid, H) for each
-                    bond, (hybrid,) for each lone pair. With use_active, the indices are those of the active space,
-                    otherwise those of the full HAO list.
+    HAOs are the atom-centered hybrids that JANPA builds before combining them into CLPOs.
 
-    Returns:
+    Parameters
     ----------
-    Sunrise Molecule (same instance as input) with HAO orbitals.
-    If ret2act the dictionary, and then if return_edges the edges.
+    mol : QuantumChemistryBase
+        Any sunrise molecule.
+    thres : float
+        Convergence threshold of the JANPA hybrid-orbital optimization.
+    silent : bool
+        If True, suppress the JANPA output.
+    use_active : bool
+        If True, keep the active space of ``mol``. Otherwise all orbitals are replaced by the
+        orthogonalized HAOs.
+    ret2act : bool
+        If True and ``use_active`` is True, also return the dictionary mapping the HAO index
+        in the full list to its index after the active-space transformation.
+    use_mp2 : bool
+        If True, use the MP2 density to initialize JANPA, otherwise the Hartree-Fock one.
+    return_edges : bool
+        If True, also return the edges of the CLPO graph on the HAOs (SPA format): ``(hybrid, H)``
+        for each bond and ``(hybrid,)`` for each lone pair. With ``use_active`` the indices are
+        those of the active space, otherwise those of the full HAO list.
+    **kwargs
+        ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
+        and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
+        the responsibility of the user, JANPA only considers HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+
+    Returns
+    -------
+    mol : QuantumChemistryBase
+        Molecule with HAO orbitals.
+    to_active : dict of int to int, optional
+        Only if ``ret2act`` and ``use_active`` are True.
+    edges : list of tuple of int, optional
+        Only if ``return_edges`` is True.
     """
 
     pfmol = MoleculeToPyscf(mol)
@@ -400,9 +463,18 @@ def generate_HAO_molecule_edges_pyscf(
     use_mp2: bool = False,
     **kwargs,
 ) -> tuple[QuantumChemistryBase, list]:
-    """
-    Same as generate_HAO_molecule_pyscf, but the edges of the CLPO graph on the HAOs are returned along with the molecule
-    (the ret2act dictionary goes between them), so that the JANPA pipeline is only executed once.
+    """Generate a molecule with HAO orbitals and the SPA edges on the HAOs via PySCF.
+
+    Same as ``generate_HAO_molecule_pyscf`` with ``return_edges=True``: JANPA runs only once.
+
+    Returns
+    -------
+    mol : QuantumChemistryBase
+        Molecule with HAO orbitals.
+    to_active : dict of int to int, optional
+        Only if ``ret2act`` and ``use_active`` are True.
+    edges : list of tuple of int
+        SPA edges on the HAOs.
     """
     return generate_HAO_molecule_pyscf(
         mol, thres, silent, use_active, ret2act, use_mp2, return_edges=True, **kwargs
@@ -419,31 +491,54 @@ def generate_CLPO_molecule_pyscf(
     use_mp2: bool = False,
     **kwargs,
 ) -> QuantumChemistryBase:
-    """
-    Interface sunrise molecules with janpa for CLPO molecule generation  via pyscf.
+    """Generate a molecule with CLPO orbitals via PySCF.
 
-    Parameters:
-    ----------
-    mol (QuantumChemistryBase): any instance of sunrise molecule
-    atom_edges (List[tuple[int]]): Optional. Custom molecule connectivity as tuples of atom indices (not orbital
-                            indices). I.e. for linear H4, [(0,3),(1,2)] would return 2nd graph orbitals.
-                            If not given, it is determined by JANPA. The former keyword ``edges`` is still accepted
-                            in **kwargs.
-    thres (Number): Orbital janpa orbital threshold, where orbitals are rotated to accomodate the electrond density
-    silent (bool): Whether to print all janpa output
-    use_active (bool): Whether to transform the janpa result orbitals to keep the active space defined by the input molecule
-    return_aviso: (bool): Wether to return the data of the dangerours orbitals (same info showed on the warnings)
-    use_mp2 (bool): Whether to use mp2 or HF mo_occ to initialize the janpa pipeline. It can be also provided a custom pyscf
-                    with the keyword pyscf_object, or to provide custom mo_coeff, mo_occ, mo_energy. If not, pyscf
-                    HF will be run.
+    Same as ``generate_CLPO_molecule_edges`` but the graph edges are not returned.
 
-    Returns:
+    Parameters
     ----------
-    Sunrise Molecule (same instance as input) with CLPO orbitals.
-    If return_aviso a list with content (mo_type, orb_idx, mo_occ) for those orbitals with dangerous occupation.
-        mo_type 1 for lone pairs not doubly occupied and mo_type 2 for bonding/antibonding pairs (idx, idx+1)
-        whose summed occupation is not close two 2e-. With use_active, orb_idx is the active space index
-        (None if the orbital ended up in the frozen core), otherwise the index in the full CLPO list.
+    mol : QuantumChemistryBase
+        Any sunrise molecule.
+    atom_edges : list of tuple of int, optional
+        Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
+        for linear H4 (repeat a pair for a double bond). The bonds
+        between the other atom pairs are found automatically from the Hartree-Fock density
+        (MP2 with ``use_mp2``).
+    thres : float
+        Convergence threshold of the JANPA hybrid-orbital optimization.
+    silent : bool
+        If True, suppress the JANPA output.
+    use_active : bool
+        If True, keep the active space of ``mol`` (the CLPOs are rotated into it). Otherwise
+        all orbitals are replaced by the orthogonalized CLPOs.
+    return_aviso : bool
+        If True, also return the orbitals that do not have the expected double occupancy
+        (the same information as the emitted warnings).
+    use_mp2 : bool
+        If True, use the MP2 density to initialize JANPA, otherwise the Hartree-Fock one.
+    **kwargs
+        ``edges`` is the former name of ``atom_edges`` and is still accepted.
+        ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
+        and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
+        the responsibility of the user, JANPA only considers HF or MP2 references.
+        With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
+        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+
+    Returns
+    -------
+    mol : QuantumChemistryBase
+        Molecule with CLPO orbitals.
+    aviso : list of tuple, optional
+        Only if ``return_aviso`` is True. See Notes.
+
+    Notes
+    -----
+    Each aviso entry is ``(mo_type, orb_idx, occupation)``. It lists the orbitals that do not have
+    the expected double occupancy: ``mo_type`` 1 is a lone pair with occupation between 0.5
+    and 1.5, 2 a bonding/antibonding pair whose summed occupation is below 1.7, with ``orb_idx``
+    the tuple ``(idx, idx + 1)``.
+    With ``use_active``, ``orb_idx`` is the active-space index (None if the orbital ended up in
+    the frozen core), otherwise the index in the full CLPO list.
     """
     if return_aviso:
         mol_out, _, aviso = generate_CLPO_molecule_edges_pyscf(
@@ -462,7 +557,7 @@ def __map_aviso(
     to_active: dict[int, int] | None,
     ncore: int = 0,
 ) -> list[tuple[int, int | tuple[int, int], float]]:
-    """Moves the aviso orbital indices from the full CLPO list to the active space, None for those in the frozen core."""
+    """Move the aviso orbital indices from the full CLPO list to the active space (None for those in the frozen core)."""
 
     def move(idx):
         return to_active[idx] - ncore if idx in to_active else None
@@ -482,8 +577,7 @@ def __raise_aviso(
     to_active: dict[int, int] | None = None,
     ncore: int = 0,
 ):
-    """Warns about the aviso orbitals, given by their index in the full CLPO list. With to_active the indices are shown in
-    the active space, and orbitals that ended up in the frozen core are reported as such."""
+    """Warn about the aviso orbitals, given by their index in the full CLPO list. With ``to_active`` the indices are shown in the active space and frozen-core orbitals are reported as such."""
     warnings = {
         LO_TYPE_LP: "Lone Pair {i} found with occupation close to 1 => {occ:.5f}, take care.",
         LO_TYPE_BD: "Bond pair orbitals [{i},{j}] population expected under expected 2e-, predicted: {occ:.5f}, take care with predicted edges.",

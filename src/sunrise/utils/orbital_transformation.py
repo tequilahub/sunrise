@@ -1,3 +1,5 @@
+"""Orthogonalization and active-space matching of orbital coefficient matrices."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -10,10 +12,19 @@ from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 
 def orthogonalize(c: numpy.ndarray, s: numpy.ndarray) -> numpy.ndarray:
-    """
-    Symmetrically orthogonalize orbital coefficients.
-    c: (basis_functions, orbitals)
-    s: (basis_functions, basis_functions)
+    """Symmetrically (Loewdin) orthogonalize orbital coefficients.
+
+    Parameters
+    ----------
+    c : numpy.ndarray
+        Orbital coefficients, shape (basis functions, orbitals).
+    s : numpy.ndarray
+        Overlap matrix of the basis functions.
+
+    Returns
+    -------
+    numpy.ndarray
+        Orthonormal orbital coefficients, same shape as ``c``.
     """
     # 1. Compute the overlap of the current MOs: S' = C^T * S * C
     # This replaces your entire nested loop and inner() function.
@@ -38,12 +49,27 @@ def orthogonalize(c: numpy.ndarray, s: numpy.ndarray) -> numpy.ndarray:
 def orthogonalize_active_space(
     c: numpy.ndarray, s: numpy.ndarray, frozen_idx: list[int], active_idx: list[int]
 ) -> numpy.ndarray:
-    """
-    Symmetrically orthogonalize orbital coefficients defined by colums with indices 'active_idx' while keeping untouched those defined by 'frozen_idx'.
-    c: (basis_functions, orbitals)
-    s: (basis_functions, basis_functions)
-    frozen_idx: list of orbitals to left untoched
-    active_idx: list of orbitals to orthogonalize
+    """Orthogonalize the active orbitals against the frozen ones and among themselves.
+
+    Columns in ``frozen_idx`` are kept unchanged. Columns in ``active_idx`` are
+    projected out of the frozen space and then symmetrically orthogonalized.
+    The frozen orbitals are assumed to be orthonormal.
+
+    Parameters
+    ----------
+    c : numpy.ndarray
+        Orbital coefficients, shape (basis functions, orbitals).
+    s : numpy.ndarray
+        Overlap matrix of the basis functions.
+    frozen_idx : list of int
+        Columns of ``c`` to leave untouched.
+    active_idx : list of int
+        Columns of ``c`` to orthogonalize.
+
+    Returns
+    -------
+    numpy.ndarray
+        Copy of ``c`` with the active columns replaced.
     """
     c_f = c[:, frozen_idx]
     c_a = c[:, active_idx]
@@ -70,12 +96,26 @@ def get_active(
     s: numpy.ndarray,
     active_idx_c: list[int],
 ) -> list[int]:
-    """
-    Safely identifies active orbitals in d_orig by projecting them into the entire active subspace of c_orig.
-    c_orig: original orbital matrix which will be frozen (typicall HF)
-    d_orig: original orbital matrix to look for active w.r.t. c_orig (i.e. native orbital matrix or CLPO matrix before active space considerations)
-    s: overlap_integrals
-    active_idx_c: subspace from c_orig to  look for the active indices for d_orig
+    """Find the orbitals of ``d_orig`` that best span the active space of ``c_orig``.
+
+    Each orbital of ``d_orig`` is weighted by its squared projection onto the
+    active orbitals of ``c_orig``; the highest-weight ones are chosen.
+
+    Parameters
+    ----------
+    c_orig : numpy.ndarray
+        Reference orbital coefficients (typically Hartree-Fock).
+    d_orig : numpy.ndarray
+        Orbital coefficients to select from (e.g. native or CLPO orbitals).
+    s : numpy.ndarray
+        Overlap matrix of the basis functions.
+    active_idx_c : list of int
+        Active orbital columns of ``c_orig``.
+
+    Returns
+    -------
+    list of int
+        Sorted column indices of ``d_orig``, as many as ``active_idx_c``.
     """
     # 1. Extract the entire reference active space block from c_orig
     c_active = c_orig[:, active_idx_c]
@@ -103,15 +143,27 @@ def get_core(
     s: numpy.ndarray,
     active_idx_d: list[int],
 ):
-    """
-    Given the active space indices of d_orig, finds which occupied orbitals in c_orig should be frozen (core orbitals).
+    """Find the orbitals of ``c_orig`` to freeze, given the active orbitals of ``d_orig``.
 
-    Parameters:
-    -----------
-    c_orig: original orbital matrix which will be frozen (typicall HF)
-    d_orig: original orbital matrix to look for active w.r.t. c_orig (i.e. native orbital matrix or CLPO matrix before active space considerations)
-    s: overlap_integrals
-    active_idx_d: The indices of the active space orbitals in d_orig.
+    The orbitals of ``c_orig`` with the smallest overlap with the active
+    subspace of ``d_orig`` are chosen as core.
+
+    Parameters
+    ----------
+    c_orig : numpy.ndarray
+        Reference orbital coefficients (typically Hartree-Fock).
+    d_orig : numpy.ndarray
+        Orbital coefficients containing the active orbitals.
+    s : numpy.ndarray
+        Overlap matrix of the basis functions.
+    active_idx_d : list of int
+        Active orbital columns of ``d_orig``.
+
+    Returns
+    -------
+    list of int
+        Sorted column indices of ``c_orig`` to freeze; their number is the
+        number of orbitals of ``d_orig`` minus ``len(active_idx_d)``.
     """
     n_occ_c = d_orig.shape[1] - len(active_idx_d)
 
@@ -141,16 +193,34 @@ def transform(
     *args,
     **kwargs,
 ) -> tuple[QuantumChemistryBase, dict]:
-    """
-    Procedure similar to what is done in use_native_orbitals but for arbitrary basis keeped insied modified. Keeps frozen orbitals canHF
-    orthogonalized with the active modified ones
-    modified: sunrise molecule with modified orb. coeff. to be orthogonalized
-    original: sunrise HF molecule. Not runing here a new HF to be backend independent.
-    orbital type: the text that will show whem printing the molecule
-    kwargs: Molecular arguments. It can also be defined the core and active orbitals, both in total (not active) space indices see get_core and get_active above.
-    Returns modified sunrise molecule with the core orbitals of the original one
-    And a dictionary with the form {active_orbital_index_before:active_orbital_index_after}
-    The frozen orbitals will always be the N first on the orbital matrix
+    """Build a molecule that uses the orbitals of ``modified`` as active space and those of ``original`` as core.
+
+    Similar to ``use_native_orbitals``, but for an arbitrary orbital basis stored
+    in ``modified``. The frozen core orbitals of ``original`` are kept and the
+    active orbitals of ``modified`` are orthogonalized against them. No new
+    Hartree-Fock calculation is run, so this works for any backend.
+
+    Parameters
+    ----------
+    modified : QuantumChemistryBase
+        Molecule whose orbital coefficients define the new active orbitals.
+    original : QuantumChemistryBase
+        Reference (Hartree-Fock) molecule providing integrals, parameters and core orbitals.
+    orbital_type : str, optional
+        Label shown when printing the molecule.
+    **kwargs
+        ``core`` and ``active`` (list of int, indices in the full orbital space, not the active
+        one) override the automatic choice. Default: the core is the frozen orbitals of
+        ``original``. With only ``core``, the active orbitals of ``modified`` are matched to the
+        other orbitals of ``original`` (``get_active``); with only ``active`` (indices in
+        ``modified``), the core is chosen from ``original`` (``get_core``).
+
+    Returns
+    -------
+    tuple
+        The new molecule (same class as ``modified``; the core orbitals keep their positions in
+        the orbital matrix and the active ones fill the others) and a dict
+        ``{active orbital index in modified: index in the new molecule}``.
     """
     assert len(original.integral_manager.orbitals) == len(
         modified.integral_manager.orbitals
