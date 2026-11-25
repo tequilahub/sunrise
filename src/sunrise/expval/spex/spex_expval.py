@@ -1,3 +1,9 @@
+"""Fermionic backend ``"spex"``: sunrise's own sparse wavefunction simulator.
+
+States are stored as sparse dictionaries {bitstring: amplitude} in
+up-then-down spin orbital ordering.
+"""
+
 from __future__ import annotations
 
 from collections import OrderedDict
@@ -26,6 +32,23 @@ _OPERATOR_CACHE_SIZE = 8
 
 
 class SpexExpval:
+    """Braket (overlap, expectation value or transition element) evaluated with the ``"spex"`` backend.
+
+    The molecular Hamiltonian is built from the molecule's integrals and cached, so brakets of a
+    molecule with the same integrals share it. Circuits are compiled once into spex terms and
+    applied to the initial state (Hartree-Fock unless a circuit defines one) as sequences of
+    fermionic excitations.
+
+    Parameters
+    ----------
+    braket : FermBraketImpl
+        Braket to evaluate. Its molecule is required.
+    name : str, optional
+        Label used when printing. Passed as keyword argument.
+    *args, **kwargs
+        Ignored apart from ``name``.
+    """
+
     def __init__(
         self,
         braket: FermBraketImpl,
@@ -74,6 +97,11 @@ class SpexExpval:
         self.operator = self.build_operator(operator)
 
     def _cached_terms(self, name: str, build: Callable) -> list[spex.FermionTerm]:
+        """Return the terms of operator ``name`` built by ``build(c, h, g)``, cached by integral content.
+
+        The key is the content of the integrals, not the molecule object, so deep copies share
+        the terms and a molecule with rotated orbitals gets new ones. The last 8 operators are kept.
+        """
         # Every braket of a molecule needs the same term list, so it is built once and
         # reused. The key is the content of the integrals, not the molecule object:
         # the gradient deep-copies the brakets (molecule included), and a molecule whose
@@ -95,6 +123,11 @@ class SpexExpval:
     def _build_hamiltonian(self, c, h, g) -> list[spex.FermionTerm]:
         # Integrals in chemists notation g[p,q,r,s]=(pq|rs); spatial orbital p maps to
         # spin orbitals p (alpha) and p+norb (beta) in up-then-down ordering.
+        """Return the molecular Hamiltonian as spex FermionTerms in up-then-down ordering.
+
+        ``c`` is the constant, ``h`` the one-body and ``g`` the two-body integrals in chemists'
+        (Mulliken) ordering.
+        """
         norb = self.norb
         terms: list[spex.FermionTerm] = []
         if c is not None and abs(c) > _ZERO_TOL:
@@ -123,6 +156,12 @@ class SpexExpval:
         return terms
 
     def _build_hcb_hamiltonian(self, c, h, g) -> list[spex.FermionTerm]:
+        """Return the hard-core boson Hamiltonian as spex FermionTerms in up-then-down ordering.
+
+        Each electron pair lives on the two spin orbitals of a spatial orbital, as in
+        ``HybridBase.make_hamiltonian`` with ``two_qubit=True``. Arguments as in
+        ``_build_hamiltonian``.
+        """
         # Hardcore-boson Hamiltonian with each pair on two spin orbitals, as in
         # HybridBase.make_hamiltonian (make_bosonic_hamiltonian with two_qubit=True).
         # Integrals in chemists notation g[p,q,r,s]=(pq|rs); spatial orbital p maps to
@@ -154,6 +193,7 @@ class SpexExpval:
 
     @property
     def bra(self) -> FCircuit:
+        """FCircuit or None : circuit preparing the bra state, in up-then-down ordering."""
         return self._bra
 
     @bra.setter
@@ -168,6 +208,7 @@ class SpexExpval:
 
     @property
     def ket(self) -> FCircuit:
+        """FCircuit or None : circuit preparing the ket state, in up-then-down ordering."""
         return self._ket
 
     @ket.setter
@@ -182,12 +223,14 @@ class SpexExpval:
 
     @property
     def variables(self) -> list[Variable]:
+        """list of Variable : variables of bra followed by ket, possibly with repetitions."""
         bra = self.bra.variables if self.bra is not None else []
         ket = self.ket.variables if self.ket is not None else []
         return bra + ket
 
     @property
     def init_state(self) -> tuple:
+        """tuple of QubitWaveFunction : initial states of bra and ket. Setting it sets both."""
         return self.__civect_to_qwvf(self._init_state_bra), self.__civect_to_qwvf(
             self._init_state_ket
         )
@@ -199,10 +242,14 @@ class SpexExpval:
 
     @property
     def is_diagonal(self):
+        """bool : True if bra and ket are the same, i.e. the braket is an expectation value."""
         return self.bra is None or self.ket is None or self.bra == self.ket
 
     @property
     def U(self):
+        """FCircuit or list of FCircuit : the ket if diagonal, otherwise ``[bra, ket]``. Needed by
+        tequila Objectives.
+        """
         return self.ket if self.is_diagonal else [self.bra, self.ket]
 
     def __civect_to_qwvf(self, state_dict: dict) -> QubitWaveFunction:
@@ -222,6 +269,27 @@ class SpexExpval:
     ) -> None | Callable | list[spex.FermionTerm]:
         # Supported: "I"/"H", openfermion FermionOperator, tequila QubitHamiltonian (callable on state dict)
         #             list of supported operators, spex.FermionTerm or list of it.
+
+        """Convert an operator into a form spex can evaluate.
+
+        Parameters
+        ----------
+        operator : str or number or FermionOperator or QubitHamiltonian or spex.FermionTerm or list
+            "I" (identity), "H" (molecular Hamiltonian), "HCB" (hard-core boson Hamiltonian), a
+            constant, an openfermion FermionOperator (interleaved spin orbital ordering), a tequila
+            QubitHamiltonian, spex FermionTerms, or a list of these.
+
+        Returns
+        -------
+        callable or list
+            A callable acting on the state for "I" and a QubitHamiltonian, otherwise a list of
+            spex terms.
+
+        Raises
+        ------
+        TequilaException
+            If the operator is not supported.
+        """
 
         def from_string(operator: str) -> Callable | list[spex.FermionTerm]:
             if operator.upper() == "I":
@@ -311,11 +379,29 @@ class SpexExpval:
     def __call__(
         self, variables: list | dict | Variables = None, *args, **kwargs
     ) -> float:
+        """Evaluate the braket, see ``simulate``."""
         if variables is None:
             variables = {}
         return self.simulate(variables=variables)
 
     def simulate(self, variables: list | dict | Variables = None) -> float:
+        """Evaluate the braket for the given variable values.
+
+        Parameters
+        ----------
+        variables : dict or Variables, optional
+            Values of the circuit variables, keyed by Variable or name.
+
+        Returns
+        -------
+        float
+            Real part of the braket.
+
+        Raises
+        ------
+        TequilaException
+            If a variable value is missing or ``variables`` has the wrong type.
+        """
         variables = {} if variables is None else variables
         check_variables = {k: k in variables for k in self.extract_variables()}
         if not all(list(check_variables.values())):
@@ -385,6 +471,7 @@ class SpexExpval:
         return float(real(result))
 
     def extract_variables(self) -> list[Variable]:
+        """Return the unique variables of bra and ket."""
         variables_bra = []
         variables_ket = []
         uniques_bra = []
@@ -398,6 +485,7 @@ class SpexExpval:
         return uniques_bra + variables_ket
 
     def _apply_circuit(self, state: dict, circuit, dvars: dict) -> dict:
+        """Apply ``circuit`` to the state dictionary ``state``."""
         return _apply_circuit_to_state(state, circuit, dvars)
 
     def __str__(self):
@@ -415,10 +503,16 @@ class SpexExpval:
         return self.__str__()
 
     def count_measurements(self) -> int:
+        """Return a cost measure of the braket: ``norb**4``, the size of the two-body integrals."""
         return self.norb**4
 
     @property
     def molecule(self) -> QuantumChemistryBase:
+        """QuantumChemistryBase : molecule of the braket.
+
+        Setting it only reads the number of orbitals and of alpha/beta electrons; the Hamiltonian
+        is built from the integrals when it is needed, and cached.
+        """
         return self._molecule
 
     @molecule.setter
@@ -431,6 +525,7 @@ class SpexExpval:
 
 
 def _qwvf_to_civect(wvf: QubitWaveFunction, n_qubits: int) -> dict:
+    """Convert a QubitWaveFunction to a {bitstring: amplitude} dict in LSB numbering."""
     wvf.n_qubits = n_qubits
     result = {}
     for bs, coeff in wvf.items():
@@ -443,6 +538,7 @@ def _qwvf_to_civect(wvf: QubitWaveFunction, n_qubits: int) -> dict:
 
 
 def _civect_to_qwvf(state_dict: dict, n_qubits: int) -> QubitWaveFunction:
+    """Convert a {bitstring: amplitude} dict to a QubitWaveFunction with LSB numbering."""
     wvf = QubitWaveFunction(n_qubits=n_qubits, numbering=BitNumbering.LSB)
     wvf._state = {
         int(k): complex(v) for k, v in (state_dict or {}).items() if abs(v) > _ZERO_TOL
@@ -451,9 +547,14 @@ def _civect_to_qwvf(state_dict: dict, n_qubits: int) -> QubitWaveFunction:
 
 
 class _CompiledCircuit:
-    """
-    Gates of an (up-then-down) FCircuit translated once into spex terms, so that
-    simulating it only has to resolve the angles.
+    """Gates of an (up-then-down) FCircuit translated once into spex terms.
+
+    Simulating the circuit then only has to resolve the angles.
+
+    Parameters
+    ----------
+    circuit : FCircuit or None
+        Circuit to compile. None gives an empty circuit.
     """
 
     def __init__(self, circuit: FCircuit | None):
@@ -479,6 +580,7 @@ class _CompiledCircuit:
             self.gates.append((gate.variables, ops))
 
     def __call__(self, state: dict, dvars: dict) -> dict:
+        """Apply the compiled gates to ``state`` (``{bitstring: amplitude}``) with the angles in ``dvars``."""
         from sunrise import simulate
 
         state = {} if state is None else state
@@ -503,6 +605,7 @@ class _CompiledCircuit:
 
 
 def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
+    """Apply all gates of ``circuit`` (an FCircuit or ``_CompiledCircuit``) to ``state``, with variables from ``dvars``."""
     if not isinstance(circuit, _CompiledCircuit):
         circuit = _CompiledCircuit(circuit)
     return circuit(state, dvars)
@@ -511,6 +614,25 @@ def _apply_circuit_to_state(state: dict, circuit, dvars: dict) -> dict:
 def spex_circuit_simulator(
     U, variables, n_orb=None, **backend_kwargs
 ) -> QubitWaveFunction:
+    """Simulate an FCircuit with spex and return the final wavefunction.
+
+    Parameters
+    ----------
+    U : FCircuit
+        Circuit to simulate. Its initial state is used if present, otherwise the
+        vacuum.
+    variables : dict, optional
+        Values of the circuit variables.
+    n_orb : int, optional
+        Number of spatial orbitals. Default is inferred from the circuit.
+    **backend_kwargs
+        Ignored.
+
+    Returns
+    -------
+    QubitWaveFunction
+        Final state.
+    """
     if n_orb is None:
         n_orb = int(ceil((U.max_qubit() + 1) / 2))
     n_qubits = 2 * n_orb

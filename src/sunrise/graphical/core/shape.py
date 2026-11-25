@@ -1,3 +1,5 @@
+"""Gate shapes of the qpic circuit renderer."""
+
 import abc
 
 
@@ -6,21 +8,27 @@ class Shape(abc.ABC):
 
     @abc.abstractmethod
     def to_qpic(self) -> str:
-        """Returns the qpic string identifying this shape."""
+        """Return the qpic code of this shape."""
 
     def __format__(self, format_spec) -> str:
         return self.to_qpic()
 
 
 class NoBoundary(Shape):
-    """This draws a gate without a boundary."""
+    """Draw a gate without a boundary."""
 
     def to_qpic(self):
         return "0"
 
 
 class Control(Shape):
-    """This draws the gate as a control. It can optionally be drawn as a negated control."""
+    """Draw the gate as a control, optionally negated.
+
+    Parameters
+    ----------
+    negated : bool, optional
+        If True, draw a negated control. Default is False.
+    """
 
     def __init__(self, negated: bool = False):
         self.negated = negated
@@ -33,16 +41,23 @@ class Control(Shape):
 
 
 class Circle(Shape):
-    """This draws a circle."""
+    """Draw a circle."""
 
     def to_qpic(self):
         return "2"
 
 
 class Polygon(Shape):
-    """
-    This draws any polygon with n >= 3 vertices.
-    If bottom_vertex is true, odd numbered polygons will draw their tip at the bottom instead of at the top. (Basically rotating by 180°)
+    """Draw a regular polygon.
+
+    Parameters
+    ----------
+    vertices : int
+        Number of vertices, at least 3. A negative value is equivalent to the
+        positive one with ``bottom_vertex`` toggled.
+    bottom_vertex : bool, optional
+        If True, polygons with an odd number of vertices point their tip down
+        instead of up (rotation by 180 degrees). Default is False.
     """
 
     def __init__(self, vertices: int, bottom_vertex: bool = False):
@@ -62,7 +77,13 @@ class Polygon(Shape):
 
 
 class Triangle(Shape):
-    """This draws a triangle pointing to the right, or left when backward is True."""
+    """Draw a triangle pointing right, or left if ``backward`` is True.
+
+    Parameters
+    ----------
+    backward : bool, optional
+        Point left instead of right. Default is False.
+    """
 
     def __init__(self, backward: bool = False):
         self.backward = backward

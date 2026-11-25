@@ -1,17 +1,26 @@
+"""Style and state containers for the qpic circuit renderer."""
+
 from __future__ import annotations
 
 from .color import Color, ColorRange, Colors
 
 
 class CircuitStyle:
-    """
-    This class defines the style that should be used when rendering the circuit.
-    Parameters:
-        group_together -- If true, this touches all wires after each gate, preventing gates from being rearranged.
-        parametrized_marking -- If set the given Marking is used to color parametrized gates.
-        color_range -- If set the given ColorRange is used to color parametrized gates according to their angle.
+    """Style used when rendering a circuit.
 
-        primary, secondary -- Basic colors to be used by the gates, each contains a text and gate color.
+    Parameters
+    ----------
+    group_together : bool, optional
+        If True, touch all wires after each gate so that qpic cannot rearrange
+        gates. Default is False.
+    parametrized_marking : Colors, optional
+        Colors of parametrized gates. Default is black text on the "unia" color.
+    color_range : ColorRange, optional
+        Colors parametrized gates according to their angle. Default is blue to red.
+    primary, secondary : Colors, optional
+        Basic text and gate colors. Defaults are white on "tq" and white on "fai".
+    personalized : dict of str to Colors, optional
+        Colors for specific gate names (e.g. ``"UR"``, ``"UC"``). Default is empty.
     """
 
     def __init__(
@@ -42,10 +51,15 @@ class CircuitStyle:
 
 
 class CircuitState:
-    """
-    This class contains the current state of the circuit.
-    This is mostly needed for swap networks, to store the order of the wires.
-    It also stores the number of orbitals.
+    """Current state of a circuit being rendered.
+
+    Stores the number of orbitals and the current order of the wires, which
+    changes in swap networks.
+
+    Parameters
+    ----------
+    n_orbitals : int
+        Number of orbitals (wires).
     """
 
     def __init__(self, n_orbitals: int):
@@ -54,12 +68,19 @@ class CircuitState:
 
     @staticmethod
     def names(wires: list[int] | int | None) -> str:
-        """Generates the name of a single or multiple wires by their indices."""
+        """Return the space-separated qpic names (``a<i>``) of the given wires.
+
+        Parameters
+        ----------
+        wires : list of int
+            Wire indices. A bare int is not handled (the check ``wires is int``
+            never triggers), so pass a list.
+        """
         if wires is int:
             wires = [wires]
 
         return " ".join(f"a{i}" for i in wires)
 
     def all_names(self) -> str:
-        """Generates names for all wires known to this state"""
+        """Return the qpic names of all wires, in their current order."""
         return self.names(self.wires)

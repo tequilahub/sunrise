@@ -1,5 +1,15 @@
 # Import order matters here (circular imports, e.g. ADAPT needs FCircuit): do not sort.
 # ruff: noqa: I001
+"""Sunrise: state-preparation circuits for quantum chemistry, built on tequila.
+
+Re-exports the main user-facing classes and functions (molecules, fermionic
+circuits, expectation values, orbital optimization, plotting).
+
+References
+----------
+J. S. Kottmann et al., Quantum Sci. Technol. 6, 024009 (2021), arXiv:2011.03057.
+"""
+
 from sunrise import molecules
 from sunrise.molecules import qubit_base
 from sunrise.molecules import qubit_base as chemistry  # shortcut
@@ -31,6 +41,7 @@ from sunrise.expval import (
 from sunrise.fermionic_operations import gates
 from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.expval.minimize import grad, minimize, simulate
+from tequila.objective.objective import Variables
 from sunrise.expval.orbital_optimizer import optimize_orbitals
 from sunrise import graphical
 from sunrise.expval import (
@@ -44,17 +55,22 @@ from sunrise import CLPO
 from sunrise.CLPO.orbital_transformation import (
     generate_CLPO_molecule_edges,
     generate_HAO_molecule,
+    generate_HAO_molecule_edges,
 )
+from sunrise import MEAO
+from sunrise.MEAO import generate_MEAO_molecule
 from sunrise.MCVBT.gnm import mcvbt
 from sunrise import spafastprototype as SPAFP
 from sunrise import ADAPT
 from sunrise import ADAPT as adapt
 from sunrise import graph_selection
 from sunrise import utils
+from sunrise import excited_states
 
 __all__ = [
     "ADAPT",
     "CLPO",
+    "MEAO",
     "SPAFP",
     "Braket",
     "ExpectationValue",
@@ -72,12 +88,16 @@ __all__ = [
     "ParametersQC",
     "QuantumChemistryBase",
     "RealBraKet",
+    "Variables",
     "adapt",
     "chemistry",
     "draw",
+    "excited_states",
     "gates",
     "generate_CLPO_molecule_edges",
     "generate_HAO_molecule",
+    "generate_HAO_molecule_edges",
+    "generate_MEAO_molecule",
     "giuseppe",
     "giuseppe_bar",
     "grad",

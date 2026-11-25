@@ -1,6 +1,8 @@
-"""
-Collections of Fermion-to-Qubit encodings known to tequila
-Adapted to the encoding
+"""Fermion-to-qubit encodings for hybrid molecules, where each orbital is either fermionic or a hard-core boson.
+
+References
+----------
+F. J. del Arco Santos et al., Quantum Sci. Technol. (2025), doi:10.1088/2058-9565/adbdee.
 """
 
 from __future__ import annotations
@@ -20,6 +22,14 @@ from sunrise.molecules.qubit_base.encodings import EncodingBase as EB
 
 def known_encodings():
     # convenience for testing and I/O
+    """Return the available encodings as dict.
+
+    Returns
+    -------
+    dict
+        Maps the normalized name (upper case, without "_" and "-", e.g. "JORDANWIGNER",
+        "TAPEREDBINARY", "REORDEREDBRAVYIKITAEV") to the encoding class or constructor.
+    """
     encodings = {
         "JordanWigner": JordanWigner,
         "BravyiKitaev": BravyiKitaev,
@@ -52,6 +62,29 @@ def known_encodings():
 
 
 class JordanWigner(EB):
+    """Jordan-Wigner encoding with per-orbital choice of fermionic ("F") or hard-core boson ("B") treatment.
+
+    Fermionic orbitals use two qubits (alpha and beta spin orbital). Bosonic orbitals describe a
+    spin-paired electron pair and use one qubit, or two qubits if ``two_qubit`` is True.
+    It is also the base of the other hybrid encodings (Bravyi-Kitaev, tapered), which change only
+    the encoding of the fermionic qubits.
+
+    Parameters
+    ----------
+    n_electrons : int
+        Number of electrons.
+    n_orbitals : int
+        Number of spatial orbitals.
+    select : dict
+        Encoding "F" or "B" for each spatial orbital, see ``update_select``.
+    up_then_down : bool, optional
+        If True all alpha qubits come first, then all beta qubits (reordered Jordan-Wigner).
+    **kwargs
+        ``condense`` (bool, default True) drops the unused beta qubit of bosonic orbitals;
+        ``two_qubit`` (bool, default False) uses two qubits for bosonic orbitals (implies
+        ``condense=False``).
+    """
+
     _ucc_support = True
 
     def __init__(
@@ -75,16 +108,24 @@ class JordanWigner(EB):
     def __call__(
         self, fermion_operator: openfermion.FermionOperator, *args, **kwargs
     ) -> QubitHamiltonian:
-        """
-        :param fermion_operator:
-            an openfermion FermionOperator
-        :return:
-            The openfermion QubitOperator of this class ecoding
+        """Transform a fermionic operator to a qubit operator.
+
+        Parameters
+        ----------
+        fermion_operator : openfermion.FermionOperator or list
+            Operator, or list of ``(((spin_orbital, 1 or 0), ...), coefficient)`` terms
+            where 1 is creation and 0 annihilation.
+
+        Returns
+        -------
+        QubitHamiltonian
+            The operator in this encoding.
         """
         fop = self.do_transform(*args, fermion_operator=fermion_operator, **kwargs)
         return self.post_processing(fop)
 
     def post_processing(self, op, *args, **kwargs):
+        """Return the transformed operator unchanged (hook for subclasses)."""
         return op
 
     def do_transform(
@@ -93,19 +134,25 @@ class JordanWigner(EB):
         *args,
         **kwargs,
     ) -> QubitHamiltonian:
-        """
-        Transform the fermi_operator list in its respective gates similar to openfermion function but taking
-        into account the mixed condification
-        return: qop: the sum of the different operator product multiplied by a prefactor
+        """Transform a fermionic operator to a qubit operator, like the openfermion transforms but taking
+        the F/B selection into account.
+
+        For the Bravyi-Kitaev subclasses the fermionic factors are encoded with the corresponding
+        qubit encoding, mapped onto the fermionic qubits.
+
+        Parameters
+        ----------
+        fermion_operator : openfermion.FermionOperator or list
+            Operator, or list of ``(((spin_orbital, 1 or 0), ...), coefficient)`` terms.
+
+        Returns
+        -------
+        QubitHamiltonian
+            Sum of the products of the encoded ladder operators times their coefficients.
         """
 
         def cre(i: int) -> QubitHamiltonian:
-            """
-            Internal function
-            Creates a creation operator on the JW codification acting on the i-th SO
-            :param i: number of the SO in full-Fermionic-not-upthendown over the creation operators acts
-            :return :creation operator acting on the corresponding qubits
-            """
+            """Return the creation operator of spin orbital ``i`` (``2*orbital + spin``)."""
             d = self.pos
             a = Sm(d[i])
             if self.two_qubit or (self.select[i // 2] == "F"):
@@ -114,12 +161,7 @@ class JordanWigner(EB):
             return a
 
         def anni(i: int) -> QubitHamiltonian:
-            """
-            Internal function
-            Creates a annihilation operator on the JW codification acting on the i-th SO
-            :param i: number of the SO in full-Fermionic-not-upthendown over the creation operators acts
-            :return :annihilation operator acting on the corresponding qubits
-            """
+            """Return the annihilation operator of spin orbital ``i`` (``2*orbital + spin``)."""
             d = self.pos
             a = Sp(d[i])
             if self.two_qubit or (self.select[i // 2] == "F"):
@@ -162,9 +204,29 @@ class JordanWigner(EB):
         return qop
 
     def hcb_to_me(self, *args, **kwargs):
-        """
-        all: CNOT for all orbs, including FER
-        bos: CNOT only for the Bos orbitals
+        """Return the circuit that maps the hard-core boson (HCB) representation to this encoding.
+
+        Unless ``bos``, the circuit ends with ``jw_to_me`` (needed for the Bravyi-Kitaev encodings).
+
+        By default a CNOT copies the alpha qubit to the beta qubit of every fermionic orbital
+        (of all orbitals if ``two_qubit``).
+
+        Parameters
+        ----------
+        all : bool, optional
+            Do it for all orbitals, including bosonic ones. Needs ``condense=False``.
+        bos : bool, optional
+            Do it only for the bosonic orbitals. Needs ``condense=False``. Not together with ``all``.
+
+        Returns
+        -------
+        QCircuit
+            The CNOT circuit.
+
+        Raises
+        ------
+        ValueError
+            For the incompatible combinations above.
         """
         if "all" in kwargs:
             alle = kwargs["all"]
@@ -203,9 +265,15 @@ class JordanWigner(EB):
         return U
 
     def me_to_jw(self) -> QCircuit:
+        """Return the circuit from this encoding to Jordan-Wigner (inverse of ``jw_to_me``)."""
         return self.jw_to_me().dagger()
 
     def jw_to_me(self) -> QCircuit:
+        """Return the circuit from Jordan-Wigner to this encoding.
+
+        Identity for Jordan-Wigner; for (tree) Bravyi-Kitaev the circuit of the qubit encoding,
+        applied to the qubits of the fermionic spin orbitals.
+        """
         if type(self) not in (BravyiKitaev, BravyiKitaevTree) or not len(self.FER_SO):
             return QCircuit()
         return (
@@ -217,6 +285,26 @@ class JordanWigner(EB):
         )
 
     def map_state(self, state: list, *args, **kwargs):
+        """Map spin orbital occupations to the qubit occupations of this encoding.
+
+        The Bravyi-Kitaev subclasses use the generic mapping of ``EncodingBase``.
+
+        Parameters
+        ----------
+        state : list of int
+            Occupation (0 or 1) of the spin orbitals, ordered ``[0 alpha, 0 beta, 1 alpha, ...]``.
+            Missing entries are filled with 0.
+
+        Returns
+        -------
+        list of int
+            Occupation of the qubits.
+
+        Raises
+        ------
+        ValueError
+            If a bosonic orbital has different alpha and beta occupation.
+        """
         state = state + [0] * (2 * self.n_orbitals - len(state))
         if not all(
             state[2 * i] == state[2 * i + 1]
@@ -249,9 +337,13 @@ class JordanWigner(EB):
             return state
 
     def up(self, i):
+        """Return the qubit index of the up spin orbital of spatial orbital ``i``."""
         return self.pos[2 * i]
 
     def down(self, i):
+        """Return the qubit index of the down spin orbital of spatial orbital ``i``, None if it has
+        no qubit.
+        """
         try:
             return self.pos[2 * i + 1]
         except KeyError:
@@ -260,24 +352,29 @@ class JordanWigner(EB):
     def update_select(
         self, select: str | dict | list | tuple, n_orb: int | None = None
     ):
-        """
+        """Set the F/B encoding of the orbitals and recompute the qubit positions.
+
         Parameters
         ----------
-        select: codification of the transformation for each MO.
+        select : str, dict, list or tuple
+            Encoding of each spatial orbital, "F" (fermionic, two qubits) or "B" (hard-core boson,
+            one qubit). As str or list e.g. ``"FBB"``, as dict ``{0: "F", 1: "B"}``. Missing
+            orbitals are set to "B".
+        n_orb : int, optional
+            Number of orbitals. Default is ``self.n_orbitals``.
 
-        Returns
-        -------
-        Updates the MO cofication data. Returns Instance of the class
+        Raises
+        ------
+        ValueError
+            If a string or dict contains characters other than "F" and "B".
+        TypeError
+            If ``select`` has another type.
         """
         if n_orb is None:
             n_orb = self.n_orbitals
 
         def verify_selection_str(select: str, n_orb: int) -> dict:
-            """
-            Internal function
-            Checks if the orbital selection string has the appropiated lenght, otherwise corrects it
-            :return : corrected selection dict
-            """
+            """Return the selection as dict, padded with "B" or cut to ``n_orb`` orbitals."""
             sel = {}
             if len(select) >= n_orb:
                 select = select[:n_orb]
@@ -293,11 +390,7 @@ class JordanWigner(EB):
             return sel
 
         def verify_selection_dict(select: dict, n_orb: int) -> dict:
-            """
-            Internal function
-            Checks if the orbital selection dictionary has the appropiated lenght, otherwise corrects it
-            :return : corrected selection dict
-            """
+            """Return the selection as complete dict, missing orbitals are "B"."""
             sel = {}
             for i in range(n_orb):
                 if i in [*select.keys()]:
@@ -312,11 +405,7 @@ class JordanWigner(EB):
             return sel
 
         def verify_selection_list(select: list | tuple, n_orb: int) -> dict:
-            """
-            Internal function
-            Checks if the orbital selection string has the appropiated lenght, otherwise corrects it
-            :return : corrected selection dict
-            """
+            """Return the selection as dict, padded with "B" or cut to ``n_orb`` orbitals."""
             select = [*select]
             sel = {}
             if len(select) >= n_orb:
@@ -333,11 +422,7 @@ class JordanWigner(EB):
             return sel
 
         def select_to_list(sel):
-            """
-            Internal function
-            Read the select string to make the proper Fer and Bos lists
-            :return : list of MOs for the Bos, MOs and SOs for the Fer space
-            """
+            """Return the list of fermionic qubits and the dict mapping spin orbitals to qubits."""
             hcb = 0
             FER_SO = []
             pos = {}
@@ -374,31 +459,51 @@ class JordanWigner(EB):
 
 
 class BravyiKitaev(JordanWigner):
-    """OpenFermion::bravyi_kitaev on the fermionic orbitals"""
+    """Bravyi-Kitaev encoding (``openfermion.bravyi_kitaev``) of the fermionic orbitals.
+
+    The bosonic ("B") orbitals stay hard-core bosons. Parameters as in ``JordanWigner``.
+    """
 
 
 class BravyiKitaevTree(JordanWigner):
-    """OpenFermion::bravyi_kitaev_tree on the fermionic orbitals"""
+    """Bravyi-Kitaev tree encoding (``openfermion.bravyi_kitaev_tree``) of the fermionic orbitals.
+
+    The bosonic ("B") orbitals stay hard-core bosons. Parameters as in ``JordanWigner``.
+    """
 
 
 class TaperedLinearEncoding(JordanWigner):
-    """
-    Encodings which are a linear map q = A n + s (mod 2) of the hybrid JordanWigner qubits n.
-    The tapered qubits store the fixed electron parities, so they are projected out and stay in |0>.
-    Subclasses implement linear_map.
+    r"""Base class of encodings that are a linear map of the hybrid Jordan-Wigner qubits.
+
+    The qubits are :math:`q = A n + s \pmod 2`, with ``n`` the Jordan-Wigner qubits. The tapered
+    qubits store fixed electron parities, so they are projected out and stay in :math:`|0\rangle`.
+    Subclasses implement ``linear_map``. Parameters as in ``JordanWigner``.
     """
 
     def linear_map(self) -> tuple[dict, dict, list]:
-        """
-        :return: rows: {qubit: JordanWigner qubits whose sum it stores}, qubits not present are unchanged
-                 shift: {qubit: constant bit added}
-                 tapered: list of tapered qubits
+        """Return the linear map of the encoding (implemented by the subclasses).
+
+        Returns
+        -------
+        rows : dict
+            ``{qubit: Jordan-Wigner qubits whose sum it stores}``; qubits not present are unchanged.
+        shift : dict
+            ``{qubit: constant bit added}``.
+        tapered : list of int
+            The tapered qubits.
         """
         raise NotImplementedError(f"{type(self).__name__}::linear_map")
 
     def matrix(self) -> tuple[list, numpy.ndarray, numpy.ndarray]:
-        """
-        :return: the qubits, A and s on that ordering
+        """Return the qubits of the map and the matrix ``A`` and vector ``s`` in that ordering.
+
+        Returns
+        -------
+        qubits : list of int
+        A : numpy.ndarray
+            Binary matrix of the map.
+        s : numpy.ndarray
+            Binary shift vector.
         """
         rows, shift, _ = self.linear_map()
         qubits = sorted(set(self.pos.values()))
@@ -413,8 +518,17 @@ class TaperedLinearEncoding(JordanWigner):
 
     @staticmethod
     def row_reduction(A: numpy.ndarray) -> list:
-        """
-        :return: row operations (target, control) row_t += row_c (mod 2) that bring A to the identity
+        """Return the row operations that bring the binary matrix ``A`` to the identity.
+
+        Parameters
+        ----------
+        A : numpy.ndarray
+            Invertible binary matrix.
+
+        Returns
+        -------
+        list of tuple of int
+            Operations ``(target, control)``, each meaning ``row_target += row_control (mod 2)``.
         """
         A = A.copy()
         ops = []
@@ -435,8 +549,16 @@ class TaperedLinearEncoding(JordanWigner):
         *args,
         **kwargs,
     ) -> QubitHamiltonian:
-        """
-        JordanWigner operator conjugated with jw_to_me and projected onto the tapered qubits in |0>
+        r"""Return the Jordan-Wigner operator conjugated with ``jw_to_me`` and projected onto the tapered qubits in :math:`|0\rangle`.
+
+        Parameters
+        ----------
+        fermion_operator : openfermion.FermionOperator or list
+            Operator to transform, see ``JordanWigner.do_transform``.
+
+        Returns
+        -------
+        QubitHamiltonian
         """
         qop = super().do_transform(fermion_operator, *args, **kwargs)
         if not len(self.FER_SO):
@@ -478,6 +600,15 @@ class TaperedLinearEncoding(JordanWigner):
         return QubitHamiltonian.from_openfermion(projected)
 
     def jw_to_me(self) -> QCircuit:
+        """Return the circuit from the hybrid Jordan-Wigner qubits to this encoding.
+
+        The CNOTs of the row reduction of ``A`` (in reversed order) build the map, and X gates add the
+        shift ``s``.
+
+        Returns
+        -------
+        QCircuit
+        """
         U = QCircuit()
         if not len(self.FER_SO):
             return U
@@ -490,6 +621,19 @@ class TaperedLinearEncoding(JordanWigner):
         return U
 
     def map_state(self, state: list, *args, **kwargs):
+        r"""Map spin orbital occupations to the qubit occupations of this encoding.
+
+        The Jordan-Wigner occupations ``n`` are mapped to :math:`A n + s \pmod 2`.
+
+        Parameters
+        ----------
+        state : list of int
+            Occupation of the spin orbitals, see ``JordanWigner.map_state``.
+
+        Returns
+        -------
+        list of int
+        """
         state = list(super().map_state(state, *args, **kwargs))
         if not len(self.FER_SO):
             return state
@@ -501,13 +645,19 @@ class TaperedLinearEncoding(JordanWigner):
 
 
 class TaperedBinary(TaperedLinearEncoding):
-    """
-    Checksum code (arXiv:1712.07067) on top of the hybrid JordanWigner: the qubits of the last fermionic orbital store
-    the alpha and beta electron parities, which are fixed, so they are tapered and stay in |0>.
-    The bosonic qubits enter both parities since they hold one alpha and one beta electron.
+    r"""Tapered binary encoding: checksum code on top of the hybrid Jordan-Wigner encoding.
+
+    The qubits of the last fermionic orbital store the alpha and beta electron parities, which are
+    fixed, so they are tapered and stay in :math:`|0\rangle`. The bosonic qubits enter both parities,
+    since they hold one alpha and one beta electron. Parameters as in ``JordanWigner``.
+
+    References
+    ----------
+    M. Steudtner and S. Wehner, New J. Phys. 20, 063010 (2018), arXiv:1712.07067.
     """
 
     def linear_map(self) -> tuple[dict, dict, list]:
+        """Return the checksum map, see ``TaperedLinearEncoding.linear_map``."""
         alpha = [self.pos[2 * i] for i in range(self.n_orbitals)]
         beta = [
             self.pos[2 * i + 1]
@@ -521,14 +671,22 @@ class TaperedBinary(TaperedLinearEncoding):
 
 
 class TaperedBravyiKitaev(TaperedLinearEncoding):
-    """
-    Symmetry conserving Bravyi-Kitaev (arXiv:1701.07072) on top of the hybrid JordanWigner: Bravyi-Kitaev tree on the
-    alpha and on the beta fermionic qubits, the alpha root stores the alpha parity and the beta root the total parity.
-    Both are fixed, so they are tapered and stay in |0>.
-    The bosonic qubits enter the alpha parity, they hold two electrons so they do not change the total one.
+    r"""Tapered (symmetry-conserving) Bravyi-Kitaev encoding on top of the hybrid Jordan-Wigner encoding.
+
+    A Bravyi-Kitaev tree acts on the alpha and on the beta fermionic qubits. The alpha root stores
+    the alpha parity and the beta root the total parity; both are fixed, so they are tapered and stay
+    in :math:`|0\rangle`. The bosonic qubits enter the alpha parity; they hold two electrons, so they
+    do not change the total one. Parameters as in ``JordanWigner``.
+
+    References
+    ----------
+    S. Bravyi, J. M. Gambetta, A. Mezzacapo and K. Temme, arXiv:1701.08213 (2017) (tapering).
+    V. Havlíček, M. Troyer and J. D. Whitfield, Phys. Rev. A 95, 032332 (2017), arXiv:1701.07072
+    (Bravyi-Kitaev tree encoding).
     """
 
     def linear_map(self) -> tuple[dict, dict, list]:
+        """Return the Bravyi-Kitaev tree map with tapered roots, see ``TaperedLinearEncoding.linear_map``."""
         alpha, beta = self.FER_SO[0::2], self.FER_SO[1::2]
         rows = {}
         for modes in [alpha, beta]:
