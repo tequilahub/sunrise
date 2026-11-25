@@ -1,3 +1,5 @@
+"""Ant colony optimization heuristic for pairing atoms."""
+
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
@@ -12,7 +14,40 @@ def ant_colony_opt(
     evaporation=0.5,
     Q=100,
 ):
+    """Find a short pairing of atoms with ant colony optimization.
 
+    Each ant builds a perfect matching choosing partners with probability proportional to
+    ``pheromone**alpha * heuristic**beta`` (heuristic = ``1 / (1 + distance)``). Pheromone
+    evaporates every iteration and is reinforced on the edges of short matchings.
+
+    Parameters
+    ----------
+    num_atoms : int
+        Number of atoms (vertices); must be even.
+    coordinates : numpy.ndarray
+        Atom coordinates, shape ``(num_atoms, 3)``.
+    num_ants : int, optional
+        Ants (candidate matchings) per iteration. Default is 10.
+    num_iter : int, optional
+        Number of iterations. Default is 10.
+    alpha : float, optional
+        Weight of the pheromone. Default is 1.
+    beta : float, optional
+        Weight of the distance heuristic. Default is 2.
+    evaporation : float, optional
+        Fraction of pheromone lost each iteration. Default is 0.5.
+    Q : float, optional
+        Pheromone deposit scale. Default is 100.
+
+    Returns
+    -------
+    list of tuple of int
+        Best matching found, as edges ``(i, j)``.
+
+    Examples
+    --------
+    >>> edges = ant_colony_opt(len(coordinates), coordinates)
+    """
     distance_matrix = squareform(pdist(coordinates))
     heuristic = np.ones((num_atoms, num_atoms))
     pheromone = np.ones((num_atoms, num_atoms))

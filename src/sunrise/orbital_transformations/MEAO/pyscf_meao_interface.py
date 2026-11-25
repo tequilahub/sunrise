@@ -1,3 +1,10 @@
+"""Generate MEAO orbitals with the original MEAO code, through PySCF.
+
+References
+----------
+L. Ding, E. Matito and C. Schilling, arXiv:2501.15699 (2025).
+"""
+
 from __future__ import annotations
 
 import contextlib
@@ -29,12 +36,11 @@ def generate_MEAO_molecule(
     use_active: bool = True,
     **kwargs,
 ) -> QuantumChemistryBase:
-    """Generate a molecule with MEAO (maximally entangled atomic orbital) orbitals.
+    r"""Generate a molecule with MEAO (maximally entangled atomic orbital) orbitals.
 
-    Interface with the original MEAO code (https://github.com/schilling-group/MEAO, L. Ding,
-    E. Matito, C. Schilling, arXiv:2501.15699) through PySCF. The MEAOs are optimized in the space of
-    the intrinsic atomic orbitals (IAOs) of the Hartree-Fock occupied orbitals. MEAO is not installed
-    with sunrise, see the README.
+    Interface with the original MEAO code (https://github.com/schilling-group/MEAO) through PySCF.
+    The MEAOs are optimized in the space of the intrinsic atomic orbitals (IAOs) of the Hartree-Fock
+    occupied orbitals. MEAO is not installed with sunrise, see the README.
 
     Parameters
     ----------
@@ -48,8 +54,8 @@ def generate_MEAO_molecule(
     silent : bool
         If True, suppress the output of the MEAO optimization.
     use_active : bool
-        If True, keep the frozen core and the active space of ``mol`` (the MEAOs are rotated into it).
-        Otherwise all orbitals are replaced by the MEAOs.
+        If True, keep the frozen core and the active space of ``mol`` (the MEAOs are rotated into
+        it). Otherwise all orbitals are replaced by the MEAOs.
     **kwargs
         ``pyscf_object`` (a PySCF mean-field object) whose occupied orbitals define the IAOs, otherwise
         a PySCF restricted Hartree-Fock is run.
@@ -60,6 +66,15 @@ def generate_MEAO_molecule(
         Molecule with MEAO orbitals. For basis sets larger than ``minao`` the MEAOs are completed by their
         orthonormal complement.
 
+    Raises
+    ------
+    TequilaException
+        If the MEAO package is not installed.
+
+    See Also
+    --------
+    sunrise.orbital_transformations.CLPO.generate_HAO_molecule : Hybrid atomic orbitals from JANPA.
+
     Notes
     -----
     With a frozen core, which is the default of ``Molecule``, the core MEAOs are replaced by the canonical core
@@ -69,6 +84,11 @@ def generate_MEAO_molecule(
     and mutual information. To obtain exactly the orbitals of the original code, use ``frozen_core=False``
     when creating the molecule: the first orbitals of the result are then the MEAOs, in the order of the
     original, and the rest is the complement.
+
+    Examples
+    --------
+    >>> mol = sun.Molecule(geometry="Be 0 0 0\nH 0 0 1.3\nH 0 0 -1.3", basis_set="sto-3g")
+    >>> mol = sun.MEAO.generate_MEAO_molecule(mol, minao="sto-3g")
     """
     if MEAO is None:
         raise TequilaException(

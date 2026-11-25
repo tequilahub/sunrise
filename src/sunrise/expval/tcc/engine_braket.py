@@ -3,6 +3,13 @@
 #  This file is distributed under ACADEMIC PUBLIC LICENSE
 #  and WITHOUT ANY WARRANTY. See the LICENSE file for details.
 
+"""Energy, expectation value and gradient functions for the TCC engines.
+
+Each function dispatches on ``engine`` ("statevector", "tensornetwork",
+"civector", "civector-large" or "pyscf") to the corresponding tencirchem
+routine. The statevector and tensornetwork gradients need a JAX backend.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -60,7 +67,38 @@ def get_expval(
     ex_ops_bra: tuple | None = None,
     init_state_bra=None,
 ):
-    "Now retuns also the overlap betwen states"
+    """Return the expectation value and the overlap of bra and ket.
+
+    Parameters
+    ----------
+    angles : array_like
+        Values of ``total_variables``.
+    hamiltonian : callable
+        Operator applied to the ket.
+    n_qubits : int
+        Number of spin orbitals.
+    n_elec_s : int or tuple of int
+        Number of electrons (per spin).
+    total_variables : list of Variable
+        All variables of the braket, in the order of ``angles``.
+    params : dict
+        Mapping of the ket gates to variables.
+    ex_ops : tuple
+        Excitation operators of the ket.
+    engine : str
+        Engine used to build the states.
+    mode : str
+        Fermion encoding mode of tencirchem. Default is "fermion".
+    init_state : array_like, optional
+        Initial ket state.
+    params_bra, ex_ops_bra, init_state_bra : optional
+        Same as the ket quantities, for the bra. Default is the ket ones.
+
+    Returns
+    -------
+    tuple of float
+        ``(<bra|H|ket>, <bra|ket>)``, real parts.
+    """
     if ex_ops_bra is None:
         ex_ops_bra = ex_ops
     if init_state_bra is None:
@@ -108,6 +146,7 @@ def get_energy(
     init_state,
     engine,
 ):
+    """Return the real expectation value of ``hamiltonian`` in the state built by ``engine``, see ``get_expval`` for the arguments."""
     assert len(angles) == len(total_variables)
     map_params = params_to_tcc(params, angles, total_variables)
     logger.info("Entering `get_energy`")
@@ -138,6 +177,7 @@ def get_statevector(
     init_state,
     engine,
 ):
+    """Return the full statevector prepared by the excitation operators, built with ``engine``."""
     ci_strings = get_ci_strings(n_qubits, n_elec_s, mode)
     assert len(angles) == len(total_variables)
     map_params = params_to_tcc(params, angles, total_variables)
@@ -235,6 +275,16 @@ def get_expval_and_grad(
     ex_ops_bra: tuple | None = None,
     init_state_bra=None,
 ):
+    """Return the expectation value, overlap and their gradients with respect to ``angles``.
+
+    Parameters are those of ``get_expval``. The gradient is computed by the
+    engine-specific function.
+
+    Raises
+    ------
+    ValueError
+        If the engine is not supported.
+    """
     if engine not in EXPVAL_AND_GRAD_MAP:
         raise ValueError(f"Engine '{engine}' not supported")
 
@@ -270,6 +320,15 @@ def get_energy_and_grad(
     init_state,
     engine,
 ):
+    """Return the energy and its gradient with respect to ``angles``.
+
+    Parameters are those of ``get_energy``.
+
+    Raises
+    ------
+    ValueError
+        If the engine is not supported.
+    """
     if engine not in ENERGY_AND_GRAD_MAP:
         raise ValueError(f"Engine '{engine}' not supported")
 
@@ -290,6 +349,7 @@ def get_energy_and_grad(
 
 
 def map_variables(x: list[Variable, Objective], dvariables: dict):
+    """Return the value of ``x``, evaluating it with ``dvariables`` if it is a Variable or Objective."""
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):

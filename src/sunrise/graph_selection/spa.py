@@ -1,3 +1,5 @@
+"""Run the SPA (separable pair approximation) optimization with edges chosen by a graph heuristic."""
+
 from __future__ import annotations
 
 import inspect
@@ -14,11 +16,15 @@ from .shared import generate_min_global_distance_edges
 
 
 class CustomData(TypedDict):
+    """Named piece of extra data attached to an optimization result."""
+
     name: str
     data: list | str | float | int | np.number
 
 
 class OptimizationResult(TypedDict):
+    """Result of an orbital/circuit optimization: energy, orbitals, optimized variables, circuit, molecule and optional custom data."""
+
     energy: float
     orbital_coefficients: NDArray | None
     orbital_transformation: NDArray | None
@@ -31,6 +37,25 @@ class OptimizationResult(TypedDict):
 def generate_initial_guess_from_edges(
     vertices: NDArray[np.float64], edges: list[tuple[int, int]]
 ) -> NDArray:
+    """Build the initial guess for the orbital transformation, mixing the two orbitals of each edge.
+
+    Parameters
+    ----------
+    vertices : numpy.ndarray
+        Atom coordinates; only their number (even) is used.
+    edges : list of tuple of int
+        Pairs of orbitals ``(i, j)``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Square matrix of size ``len(vertices)``: identity, with the 2x2 block ``[[1, 1], [-1, 1]]`` on each edge (not normalized).
+
+    Raises
+    ------
+    ValueError
+        If the number of vertices is odd.
+    """
     count = len(vertices)
     if count % 2 != 0:
         raise ValueError("count needs to be a multipe of two")
@@ -52,6 +77,38 @@ def run_spa_optimization(
     edges=None,
     **kwargs,
 ):
+    """Optimize a molecule with SPA, choosing the pairs of orbitals (edges) from the geometry.
+
+    Parameters
+    ----------
+    molecule : QuantumChemistryBase
+        Molecule to optimize; its native orbitals are used.
+    coordinates : numpy.ndarray
+        Coordinates of the atoms (one orbital pair per two atoms).
+    key_heuristic : callable, optional
+        Heuristic returning the edges, either ``f(coordinates)`` or ``f(num_atoms, coordinates)``.
+        Default is ``generate_min_global_distance_edges``.
+    num_atoms : int, optional
+        Number of atoms. Default is ``len(coordinates)``.
+    edges : list of tuple of int, optional
+        Edges to use directly, skipping the heuristic.
+
+    Returns
+    -------
+    OptimizationResult
+        Dictionary with ``energy``, ``orbital_coefficients``, ``orbital_transformation``,
+        ``variables``, ``circuit`` (the SPA ansatz), ``molecule`` and ``custom_data`` (None).
+
+    See Also
+    --------
+    sunrise.optimize_orbitals : Orbital optimization for a given circuit.
+    minimum_weight_perfect_performance : Exact pairing, a common choice of ``key_heuristic``.
+
+    Examples
+    --------
+    >>> result = run_spa_optimization(mol, coordinates=coordinates, key_heuristic=minimum_weight_perfect_performance)
+    >>> result["energy"]
+    """
     if num_atoms == None:
         num_atoms = len(coordinates)
     if edges == None:
