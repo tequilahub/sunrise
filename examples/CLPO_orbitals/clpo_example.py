@@ -1,5 +1,5 @@
 import sunrise as sn
-from sunrise.CLPO.orbital_transformation import (
+from sunrise.orbital_transformations.CLPO import (
     generate_CLPO_molecule_edges,
     generate_HAO_molecule,
 )
@@ -56,6 +56,6 @@ mol1, edges = generate_CLPO_molecule_edges(
 sn.plot_MO(mol1, filename="CLPO", orbital=[4, 5, 14, 15])
 print("Edges ", edges)
 
-import sunrise.CLPO.orbital_transformation as ot
+import sunrise.orbital_transformations.CLPO.orbital_transformation as ot
 
 print("Loading Sunrise from:", ot.__file__)

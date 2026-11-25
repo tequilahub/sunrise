@@ -6,7 +6,7 @@ from sunrise.molecules.qubit_base import INSTALLED_QCHEMISTRY_BACKENDS
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
 
 try:
-    from .pyscf_janpa_interace import (
+    from .pyscf_janpa_interface import (
         generate_CLPO_molecule_edges_pyscf,
         generate_CLPO_molecule_pyscf,
         generate_HAO_molecule_edges_pyscf,

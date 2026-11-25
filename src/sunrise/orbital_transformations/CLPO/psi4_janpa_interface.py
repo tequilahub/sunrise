@@ -14,7 +14,7 @@ from janpa.io.molden import MoldenFile
 from janpa.npa.npa import run_npa
 
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.utils.orbital_transformation import orthogonalize, transform
+from sunrise.orbital_transformations.loewdin import orthogonalize, transform
 
 try:
     import psi4

@@ -309,153 +309,36 @@ class HybridBase(qc_base):
     def use_native_orbitals(
         self, inplace=False, core: list | None = None, *args, **kwargs
     ):
-        r"""
+        """Return the molecule in the native (orthonormalized atomic) orbital basis.
+
+        For standard basis sets these are the orthonormalized Gaussian basis functions. The F/B selection is carried over to the new orbitals, so check that it is still what you want.
+
         Parameters
         ----------
-        inplace: update current molecule or return a new instance
-        core: list of the core orbitals indices (they will be frozen) on the current orbital schema. If not provided, they will be employed the
-        indices on the integral manager. Indices interpreted with respect to the complete basis. If core provided but not active, will be
-        chosen the ones with the lowest overlap on the Native schema.
-        active(in kwargs): list of the active orbital indices on the Native Orbs schema. If not provided they will be chosen the ones
-        with the lowest overlap with the core orbitals. For an example where it may necesary, check the H-He-H molecule
-        with pyscf; the fist HF orbital (at high interatomic distances) correspond to |\phi_0> = 1.|\chi_1>, being identical to the native \varphi_1>.
+        inplace : bool, optional
+            Update the current molecule instead of returning a new one. Default is False.
+        core : list of int, optional
+            Core orbitals (frozen, doubly occupied), see ``generate_loewdin_molecule``.
+        **kwargs
+            ``active`` and ``reference_orbitals``, see ``generate_loewdin_molecule``.
+
         Returns
         -------
-        New molecule in the native (orthonormalized) basis given
-        e.g. for standard basis sets the orbitals are orthonormalized Gaussian Basis Functions
+        HybridBase
+            Molecule in the native basis.
+
+        See Also
+        --------
+        sunrise.orbital_transformations.loewdin.generate_loewdin_molecule : The implementation.
+        use_orbs : Pick any of the orbital bases by name.
+
+        Examples
+        --------
+        >>> mol = sun.Molecule(geometry=geometry, basis_set="sto-3g").use_native_orbitals()
         """
-        from sunrise.utils.orbital_transformation import (
-            get_active,
-            get_core,
-            orthogonalize_active_space,
-        )
+        from sunrise.orbital_transformations.loewdin import generate_loewdin_molecule
 
-        c = self.integral_manager.orbital_coefficients.copy()
-        s = self.integral_manager.overlap_integrals.copy()
-        d = self.integral_manager.get_orthonormalized_orbital_coefficients().copy()
-
-        active = None
-        if not self.integral_manager.active_space_is_trivial() and core is None:
-            core = [
-                i.idx_total for i in self.integral_manager.orbitals if i.idx is None
-            ]
-        if "active" in kwargs:
-            active = kwargs["active"]
-            kwargs.pop("active")
-            if core is None:
-                core = get_core(c, d, s, active)
-        else:
-            if active is None:
-                if core is None:
-                    core = []
-                    active = [i for i in range(len(self.integral_manager.orbitals))]
-                else:
-                    if isinstance(core, int):
-                        core = [core]
-                    active = get_active(
-                        c,
-                        d,
-                        s,
-                        [
-                            i
-                            for i in range(len(self.integral_manager.orbitals))
-                            if i not in core
-                        ],
-                    )
-        assert len(active) + len(core) == len(self.integral_manager.orbitals)
-        if "reference_orbitals" in kwargs:
-            reference_orbitals = kwargs["reference_orbitals"]
-            kwargs.pop("reference_orbitals")
-            assert len(reference_orbitals) == self.parameters.total_n_electrons // 2, (
-                f"Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons // 2}, received {len(reference_orbitals)}"
-            )
-        else:
-            reference_orbitals = [
-                i.idx_total for i in self.integral_manager.reference_orbitals
-            ]
-        to_active = [
-            i for i in range(len(self.integral_manager.orbitals)) if i not in core
-        ]
-        to_active = {active[i]: to_active[i] for i in range(len(active))}
-        if len(core):
-            # keep the core orbitals at their own indices (`core` is passed as
-            # frozen_idx below) and only replace the active columns
-            c_combined = c.copy()
-            for act_idx in active:
-                c_combined[:, to_active[act_idx]] = d[:, act_idx]
-            coeff = orthogonalize_active_space(
-                c_combined, s, core, [*to_active.values()]
-            )
-            if (
-                not all(i == to_active[i] for i in to_active)
-                and len(self.BOS_MO)
-                and len(self.FER_MO)
-            ):
-                print("Orbital may be reordered, please double check F/B selection")
-            if len(active) == len(self.select):
-                new_select = {i: self.select[i] for i in range(len(active))}
-            else:
-                # do not shadow `s` (the overlap integrals) - still needed below
-                remaining = {i: self.select[i] for i in self.select if i not in core}
-                new_select = {
-                    i: remaining[[*remaining.keys()][i]] for i in range(len(remaining))
-                }
-            if inplace:
-                self.integral_manager = self.initialize_integral_manager(
-                    one_body_integrals=self.integral_manager.one_body_integrals,
-                    two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term,
-                    active_orbitals=[*to_active.values()],
-                    reference_orbitals=reference_orbitals,
-                    frozen_orbitals=core,
-                    orbital_coefficients=coeff,
-                    overlap_integrals=s,
-                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
-                )
-                self.update_select(new_select)
-                return self
-            else:
-                integral_manager = self.initialize_integral_manager(
-                    one_body_integrals=self.integral_manager.one_body_integrals,
-                    two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term,
-                    active_orbitals=[*to_active.values()],
-                    reference_orbitals=reference_orbitals,
-                    frozen_orbitals=core,
-                    orbital_coefficients=coeff,
-                    overlap_integrals=s,
-                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
-                )
-                parameters = copy.deepcopy(self.parameters)
-                result = HybridBase(
-                    parameters=parameters,
-                    integral_manager=integral_manager,
-                    transformation=self.transformation,
-                    select=new_select,
-                    two_qubit=self.two_qubit,
-                    condense=self.condense,
-                    integral_tresh=self.integral_tresh,
-                    active_orbitals=[*to_active.values()],
-                )
-                return result
-        # can not be an instance of a specific backend (otherwise we get inconsistencies with classical methods in the backend)
-        if inplace:
-            self.integral_manager.transform_to_native_orbitals()
-            return self
-        else:
-            integral_manager = copy.deepcopy(self.integral_manager)
-            integral_manager.transform_to_native_orbitals()
-            parameters = copy.deepcopy(self.parameters)
-            result = HybridBase(
-                parameters=parameters,
-                integral_manager=integral_manager,
-                transformation=self.transformation,
-                select=self.select,
-                two_qubit=self.two_qubit,
-                condense=self.condense,
-                integral_tresh=self.integral_tresh,
-            )
-            return result
+        return generate_loewdin_molecule(self, inplace=inplace, core=core, **kwargs)
 
     @property
     def select(self):
