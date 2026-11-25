@@ -175,10 +175,11 @@ def generate_CLPO_molecule_edges_pyscf(
         whose summed occupation is not close two 2e-. With use_active, orb_idx is the active space index
         (None if the orbital ended up in the frozen core), otherwise the index in the full CLPO list.
     """
-    if "edges" in kwargs:  # former name of atom_edges
+    legacy_edges = kwargs.pop("edges", None)  # former name of atom_edges
+    if legacy_edges is not None:
         if atom_edges is not None:
             raise TypeError("pass atom_edges or edges, not both")
-        atom_edges = kwargs.pop("edges")
+        atom_edges = legacy_edges
 
     pfmol = MoleculeToPyscf(mol)
     if "pyscf_object" in kwargs:

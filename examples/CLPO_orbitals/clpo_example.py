@@ -53,7 +53,7 @@ sn.plot_MO(mol3, filename="HAO", orbital=[2, 6, 10, 14])
 # One can also provide only part of the molecule, the rest will be autocomplete, similar as if
 # no edges are provided.
 mol1, edges = generate_CLPO_molecule_edges(
-    mol, edges=[(2, 3), (0, 1), (0, 1)], silent=True, use_active=True
+    mol, atom_edges=[(2, 3), (0, 1), (0, 1)], silent=True, use_active=True
 )
 sn.plot_MO(mol1, filename="CLPO", orbital=[4, 5, 14, 15])
 print("Edges ", edges)

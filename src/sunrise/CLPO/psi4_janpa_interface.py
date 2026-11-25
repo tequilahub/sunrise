@@ -195,10 +195,11 @@ def generate_CLPO_molecule_edges_psi4(
         whose summed occupation is not close two 2e-. With use_active, orb_idx is the active space index
         (None if the orbital ended up in the frozen core), otherwise the index in the full CLPO list.
     """
-    if "edges" in kwargs:  # former name of atom_edges
+    legacy_edges = kwargs.pop("edges", None)  # former name of atom_edges
+    if legacy_edges is not None:
         if atom_edges is not None:
             raise TypeError("pass atom_edges or edges, not both")
-        atom_edges = kwargs.pop("edges")
+        atom_edges = legacy_edges
 
     if not hasattr(mol, "ref_wfn"):  # its not a psi4 base
         psi4mol = psi4.geometry(mol.parameters.get_geometry_string(ghost="psi4"))
