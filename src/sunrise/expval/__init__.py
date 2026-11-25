@@ -1,3 +1,10 @@
+"""Fermionic expectation values, overlaps and brakets built from FCircuits.
+
+Entry points are Braket, ExpectationValue, Overlap and Fidelity, which return
+tequila Objectives that are evaluated by one of the fermionic backends
+("spex", "tcc", "fqe", "ffsim") or by the tequila qubit simulators.
+"""
+
 from __future__ import annotations
 
 from openfermion.ops.operators.fermion_operator import FermionOperator
@@ -48,37 +55,51 @@ INSTALLED_FERMIONIC_BACKENDS["tequila"] = TequilaBraket
 
 
 def show_available_modules():
+    """Print the names of the fermionic backends installed on this system."""
     print("Available Fermionic Modules:")
     for k in INSTALLED_FERMIONIC_BACKENDS:
         print(k)
 
 
 def show_supported_modules():
+    """Print the names of the supported fermionic backends."""
     print(SUPPORTED_FERMIONIC_BACKENDS)
 
 
 def pick_backend(
     backend: str | None = None, samples: int | None = None, noise=None, device=None
 ) -> str:
-    """
-    choose, or verify, a fermionic backend for the user.
+    """Choose or verify a fermionic backend.
+
+    Every fermionic backend supports sampling. Only the "tequila" backend, which simulates through the
+    tequila qubit simulators, supports noise and devices.
+
     Parameters
     ----------
-    backend: str, optional:
-        what backend to choose or verify. if None: choose for the user, following the order of SUPPORTED_FERMIONIC_BACKENDS.
-    samples: int, optional:
-        number of measurements, every fermionic backend supports sampling.
-    noise: str or NoiseModel, optional:
-        if not None, choose (verify) a backend which supports the specified noise.
-    device: optional:
-        if not None, choose (verify) a backend which supports the specified device.
-
-    Only the tequila backend, which simulates through the tequila qubit simulators, supports noise and devices.
+    backend : str, optional
+        Backend to verify. If None, the first installed backend in
+        ``SUPPORTED_FERMIONIC_BACKENDS`` is chosen, or "tequila" if noise or a device is given.
+    samples : int, optional
+        Number of measurements.
+    noise : str or NoiseModel, optional
+        If given, only the tequila backend is accepted.
+    device : optional
+        If given, only the tequila backend is accepted.
 
     Returns
     -------
-    str:
-        the name of the chosen (or verified) backend.
+    str
+        Name of the chosen (or verified) backend.
+
+    Raises
+    ------
+    TequilaException
+        If no backend is installed, the requested one is unknown, not installed,
+        or cannot handle noise or devices.
+
+    Examples
+    --------
+    >>> sun.pick_backend()  # name of the default fermionic backend
     """
 
     if len(INSTALLED_FERMIONIC_BACKENDS) == 0:
@@ -117,27 +138,37 @@ def Fidelity(
     *args,
     **kwargs,
 ) -> Objective:
-    """
+    r"""Create an Objective for the fidelity :math:`|\langle bra|ket \rangle|^2`.
 
-    Convenience initialization of an tq.Objective that corresponds to the fidelity |<bra|ket>|^2 between two quantum states
-    initialized by the circuits bra and ket
+    The fidelity is symmetric, so it does not matter which circuit is bra and
+    which is ket.
 
-    Notes
-    -----
-
-    note, that the fidelity is symmetric: F(a,b) = F(b,a)
-    so it does not matter what is bra and what is ket
-
-    Parameters:
+    Parameters
     ----------
-    bra: FCircuit
-    ket: FCircuit
-    mol: Sunrise Molecule
+    ket : FCircuit or tq.QCircuit
+        Circuit preparing the first state.
+    bra : FCircuit or tq.QCircuit
+        Circuit preparing the second state.
+    mol : QuantumChemistryBase, optional
+        Molecule providing the number of orbitals and electrons if they cannot be
+        inferred from the circuits.
+    *args, **kwargs
+        Passed on to ``Braket``.
 
-    Returns:
-    ----------
-    A tq.Objective that evaluated to the fidelity between the two states
+    Returns
+    -------
+    tq.Objective
+        Objective evaluating to the fidelity of the two states.
 
+    See Also
+    --------
+    Overlap : Overlap <bra|ket> itself.
+    Braket : General overlap, expectation value or transition element.
+
+    Examples
+    --------
+    >>> F = sun.Fidelity(ket=U1, bra=U2)  # |<U2|U1>|^2
+    >>> sun.simulate(F, variables=variables)
     """
     if isinstance(ket, QCircuit):
         # qubit circuits: the tequila fidelity (one expectation value instead of the complex braket)
@@ -159,20 +190,34 @@ def Overlap(
     *args,
     **kwargs,
 ) -> Objective:
-    """
+    r"""Create an Objective for the overlap :math:`\langle bra|ket \rangle`.
 
-    Function that calculates the overlap between two quantum states.
-
-    Parameters:
+    Parameters
     ----------
-    bra: FCircuit
-    ket: FCircuit
-    mol: Sunrise Molecule
+    ket : FCircuit or tq.QCircuit
+        Circuit preparing the ket state.
+    bra : FCircuit or tq.QCircuit
+        Circuit preparing the bra state.
+    mol : QuantumChemistryBase, optional
+        Molecule providing the number of orbitals and electrons if they cannot be
+        inferred from the circuits.
+    *args, **kwargs
+        Passed on to ``Braket``.
 
-    Returns:
-    ----------
-    A tq.Objective that evaluated to the overlap between the two states
+    Returns
+    -------
+    tq.Objective
+        Objective evaluating to the overlap of the two states.
 
+    See Also
+    --------
+    Braket : General overlap, expectation value or transition element.
+    Fidelity : Squared overlap |<bra|ket>|^2.
+
+    Examples
+    --------
+    >>> S = sun.Overlap(ket=U1, bra=U2)  # <U2|U1>
+    >>> sun.simulate(S, variables=variables)
     """
     return Braket(*args, ket=ket, bra=bra, operator="I", mol=mol, **kwargs)
 
@@ -185,30 +230,61 @@ def Braket(
     *args,
     **kwargs,
 ) -> Objective | QTensor:
-    """Function that allows to calculate different quantities
-       depending on the passed parameters:
-       1) If only ket is passed, returns the overlap with itself (1).
-       2) If ket and bra are passed, returns the overlap between the two states.
-       3) If ket and operator are passed, returns the expectation value of the operator for the given state.
-       4) If ket, bra and operator are passed, returns the transition element of the operator.
+    """Create an Objective for an overlap, expectation value or transition element.
 
-       returns an instance of tq.Objective, or a tq.QTensor of them for a list of operators
+    The result depends on which arguments are given:
 
-    Args:
-        ket (FCircuit): FCircuit corresponding to a state.
-        bra (FCircuit, optional): FCircuit corresponding to a second state.
-                                  Defaults to None.
-        operator (FermionOperator, optional): Operator of which we want to
-                                               calculate the transition element.
-                                               Defaults to None unless molecule provided, then the fermionic
-                                               Hamiltonian is taken as default.
-        mol: (QuantumChemistryBase, Optional) Sunrise Molecule to get the information (n electrons, integrals...)
-                                                if not enough data provided
+    - only ``ket``: overlap of the state with itself (1);
+    - ``ket`` and ``bra``: overlap between the two states;
+    - ``ket`` and ``operator``: expectation value of the operator;
+    - ``ket``, ``bra`` and ``operator``: transition element of the operator.
 
-        shape: (tuple, optional) shape of the QTensor for a list of operators, defaults to (len(operator),)
+    Tequila qubit circuits (``tq.QCircuit``) give the tequila objectives, with "H" the qubit
+    Hamiltonian of ``mol``.
 
-    Returns:
-        tq.Objective representing the BraKet
+    Parameters
+    ----------
+    ket : FCircuit or tq.QCircuit
+        Circuit preparing the ket state.
+    bra : FCircuit or tq.QCircuit, optional
+        Circuit preparing the bra state. If None, the ket is used as bra.
+    operator : str or FermionOperator or list of FermionOperator, optional
+        Operator to evaluate. A string is one of "H" (molecular Hamiltonian),
+        "HCB" (hard-core boson Hamiltonian), "I" (identity) or a tequila
+        Pauli string. If None, it defaults to "H" when ``mol`` is given. A list
+        returns a QTensor of Objectives, one per operator.
+    mol : QuantumChemistryBase, optional
+        Sunrise molecule providing the integrals and number of electrons.
+        May also be passed as the keyword ``molecule``.
+    shape : tuple, optional
+        Keyword argument, shape of the QTensor for a list of operators. Default is ``(len(operator),)``.
+    *args, **kwargs
+        Passed on to the backend braket.
+
+    Returns
+    -------
+    tq.Objective or tq.QTensor
+        Objective to be compiled or simulated with ``sunrise.simulate`` or
+        ``sunrise.minimize``.
+
+    Raises
+    ------
+    TequilaException
+        If both ``mol`` and ``molecule`` are passed.
+
+    See Also
+    --------
+    ExpectationValue : Expectation value <U|H|U> of a single circuit.
+    Overlap : Overlap <bra|ket> of two circuits, without an operator.
+    Fidelity : Squared overlap |<bra|ket>|^2 of two circuits.
+    sunrise.simulate : Evaluate the returned Objective for given variable values.
+
+    Examples
+    --------
+    >>> E = sun.Braket(ket=U, mol=mol)  # energy <U|H|U>
+    >>> H12 = sun.Braket(ket=U1, bra=U2, mol=mol)  # transition element <U2|H|U1>
+    >>> S12 = sun.Braket(ket=U1, bra=U2, mol=mol, operator="I")  # overlap <U2|U1>
+    >>> energy = sun.simulate(E, variables={"a": 0.1})
     """
     if "molecule" in kwargs:
         if mol is not None:
@@ -260,19 +336,34 @@ def ExpectationValue(
     *args,
     **kwargs,
 ) -> Objective:
-    """
-    Function that calculates the Expectation Value of an Hamiltonian operator for a given quantum states.
+    """Create an Objective for the expectation value of an operator in a state.
 
     Parameters
     ----------
-    U : FCircuit sunrise object, corresponding to the quantum state.
-
-    H : QubitHamiltonian tequila object
+    U : FCircuit or tq.QCircuit
+        Circuit preparing the state.
+    H : str or FermionOperator or list of FermionOperator, optional
+        Operator to evaluate, see ``Braket``. Default is "H", the molecular
+        Hamiltonian of ``mol``.
+    mol : QuantumChemistryBase, optional
+        Sunrise molecule providing the integrals and number of electrons.
+    *args, **kwargs
+        Passed on to ``Braket``.
 
     Returns
     -------
-    Tequila objectives to be simulated or compiled.
+    tq.Objective or list of tq.Objective
+        Objective to be compiled or simulated.
 
+    See Also
+    --------
+    Braket : General overlap, expectation value or transition element.
+    sunrise.minimize : Minimize the returned Objective.
+
+    Examples
+    --------
+    >>> E = sun.ExpectationValue(U=U, mol=mol)
+    >>> energy = sun.simulate(E, variables={"a": 0.1})
     """
     return Braket(*args, ket=U, operator=H, mol=mol, **kwargs)
 
@@ -285,19 +376,29 @@ def RealBraKet(
     *args,
     **kwargs,
 ):
-    """
-    Function that calculates the Reak part of a given Expectation Value of an Hamiltonian operator for a given quantum states.
+    """Create an Objective for a braket, see ``Braket``.
+
+    Kept for consistency with tequila. Fermionic states are real, so for an ``FCircuit``
+    this is the same as ``Braket``. For tequila qubit circuits with a ``bra``, the real part
+    of the tequila braket is taken.
 
     Parameters
     ----------
-    U : FCircuit sunrise object, corresponding to the quantum state.
-
-    H : QubitHamiltonian tequila object
+    ket : FCircuit or tq.QCircuit
+        Circuit preparing the ket state.
+    bra : FCircuit or tq.QCircuit, optional
+        Circuit preparing the bra state.
+    operator : str or FermionOperator or list of FermionOperator, optional
+        Operator to evaluate, see ``Braket``.
+    mol : QuantumChemistryBase, optional
+        Sunrise molecule providing the integrals and number of electrons.
+    *args, **kwargs
+        Passed on to ``Braket``.
 
     Returns
     -------
-    Tequila objectives to be simulated or compiled.
-
+    tq.Objective or list of tq.Objective
+        Objective to be compiled or simulated.
     """
     braket = Braket(*args, bra=bra, ket=ket, operator=operator, mol=mol, **kwargs)
     if isinstance(ket, QCircuit) and bra is not None:
@@ -314,20 +415,29 @@ def ImagBraKet(
     *args,
     **kwargs,
 ):
-    """
-    Function that calculates the Imaginary part of a given Expectation Value of an Hamiltonian operator for a given quantum states.
-    Defined just for consistency with Tequila, since chemistry molecules should be always real
+    """Create an Objective for the imaginary part of a braket.
+
+    Defined for consistency with tequila. Fermionic states are real, so for an ``FCircuit``
+    the result is zero. For tequila qubit circuits with a ``bra``, the imaginary part of the
+    tequila braket is taken.
 
     Parameters
     ----------
-    U : FCircuit sunrise object, corresponding to the quantum state.
-
-    H : QubitHamiltonian tequila object
+    ket : FCircuit or tq.QCircuit
+        Circuit preparing the ket state.
+    bra : FCircuit or tq.QCircuit, optional
+        Circuit preparing the bra state.
+    operator : str or FermionOperator or list of FermionOperator, optional
+        Operator to evaluate, see ``Braket``.
+    mol : QuantumChemistryBase, optional
+        Sunrise molecule providing the integrals and number of electrons.
+    *args, **kwargs
+        Passed on to ``Braket``.
 
     Returns
     -------
-    Tequila objectives to be simulated or compiled.
-
+    tq.Objective
+        Objective to be compiled or simulated.
     """
     if isinstance(ket, QCircuit) and bra is not None:
         # the complex tequila braket, its imaginary part taken like in tq.ImagBraKet (differentiable)
