@@ -31,7 +31,7 @@ HAS_PSI4 = "psi4" in INSTALLED_QCHEMISTRY_BACKENDS
 
 def generate_CLPO_molecule_edges(
     mol: QuantumChemistryBase,
-    edges: list[tuple[int]] | None = None,
+    atom_edges: list[tuple[int]] | None = None,
     thres: Number = 1.0e-12,
     silent: bool = True,
     use_active: bool = True,
@@ -46,9 +46,10 @@ def generate_CLPO_molecule_edges(
     Parameters:
     ----------
     mol (QuantumChemistryBase): any instance of sunrise molecule
-    edges (List[tuple[int]]): Optional. Custom molecule conectivity defined by the
-                            atom indices. I.e. for lineral H4. [(0,3),(1,2)] would
-                                return 2nd graph orbtials
+    atom_edges (List[tuple[int]]): Optional. Custom molecule connectivity as tuples of atom indices (not orbital
+                            indices). I.e. for linear H4, [(0,3),(1,2)] would return 2nd graph orbitals.
+                            If not given, it is determined by JANPA. The former keyword ``edges`` is still accepted
+                            in **kwargs.
     thres (Number): Orbital janpa orbital threshold, where orbitals are rotated to accomodate the electrond density
     silent (bool): Whether to print all janpa output
     use_active (bool): Whether to transform the janpa result orbitals to keep the active space defined by the input molecule
@@ -67,7 +68,7 @@ def generate_CLPO_molecule_edges(
     Returns:
     ----------
     Sunrise Molecule (same instance as input) with CLPO orbitals.
-    Edges already in SPA format.
+    Edges already in SPA format: orbital indices of the returned molecule (not atom indices).
     If return_aviso a list with content (mo_type, orb_idx, mo_occ) for those orbitals with dangerous occupation.
         mo_type 1 for lone pairs not doubly occupied and mo_type 2 for bonding/antibonding pairs (idx, idx+1)
         whose summed occupation is not close two 2e-. With use_active, orb_idx is the active space index
@@ -79,7 +80,7 @@ def generate_CLPO_molecule_edges(
     if backend.lower() == "psi4":
         return generate_CLPO_molecule_edges_psi4(
             mol=mol,
-            edges=edges,
+            atom_edges=atom_edges,
             thres=thres,
             silent=silent,
             use_active=use_active,
@@ -90,7 +91,7 @@ def generate_CLPO_molecule_edges(
     else:
         return generate_CLPO_molecule_edges_pyscf(
             mol=mol,
-            edges=edges,
+            atom_edges=atom_edges,
             thres=thres,
             silent=silent,
             use_active=use_active,
@@ -226,7 +227,7 @@ def generate_HAO_molecule_edges(
 
 def generate_CLPO_molecule(
     mol: QuantumChemistryBase,
-    edges: list | None = None,
+    atom_edges: list | None = None,
     thres: Number = 1.0e-12,
     silent: bool = True,
     use_active: bool = True,
@@ -241,9 +242,10 @@ def generate_CLPO_molecule(
     Parameters:
     ----------
     mol (QuantumChemistryBase): any instance of sunrise molecule
-    edges (List[tuple[int]]): Optional. Custom molecule conectivity defined by the
-                            atom indices. I.e. for lineral H4. [(0,3),(1,2)] would
-                                return 2nd graph orbtials
+    atom_edges (List[tuple[int]]): Optional. Custom molecule connectivity as tuples of atom indices (not orbital
+                            indices). I.e. for linear H4, [(0,3),(1,2)] would return 2nd graph orbitals.
+                            If not given, it is determined by JANPA. The former keyword ``edges`` is still accepted
+                            in **kwargs.
     thres (Number): Orbital janpa orbital threshold, where orbitals are rotated to accomodate the electrond density
     silent (bool): Whether to print all janpa output
     use_active (bool): Whether to transform the janpa result orbitals to keep the active space defined by the input molecule
@@ -272,7 +274,7 @@ def generate_CLPO_molecule(
     if backend.lower() == "psi4":
         return generate_CLPO_molecule_psi4(
             mol=mol,
-            edges=edges,
+            atom_edges=atom_edges,
             thres=thres,
             silent=silent,
             use_active=use_active,
@@ -283,7 +285,7 @@ def generate_CLPO_molecule(
     else:
         return generate_CLPO_molecule_pyscf(
             mol=mol,
-            edges=edges,
+            atom_edges=atom_edges,
             thres=thres,
             silent=silent,
             use_active=use_active,

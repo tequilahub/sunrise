@@ -1213,7 +1213,7 @@ class QuantumChemistryBase:
         self,
         use_active: bool = True,
         inplace: bool = False,
-        edges: list | None = None,
+        atom_edges: list | None = None,
         *args,
         **kwargs,
     ):
@@ -1225,14 +1225,19 @@ class QuantumChemistryBase:
         Parameters
         ----------
         inplace: update current molecule or return a new instance
-        edges: list of edges the CLPO algorithm is restricted to. If not given, they are determined by JANPA
+        atom_edges: list of tuples of atom indices (not orbital indices) the CLPO algorithm is restricted to. If not
+            given, they are determined by JANPA. The former keyword ``edges`` is still accepted in kwargs.
 
         Returns
         -------
         New molecule in the CLPO basis
         """
         clpo_mol, _ = self.use_CLPO_orbitals_and_edges(
-            *args, use_active=use_active, inplace=inplace, edges=edges, **kwargs
+            *args,
+            use_active=use_active,
+            inplace=inplace,
+            atom_edges=atom_edges,
+            **kwargs,
         )
         return clpo_mol
 
@@ -1240,7 +1245,7 @@ class QuantumChemistryBase:
         self,
         use_active: bool = True,
         inplace=False,
-        edges: list | None = None,
+        atom_edges: list | None = None,
         *args,
         **kwargs,
     ):
@@ -1250,12 +1255,12 @@ class QuantumChemistryBase:
 
         Returns
         -------
-        Tuple of the molecule in the CLPO basis and the corresponding list of SPA edges
+        Tuple of the molecule in the CLPO basis and the corresponding list of SPA edges (orbital indices, not atom indices)
         """
         from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
 
         clpo_mol, clpo_edges = generate_CLPO_molecule_edges(
-            self, edges=edges, use_active=use_active, silent=True, **kwargs
+            self, atom_edges=atom_edges, use_active=use_active, silent=True, **kwargs
         )
 
         if inplace:
