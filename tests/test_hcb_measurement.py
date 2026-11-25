@@ -110,6 +110,11 @@ def test_hcb_measurement_linearH4_scenario2(backend):
         test_energy += tq.simulate(E, variables=variables)
     assert np.isclose(test_energy, energy, 10**-3)
 
+    # Test test_energy + residual expectation value = fci
+    wfn = tq.simulate(U, variables=variables)
+    H_res = result[1].make_hamiltonian()
+    assert np.isclose(test_energy + wfn.inner(H_res * wfn).real, energy, 10**-7)
+
 
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_hcb_measurement_linearH4_scenario1(backend):
@@ -153,3 +158,7 @@ def test_hcb_measurement_linearH4_scenario1(backend):
         E = tq.ExpectationValue(H=molecule.make_hamiltonian(), U=rotators[i])
         test_energy += tq.simulate(E, initial_state=wfn)
     assert np.isclose(test_energy, energy, 10**-3)
+
+    # Test test_energy + residual expectation value = fci
+    H_res = result[1].make_hamiltonian()
+    assert np.isclose(test_energy + wfn.inner(H_res * wfn).real, energy, 10**-7)

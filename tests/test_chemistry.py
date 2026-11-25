@@ -87,7 +87,7 @@ def test_base(trafo):
     H = molecule.make_hamiltonian()
     eigvals = numpy.linalg.eigvalsh(H.to_matrix())
     assert numpy.isclose(eigvals[0], -2.87016214e00)
-    if "trafo" in standard_trafos:  # others change spectrum outside of the groundstate
+    if trafo in standard_trafos:  # others change spectrum outside of the groundstate
         assert numpy.isclose(eigvals[-1], 7.10921141e-01)
         assert len(eigvals) == 16
 
@@ -454,7 +454,7 @@ def test_upccgsd(geometry, trafo):
         geometry=geometry, units="angstrom", basis_set="sto-3g", transformation=trafo
     )
     if not molecule.supports_ucc():
-        return
+        pytest.skip(f"{trafo} has no UCC support")
     energy = do_test_upccgsd(molecule)
     fci = molecule.compute_energy("fci")
     assert numpy.isclose(fci, energy, atol=1.0e-3)
@@ -1356,13 +1356,12 @@ def test_spa_consistency(geometry, name, optimize, transformation):
         transformation=transformation,
     ).use_native_orbitals()
 
-    # test compares HCB and non-HCB SPA implementations
-    # conversion needs to be implemented for comparisson
-    # if not, HCB is not used in  circuit optimization anyways
+    # test compares HCB and non-HCB SPA implementations, the HCB one needs hcb_to_me
+    # (without it, HCB is not used in circuit optimization anyway)
     try:
         mol.transformation.hcb_to_me()
     except tq.TequilaException:
-        return
+        pytest.skip(f"{transformation} has no hcb_to_me")
 
     # doesn't need to make physical sense for the test
     edges = []
@@ -1388,6 +1387,33 @@ def test_spa_consistency(geometry, name, optimize, transformation):
         print(UX)
 
     assert numpy.isclose(F, 1.0)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+@pytest.mark.parametrize(
+    "transformation", ["BravyiKitaevTree", "ReorderedBravyiKitaevTree"]
+)
+def test_bravyi_kitaev_tree_me_to_jw(transformation):
+    # me_to_jw turns the Hamiltonian into the Jordan-Wigner one (6 spin orbitals, not a power of 2)
+    geometry = "H 0.0 0.0 0.0\nH 0.0 0.0 1.5\nH 0.0 0.0 3.0"
+    mol, jw = [
+        sun.Molecule(
+            geometry=geometry,
+            basis_set="sto-3g",
+            backend="pyscf",
+            charge=1,
+            transformation=t,
+        )
+        for t in [
+            transformation,
+            transformation.replace("BravyiKitaevTree", "JordanWigner"),
+        ]
+    ]
+    U = mol.transformation.me_to_jw()
+    U.n_qubits = 2 * mol.n_orbitals
+    U = U.to_matrix()
+    H, H_jw = mol.make_hamiltonian().to_matrix(), jw.make_hamiltonian().to_matrix()
+    assert numpy.allclose(U @ H @ U.conj().T, H_jw)
 
 
 @pytest.mark.skipif(
@@ -1662,7 +1688,7 @@ def test_clpo_pyscf_ao_order():
     # cc-pVDZ has d shells, whose MOLDEN order (used by janpa) differs from the pyscf one
     from pyscf import scf
 
-    from sunrise.CLPO.pyscf_janpa_interace import _run_janpa_pipeline
+    from sunrise.CLPO.pyscf_janpa_interface import _run_janpa_pipeline
 
     mol = sun.Molecule(
         geometry="O 0.0 0.0 0.0\nH 0.757 0.586 0.0\nH -0.757 0.586 0.0",
@@ -1671,10 +1697,32 @@ def test_clpo_pyscf_ao_order():
     )
     pfmol = sun.MoleculeToPyscf(mol)
     mf = scf.RHF(pfmol).run()
-    aho, clpo, _, _ = _run_janpa_pipeline(pfmol, mf.mo_coeff, mf.mo_occ, mf.mo_energy)
+    aho, clpo, _, _, _ = _run_janpa_pipeline(
+        pfmol, mf.mo_coeff, mf.mo_occ, mf.mo_energy
+    )
     s = pfmol.intor("int1e_ovlp")
     assert numpy.allclose(aho.T @ s @ aho, numpy.eye(pfmol.nao), atol=1.0e-8)
     assert numpy.allclose(clpo.T @ s @ clpo, numpy.eye(pfmol.nao), atol=1.0e-8)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_hao_molecule_edges_pyscf():
+    # the bonds of BeH2 are (Be hybrid, H), the HAOs are the two hybrids followed by the two H s orbitals
+    mol = sun.Molecule(
+        geometry="Be 0 0 0\nH 0 0 1.326\nH 0 0 -1.326",
+        basis_set="sto-3g",
+        backend="pyscf",
+        active_orbitals=[1, 2, 5, 6],
+    )
+    hao, edges = sun.CLPO.generate_HAO_molecule_edges(mol)
+    assert edges == [(0, 2), (1, 3)]
+    ref = sun.CLPO.generate_HAO_molecule(mol)
+    assert numpy.allclose(
+        hao.integral_manager.orbital_coefficients,
+        ref.integral_manager.orbital_coefficients,
+    )
+    _, edges = mol.use_HAO_orbitals_and_edges()
+    assert edges == [(0, 2), (1, 3)]
 
 
 @pytest.mark.skipif(
@@ -1692,6 +1740,45 @@ def test_clpo_psi4():
         _, energy = sun.SPAFP.spa_solve_graph(mol, edges)
         h.append(energy)
     assert numpy.allclose(h[0], h[1], atol=1.0e-5)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_meao_orbitals():
+    # the MEAOs only rotate the active orbitals, and the symmetry operations map them onto each other
+    pytest.importorskip("MEAO.meao")
+    from sunrise.symmetry_adaptation import FockSpaceState, IrrepAssigner
+
+    mol = sun.Molecule(
+        geometry="O 0.0 0.0 0.117790\nH 0.0 0.755453 -0.471161\nH 0.0 -0.755453 -0.471161",
+        basis_set="sto-3g",
+        backend="pyscf",
+        frozen_core=True,
+    )
+    meao_mol = mol.use_MEAO_orbitals()
+    c = meao_mol.integral_manager.orbital_coefficients
+    s = meao_mol.integral_manager.overlap_integrals
+    assert numpy.allclose(c.T @ s @ c, numpy.eye(c.shape[1]), atol=1.0e-8)
+    assert numpy.isclose(meao_mol.compute_energy("fci"), mol.compute_energy("fci"))
+    states = FockSpaceState.non_ionic_states(
+        meao_mol, IrrepAssigner(meao_mol, "projection")
+    )
+    assert "A1" in {state.irrep for state in states}
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_meao_orbitals_complement():
+    # beyond the minimal basis the MEAOs are completed by their orthonormal complement
+    pytest.importorskip("MEAO.meao")
+    mol = sun.Molecule(
+        geometry="O 0.0 0.0 0.117790\nH 0.0 0.755453 -0.471161\nH 0.0 -0.755453 -0.471161",
+        basis_set="6-31g",
+        backend="pyscf",
+    )
+    mol.use_MEAO_orbitals(inplace=True)
+    c = mol.integral_manager.orbital_coefficients
+    s = mol.integral_manager.overlap_integrals
+    assert c.shape == (13, 13)
+    assert numpy.allclose(c.T @ s @ c, numpy.eye(13), atol=1.0e-8)
 
 
 def save_and_load(mol, tmp_path, monkeypatch):
@@ -1858,3 +1945,38 @@ def test_save_load_xyz_geometry(tmp_path, monkeypatch):
 
     assert loaded.parameters.name == "h4"
     assert loaded.make_hamiltonian() == H
+
+
+@pytest.mark.skipif(
+    condition=not HAS_PSI4 or not HAS_PYSCF, reason="you don't have psi4 and pyscf"
+)
+def test_basis_convention(tmp_path):
+    # psi4 and pyscf order the AOs differently, the backend labels its orbital coefficients
+    geometry = "H 0.0 0.0 0.0\nLi 0.0 0.0 1.6"
+    for backend in ("psi4", "pyscf"):
+        mol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend=backend)
+        assert mol.integral_manager._basis_convention == backend
+        mol.save(tmp_path / "mol.h5")
+        loaded = sun.load_molecule(tmp_path / "mol.h5")
+        assert loaded.integral_manager._basis_convention == backend
+    # own integrals are labelled by the user
+    integrals = {
+        k: getattr(mol.integral_manager, k)
+        for k in ("one_body_integrals", "two_body_integrals", "overlap_integrals")
+    }
+    mol = sun.Molecule(
+        geometry=geometry,
+        basis_set="sto-3g",
+        backend="base",
+        basis_convention="custom",
+        **integrals,
+    )
+    assert mol.integral_manager._basis_convention == "custom"
+    with pytest.raises(tq.TequilaException):
+        sun.Molecule(
+            geometry=geometry,
+            basis_set="sto-3g",
+            backend="base",
+            basis_convention="pyscff",
+            **integrals,
+        )
