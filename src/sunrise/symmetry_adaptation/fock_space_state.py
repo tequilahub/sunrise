@@ -31,7 +31,8 @@ class FockSpaceState:
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals.
+        Qubit, fermionic or hybrid molecule defining the orbitals. The bitstrings do not depend on its
+        fermion-to-qubit encoding.
     wavefunction : str or tequila.QubitWaveFunction
         State to describe. A string is read as a bitstring, e.g. ``"1100"``.
     assigner : IrrepAssignerBase
@@ -117,7 +118,7 @@ class FockSpaceState:
 
     @cached_property
     def m_s(self) -> numpy.float64:
-        r"""float : spin projection :math:`\langle :math:`S_z` \rangle` of the state (as given at construction, or computed and rounded to 10 decimals)."""
+        r"""float : spin projection :math:`\langle S_z \rangle` of the state (as given at construction, or computed and rounded to 10 decimals)."""
         if self._m_s is not None:
             return self._m_s
         # the bitstrings are spin-orbital occupations (up, down, ...), i.e. Jordan-Wigner for every molecule nature

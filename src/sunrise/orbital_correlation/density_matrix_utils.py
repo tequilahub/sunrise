@@ -19,7 +19,7 @@ class Input_State:
 
     Parameters
     ----------
-    circuit : tequila.QCircuit, optional
+    circuit : tequila.QCircuit or FCircuit, optional
     variables : tequila.objective.objective.Variables, optional
     wavefunction : tequila.QubitWaveFunction, optional
 
@@ -76,8 +76,9 @@ def compute_one_orb_rdm(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -95,6 +96,15 @@ def compute_one_orb_rdm(
     ------
     ValueError
         If neither a circuit nor a wavefunction is given.
+    TequilaException
+        If an orbital is a hard-core boson orbital (``select`` 'B') of a hybrid molecule and
+        ``circuit`` is not an ``FCircuit``.
+
+    Notes
+    -----
+    With an ``FCircuit`` the fermionic operators are measured directly on ``mol.fermionic_backend``
+    (the default fermionic backend if it is not set). A wavefunction without a circuit is measured
+    through the qubit encoding, so it does not work with fermionic molecules.
 
     Examples
     --------
@@ -221,8 +231,9 @@ def compute_two_orb_rdm(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -246,6 +257,15 @@ def compute_two_orb_rdm(
     ------
     ValueError
         If neither a circuit nor a wavefunction is given.
+    TequilaException
+        If an orbital is a hard-core boson orbital (``select`` 'B') of a hybrid molecule and
+        ``circuit`` is not an ``FCircuit``.
+
+    Notes
+    -----
+    With an ``FCircuit`` the fermionic operators are measured directly on ``mol.fermionic_backend``
+    (the default fermionic backend if it is not set). A wavefunction without a circuit is measured
+    through the qubit encoding, so it does not work with fermionic molecules.
 
     Examples
     --------
@@ -414,8 +434,9 @@ def compute_one_spin_rdm(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -435,6 +456,15 @@ def compute_one_spin_rdm(
     ------
     ValueError
         If ``spin`` is not "up" or "down", or if neither a circuit nor a wavefunction is given.
+    TequilaException
+        If an orbital is a hard-core boson orbital (``select`` 'B') of a hybrid molecule and
+        ``circuit`` is not an ``FCircuit``.
+
+    Notes
+    -----
+    With an ``FCircuit`` the fermionic operators are measured directly on ``mol.fermionic_backend``
+    (the default fermionic backend if it is not set). A wavefunction without a circuit is measured
+    through the qubit encoding, so it does not work with fermionic molecules.
     """
 
     # Initialize the input state in a wrapper class

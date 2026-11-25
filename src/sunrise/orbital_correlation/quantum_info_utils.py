@@ -118,8 +118,9 @@ def mutual_info_simple(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -177,8 +178,9 @@ def one_orb_mutual_info(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -255,8 +257,8 @@ def total_mutual_info(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals.
-    circuit : tequila.QCircuit
+        Qubit, fermionic or hybrid molecule defining the orbitals.
+    circuit : tequila.QCircuit or FCircuit
         Circuit preparing the state.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -306,8 +308,9 @@ def one_orb_entanglement(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -660,8 +663,9 @@ def two_orbs_entanglement(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -772,8 +776,9 @@ def two_orbs_quantum_correlation(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -827,8 +832,9 @@ def two_orbs_classical_correlation(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -889,8 +895,9 @@ def two_orbs_mutual_info(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
