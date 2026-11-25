@@ -39,7 +39,8 @@ class ObjectiveFactoryBase:
     Parameters
     ----------
     H : FermionOperator or QubitHamiltonian or str, optional
-        Hamiltonian. For fermionic molecules the strings ``"H"`` (molecular Hamiltonian)
+        Hamiltonian: a FermionOperator for fermionic molecules, a QubitHamiltonian for qubit and
+        hybrid molecules. For fermionic molecules the strings ``"H"`` (molecular Hamiltonian)
         and ``"HCB"`` (hard-core boson Hamiltonian) are accepted.
     Upre : QCircuit or FCircuit, optional
         Circuit applied before ``U`` (typically the reference state). Default is empty.
@@ -783,7 +784,8 @@ class ObjectiveFactorySequentialExcitedState(ObjectiveFactoryBase):
     Parameters
     ----------
     H : FermionOperator or QubitHamiltonian or str
-        Hamiltonian.
+        Hamiltonian: a FermionOperator for fermionic molecules, a QubitHamiltonian for qubit and
+        hybrid molecules.
     circuits : list
         Adaptive circuits of the previously optimized states (without ``Upre``/``Upost``).
     factors : list of float

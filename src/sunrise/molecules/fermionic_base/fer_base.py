@@ -832,12 +832,12 @@ class FermionicBase(QuantumChemistryBase):
         return fop
 
     def make_hardcore_boson_hamiltonian(self) -> OFFermionOperator | str:
-        """Return the string ``"H"``; only a placeholder for the HCB optimization.
+        """Return the string ``"HCB"``; only a placeholder for the HCB optimization.
 
         In the hard-core boson orbital optimization it is faster to use the fermionic Hamiltonian
         with pseudo hard-core boson states and circuits.
         """
-        return "H"
+        return "HCB"
 
     def prepare_reference(self, state=None, *args, **kwargs) -> FCircuit:
         """Return the circuit preparing the reference (Hartree-Fock) state.
@@ -1570,8 +1570,10 @@ class FermionicBase(QuantumChemistryBase):
             Index ordering of the 2-RDM. Default is "dirac", the physics ordering
             ``rdm2[p, q, r, s] = <psi|a^p a^q a_s a_r|psi>``; "chem" (Mulliken) and "openfermion" are
             also possible.
-        rdm_trafo : QubitHamiltonian, optional
-            Transformation ``T`` applied to the operators, ``a^dagger_i a_j -> T^dagger a^dagger_i a_j T``. Default is identity.
+        rdm_trafo : optional
+            Transformation ``T`` applied to the operators, ``a^dagger_i a_j -> T^dagger a^dagger_i a_j T``.
+            Currently not supported for fermionic molecules (it fails for both FermionOperators and
+            QubitHamiltonians). Default is identity.
         evaluate : bool, optional
             If True (default) the expectation values are evaluated directly; if False the RDMs are returned as tq.QTensor.
         backend : str, optional
@@ -1637,7 +1639,7 @@ class FermionicBase(QuantumChemistryBase):
             return 0.5 * (of_operator + hermitian_conjugated(of_operator))
 
         def _build_1bdy_operators_spinful() -> list:
-            """Return spinful one-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinful one-body operators as a symmetry-reduced list of FermionOperators."""
             # Exploit symmetry pq = qp
             ops = []
             for p in range(n_SOs):
@@ -1649,7 +1651,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_2bdy_operators_spinful() -> list:
-            """Return spinful two-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinful two-body operators as a symmetry-reduced list of FermionOperators."""
             # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
             #                and      =  rspq
             ops = []
@@ -1665,7 +1667,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_1bdy_operators_spinfree() -> list:
-            """Return spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinfree one-body operators as a symmetry-reduced list of FermionOperators."""
             # Exploit symmetry pq = qp (not changed by spin-summation)
             ops = []
             for p in range(n_MOs):
@@ -1681,7 +1683,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_2bdy_operators_spinfree() -> list:
-            """Return spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinfree two-body operators as a symmetry-reduced list of FermionOperators."""
             # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
             #                and      = rspq
             ops = []
@@ -1779,7 +1781,7 @@ class FermionicBase(QuantumChemistryBase):
             return rdm2
 
         def _build_1bdy_hcb_operators_spinfree() -> list:
-            """Return spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinfree hard-core boson one-body operators as a symmetry-reduced list of FermionOperators."""
             # Exploit symmetry pq = qp (not changed by spin-summation)
             ops = []
             for p in range(n_MOs):
@@ -1797,7 +1799,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_1bdy_hcb_operators_spinful() -> list:
-            """Return spinful one-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinful hard-core boson one-body operators as a symmetry-reduced list of FermionOperators."""
             # Exploit symmetry pq = qp
             ops = []
             for p in range(n_SOs):
@@ -1811,7 +1813,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_2bdy_hcb_operators_spinful() -> list:
-            """Return spinful two-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinful hard-core boson two-body operators as a symmetry-reduced list of FermionOperators."""
             # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
             #                and      =  rspq
             ops = []
@@ -1854,7 +1856,7 @@ class FermionicBase(QuantumChemistryBase):
             return ops
 
         def _build_2bdy_hcb_operators_spinfree() -> list:
-            """Return spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinfree hard-core boson two-body operators as a symmetry-reduced list of FermionOperators."""
             # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
             #                and      = rspq
             ops = []
@@ -1908,7 +1910,7 @@ class FermionicBase(QuantumChemistryBase):
                 qops += _build_1bdy_operators_spinful() if get_rdm1 else []
                 qops += _build_2bdy_operators_spinful() if get_rdm2 else []
 
-        # Transform operator lists to QubitHamiltonians
+        # Keep the Hermitian part of each FermionOperator
         qops = [_get_qop_hermitian(op) for op in qops]
         # Compute expected values
         rdm1 = None
@@ -1923,6 +1925,7 @@ class FermionicBase(QuantumChemistryBase):
                     variables=variables,
                 )
             else:
+                # TODO: rdm_trafo fails here, the operators are FermionOperators (no .dagger(), no product with QubitHamiltonian)
                 qops = [
                     rdm_trafo.dagger() * qops[i] * rdm_trafo for i in range(len(qops))
                 ]

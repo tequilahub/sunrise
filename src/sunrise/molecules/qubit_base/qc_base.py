@@ -3658,7 +3658,7 @@ class QuantumChemistryBase:
                 )
 
         def _build_1bdy_operators_spinful() -> list:
-            """Return spinful one-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinful one-body operators as a symmetry-reduced list of FermionOperators, mapped to qubit operators by ``_get_qop_hermitian``."""
             # Exploit symmetry pq = qp
             ops = []
             for p in range(n_SOs):
@@ -3670,7 +3670,7 @@ class QuantumChemistryBase:
             return ops
 
         def _build_2bdy_operators_spinful() -> list:
-            """Return spinful two-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinful two-body operators as a symmetry-reduced list of FermionOperators, mapped to qubit operators by ``_get_qop_hermitian``."""
             # Exploit symmetries pqrs = -pqsr = -qprs = qpsr
             #                and      =  rspq
             ops = []
@@ -3686,7 +3686,7 @@ class QuantumChemistryBase:
             return ops
 
         def _build_1bdy_operators_spinfree() -> list:
-            """Return spinfree one-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinfree one-body operators as a symmetry-reduced list of FermionOperators, mapped to qubit operators by ``_get_qop_hermitian``."""
             # Exploit symmetry pq = qp (not changed by spin-summation)
             ops = []
             for p in range(n_MOs):
@@ -3702,7 +3702,7 @@ class QuantumChemistryBase:
             return ops
 
         def _build_2bdy_operators_spinfree() -> list:
-            """Return spinfree two-body operators as a symmetry-reduced list of QubitHamiltonians."""
+            """Return spinfree two-body operators as a symmetry-reduced list of FermionOperators, mapped to qubit operators by ``_get_qop_hermitian``."""
             # Exploit symmetries pqrs = qpsr (due to spin summation, '-pqsr = -qprs' drops out)
             #                and      = rspq
             ops = []
