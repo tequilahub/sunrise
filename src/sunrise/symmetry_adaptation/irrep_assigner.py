@@ -1,3 +1,5 @@
+"""Irrep assigners: objects that assign a point-group irreducible representation to a Fock-space state."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -15,20 +17,49 @@ if TYPE_CHECKING:
 
 @dataclass
 class IrrepAssignerBase(ABC):
+    """Abstract base class of the irrep assigners.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule whose point group defines the irreps.
+    """
+
     mol: QuantumChemistryBase
 
     @abstractmethod
     def get_irrep(self, state) -> str:
-        pass
+        """Return the irrep label of a state.
+
+        Parameters
+        ----------
+        state : FockSpaceState
+            State to classify.
+
+        Returns
+        -------
+        str or None
+            Irrep name, None if it cannot be determined.
+        """
 
 
 class ProjectionIrrepAssigner(IrrepAssignerBase):
-    """
-    An irrep assigner that determines the irreducible representation of a state by directly
-    comparing the effect of the symmetry operations on the state to the character table.
-    The operations act on the orbitals of the molecule (see mol.mo_representation), which can be any orbitals
-    the operations map onto themselves as a set, e.g. canonical, native or hybrid orbitals. The state is
-    labelled with the irrep whose projector keeps it whole, otherwise (a mix of irreps) the irrep is None.
+    r"""Irrep assigner that applies the symmetry operations to the state and compares with the character table.
+
+    The operations act on the orbitals of the molecule (see ``mol.mo_representation``), which can be
+    any orbitals the operations map onto themselves as a set, e.g. canonical, native or hybrid
+    orbitals. The state is labelled with the irrep :math:`\Gamma` whose projector keeps it whole,
+
+    .. math::
+        \langle\psi|P_\Gamma|\psi\rangle = 1, \qquad
+        P_\Gamma = \frac{d_\Gamma}{|G|} \sum_O \chi_\Gamma(O)^* \, O,
+
+    otherwise (a mix of irreps) the irrep is None.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule whose ``point_group`` defines the irreps.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
@@ -39,9 +70,22 @@ class ProjectionIrrepAssigner(IrrepAssignerBase):
 
     @property
     def representation(self) -> PointGroupRepresentation:
+        """PointGroupRepresentation : the symmetry operations as orbital transformations, see ``mol.mo_representation``."""
         return self._representation
 
     def get_irrep(self, state) -> str | None:
+        """Return the irrep whose projector keeps ``state`` whole.
+
+        Parameters
+        ----------
+        state : FockSpaceState
+            State to classify, possibly a superposition.
+
+        Returns
+        -------
+        str or None
+            Irrep name, None if the state is a mix of irreps.
+        """
         expectation_values = self.representation.character_vector(state.wavefunction)
         table = self.pg.character_table
         for irrep in table.irreps:
@@ -58,10 +102,16 @@ class ProjectionIrrepAssigner(IrrepAssignerBase):
 
 
 class PySCFIrrepAssigner(IrrepAssignerBase):
-    """
-    An irrep assigner that uses PySCF to determine the irreducible representation of a state in the canonical molecular orbital basis.
-    PySCF only labels orbitals in Abelian groups, so the states are labelled in mol.abelian_point_group,
-    e.g. in D2h for a molecule with D4h symmetry.
+    """Irrep assigner based on the canonical molecular orbitals labelled by PySCF.
+
+    PySCF only labels orbitals in Abelian groups, so the states are labelled in
+    ``mol.abelian_point_group``, e.g. in D2h for a molecule with D4h symmetry. The irrep of a
+    state is the product of the irreps of the occupied orbitals.
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule built with the PySCF backend.
     """
 
     def __init__(self, mol: QuantumChemistryBase):
@@ -71,9 +121,28 @@ class PySCFIrrepAssigner(IrrepAssignerBase):
 
     @property
     def mol_irreps(self) -> list[str]:
+        """list of str : irrep label of each molecular orbital."""
         return self._mol_irreps
 
     def get_irrep(self, state) -> str | None:
+        """Return the irrep of ``state`` as the product of the irreps of its occupied orbitals.
+
+        Parameters
+        ----------
+        state : FockSpaceState
+            State with integer orbital occupations.
+
+        Returns
+        -------
+        str or None
+            Irrep name, None if the character product matches no irrep.
+
+        Raises
+        ------
+        ValueError
+            If an orbital occupation is fractional, e.g. for a superposition of different occupation
+            sectors. Use the ``"projection"`` assigner in that case.
+        """
         # Canonical irrep assignment only works for states with integer occupations
         # (single determinants or superpositions within the same occupation sector).
         # Fractional occupations indicate a superposition across sectors, which
@@ -106,30 +175,43 @@ INSTALLED_IRREP_ASSIGNERS = {
 
 
 def show_available_modules():
+    """Print the names of the irrep assigners installed on this system."""
     print("Available Irrep Assigners")
     for k in INSTALLED_IRREP_ASSIGNERS:
         print(k)
 
 
 def show_supported_modules():
+    """Print the names of the supported irrep assigners."""
     print(SUPPORTED_IRREP_ASSIGNERS)
 
 
 def IrrepAssigner(
     mol: QuantumChemistryBase, method: str = "pyscf", *args, **kwargs
 ) -> IrrepAssignerBase:
-    r"""
-    Returns the irrep assigner that assigns irreducible representations to the FockSpaceStates of a molecule.
+    """Create the irrep assigner that assigns irreducible representations to the FockSpaceStates of a molecule.
 
     Parameters
     ----------
-    mol
-        The molecule, its point group is mol.point_group.
-    method
-        "pyscf" (PySCFIrrepAssigner): from the irreps PySCF assigns to the canonical orbitals, in
-        mol.abelian_point_group, for states with integer occupations.
-        "projection" (ProjectionIrrepAssigner): by applying the symmetry operations to the state, in mol.point_group, for
-        any orbitals the operations map onto themselves (e.g. native or hybrid orbitals).
+    mol : QuantumChemistryBase
+        Molecule whose point group defines the irreps.
+    method : str {"pyscf", "projection"}
+        ``"pyscf"`` (``PySCFIrrepAssigner``) uses the irreps PySCF assigns to the canonical
+        orbitals, in ``mol.abelian_point_group``, for states with integer occupations.
+        ``"projection"`` (``ProjectionIrrepAssigner``) applies the symmetry operations to the
+        state, in ``mol.point_group``, for any orbitals the operations map onto themselves (e.g.
+        native or hybrid orbitals).
+    *args, **kwargs
+        Passed to the assigner class.
+
+    Returns
+    -------
+    IrrepAssignerBase
+
+    Examples
+    --------
+    >>> assigner = IrrepAssigner(mol, "pyscf")
+    >>> states = FockSpaceState.non_ionic_states(mol, assigner)
     """
     # any kwargs should be managed inside each class
     return INSTALLED_IRREP_ASSIGNERS[method.lower()](*args, mol=mol, **kwargs)

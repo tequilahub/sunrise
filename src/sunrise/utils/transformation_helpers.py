@@ -1,3 +1,5 @@
+"""Fermionic swap circuits (``FermionicSWAP``) for rearranging orbitals."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -13,26 +15,46 @@ if TYPE_CHECKING:
 # This is really inefficient but will work for now
 @dataclass
 class FermionicSWAP:
+    """Build fermionic swap circuits for a molecule with qubits ordered as [up0, down0, up1, down1, ...].
+
+    Parameters
+    ----------
+    mol : QuantumChemistryBase
+        Molecule the circuits are built for.
+
+    Examples
+    --------
+    >>> fswap = FermionicSWAP(mol)
+    >>> U = fswap.f_swap(0, 3)
+    """
+
     mol: QuantumChemistryBase
 
     def f(self, i: int, j: int) -> tequila.QCircuit:
-        """
-        This is a helper function for fermionic_swap.
+        """Return the exact fermionic swap of two adjacent qubit modes, the building block of ``f_swap``.
 
-        The fermionic swap (SWAP followed by CZ) of the two adjacent qubit
-        modes (i, j), built from 2 CNOTs:
-                |00> -> |00>, |01> -> |10>, |10> -> |01>, |11> -> -|11>
+        The gate is a SWAP followed by a CZ, built from 2 CNOTs (and 2 Hadamards)::
+
+            |00> -> |00>, |01> -> |10>, |10> -> |01>, |11> -> -|11>
 
         Parameters
         ----------
         i : int
-                First qubit index.
+            First qubit index.
         j : int
-                Second qubit index.
+            Second qubit index.
 
-        Author
-        ------
-        Francisco Javier Del Arco Santos
+        Returns
+        -------
+        tq.QCircuit
+
+        Notes
+        -----
+        Written by Francisco Javier Del Arco Santos.
+
+        Examples
+        --------
+        >>> U = FermionicSWAP(mol).f(0, 1)
         """
         return (
             tequila.gates.H(target=i)
@@ -42,36 +64,33 @@ class FermionicSWAP:
         )
 
     def f_swap(self, i: int, j: int) -> tequila.QCircuit:
-        """
-        A function that swaps two orbitals (i, j) while accounting for fermionic antisymmetry.
-
-        Note
-        ----
-        This implementation assumes that the orbitals are ordered as
-        [up0, down0, up1, down1, ...] so that the spin-up and spin-down qubits
-        for each orbital are adjacent.
+        """Swap orbitals ``i`` and ``j`` (both spin components) with fermionic antisymmetry.
 
         Parameters
         ----------
         i : int
-                Index of the first orbital.
+            Index of the first orbital.
         j : int
-                Index of the second orbital.
+            Index of the second orbital.
 
         Returns
         -------
-        tequila.QCircuit
-                A circuit that will perform the specified fermionic swap.
+        tq.QCircuit
+            A circuit that performs the fermionic swap.
+
+        Notes
+        -----
+        Assumes the qubits are ordered as [up0, down0, up1, down1, ...], so that the spin-up and
+        spin-down qubits of each orbital are adjacent. Written by Francisco Javier Del Arco Santos.
 
         Examples
         --------
-        For example fermionic_swap(0,1) would perform the following transformations:
-                +|0011> -> +|1100>
-                +|0101> -> -|0101>
+        ``f_swap(0, 1)`` performs the following transformations::
 
-        Author
-        ------
-        Francisco Javier Del Arco Santos
+            +|0011> -> +|1100>
+            +|0101> -> -|0101>
+
+        >>> U = FermionicSWAP(mol).f_swap(0, 3)
         """
         U = tequila.QCircuit()
         for k in range(i, j):
