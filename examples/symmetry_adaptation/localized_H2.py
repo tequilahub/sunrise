@@ -5,7 +5,7 @@ from sunrise.symmetry_adaptation import (
     FockSpaceState,
     IrrepAssigner,
     SpinSymmetrizationProcedure,
-    SymmetryAdaptedLinearCombintationSymmetrization,
+    SymmetryAdaptedLinearCombinationSymmetrization,
 )
 
 # Create the molecule, its point group (D2h) is detected from the geometry
@@ -24,7 +24,7 @@ states_list: list[FockSpaceState] = FockSpaceState.non_ionic_states(
 )
 
 # Symmetrize the states with respect to SALCs
-SALC_symm_list: list[FockSpaceState] = SymmetryAdaptedLinearCombintationSymmetrization(
+SALC_symm_list: list[FockSpaceState] = SymmetryAdaptedLinearCombinationSymmetrization(
     mol
 ).symmetrize(states_list)
 

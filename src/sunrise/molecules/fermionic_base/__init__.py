@@ -1,3 +1,5 @@
+"""Fermionic molecules: backend selection and the ``FerMolecule`` factory."""
+
 from __future__ import annotations
 
 import warnings
@@ -40,28 +42,50 @@ def FerMolecule(
     *args,
     **kwargs,
 ) -> FermionicBase:
-    """
+    r"""Create a fermionic molecule with the quantum chemistry backend that fits the arguments.
+
+    Usually called through ``sun.Molecule(..., nature="fermionic")``. Without ``backend`` the integrals
+    are taken from ``one_body_integrals`` and ``two_body_integrals`` if given ("base"), from MADNESS
+    if no basis set is given, otherwise from Psi4 if installed, else from PySCF.
 
     Parameters
     ----------
-    geometry
-        molecular geometry as string or as filename (needs to be in xyz format with .xyz ending)
-    basis_set
-        quantum chemistry basis set (sto-3g, cc-pvdz, etc)
-    backend
-        quantum chemistry backend (psi4, pyscf, madness)
-    guess_wfn
-        pass down a psi4 guess wavefunction to start the scf cycle from
-        can also be a filename leading to a stored wavefunction
-    name
-        name of the molecule, if not given it's auto-deduced from the geometry
-        can also be done vice versa (i.e. geometry is then auto-deduced to name.xyz)
-    args
-    kwargs
+    geometry : str, optional
+        Geometry as string, or file name of an xyz file (with ``.xyz`` ending).
+    basis_set : str, optional
+        Basis set name as understood by Psi4 and PySCF, e.g. "sto-3g" (minimal), "6-31g",
+        "6-31g*", "cc-pvdz", "cc-pvtz", "aug-cc-pvdz" or "def2-svp". None (or "madness", "mra",
+        "pno") selects MADNESS, which needs no basis set.
+    orbital_type : str, optional
+        Orbitals to use: "hf" (default) or "native" with a basis set, "pno" with MADNESS.
+    backend : str {"base", "psi4", "pyscf", "madness"}, optional
+        Quantum chemistry backend. "base" needs ``one_body_integrals`` and ``two_body_integrals``.
+    guess_wfn : psi4.core.Wavefunction or str, optional
+        Psi4 wavefunction (or the file it is stored in) to start the SCF cycle from. Only for Psi4.
+    name : str, optional
+        Name of the molecule. Default is deduced from the geometry.
+    *args, **kwargs
+        Passed to the backend class. Entries of ``ParametersQC`` (e.g. ``charge``, ``frozen_core``)
+        are used for the molecular parameters, or give ``parameters`` directly; ``basis`` is accepted
+        as alias of ``basis_set``.
 
     Returns
     -------
-        The Fermion to Qubit Transformation (jordan-wigner, bravyi-kitaev, bravyi-kitaev-tree and whatever OpenFermion supports)
+    FermionicBase
+        Molecule of the class of the chosen backend.
+
+    Raises
+    ------
+    ValueError
+        If the backend is not supported, neither basis set nor integrals are given, or ``guess_wfn``
+        is used without Psi4.
+    ImportError
+        If the backend (or any backend) is not installed.
+
+    Examples
+    --------
+    >>> import sunrise as sun
+    >>> mol = sun.Molecule(geometry="H 0 0 0\nH 0 0 0.75", basis_set="sto-3g", nature="fermionic", backend="pyscf")
     """
 
     # failsafe for common mistake

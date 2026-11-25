@@ -1,3 +1,5 @@
+"""Excited states with variational quantum deflation (VQD)."""
+
 from .variational_quantum_deflaction import vqd_projection_method
 
 __all__ = [

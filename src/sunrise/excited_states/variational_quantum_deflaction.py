@@ -1,3 +1,10 @@
+"""Variational quantum deflation (VQD) for excited states.
+
+References
+----------
+O. Higgott, D. Wang and S. Brierley, Quantum 3, 156 (2019), doi:10.22331/q-2019-07-01-156.
+"""
+
 from numbers import Number
 
 import tequila as tq
@@ -9,24 +16,44 @@ def vqd_projection_method(
     circuit_list: list[tq.QCircuit],
     constant_list: list[Number],
 ):
-    """Return the Variational Quantum Deflation (VQD) objective with overlap penalties for the circuit ``U``.
+    r"""Return the variational quantum deflation (VQD) objective for the circuit ``U``.
+
+    The energy is penalized by the overlap with each previously optimized state
+    :math:`|\psi_k\rangle = V_k|0\rangle`,
+
+    .. math::
+        E = \langle\psi|H|\psi\rangle + \sum_k \beta_k |\langle\psi_k|\psi\rangle|^2,
+        \qquad |\psi\rangle = U|0\rangle,
+
+    where the overlap is measured as the probability of the all-zero state after
+    :math:`V_k^\dagger U`. Minimizing it gives the next excited state.
+
     Parameters
     ----------
-    H : QubitHamiltonian
+    H : tq.QubitHamiltonian
         Hamiltonian.
-    U : QCircuit
-        Current circuit.
-    circuit_list : list
-        Circuits of the previously optimized states.
+    U : tq.QCircuit
+        Circuit of the state being optimized.
+    circuit_list : list of tq.QCircuit
+        Circuits :math:`V_k` of the previously optimized states.
     constant_list : list of float
-        Penalty weight of each previous state.
+        Penalty weights :math:`\beta_k`, one per previous state. They must exceed the energy gap
+        to the wanted state, otherwise the minimum is a lower state plus the penalty.
+
     Returns
     -------
     tq.Objective
+        VQD objective, to be minimized.
+
     Raises
     ------
     ValueError
         If ``circuit_list`` and ``constant_list`` differ in length.
+
+    Examples
+    --------
+    >>> E1 = sun.excited_states.vqd_projection_method(H, U1, [U0], [1.0])
+    >>> result = tq.minimize(E1)
     """
     # TODO Adapt for sunrise functions
     E = tq.ExpectationValue(H=H, U=U)

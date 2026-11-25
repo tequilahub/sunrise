@@ -5,7 +5,7 @@ with the angles read out from the hardcore-boson Hamiltonian (no VQE for the fin
 
 import numpy as np
 
-import sunrise as sn
+import sunrise as sun
 from sunrise.graph_selection import (
     ant_colony_opt,
     blossom_scaled,
@@ -31,7 +31,7 @@ coordinates = np.array(
     ]
 )
 geometry = "".join(f"h {x} {y} {z}\n" for x, y, z in coordinates)
-mol = sn.Molecule(geometry=geometry, basis_set="sto-3g")
+mol = sun.Molecule(geometry=geometry, basis_set="sto-3g")
 num_atoms = len(coordinates)
 
 graphs = {
