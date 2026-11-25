@@ -1,3 +1,5 @@
+"""Fermionic molecule with MRA-PNO orbitals and integrals from MADNESS."""
+
 from __future__ import annotations
 
 import warnings
@@ -16,20 +18,23 @@ from .fer_base import FermionicBase
 
 
 class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
-    """
-    Fermionic molecule with MRA-PNO orbitals computed by madness
-    The madness calculation (or the read-in of name_htensor.npy, name_gtensor.npy and name_pnoinfo.txt with n_pno="read")
-    is shared with the other natures, see sunrise.molecules.qubit_base.madness_interface for all options
-    e.g. sn.Molecule(geometry="...", n_pno=4, nature="fermionic")
+    """Fermionic molecule with MRA-PNO orbitals and integrals from MADNESS.
+
+    The MADNESS calculation (or the read-in of ``name_htensor.npy``, ``name_gtensor.npy`` and
+    ``name_pnoinfo.txt`` with ``n_pno="read"``) is shared with the other natures, see the qubit
+    ``QuantumChemistryMadness`` for the backend options.
+
+    Examples
+    --------
+    >>> mol = sun.Molecule(geometry="...", n_pno=4, nature="fermionic")
     """
 
     def __init__(self, parameters: ParametersQC, *args, **kwargs):
+        """See the class docstring."""
         self._init_madness(super().__init__, parameters, *args, **kwargs)
 
     def get_spa_edges(self, *args, **kwargs):
-        """
-        SPA edges from the PNO structure: each occupied orbital together with its PNOs
-        """
+        """Return the SPA edges from the PNO structure: each occupied orbital together with its PNOs, as list of tuples of orbital indices."""
         return [
             tuple(
                 [i.idx] + [a.idx for a in self.get_pair_orbitals(i=i, j=i, exclude=i)]
@@ -38,23 +43,22 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
         ]
 
     def compute_energy(self, method, *args, **kwargs):
-        """
-        Call classical methods over PySCF (needs to be installed) or
-        use as a shortcut to calculate quantum energies (see make_upccgsd_ansatz)
+        """Compute the energy of a classical or quantum method.
+
+        Classical methods run with PySCF, quantum methods build an ansatz and minimize the energy.
 
         Parameters
         ----------
-        method: method name
-                classical: HF, MP2, CCSD, CCSD(T), FCI
-                quantum: SPA-GASD (SPA can be dropped as well as letters in GASD)
-                examples: GSD is the same as UpCCGSD, SPA alone is equivalent to SPA-D
-                see make_upccgsd_ansatz of the this class for more information
-        args
-        kwargs
+        method : str
+            Classical: "HF", "MP2", "CCSD", "CCSD(T)", "FCI". Quantum: "SPA-GASD", where "SPA" and
+            letters of "GASD" can be dropped, e.g. "GSD" is the same as UpCCGSD and "SPA" alone
+            is "SPA-D". See ``make_upccgsd_ansatz``.
+        **kwargs
+            For quantum methods, keyword arguments of the minimizer.
 
         Returns
         -------
-
+        float
         """
 
         if any(x in method.upper() for x in ["U", "SPA", "PNO", "HCB"]):
@@ -70,6 +74,27 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
             return super().compute_energy(*args, method=method, **kwargs)
 
     def local_qubit_map(self, hcb=False, up_then_down=False):
+        """Return a qubit map that orders the orbitals pair by pair.
+
+        It does not make the circuit more local, but shows the locality better in pictures.
+        Apply it with ``H = H.map_qubits(qubit_map)`` and ``U = U.map_qubits(qubit_map)``.
+
+        Parameters
+        ----------
+        hcb : bool, optional
+            Map for the hard-core boson representation. Default is False.
+        up_then_down : bool, optional
+            Order the spin orbitals as all up then all down. Default is False.
+
+        Returns
+        -------
+        dict
+            Maps qubit indices to the new indices.
+
+        Examples
+        --------
+        >>> qubit_map = mol.local_qubit_map()
+        """
         # re-arrange orbitals to result in more local circuits
         # does not make the circuit more local, but rather will show locality better in pictures
         # transform circuits and Hamiltonians with this map
@@ -108,25 +133,47 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
         *args,
         **kwargs,
     ):
-        """
-        Overwriting baseclass to allow names like : PNO-UpCCD etc
+        """Return a UpCCGSD-type FCircuit, with names like "SPA-UpCCD" and "PNO-UpCCD".
+
+        Overrides the base class method. The name has the form ``{order}-{HCB}-{SPA}-{excitations}``.
+
         Parameters
         ----------
-        label: label the variables of the ansatz ( variables will be labelled (indices, X, (label, layer) witch X=D/S)
-        direct_compiling: Directly compile the first layer (works only for transformation that implement the hcb_to_me function)
-        name: ansatz name (SPA-UpCCD or SPA-D, SPA-UpCCGD or SPA-GD, SPA-UpCCGSD or SPA-GSD, UpCCGSD or GSD ..., in general {HCB}-{SPA}-{Excitations}
-                if HCB is included in name: do not map from hard-core Boson to qubit encoding of this molecule
-                if SPA is included in name: Use the separable pair ansatz (excitations will be restricted to the PNO structure of the surrogate model)
-                Excitations: can be "S" (use only singles), "D" (use only doubles), "GSD" (generalized singles and doubles), "GASD" (approximate singles, neglecting Z terms in JW)
-        order: repetition of layers, can be given over the name as well, the order needs to be the first in the name then (i.e. 2-UpCCGSD, 2-SPA-GSD, etc)
-        indices: excitation indices in the format of format_excitation_indices, e.g. [((0, 3),), ((1, 4),)]
-                 (see make_pno_upccgsd_ansatz), they replace the ones of the name in every layer
-        args
-        kwargs
+        name : str, optional
+            In general ``{HCB}-{SPA}-{excitations}``, e.g. "SPA-UpCCD" or "SPA-D", "SPA-UpCCGD" or
+            "SPA-GD", "SPA-UpCCGSD" or "SPA-GSD", "UpCCGSD" or "GSD". "HCB" in the name builds pair
+            doubles only, with the electrons treated as pairs (fermionic molecules have no hard-core
+            boson qubit reduction), so it cannot be combined with singles. "SPA" uses the separable
+            pair ansatz: the excitations are restricted to the PNO structure of the surrogate model.
+            The excitations are "S" (only singles), "D" (only doubles), "GSD" (generalized singles
+            and doubles) or "GASD" (approximate singles). Default is "UpCCGSD".
+        label : hashable, optional
+            Label of the variables, named ``(indices, X, (label, layer))`` with X = D or S.
+        direct_compiling : bool, optional
+            Not used.
+        order : int, optional
+            Number of repeated layers. Can also be given as the first part of the name, e.g.
+            "2-UpCCGSD" or "2-SPA-GSD".
+        neglect_z : bool, optional
+            Not used: fermionic singles have no Z strings.
+        hcb_optimization : bool, optional
+            Not used.
+        include_reference : bool, optional
+            Start from the reference state. Default is True.
+        indices : list, optional
+            Excitation indices in the format of ``format_excitation_indices``, e.g.
+            ``[((0, 3),), ((1, 4),)]`` (see ``make_pno_upccgsd_ansatz``). They replace the indices
+            given by the name in every layer.
+        **kwargs
+            Passed to the base class, e.g. ``spin_adapt_singles`` (default False here).
 
         Returns
         -------
+        FCircuit
 
+        Examples
+        --------
+        >>> U = mol.make_upccgsd_ansatz(name="HCB-PNO-UpCCD")
         """
         # Default Method
         if "SPA" in name and name.split("-")[-1] in ["SPA", "HCB"]:
@@ -229,6 +276,25 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
     def make_hardcore_boson_pno_upccd_ansatz(
         self, pairs=None, label=None, include_reference=True, direct_compiling=False
     ):
+        """Return the PNO-UpCCD circuit, with pair doubles from each reference orbital into its PNOs.
+
+        Fermionic backends have no hard-core boson qubit reduction: a warning is raised and the electrons are treated as pairs.
+
+        Parameters
+        ----------
+        pairs : list of OrbitalData, optional
+            Reference orbitals of the pairs. Default is all reference orbitals.
+        label : hashable, optional
+            Label of the angles.
+        include_reference : bool, optional
+            Start from the reference state. Default is True.
+        direct_compiling : bool, optional
+            Not used.
+
+        Returns
+        -------
+        FCircuit
+        """
         warnings.warn(
             "No HCB operations (qubit reduction) in Fermionic Backends; treated as electron pairs",
             TequilaWarning,
@@ -253,11 +319,22 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
     def make_upccgsd_indices(
         self, name="UpCCGD", exclude: list | None = None, *args, **kwargs
     ):
-        """
-        :param label: label the angles
-        :param generalized: if true the complement to UpCCGD is created (otherwise UpCCD)
-        :param exclude: list of indices to exclude
-        :return: All gates missing between PNO-UpCCD and UpCC(G)D
+        """Return the excitation indices missing between PNO-UpCCD and UpCC(G)D.
+
+        Parameters
+        ----------
+        label : hashable, optional
+            Not used.
+        name : str, optional
+            Excitation type. "G" in the name also adds the generalized excitations (otherwise
+            UpCCD), "PNO" or "SPA" returns only the PNO-pair excitations. Default is "UpCCGD".
+        exclude : list, optional
+            Indices to leave out.
+
+        Returns
+        -------
+        list
+            Formatted excitation indices, see ``format_excitation_indices``.
         """
 
         if exclude is None:
@@ -316,6 +393,21 @@ class QuantumChemistryMadness(MadnessPNOMixin, FermionicBase):
     def make_pno_upccgsd_ansatz(
         self, generalized=False, include_offdiagonals=False, **kwargs
     ):
+        """Return a UpCCGSD-type ansatz restricted to the PNO excitations.
+
+        Parameters
+        ----------
+        generalized : bool, optional
+            Also add excitations between the PNOs of a pair. Default is False.
+        include_offdiagonals : bool, optional
+            Also add excitations of off-diagonal pairs. Default is False.
+        **kwargs
+            Passed on to ``make_upccgsd_ansatz``.
+
+        Examples
+        --------
+        >>> U = mol.make_pno_upccgsd_ansatz(name="UpCCD")
+        """
         indices = []
         for i in self.reference_orbitals:
             for a in self.get_pair_orbitals(i=i, j=i, exclude=i):

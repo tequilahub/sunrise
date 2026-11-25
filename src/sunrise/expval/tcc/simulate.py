@@ -1,3 +1,5 @@
+"""Simulation of FCircuits with the TCC (tencirchem) backend."""
+
 from __future__ import annotations
 
 from warnings import warn
@@ -20,12 +22,25 @@ from sunrise.molecules.qubit_base import Molecule
 def tcc_circuit_simulator(
     U: FCircuit, variables: Variables, n_orb: int | None = None, **backend_kwargs
 ) -> QubitWaveFunction:
-    """
-    TCC FCircuit simulator based on the TCC.UCC utilities
-    :param U: FCircuit to simulate
-    :param variables:
-    :param n_orb: number of spatial orbitals
-    :param backend_kwargs: Backend kwargs for TCCBraket. Keywords accepted: engine,backend,dtype
+    """Simulate an FCircuit with the TCC backend and return the final wavefunction.
+
+    Parameters
+    ----------
+    U : FCircuit
+        Circuit to simulate. It needs an initial state or number of electrons,
+        otherwise an empty wavefunction is returned with a warning.
+    variables : dict
+        Values of the circuit variables.
+    n_orb : int, optional
+        Number of spatial orbitals. Default is inferred from the circuit.
+    **backend_kwargs
+        Passed on to ``TCCBraket``. Accepted keywords are ``engine``, ``backend``
+        and ``dtype``.
+
+    Returns
+    -------
+    QubitWaveFunction
+        Final state (sparse, amplitudes below 1e-6 dropped).
     """
     from sunrise.expval.minimize import compile
 
@@ -54,6 +69,7 @@ def tcc_circuit_simulator(
 
 
 def __generate_dummy_mol(n_orb: int, n_elec: int):
+    """Return a molecule with zero integrals and ``n_elec`` electrons, only used to build the braket."""
     h = np.zeros(shape=(n_orb, n_orb))
     g = np.zeros(shape=(n_orb, n_orb, n_orb, n_orb))
     geo = "".join([f"H 0. 0. {i}\n" for i in range(n_orb)])
@@ -72,6 +88,7 @@ def __generate_dummy_mol(n_orb: int, n_elec: int):
 
 
 def map_variables(x: list[Variable, Objective], dvariables: dict):
+    """Return the value of ``x``, evaluating it with ``dvariables`` if it is a Variable or Objective."""
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):

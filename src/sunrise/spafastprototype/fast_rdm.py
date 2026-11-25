@@ -1,3 +1,5 @@
+"""Computation of the 1- and 2-RDM of separable circuits from small local simulations."""
+
 import numpy
 import tequila as tq
 
@@ -9,23 +11,45 @@ from .decompose import make_decomposed_circuits
 
 
 def fast_rdm(U, mol, clusters, variables, test=False, backend="qulacs"):
-    r"""
-    This function builds the 1-RDM and 2-RDM by exploiting the separability of
-    the circuit to speed up the procedure.
+    r"""Compute the spin-free 1- and 2-RDM of a hard-core boson circuit by exploiting its separability.
 
-    It decomposes each global RDM operator into local Pauli strings for each
-    circuit cluster, simulates these small local expectation values,
-    and reassembles them to reconstruct the full RDM element.
-    To further optimize performance, evaluated Pauli strings are stored in a
-    dictionary to avoid redundant simulations.
+    Each RDM element is the expectation value of an operator O, decomposed into Pauli strings,
+    ``<O>_U = sum_k c_k <P_k>_U``. If the circuit is a tensor product over qubit clusters,
+    ``U = U_0 * U_1 * ...``, every global Pauli string is a tensor product of local ones,
+    ``P_k = P_k,0 * P_k,1 * ...``, and the element factorizes::
 
-    Each RDM element is the expectation value of an operator O:
-    <O>_U = \sum_k c_k <P_k>_U
-    where each global Pauli string is a tensor product of local Pauli strings:
-    P_k = P_k,0 * P_k,1 * P_k,2 ...
-    In the case where U is a tensor product: U = U_0 * U_1 * U_2 ...
-    Each RDM element factorizes:
-    <O>_U = \sum_k (c_k <P_k,0>_U0 * <P_k,1>_U1 * <P_k,2>_U2 ...)
+        <O>_U = sum_k c_k <P_k,0>_U0 * <P_k,1>_U1 * ...
+
+    So only the small local circuits of each cluster are simulated, and their expectation values
+    are reassembled into the full RDM element. Local Pauli strings already evaluated are cached
+    to avoid repeated simulations.
+
+    Parameters
+    ----------
+    U : tq.QCircuit
+        Circuit preparing the state. Must not couple different clusters.
+    mol : QuantumChemistryBase
+        Molecule providing the RDM operators (needs ``compute_rdms`` with
+        ``evaluate=False`` returning the raw operators).
+    clusters : list of list of int
+        Qubits of each cluster. Gates spanning several clusters are dropped.
+    variables : dict
+        Values of the circuit variables.
+    test : bool, optional
+        If True, compare each element with a full simulation and print mismatches.
+        Default is False.
+    backend : str, optional
+        Simulation backend. Default is ``"qulacs"``.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        ``(rdm1, rdm2)``, the latter in Dirac (physics) ordering.
+
+    Examples
+    --------
+    >>> clusters = sun.SPAFP.make_decomposed_clusters(U, 12)
+    >>> rdm1, rdm2 = sun.SPAFP.fast_rdm(mol=mol, U=U, clusters=clusters, variables=variables)
     """
     assert clusters is not None
 

@@ -2,7 +2,7 @@ import numpy
 import pytest
 import tequila as tq
 
-import sunrise as sn
+import sunrise as sun
 
 
 @pytest.mark.parametrize(
@@ -15,7 +15,7 @@ import sunrise as sn
 @pytest.mark.parametrize("select", ["FBFBFFBFBFBFB", "BBFFBBFFBBFF"])
 @pytest.mark.parametrize("two_qubit", [True, False])
 def test_hamiltonian(system, select, two_qubit):
-    mol = sn.Molecule(
+    mol = sun.Molecule(
         geometry=system,
         basis_set="sto-6g",
         select=select,
@@ -23,7 +23,7 @@ def test_hamiltonian(system, select, two_qubit):
         two_qubit=two_qubit,
         nature="hybrid",
     )
-    tqmol = sn.Molecule(basis_set="sto-6g", geometry=system, backend="pyscf")
+    tqmol = sun.Molecule(basis_set="sto-6g", geometry=system, backend="pyscf")
     edges = mol.get_spa_edges()
     U1 = tqmol.make_ansatz("SPA", edges=edges)
     H1 = tqmol.make_hamiltonian()
@@ -39,7 +39,7 @@ def test_hamiltonian(system, select, two_qubit):
 @pytest.mark.parametrize("two_qubit", [True, False])
 @pytest.mark.parametrize("transformation", ["Jordan-Wigner", "reordered-Jordan-Wigner"])
 def test_opt_SPA(two_qubit, transformation):
-    mol = sn.Molecule(
+    mol = sun.Molecule(
         geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",
         basis_set="sto-6g",
         select="BBFFBBFFBBFF",
@@ -48,7 +48,7 @@ def test_opt_SPA(two_qubit, transformation):
         transformation=transformation,
         nature="hybrid",
     )  # could be any select
-    tqmol = sn.Molecule(
+    tqmol = sun.Molecule(
         basis_set="sto-6g",
         geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",
         backend="pyscf",
@@ -56,16 +56,16 @@ def test_opt_SPA(two_qubit, transformation):
     )
     mol, edges = mol.use_CLPO_orbitals_and_edges()
     # same CLPO starting orbitals on the tequila side, so both optimizations start from the same point
-    tqmol = sn.CLPO.generate_CLPO_molecule(
+    tqmol = sun.CLPO.generate_CLPO_molecule(
         tqmol, use_active=not tqmol.integral_manager.active_space_is_trivial()
     )
-    tqopt = sn.optimize_orbitals(
+    tqopt = sun.optimize_orbitals(
         molecule=tqmol,
         circuit=tqmol.make_ansatz("HCB-SPA", edges=edges),
         silent=True,
         use_hcb=True,
     )
-    opt = sn.optimize_orbitals(
+    opt = sun.optimize_orbitals(
         molecule=mol, circuit=mol.make_ansatz("SPA", edges=edges), silent=True
     )
     assert numpy.isclose(tqopt.energy, opt.energy, 10**-5)
@@ -74,14 +74,14 @@ def test_opt_SPA(two_qubit, transformation):
 # Tests that the hybrid molecule gets the same native orbitals and ground state energy as the qubit molecule
 def test_native_orbitals():
     system = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
-    mol = sn.Molecule(
+    mol = sun.Molecule(
         geometry=system,
         basis_set="sto-6g",
         select="FFFF",
         backend="pyscf",
         nature="hybrid",
     ).use_native_orbitals()
-    tqmol = sn.Molecule(
+    tqmol = sun.Molecule(
         geometry=system, basis_set="sto-6g", backend="pyscf"
     ).use_native_orbitals()
 
@@ -112,7 +112,7 @@ def test_native_orbitals():
     ],
 )
 def test_exc_gate(system, select, excit):
-    mol_mix = sn.Molecule(
+    mol_mix = sun.Molecule(
         geometry=system,
         basis_set="sto-6g",
         select=select,
@@ -120,7 +120,7 @@ def test_exc_gate(system, select, excit):
         backend="pyscf",
         nature="hybrid",
     )
-    mol_jw = sn.Molecule(basis_set="sto-6g", geometry=system, backend="pyscf")
+    mol_jw = sun.Molecule(basis_set="sto-6g", geometry=system, backend="pyscf")
 
     U_jw = mol_jw.prepare_reference()
     U_mix = mol_mix.prepare_reference()
@@ -157,7 +157,7 @@ def test_exc_gate(system, select, excit):
 @pytest.mark.parametrize("hcb_optimization", [True, False])
 @pytest.mark.parametrize("order", [1, 2])
 def test_UpCCGD_BOS(system, hcb_optimization, order):
-    mol = sn.Molecule(
+    mol = sun.Molecule(
         geometry=system,
         basis_set="sto-6g",
         select="",
@@ -165,7 +165,7 @@ def test_UpCCGD_BOS(system, hcb_optimization, order):
         backend="pyscf",
         nature="hybrid",
     )
-    tqmol = sn.Molecule(geometry=system, basis_set="sto-6g", backend="pyscf")
+    tqmol = sun.Molecule(geometry=system, basis_set="sto-6g", backend="pyscf")
 
     H = mol.make_hamiltonian()
     tqH = tqmol.make_hamiltonian()
@@ -196,7 +196,7 @@ def test_UpCCGD_BOS(system, hcb_optimization, order):
 )
 @pytest.mark.parametrize("hcb_optimization", [True, False])
 def test_UpCCGSD_FER(system, hcb_optimization):
-    mol = sn.Molecule(
+    mol = sun.Molecule(
         geometry=system,
         basis_set="sto-6g",
         select="FFFFFFFFFFFFFFFFFFFFF",
@@ -204,7 +204,7 @@ def test_UpCCGSD_FER(system, hcb_optimization):
         backend="pyscf",
         nature="hybrid",
     )
-    tqmol = sn.Molecule(geometry=system, basis_set="sto-6g", backend="pyscf")
+    tqmol = sun.Molecule(geometry=system, basis_set="sto-6g", backend="pyscf")
 
     H = mol.make_hamiltonian()
     tqH = tqmol.make_hamiltonian()
@@ -227,7 +227,7 @@ def test_UpCCGSD_FER(system, hcb_optimization):
 
 
 def test_UCCSD_FER():
-    mol = sn.Molecule(
+    mol = sun.Molecule(
         geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",
         basis_set="sto-6g",
         select="FFFFFFFFFFFFFFFFFFFFF",
@@ -235,7 +235,7 @@ def test_UCCSD_FER():
         backend="pyscf",
         nature="hybrid",
     )
-    tqmol = sn.Molecule(
+    tqmol = sun.Molecule(
         geometry="H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8",
         basis_set="sto-6g",
         backend="pyscf",
@@ -273,7 +273,7 @@ def test_UCCSD_FER():
 def test_encodings(transformation, encoding):
     geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
     jw = "ReorderedJordanWigner" if "Reordered" in transformation else "JordanWigner"
-    mol_jw = sn.Molecule(
+    mol_jw = sun.Molecule(
         geometry=geom,
         basis_set="sto-3g",
         backend="pyscf",
@@ -281,7 +281,7 @@ def test_encodings(transformation, encoding):
         transformation=jw,
         **encoding,
     )
-    mol = sn.Molecule(
+    mol = sun.Molecule(
         geometry=geom,
         basis_set="sto-3g",
         backend="pyscf",
@@ -307,7 +307,7 @@ def test_encodings(transformation, encoding):
 def test_encodings_spectrum(select):
     # all fermionic and mixed orbitals: every encoding gives the spectrum of Jordan-Wigner
     geom = "H 0.0 0.0 0.0\nH 0.0 0.0 1.6\nH 0.0 0.0 3.2\nH 0.0 0.0 4.8"
-    H_jw = sn.Molecule(
+    H_jw = sun.Molecule(
         geometry=geom,
         basis_set="sto-3g",
         backend="pyscf",
@@ -319,7 +319,7 @@ def test_encodings_spectrum(select):
         "BravyiKitaevTree",
         "ReorderedBravyiKitaev",
     ]:
-        H = sn.Molecule(
+        H = sun.Molecule(
             geometry=geom,
             basis_set="sto-3g",
             backend="pyscf",
@@ -334,7 +334,7 @@ def test_encodings_spectrum(select):
     # tapered encodings keep only the sector with the alpha and beta parities of the molecule
     e_jw = numpy.linalg.eigvalsh(H_jw.to_matrix())
     for transformation in ["TaperedBinary", "TaperedBravyiKitaev"]:
-        H = sn.Molecule(
+        H = sun.Molecule(
             geometry=geom,
             basis_set="sto-3g",
             backend="pyscf",
