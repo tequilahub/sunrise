@@ -10,7 +10,8 @@ from math import pi
 def qpic_to_pdf(filename, filepath=None):
     """Run ``qpic`` to convert ``<filename>.qpic`` into a PDF.
 
-    Falls back to :func:`qpic_to_matplotlib` when ``qpic`` is missing or fails.
+    Falls back to ``qpic_to_matplotlib`` when ``qpic`` (or the ``pdflatex`` it calls) is missing
+    or fails.
 
     Parameters
     ----------
@@ -28,7 +29,8 @@ def qpic_to_pdf(filename, filepath=None):
 def qpic_to_png(filename, filepath=None):
     """Run ``qpic`` to convert ``<filename>.qpic`` into a PNG.
 
-    Falls back to :func:`qpic_to_matplotlib` when ``qpic`` is missing or fails.
+    Falls back to ``qpic_to_matplotlib`` when ``qpic`` (or the ``pdflatex`` it calls) is missing
+    or fails.
 
     Parameters
     ----------

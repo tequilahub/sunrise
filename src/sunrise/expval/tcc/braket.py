@@ -1,3 +1,9 @@
+"""TenCirChem ``UCC`` subclass for brakets (overlaps, expectation values and transition elements).
+
+``EXPVAL`` extends tencirchem's ``UCC`` with a separate bra circuit and an
+arbitrary operator, and is the engine behind ``TCCBraket``.
+"""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -40,6 +46,15 @@ from sunrise.expval.tcc.engine_braket import (
 
 
 class EXPVAL(UCC):
+    """TenCirChem object for the braket of two excitation circuits.
+
+    Extends ``tencirchem.UCC`` by storing excitation operators, parameters and
+    initial states for both bra and ket. If no bra is set, the braket is an
+    expectation value (``is_diagonal`` is True).
+
+    See __init__ for the constructor parameters.
+    """
+
     def __init__(
         self,
         mol: Mole | RHF | None,
@@ -54,20 +69,19 @@ class EXPVAL(UCC):
         run_ccsd=True,
         run_fci=True,
     ):
-        r"""
-        Initialize the class with molecular input.
+        r"""Initialize the class with molecular input.
 
         Parameters
         ----------
-        mol: Mole or RHF
+        mol : Mole or RHF
             The molecule as PySCF ``Mole`` object or the PySCF ``RHF`` object
-        init_method: str, optional
+        init_method : str, optional
             How to determine the initial amplitude guess. Accepts ``"mp2"`` (default), ``"ccsd"``, ``"fe"``
             and ``"zeros"``.
-        active_space: Tuple[int, int], optional
+        active_space : Tuple[int, int], optional
             Active space approximation. The first integer is the number of electrons and the second integer is
             the number or spatial-orbitals. Defaults to None.
-        aslst: List[int], optional
+        aslst : List[int], optional
             Pick orbitals for the active space. Defaults to None which means the orbitals are sorted by energy.
             The orbital index is 0-based.
 
@@ -75,24 +89,25 @@ class EXPVAL(UCC):
                 See `PySCF document <https://pyscf.org/user/mcscf.html#picking-an-active-space>`_
                 for choosing the active space orbitals. Here orbital index is 0-based, whereas in PySCF by default it
                 is 1-based.
-        mo_coeff: np.ndarray, optional
+        mo_coeff : np.ndarray, optional
             Molecule coefficients. If provided then RHF is skipped.
             Can be used in combination with the ``init_state`` attribute.
             Defaults to None which means RHF orbitals are used.
-        mode: str, optional
+        mode : str, optional
             How to deal with particle symmetry, such as whether force electrons to pair as hard-core boson (HCB).
             Possible values are ``"fermion"``, ``"qubit"`` and ``"hcb"``.
             Default to ``"fermion"``.
-        engine: str, optional
-            The engine to run the calculation. See :ref:`advanced:Engines` for details.
-        run_hf: bool, optional
+        engine : str, optional
+            The engine to run the calculation. See the engines section of the TenCirChem
+            documentation for details.
+        run_hf : bool, optional
             Whether run HF for molecule orbitals. Defaults to ``True``.
             The argument has no effect if ``mol`` is a ``RHF`` object.
-        run_mp2: bool, optional
+        run_mp2 : bool, optional
             Whether run MP2 for initial guess and energy reference. Defaults to ``True``.
-        run_ccsd: bool, optional
+        run_ccsd : bool, optional
             Whether run CCSD for initial guess and energy reference. Defaults to ``True``.
-        run_fci: bool, optional
+        run_fci : bool, optional
             Whether run FCI  for energy reference. Defaults to ``True``.
 
         """
@@ -132,22 +147,17 @@ class EXPVAL(UCC):
     def get_opt_function(
         self, with_time: bool = False
     ) -> Callable | tuple[Callable, float] | None:
-        """
-        Returns the cost function in SciPy format for optimization.
-        The gradient is included.
-        Basically a wrapper to :func:`expval_and_grad`.
+        """Return the cost function (value and gradient) in SciPy format.
 
         Parameters
         ----------
-        with_time: bool, optional
-            Whether return staging time. Defaults to False.
+        with_time : bool, optional
+            If True, also return the staging time. Default is False.
 
         Returns
         -------
-        opt_function: Callable
-            The optimization cost function in SciPy format.
-        time: float
-            Staging time. Returned when ``with_time`` is set to ``True``.
+        Callable or tuple of (Callable, float)
+            The cost function, and the staging time if ``with_time`` is True.
         """
         if self.is_diagonal():
             expval_and_grad = scipy_opt_wrap(
@@ -169,9 +179,7 @@ class EXPVAL(UCC):
         return expval_and_grad
 
     def is_diagonal(self) -> bool:
-        """
-        Check is bra==ket, also if bra == None -> bra = ket
-        """
+        """Return True if bra and ket are the same (also if no bra was set), i.e. this is an expectation value."""
         if all(
             i is None for i in [self.init_state_bra, self.ex_ops_bra, self.params_bra]
         ):
@@ -188,15 +196,15 @@ class EXPVAL(UCC):
         )
 
     def kernel(self) -> float:
-        """
-        The kernel to perform the VQE algorithm.
-        The L-BFGS-B method in SciPy is used for optimization
-        and configuration is possible by setting the ``self.scipy_minimize_options`` attribute.
+        """Minimize the expectation value over the variables with L-BFGS-B.
+
+        Options can be set in ``scipy_minimize_options``. The result is stored in
+        ``opt_res``. Without variables the value is just evaluated.
 
         Returns
         -------
-        e: float
-            The optimized energy
+        float
+            Optimized value.
         """
         if not self.n_variables:
             if self.is_diagonal():
@@ -249,35 +257,28 @@ class EXPVAL(UCC):
     def expval(
         self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
     ) -> float:
-        """
-        Evaluate the total Expectation Value.
+        """Evaluate the braket (overlap, expectation value or transition element).
 
         Parameters
         ----------
-        angles: Tensor, optional
-            The circuit Variables value. Defaults to None, which uses the optimized parameter
-            and :func:`kernel` must be called before.
-        engine: str, optional
-            The engine to use. Defaults to ``None``, which uses ``self.engine``.
+        angles : Tensor, optional
+            Values of the circuit variables (one per ``total_variables``). Default is
+            None, which uses the optimized parameters, so ``kernel`` must be called first.
+        engine : str, optional
+            Engine to use. Default is None, which uses ``self.engine``.
+        hamiltonian : callable or number, optional
+            Operator applied to the ket. Default is the Hamiltonian of the molecule.
 
         Returns
         -------
-        Expectation Value: float
-            Total Expectation Value
+        float
+            Value of ``<bra|H|ket>`` plus the core energy times ``<bra|ket>``.
 
         See Also
         --------
-        civector: Get the configuration interaction (CI) vector.
-        statevector: Evaluate the circuit state vector.
-        expval_and_grad: Evaluate the total Expectation Value and parameter gradients.
-
-        Examples
-        --------
-        >>> from tencirchem import UCCSD
-        >>> from tencirchem.molecule import h2
-        >>> uccsd = UCCSD(h2)
-        >>> round(uccsd.energy([0, 0]), 8)  # HF state
-        -1.11670614
+        civector : Return the configuration interaction (CI) vector.
+        statevector : Return the circuit state vector.
+        expval_and_grad : Evaluate the expectation value and its parameter gradients.
         """
         if engine is None:
             engine = self.engine
@@ -330,35 +331,28 @@ class EXPVAL(UCC):
     def energy(
         self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
     ) -> float:
-        """
-        Evaluate the total Expectation Value.
+        """Evaluate the energy, i.e. the expectation value for bra equal to ket.
 
         Parameters
         ----------
-        angles: Tensor, optional
-            The circuit Variables value. Defaults to None, which uses the optimized parameter
-            and :func:`kernel` must be called before.
-        engine: str, optional
-            The engine to use. Defaults to ``None``, which uses ``self.engine``.
+        angles : Tensor, optional
+            Values of the circuit variables (one per ``total_variables``). Default is
+            None, which uses the optimized parameters, so ``kernel`` must be called first.
+        engine : str, optional
+            Engine to use. Default is None, which uses ``self.engine``.
+        hamiltonian : callable or number, optional
+            Operator applied to the ket. Default is the Hamiltonian of the molecule.
 
         Returns
         -------
-        Expectation Value: float
-            Total Expectation Value
+        float
+            Energy including the core energy.
 
         See Also
         --------
-        civector: Get the configuration interaction (CI) vector.
-        statevector: Evaluate the circuit state vector.
-        expval_and_grad: Evaluate the total Expectation Value and parameter gradients.
-
-        Examples
-        --------
-        >>> from tencirchem import UCCSD
-        >>> from tencirchem.molecule import h2
-        >>> uccsd = UCCSD(h2)
-        >>> round(uccsd.energy([0, 0]), 8)  # HF state
-        -1.11670614
+        civector : Return the configuration interaction (CI) vector.
+        statevector : Return the circuit state vector.
+        energy_and_grad : Evaluate the energy and its parameter gradients.
         """
         if engine is None:
             engine = self.engine
@@ -405,40 +399,30 @@ class EXPVAL(UCC):
     def expval_and_grad(
         self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
     ) -> tuple[float, Tensor]:
-        """
-        Evaluate the total Expectation Value and parameter gradients.
+        """Evaluate the braket (overlap, expectation value or transition element) and its gradients.
 
         Parameters
         ----------
-        angles: Tensor, optional
-            Variables value. Defaults to None, which uses the optimized parameter
-            and :func:`kernel` must be called before.
-        engine: str, optional
-            The engine to use. Defaults to ``None``, which uses ``self.engine``.
+        angles : Tensor, optional
+            Values of the circuit variables (one per ``total_variables``). Default is
+            None, which uses the optimized parameters, so ``kernel`` must be called first.
+        engine : str, optional
+            Engine to use. Default is None, which uses ``self.engine``.
+        hamiltonian : callable or number, optional
+            Operator applied to the ket. Default is the Hamiltonian of the molecule.
 
         Returns
         -------
-        Expectation Value: float
-            Total energy
-        grad: Tensor
-            The parameter gradients
+        float
+            Value of the braket.
+        numpy.ndarray
+            Gradients with respect to the variables.
 
         See Also
         --------
-        civector: Get the configuration interaction (CI) vector.
-        statevector: Evaluate the circuit state vector.
-        Expectation Value: Evaluate the Operator Expectation Value.
-
-        Examples
-        --------
-        >>> from tencirchem import UCCSD
-        >>> from tencirchem.molecule import h2
-        >>> uccsd = UCCSD(h2)
-        >>> e, g = uccsd.energy_and_grad([0, 0])
-        >>> round(e, 8)
-        -1.11670614
-        >>> g  # doctest:+ELLIPSIS
-        array([..., ...])
+        civector : Return the configuration interaction (CI) vector.
+        statevector : Return the circuit state vector.
+        expval : Evaluate the expectation value.
         """
         if engine is None:
             engine = self.engine
@@ -470,40 +454,30 @@ class EXPVAL(UCC):
     def energy_and_grad(
         self, angles: Tensor = None, engine: str | None = None, hamiltonian=None
     ) -> tuple[float, Tensor]:
-        """
-        Evaluate the total energy and parameter gradients.
+        """Evaluate the energy and its gradients.
 
         Parameters
         ----------
-        angles: Tensor, optional
-            Variables value. Defaults to None, which uses the optimized parameter
-            and :func:`kernel` must be called before.
-        engine: str, optional
-            The engine to use. Defaults to ``None``, which uses ``self.engine``.
+        angles : Tensor, optional
+            Values of the circuit variables (one per ``total_variables``). Default is
+            None, which uses the optimized parameters, so ``kernel`` must be called first.
+        engine : str, optional
+            Engine to use. Default is None, which uses ``self.engine``.
+        hamiltonian : callable or number, optional
+            Operator applied to the ket. Default is the Hamiltonian of the molecule.
 
         Returns
         -------
-        energy: float
-            Total energy
-        grad: Tensor
-            The parameter gradients
+        float
+            Energy including the core energy.
+        numpy.ndarray
+            Gradients with respect to the variables.
 
         See Also
         --------
-        civector: Get the configuration interaction (CI) vector.
-        statevector: Evaluate the circuit state vector.
-        energy: Evaluate the total energy.
-
-        Examples
-        --------
-        >>> from tencirchem import UCCSD
-        >>> from tencirchem.molecule import h2
-        >>> uccsd = UCCSD(h2)
-        >>> e, g = uccsd.energy_and_grad([0, 0])
-        >>> round(e, 8)
-        -1.11670614
-        >>> g  # doctest:+ELLIPSIS
-        array([..., ...])
+        civector : Return the configuration interaction (CI) vector.
+        statevector : Return the circuit state vector.
+        energy : Evaluate the energy.
         """
         if engine is None:
             engine = self.engine
@@ -530,6 +504,7 @@ class EXPVAL(UCC):
         return float(e + self.e_core), tc.backend.numpy(g)
 
     def _check_params_argument(self, params, strict=True):
+        """Validate ``params`` (falling back to stored ones) and return them as a tensor."""
         if params is None:
             if self.params is not None:
                 params = self.params
@@ -550,40 +525,32 @@ class EXPVAL(UCC):
         return tc.backend.convert_to_tensor(params).astype(tc.rdtypestr)
 
     def _sanity_check(self):
-        pass
+        """Placeholder for consistency checks, currently does nothing."""
 
     def civector(
         self, params: Tensor = None, engine: str | None = None, ket: bool = True
     ) -> Tensor:
-        """
-        Evaluate the configuration interaction (CI) vector.
+        """Evaluate the configuration interaction (CI) vector of the state.
 
         Parameters
         ----------
-        params: Tensor, optional
-            The circuit parameters. Defaults to None, which uses the optimized parameter
-            and :func:`kernel` must be called before.
-        engine: str, optional
-            The engine to use. Defaults to ``None``, which uses ``self.engine``.
+        params : Tensor, optional
+            Values of the circuit variables. Default is the optimized parameters.
+        engine : str, optional
+            Engine to use. Default is ``self.engine``.
+        ket : bool, optional
+            If True, use the ket circuit, otherwise the bra. Default is True.
 
         Returns
         -------
-        civector: Tensor
-            Corresponding CI vector
+        Tensor
+            CI vector.
 
         See Also
         --------
-        statevector: Evaluate the circuit state vector.
-        energy: Evaluate the total energy.
-        energy_and_grad: Evaluate the total energy and parameter gradients.
-
-        Examples
-        --------
-        >>> from tencirchem import UCCSD
-        >>> from tencirchem.molecule import h2
-        >>> uccsd = UCCSD(h2)
-        >>> uccsd.civector([0, 0])  # HF state
-        array([1., 0., 0., 0.])
+        statevector : Return the circuit state vector.
+        energy : Evaluate the energy.
+        energy_and_grad : Evaluate the energy and its parameter gradients.
         """
         self._sanity_check()
         params = self._check_params_argument(params)
@@ -615,6 +582,7 @@ class EXPVAL(UCC):
         return civector
 
     def _statevector_to_civector(self, statevector=None, ket: bool = True):
+        """Return a CI vector from a statevector or CI vector, or from the circuit if None."""
         if statevector is None:
             civector = self.civector(ket=ket)
         else:
@@ -638,35 +606,27 @@ class EXPVAL(UCC):
     def statevector(
         self, angles: Tensor = None, engine: str | None = None, ket: bool = True
     ) -> Tensor:
-        """
-        Evaluate the circuit state vector.
+        """Evaluate the state vector of the circuit.
 
         Parameters
         ----------
-        params: Tensor, optional
-            The circuit parameters. Defaults to None, which uses the optimized parameter
-            and :func:`kernel` must be called before.
-        engine: str, optional
-            The engine to use. Defaults to ``None``, which uses ``self.engine``.
+        angles : Tensor, optional
+            Values of the circuit variables. Default is the optimized parameters.
+        engine : str, optional
+            Engine to use. Default is ``self.engine``.
+        ket : bool, optional
+            If True, use the ket circuit, otherwise the bra. Default is True.
 
         Returns
         -------
-        statevector: Tensor
-            Corresponding state vector
+        Tensor
+            State vector.
 
         See Also
         --------
-        civector: Evaluate the configuration interaction (CI) vector.
-        energy: Evaluate the total energy.
-        energy_and_grad: Evaluate the total energy and parameter gradients.
-
-        Examples
-        --------
-        >>> from tencirchem import UCCSD
-        >>> from tencirchem.molecule import h2
-        >>> uccsd = UCCSD(h2)
-        >>> uccsd.statevector([0, 0])  # HF state
-        array([0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        civector : Return the configuration interaction (CI) vector.
+        energy : Evaluate the energy.
+        energy_and_grad : Evaluate the energy and its parameter gradients.
         """
         self._sanity_check()
         angles = self._check_params_argument(angles)
@@ -700,26 +660,29 @@ class EXPVAL(UCC):
         trotter: bool = False,
         ket: bool = True,
     ) -> tc.Circuit:
-        """
-        Get the circuit as TensorCircuit ``Circuit`` object
+        """Return the circuit as a TensorCircuit ``Circuit``.
 
         Parameters
         ----------
-        params: Tensor, optional
-            The circuit parameters. Defaults to None, which uses the optimized parameter.
-            If :func:`kernel` is not called before, the initial guess is used.
-        decompose_multicontrol: bool, optional
-            Whether decompose the Multicontrol gate in the circuit into CNOT gates.
-            Defaults to False.
-        trotter: bool, optional
-            Whether Trotterize the UCC factor into Pauli strings.
-            Defaults to False.
-        ket: bool, optional
-            Whether to return ket or bra circuit
+        params : Tensor, optional
+            Circuit parameters. Default is the optimized ones, or the initial guess
+            if ``kernel`` was not called.
+        decompose_multicontrol : bool, optional
+            Whether to decompose multicontrol gates into CNOTs. Default is False.
+        trotter : bool, optional
+            Whether to Trotterize the excitations into Pauli strings. Default is False.
+        ket : bool, optional
+            If True, return the ket circuit, otherwise the bra. Default is True.
+
         Returns
         -------
-        circuit: :class:`tc.Circuit`
+        tensorcircuit.Circuit
             The quantum circuit.
+
+        Raises
+        ------
+        ValueError
+            If the excitation operators are not defined.
         """
         if ket:
             ex_ops = self.ex_ops_ket
@@ -743,9 +706,9 @@ class EXPVAL(UCC):
         )
 
     def print_circuit(self, ket: bool = True):
-        """
-        Prints the circuit information. If you wish to print the circuit diagram,
-        use :func:`get_circuit` and then call ``draw()`` such as ``print(ucc.get_circuit().draw())``.
+        """Print gate information of the ket (or bra) circuit.
+
+        To print the diagram use ``get_circuit(...).draw()``.
         """
         c = self.get_circuit(ket=ket)
         df = get_circuit_dataframe(c)
@@ -759,33 +722,26 @@ class EXPVAL(UCC):
     def get_init_state_dataframe(
         self, init_state=None, coeff_epsilon: float = DISCARD_EPS, ket: bool = True
     ) -> pd.DataFrame:
-        """
-        Returns initial state information dataframe.
+        """Return the initial state as a table of configurations and coefficients.
 
         Parameters
         ----------
-        coeff_epsilon: float, optional
-            The threshold to screen out states with small coefficients.
-            Defaults to 1e-12.
+        init_state : array_like, optional
+            State to tabulate. Default is the initial state of the ket (or bra), or
+            Hartree-Fock if unset.
+        coeff_epsilon : float, optional
+            Coefficients below this threshold are dropped. Default is 1e-12.
+        ket : bool, optional
+            If True, use the ket, otherwise the bra. Default is True.
 
         Returns
         -------
-        pd.DataFrame
+        pandas.DataFrame
+            Columns "configuration" and "coefficient".
 
         See Also
         --------
-        init_state: The circuit initial state before applying the excitation operators.
-
-        Examples
-        --------
-        >>> from tencirchem import UCC
-        >>> from tencirchem.molecule import h2
-        >>> ucc = UCC(h2)
-        >>> ucc.init_state = [0.707, 0, 0, 0.707]
-        >>> ucc.get_init_state_dataframe()   # doctest: +NORMALIZE_WHITESPACE
-             configuration  coefficient
-        0          0101        0.707
-        1          1010        0.707
+        init_state : Initial state before the excitation operators are applied.
         """
         columns = ["configuration", "coefficient"]
         if init_state is None:
@@ -811,8 +767,17 @@ class EXPVAL(UCC):
         return pd.DataFrame(data_list, columns=columns)
 
     def get_excitation_dataframe(self, ket: bool = True) -> pd.DataFrame:
-        """
-        ket:bool Whether to refered to the ket (True) or bra (False)
+        """Return the excitation operators of the ket (or bra) as a table.
+
+        Parameters
+        ----------
+        ket : bool, optional
+            If True, use the ket, otherwise the bra. Default is True.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns "excitation", "configuration", "parameter" and "initial guess".
         """
         columns = ["excitation", "configuration", "parameter", "initial guess"]
         if ket:
@@ -848,10 +813,12 @@ class EXPVAL(UCC):
         return pd.DataFrame(data_list, columns=columns)
 
     def print_excitations(self):
+        """Print the excitation tables of bra and ket."""
         print("Bra: ", self.get_excitation_dataframe(ket=False).to_string())
         print("Ket: ", self.get_excitation_dataframe(ket=True).to_string())
 
     def print_ansatz(self):
+        """Print the numbers of qubits, parameters and excitations, and the initial condition type."""
         df_dict = {
             "#qubits": [self.n_qubits],
             "#params_ket": [self.n_params_ket],
@@ -871,24 +838,25 @@ class EXPVAL(UCC):
         print(pd.DataFrame(df_dict).to_string(index=False))
 
     def print_init_state_bra(self):
+        """Print the initial state of the bra."""
         print("Bra: ", self.get_init_state_dataframe(self.init_state_bra).to_string())
 
     def print_init_state_ket(self):
+        """Print the initial state of the ket."""
         print("Ket: ", self.get_init_state_dataframe(self.init_state_ket).to_string())
 
     def print_init_state(self):
+        """Print the initial states of bra and ket."""
         self.print_init_state_bra()
         self.print_init_state_ket()
 
     def print_summary(self, include_circuit: bool = False):
-        """
-        Print a summary of the class.
+        """Print a summary of ansatz, initial conditions, energy, excitations and optimization result.
 
         Parameters
         ----------
-        include_circuit: bool
-            Whether include the circuit section.
-
+        include_circuit : bool, optional
+            Whether to include the circuit section. Default is False.
         """
         print("################################ Ansatz ###############################")
         self.print_ansatz()
@@ -917,34 +885,31 @@ class EXPVAL(UCC):
 
     @property
     def init_state_bra(self) -> Tensor:
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
+        """Tensor : initial state of the bra before the excitations, usually Hartree-Fock.
 
         See Also
         --------
-        get_init_state_dataframe: Returns initial state information dataframe.
+        get_init_state_dataframe : Return the initial state as a dataframe.
         """
         return self._init_state_bra
 
     @property
     def init_state_ket(self) -> Tensor:
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
+        """Tensor : initial state of the ket before the excitations, usually Hartree-Fock.
 
         See Also
         --------
-        get_init_state_dataframe: Returns initial state information dataframe.
+        get_init_state_dataframe : Return the initial state as a dataframe.
         """
         return self._init_state_ket
 
     @property
     def init_state(self) -> Tensor:
-        """
-        The circuit initial state before applying the excitation operators. Usually RHF.
+        """tuple of Tensor : initial states of bra and ket. Setting it sets both.
 
         See Also
         --------
-        get_init_state_dataframe: Returns initial state information dataframe.
+        get_init_state_dataframe : Return the initial state as a dataframe.
         """
         return self._init_state_bra, self._init_state_ket
 
@@ -963,9 +928,7 @@ class EXPVAL(UCC):
 
     @property
     def ex_ops(self) -> Tensor:
-        """
-        Excitation operators applied to the bra , ket.
-        """
+        """tuple : excitation operators of bra and ket. Setting it sets both."""
         return self.ex_ops_bra, self.ex_ops_ket
 
     @ex_ops.setter
@@ -975,7 +938,7 @@ class EXPVAL(UCC):
 
     @property
     def params_bra(self) -> Tensor:
-        """The circuit parameters."""
+        """list : parameters of the bra circuit (optimized values if available, otherwise names)."""
         if self.opt_res is not None and "params_bra" in self.opt_res:
             return self.opt_res.params_bra
         elif self._params_bra is not None:
@@ -984,7 +947,7 @@ class EXPVAL(UCC):
 
     @property
     def params_ket(self) -> Tensor:
-        """The circuit parameters."""
+        """list : parameters of the ket circuit (optimized values if available, otherwise names)."""
         if self.opt_res is not None and "params_ket" in self.opt_res:
             return self.opt_res.params_ket
         elif self._params_ket is not None:
@@ -993,7 +956,7 @@ class EXPVAL(UCC):
 
     @property
     def params(self) -> Tensor:
-        """The circuit parameters."""
+        """tuple : parameters of bra and ket. Setting it sets both."""
         return self.params_bra, self.params_ket
 
     @params_bra.setter
@@ -1041,6 +1004,7 @@ class EXPVAL(UCC):
 
     @property
     def param_to_ex_ops_bra(self):
+        """dict : maps each bra parameter to the excitation operators using it."""
         if self.params_bra is None:
             return {}
         d = defaultdict(list)
@@ -1050,6 +1014,7 @@ class EXPVAL(UCC):
 
     @property
     def param_to_ex_ops_ket(self):
+        """dict : maps each ket parameter to the excitation operators using it."""
         d = defaultdict(list)
         for i, j in enumerate(self.params_ket):
             d[j].append(self.ex_ops_ket[i])
@@ -1057,6 +1022,7 @@ class EXPVAL(UCC):
 
     @property
     def param_to_ex_ops(self):
+        """dict : maps each parameter to the excitation operators using it."""
         db = self.param_to_ex_ops_bra if self.params_bra is not None else {}
         dk = self.param_to_ex_ops_ket
         db.update(dk)
@@ -1064,30 +1030,37 @@ class EXPVAL(UCC):
 
     @property
     def n_variables(self) -> int:
+        """int : number of independent variables of bra and ket."""
         return len(self.total_variables) if self.total_variables is not None else 0
 
     @property
     def n_variables_bra(self) -> int:
+        """int : number of independent variables of the bra."""
         return len(Objective(self.variables_bra).extract_variables())
 
     @property
     def n_variables_ket(self) -> int:
+        """int : number of independent variables of the ket."""
         return len(Objective(self.variables_ket).extract_variables())
 
     @property
     def variables_ket(self) -> list[Variable]:
+        """list of Variable : tequila variables (or fixed values) of the ket gates."""
         return self._variables_ket
 
     @property
     def variables_bra(self):
+        """list of Variable : tequila variables (or fixed values) of the bra gates."""
         return self._variables_bra
 
     @property
     def variables(self):
+        """tuple : variables of bra and ket."""
         return self._variables_bra, self._variables_ket
 
     @property
     def param_to_var_bra(self):
+        """dict : maps bra parameter names to variables."""
         d = {}
         for i in range(len(self.params_bra)):
             d[self.params_bra[i]] = self.variables_bra[i]
@@ -1095,6 +1068,7 @@ class EXPVAL(UCC):
 
     @property
     def param_to_var_ket(self):
+        """dict : maps ket parameter names to variables."""
         d = {}
         for i in range(len(self.params_ket)):
             d[self.params_ket[i]] = self.variables_ket[i]
@@ -1102,12 +1076,14 @@ class EXPVAL(UCC):
 
     @property
     def param_to_var(self):
+        """dict : maps parameter names to variables, for bra and ket."""
         d = self.param_to_var_bra
         d.update(self.param_to_var_ket)
         return d
 
     @property
     def var_to_param_bra(self):
+        """dict or None : maps bra variables to parameter names."""
         if self.params_bra is not None:
             d = {}
             for i in range(len(self.params_bra)):
@@ -1118,6 +1094,7 @@ class EXPVAL(UCC):
 
     @property
     def var_to_param_ket(self):
+        """dict or None : maps ket variables to parameter names."""
         if self.params_ket is not None:
             d = {}
             for i in range(len(self.params_ket)):
@@ -1126,6 +1103,7 @@ class EXPVAL(UCC):
 
     @property
     def var_to_param(self):
+        """dict or None : maps variables to parameter names, for bra and ket."""
         if self.var_to_param_bra is None:
             return self.var_to_param_ket
         else:
@@ -1135,6 +1113,7 @@ class EXPVAL(UCC):
 
     @property
     def total_variables(self) -> list[Variable] | None:
+        """list of Variable or None : unique variables of bra and ket, which define the order of ``angles``."""
         if self.variables_bra is not None and self.variables_bra is not None:
             return Objective(
                 self.variables_bra + self.variables_ket
@@ -1148,6 +1127,7 @@ class EXPVAL(UCC):
 
     @property
     def init_guess(self):
+        """list or dict : initial values of the variables for the minimization."""
         if isinstance(self._init_guess, dict):
             return [self._init_guess[i] for i in self.total_variables]
         elif isinstance(self._init_guess, Number):
@@ -1161,6 +1141,7 @@ class EXPVAL(UCC):
 
 
 def map_variables(x: Variable | Objective | None, dvariables: dict):
+    """Return the value of ``x``, evaluating it with ``dvariables`` if it is a Variable or Objective."""
     if isinstance(x, Variable):
         x = x.map_variables(dvariables)
     elif isinstance(x, Objective):

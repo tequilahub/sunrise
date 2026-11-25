@@ -4,12 +4,12 @@ import networkx as nx
 import tequila as tq
 from numpy import eye, pi
 
-import sunrise as sn
+import sunrise as sun
 
 # Step 1: Molecule intialization
 n_atoms = 8
 geo = "".join([f"H 0. 0. {i}\n".format(i) for i in range(n_atoms)])
-mol = sn.chemistry.Molecule(
+mol = sun.chemistry.Molecule(
     geometry=geo, basis_set="sto-3g", backend="pyscf", units="a"
 ).use_native_orbitals()
 
@@ -28,7 +28,7 @@ for edge in edges:
     initial_guess[edge[0], edge[1]] = 1
     initial_guess[edge[1], edge[0]] = -1
 
-# For further molecules, we recomend the combination with sn.CLPO.generate_CLPO_molecule_edges
+# For further molecules, we recomend the combination with sun.CLPO.generate_CLPO_molecule_edges
 # see Sunrise/examples/CLPO_orbitals for an example
 
 grouping = None  # Grouping keyword maybe None,number, or list of numbers
@@ -36,9 +36,9 @@ grouping = None  # Grouping keyword maybe None,number, or list of numbers
 # If Number, the circuit conectivity is grouped in blocks of your number +-1
 # If list of numbers, you decide it manually
 
-opt = sn.SPAFP.run_spa(mol, edges, initial_guess=initial_guess.T, grouping=grouping)
+opt = sun.SPAFP.run_spa(mol, edges, initial_guess=initial_guess.T, grouping=grouping)
 mol = opt.molecule
-sn.plot_MO(molecule=mol, filename="SPA-first_graph")
+sun.plot_MO(molecule=mol, filename="SPA-first_graph")
 
 # Step 3: You may extend this circuit and still taking advantage of this decomposition as:
 
@@ -74,10 +74,10 @@ Uspaplus = U + UR + UR1 + UC + UR1.dagger() + UR.dagger()
 
 # If you want to check the circuit separability:
 print("Circuit Decompostion: ", list(nx.connected_components(Uspaplus.to_networkx())))
-E = sn.SPAFP.decompose(
+E = sun.SPAFP.decompose(
     H=mol.make_hamiltonian(), U=Uspaplus, grouping=[[*range(8)], [*range(8, 16)]]
 )
-res = sn.minimize(
+res = sun.minimize(
     E, silent=True, gradient="2-point", method_options={"finite_diff_rel_step": 1.0e-5}
 )
 print("Extended SPA Energy: ", res.energy)
@@ -87,4 +87,4 @@ r1mol = deepcopy(mol)
 mUR1 = deepcopy(UR + UR1)
 mUR1 = mUR1.map_variables({d: res.variables[d] for d in mUR1.extract_variables()})
 r1mol = r1mol.transform_orbitals(mUR1)
-sn.plot_MO(r1mol, filename="SPA-second_graph")
+sun.plot_MO(r1mol, filename="SPA-second_graph")
