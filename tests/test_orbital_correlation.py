@@ -19,6 +19,8 @@ GEOMETRY = "H 0 0 0\nH 0 0 1.5\nH 0 0 3.0\nH 0 0 4.5"
     [
         pytest.param(
             b,
+            # TODO: fix tcc for spin-flip terms in expval/tcc (0.071 instead of -0.040 for
+            # 0.5 * (0^ 5^ 4 1 + h.c.) on H4 UpCCSD), then drop this xfail
             marks=pytest.mark.xfail(
                 reason="tcc gets spin-flip terms like 0^ 5^ 4 1 wrong"
             )
