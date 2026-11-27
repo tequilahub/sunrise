@@ -11,12 +11,14 @@ from numbers import Number
 from numbers import Real as RealNumber
 from typing import Callable
 
+from numpy.random import binomial
 from tequila import SUPPORTED_BACKENDS, QCircuit, QubitWaveFunction, TequilaException
 from tequila import grad as tqgrad
 from tequila.circuit.noise import NoiseModel
 from tequila.objective import QTensor, format_variable_dictionary
 from tequila.objective.objective import Objective, Variable, Variables, assign_variable
 from tequila.optimizers import minimize as tminimize
+from tequila.simulators.simulator_api import INSTALLED_SAMPLERS
 from tequila.simulators.simulator_api import compile as tq_compile
 from tequila.simulators.simulator_base import BackendCircuit
 
@@ -27,6 +29,7 @@ from sunrise.expval import (
 )
 
 from ..fermionic_operations import FCircuit
+from .fermionic_braket import FermBraketImpl
 from .simulate_circuit import simulate_fcircuit
 
 
@@ -225,7 +228,7 @@ def simulate(
     backend: str | None = None,
     noise: NoiseModel | None = None,
     device: str | None = None,
-    initial_state: int | QubitWaveFunction = 0,
+    initial_state: int | QubitWaveFunction | None = None,
     *args,
     **kwargs,
 ) -> RealNumber | QubitWaveFunction | None:
@@ -248,8 +251,9 @@ def simulate(
         Noise model to apply.
     device : str, optional
         Device on which (or in emulation of which) to sample.
-    initial_state : int or QubitWaveFunction
-        Initial state of the circuit. Default is 0.
+    initial_state : int or QubitWaveFunction, optional
+        Initial state of the circuit. If None, an FCircuit keeps its stored initial state
+        and other circuits start from 0.
     *args, **kwargs
         Passed on to the backend. ``read_out_qubits`` (list of int) selects the
         measured qubits for sampled QCircuit simulations.
@@ -277,11 +281,6 @@ def simulate(
 
     variables = format_variable_dictionary(variables)
 
-    if variables is None and not (len(objective.extract_variables()) == 0):
-        raise TequilaException(
-            f"You called simulate for a parametrized type but forgot to pass down the variables: {objective.extract_variables()}"
-        )
-
     if isinstance(objective, list):
         return [
             simulate(
@@ -296,10 +295,21 @@ def simulate(
                 **kwargs,
             )
             for op in objective
-        ]  # TODO Multidimensional
+        ]
+    if variables is None and not (len(objective.extract_variables()) == 0):
+        raise TequilaException(
+            f"You called simulate for a parametrized type but forgot to pass down the variables: {objective.extract_variables()}"
+        )
+
     if isinstance(objective, FCircuit):
         return simulate_fcircuit(
-            *args, U=objective, variables=variables, backend=backend, **kwargs
+            *args,
+            U=objective,
+            variables=variables,
+            backend=backend,
+            samples=samples,
+            initial_state=initial_state,
+            **kwargs,
         )
 
     compiled_objective = compile(
@@ -316,7 +326,7 @@ def simulate(
         *args,
         variables=variables,
         samples=samples,
-        initial_state=initial_state,
+        initial_state=0 if initial_state is None else initial_state,
         **kwargs,
     )
 
@@ -375,11 +385,31 @@ def compile(
     if backend in SUPPORTED_FERMIONIC_BACKENDS:
         if fbackend is None:
             fbackend = backend
-        if backend not in SUPPORTED_BACKENDS:
+        if backend not in SUPPORTED_BACKENDS or (
+            samples is not None and backend not in INSTALLED_SAMPLERS
+        ):
+            # the qubit part goes to the default of tequila (tequila's spex can't sample)
             backend = None
     fbackend = pick_backend(
         backend=fbackend, samples=samples, noise=noise, device=device
     )
+    if isinstance(objective, QTensor):
+        # compile every element, as tequila does
+        compiled = [
+            compile(
+                o,
+                variables=variables,
+                samples=samples,
+                simulate_density=simulate_density,
+                backend=backend,
+                noise=noise,
+                device=device,
+                fbackend=fbackend,
+                **kwargs,
+            )
+            for o in objective.flatten()
+        ]
+        return QTensor(objective_list=compiled, shape=objective.shape)
     if isinstance(objective, FCircuit):
         return objective  # Currently there is not FCircuit compilation since the fermionic backends work with lists of operations instead of actual qcircuit compilation
 
@@ -393,9 +423,12 @@ def compile(
             for arg in argset:
                 if type(arg).__name__ == "FermBraketImpl":
                     if id(arg) not in expectationvalues:
-                        compiled_expval = compile_fexpval(
-                            *args, objective=arg, backend=fbackend, **kwargs
-                        )
+                        if samples is not None and fbackend != "tequila":
+                            compiled_expval = SampledBraket(arg, backend=fbackend)
+                        else:
+                            compiled_expval = compile_fexpval(
+                                *args, objective=arg, backend=fbackend, **kwargs
+                            )
                         if fbackend == "tequila":
                             compiled_expval = tq_compile(
                                 *args,
@@ -434,7 +467,7 @@ def compile(
 
 def compile_fexpval(
     objective=None, backend: str | None = None, *args, **kwargs
-):  # TODO: For now our fermionic backends don't support noise/samples... Variables not passed since already inside FermBraketImpl
+):  # Variables not passed since already inside FermBraketImpl
     """Compile a fermionic braket with the chosen fermionic backend.
 
     Parameters
@@ -455,3 +488,51 @@ def compile_fexpval(
         return INSTALLED_FERMIONIC_BACKENDS[backend.lower()](objective, *args, **kwargs)
     else:
         raise ImportError(f"Fermionic backend not recognised {backend}")
+
+
+class SampledBraket:
+    """Braket of a fermionic backend estimated from measurements.
+
+    Each Pauli string of the operator (Jordan-Wigner, up-then-down, as in the tequila backend) is
+    measured ``samples`` times on the wavefunctions of the fermionic circuit simulator.
+
+    Parameters
+    ----------
+    braket : FermBraketImpl
+        Braket to estimate.
+    backend : str
+        Name of the fermionic circuit simulator.
+    """
+
+    def __init__(self, braket: FermBraketImpl, backend: str):
+        self.braket = braket
+        self.backend = backend
+        # the qubit operator of the tequila backend
+        operator_only = FermBraketImpl(
+            ket=FCircuit(), operator=braket.operator, molecule=braket.molecule
+        )
+        self.H = INSTALLED_FERMIONIC_BACKENDS["tequila"](operator_only).args[0].H[0]
+
+    def extract_variables(self) -> list:
+        return self.braket.extract_variables()
+
+    def __call__(self, variables=None, samples: int | None = None, *args, **kwargs):
+        n_orb = self.braket.molecule.n_orbitals
+        ket = simulate_fcircuit(
+            U=self.braket.ket, variables=variables, backend=self.backend, n_orb=n_orb
+        )
+        bra = ket
+        if self.braket.bra is not None:
+            bra = simulate_fcircuit(
+                U=self.braket.bra,
+                variables=variables,
+                backend=self.backend,
+                n_orb=n_orb,
+            )
+        result = 0.0
+        for ps in self.H.paulistrings:
+            # a measurement gives +1 with probability (1 + Re<bra|P|ket>)/2
+            p = (1 + bra.inner(ket.apply_paulistring(ps.naked())).real) / 2
+            p = min(max(p, 0.0), 1.0)
+            result += ps.coeff * (2 * binomial(samples, p) / samples - 1)
+        return float(result.real)
