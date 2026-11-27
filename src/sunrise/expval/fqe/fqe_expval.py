@@ -12,7 +12,7 @@ import tequila as tq
 from fqe.hamiltonians.diagonal_coulomb import DiagonalCoulomb
 from fqe.hamiltonians.sparse_hamiltonian import SparseHamiltonian
 from numpy import ndarray
-from tequila import QubitHamiltonian, QubitWaveFunction, TequilaException
+from tequila import BitNumbering, QubitHamiltonian, QubitWaveFunction, TequilaException
 from tequila.hamiltonian.paulis import from_string
 
 from sunrise.fermionic_operations.circuit import FCircuit
@@ -442,8 +442,8 @@ def set_init_state(
         indices, values = init_state_from_wavefunction(
             wvf=init_state, n_orb=n_orb, bin_dict=bin_dict
         )
-        for i, index in enumerate(indices):
-            coeff[index][index] = values[i]
+        for (alpha, beta), value in zip(indices, values):
+            coeff[alpha][beta] = value
 
         wfn.set_wfn(strategy="from_data", raw_data={(n_ele, 0): coeff})
         wfn.normalize()
@@ -457,29 +457,34 @@ def set_init_state(
 
 
 def init_state_from_wavefunction(wvf: QubitWaveFunction, n_orb: int, bin_dict: dict):
-    """Return indices (via ``bin_dict``) and amplitudes of the non-negligible components of ``wvf``.
+    """Return the FQE indices and amplitudes of the non-negligible components of ``wvf``.
 
     Parameters
     ----------
     wvf : QubitWaveFunction
-        Wavefunction to convert.
+        Wavefunction to convert, in up-then-down order.
     n_orb : int
-        Number of spatial orbitals; shorter bitstrings are padded.
+        Number of spatial orbitals.
     bin_dict : dict
         Map from bitstrings to FQE indices.
+
+    Returns
+    -------
+    indices : list of tuple of int
+        The (alpha string, beta string) indices of each component.
+    values : list of complex
+        The amplitudes, with their sign.
     """
     indices = []
     values = []
     for idx, i in wvf.items():
         if abs(i) > 1e-6:
-            vec = idx.binary
-            if len(vec) < n_orb:
-                vec = "0" * (n_orb - len(vec)) + vec
-            if len(vec) > n_orb:
-                vec = vec[:n_orb]
-            vec = vec[::-1]
-            # vec = vec[len(vec)//2:]
-            indices.append(bin_dict[vec])
-            values.append(abs(i))  # todo not sure about this
+            # up-then-down with qubit q as bit q: alpha in the low n_orb bits, beta in the high ones,
+            # written like the keys of bin_dict with orbital 0 as the rightmost bit
+            k = idx.to_integer(numbering=BitNumbering.LSB)
+            alpha = format(k & ((1 << n_orb) - 1), f"0{n_orb}b")
+            beta = format(k >> n_orb, f"0{n_orb}b")
+            indices.append((bin_dict[alpha], bin_dict[beta]))
+            values.append(i)
 
     return indices, values
