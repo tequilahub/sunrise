@@ -171,7 +171,11 @@ class HybridBase(qc_base):
             )
 
         if orbital_type is not None and orbital_type.lower() == "native":
-            self.integral_manager.transform_to_native_orbitals()
+            from sunrise.orbital_transformations.loewdin import (
+                transform_to_native_orbitals,
+            )
+
+            transform_to_native_orbitals(self.integral_manager)
         # tq init overwriten bcs I need the number of orbitals for select->transformation
         if not isinstance(transformation, typing.Callable):
             self.transformation: EncodingBase = self._initialize_transformation(

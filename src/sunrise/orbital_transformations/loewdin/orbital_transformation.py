@@ -46,6 +46,51 @@ def orthogonalize(c: numpy.ndarray, s: numpy.ndarray) -> numpy.ndarray:
     return jcoef
 
 
+def get_native_coefficients(integral_manager) -> numpy.ndarray:
+    """Return the coefficients of the native orbitals, the Löwdin-orthonormalized basis functions.
+
+    Parameters
+    ----------
+    integral_manager : IntegralManager
+        Integral manager of the molecule, which holds the overlap matrix of the basis.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coefficient matrix :math:`S^{-1/2}`, the identity if the basis is already orthogonal.
+
+    See Also
+    --------
+    transform_to_native_orbitals : Put these orbitals into the integral manager.
+    """
+    S = integral_manager.overlap_integrals
+    if integral_manager.basis_is_orthogonal():
+        return numpy.eye(S.shape[0])
+    # not orthogonalize(eye, S): its rounding differs at 1e-16 and flips ties in get_active
+    sv, U = numpy.linalg.eigh(S)
+    s = numpy.diag(numpy.asarray([1.0 / numpy.sqrt(x) for x in sv]))
+    return U.dot(s.dot(U.transpose()))
+
+
+def transform_to_native_orbitals(integral_manager) -> None:
+    """Replace the orbitals of an integral manager by the native orbitals, in place.
+
+    Parameters
+    ----------
+    integral_manager : IntegralManager
+        Integral manager to change.
+
+    See Also
+    --------
+    get_native_coefficients : The coefficients that are set.
+    generate_loewdin_molecule : Native orbitals for a whole molecule, with core and active space.
+    """
+    integral_manager.orbital_coefficients = get_native_coefficients(integral_manager)
+    integral_manager._orbital_type = (
+        f"orthonormalized-{integral_manager._basis_name}-basis"
+    )
+
+
 def orthogonalize_active_space(
     c: numpy.ndarray, s: numpy.ndarray, frozen_idx: list[int], active_idx: list[int]
 ) -> numpy.ndarray:
@@ -359,7 +404,7 @@ def generate_loewdin_molecule(
 
     c = mol.integral_manager.orbital_coefficients.copy()
     s = mol.integral_manager.overlap_integrals.copy()
-    d = mol.integral_manager.get_orthonormalized_orbital_coefficients().copy()
+    d = get_native_coefficients(mol.integral_manager)
 
     active = None
     if not mol.integral_manager.active_space_is_trivial() and core is None:
@@ -463,10 +508,10 @@ def generate_loewdin_molecule(
         )
     # can not be an instance of a specific backend (otherwise we get inconsistencies with classical methods in the backend)
     if inplace:
-        mol.integral_manager.transform_to_native_orbitals()
+        transform_to_native_orbitals(mol.integral_manager)
         return mol
     integral_manager = deepcopy(mol.integral_manager)
-    integral_manager.transform_to_native_orbitals()
+    transform_to_native_orbitals(integral_manager)
     if is_hybrid:
         return HybridBase(
             parameters=deepcopy(mol.parameters),

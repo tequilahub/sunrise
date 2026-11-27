@@ -159,7 +159,11 @@ class FermionicBase(QuantumChemistryBase):
             )
 
         if orbital_type is not None and orbital_type.lower() == "native":
-            self.integral_manager.transform_to_native_orbitals()
+            from sunrise.orbital_transformations.loewdin import (
+                transform_to_native_orbitals,
+            )
+
+            transform_to_native_orbitals(self.integral_manager)
 
         self._rdm1 = None
         self._rdm2 = None

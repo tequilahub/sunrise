@@ -1639,7 +1639,11 @@ class IntegralManager:
 
         if orbital_coefficients is None:
             # default are symmetrically orthogonalized orbitals in the given basis
-            orbital_coefficients = self.get_orthonormalized_orbital_coefficients()
+            from sunrise.orbital_transformations.loewdin import (
+                get_native_coefficients,
+            )
+
+            orbital_coefficients = get_native_coefficients(self)
         self._orbital_coefficients = orbital_coefficients
 
         if orbitals is None:
@@ -1650,23 +1654,6 @@ class IntegralManager:
 
         self._orbitals = orbitals
         self.active_space = active_space
-
-    def get_orthonormalized_orbital_coefficients(self):
-        """Compute orthonormal orbitals closest to the basis functions (Loewdin orthonormalization).
-
-        Returns
-        -------
-        numpy.ndarray
-            Coefficient matrix of the orthonormalized orbitals.
-        """
-        if self.basis_is_orthogonal():
-            return numpy.eye(self._one_body_integrals.shape[0])
-
-        S = self._overlap_integrals
-        sv, U = numpy.linalg.eigh(S)
-        s = numpy.diag(numpy.asarray([1.0 / numpy.sqrt(x) for x in sv]))
-        C = U.dot(s.dot(U.transpose()))
-        return C
 
     @property
     def active_orbitals(self):
@@ -1744,12 +1731,6 @@ class IntegralManager:
         for i, x in enumerate(self._orbitals):
             y = OrbitalData(idx=x.idx, idx_total=x.idx_total)
             self._orbitals[i] = y
-
-    def transform_to_native_orbitals(self):
-        """Replace the orbitals by the orthonormal functions closest to the basis (Loewdin)."""
-        c = self.get_orthonormalized_orbital_coefficients()
-        self.orbital_coefficients = c
-        self._orbital_type = f"orthonormalized-{self._basis_name}-basis"
 
     def is_unitary(self, U):
         """Return whether ``U`` is a unitary matrix."""

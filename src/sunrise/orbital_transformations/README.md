@@ -28,6 +28,8 @@ The **native orbitals** are the atomic basis functions, symmetrically (Löwdin) 
 | Function | Returns |
 |---|---|
 | `generate_loewdin_molecule(mol, core=None, active=None)` | molecule in native basis, of the same nature as `mol` |
+| `get_native_coefficients(integral_manager)` | coefficients of the native orbitals, $S^{-1/2}$ |
+| `transform_to_native_orbitals(integral_manager)` | nothing, puts the native orbitals into the integral manager (no core or active space) |
 | `orthogonalize(c, s)` | Löwdin-orthonormalized orbital coefficients |
 | `orthogonalize_active_space(c, s, frozen_idx, active_idx)` | coefficients with the active orbitals orthonormalized against the frozen ones |
 | `get_active`, `get_core` | the native orbitals that best span the active space, or the orbitals to freeze |
