@@ -250,6 +250,17 @@ class FermionicBase(QuantumChemistryBase):
         )
         return cls(*args, parameters=parameters, molecule=molecule, **kwargs)
 
+    @property
+    def up_then_down(self) -> bool:
+        """Always True: fermionic molecules have no qubit encoding and are ordered up then down."""
+        return True
+
+    @up_then_down.setter
+    def up_then_down(self, up_then_down: bool):
+        raise TequilaException(
+            "The fermionic backends only support the up then down ordering, up_then_down can't be changed"
+        )
+
     def make_excitation_generator(
         self,
         indices: typing.Iterable[tuple[int, int]],

@@ -1863,6 +1863,15 @@ class QuantumChemistryBase:
         """int : number of active electrons."""
         return 2 * len(self.integral_manager.active_reference_orbitals)
 
+    @property
+    def up_then_down(self) -> bool:
+        """Whether the qubits are ordered up then down, the flag of ``self.transformation``."""
+        return self.transformation.up_then_down
+
+    @up_then_down.setter
+    def up_then_down(self, up_then_down: bool):
+        self.transformation.up_then_down = up_then_down
+
     def make_annihilation_op(self, orbital, coefficient=1.0):
         """Return the annihilation operator of a spin orbital as qubit operator.
 
