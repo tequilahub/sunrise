@@ -1264,7 +1264,7 @@ class QuantumChemistryBase:
         self,
         use_active: bool = True,
         inplace: bool = False,
-        edges: list | None = None,
+        atom_edges: list | None = None,
         *args,
         **kwargs,
     ):
@@ -1280,10 +1280,11 @@ class QuantumChemistryBase:
             it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
-        edges : list of tuple of int, optional
+        atom_edges : list of tuple of int, optional
             Bonds imposed on the CLPOs, as 0-based atom indices (see ``generate_CLPO_molecule_edges``);
             the other bonds come from the atom connectivity.
         **kwargs
+            ``edges`` is the former name of ``atom_edges`` and is still accepted.
             Passed on to ``generate_CLPO_molecule_edges``.
 
         Returns
@@ -1291,12 +1292,21 @@ class QuantumChemistryBase:
         QuantumChemistryBase
             Molecule in the CLPO basis.
 
+        Raises
+        ------
+        TypeError
+            If both ``atom_edges`` and ``edges`` are given.
+
         See Also
         --------
         use_CLPO_orbitals_and_edges : The same, together with the SPA edges.
         """
         clpo_mol, _ = self.use_CLPO_orbitals_and_edges(
-            *args, use_active=use_active, inplace=inplace, edges=edges, **kwargs
+            *args,
+            use_active=use_active,
+            inplace=inplace,
+            atom_edges=atom_edges,
+            **kwargs,
         )
         return clpo_mol
 
@@ -1304,7 +1314,7 @@ class QuantumChemistryBase:
         self,
         use_active: bool = True,
         inplace=False,
-        edges: list | None = None,
+        atom_edges: list | None = None,
         *args,
         **kwargs,
     ):
@@ -1320,10 +1330,11 @@ class QuantumChemistryBase:
             it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
-        edges : list of tuple of int, optional
+        atom_edges : list of tuple of int, optional
             Bonds imposed on the CLPOs, as 0-based atom indices (see ``generate_CLPO_molecule_edges``);
             the other bonds come from the atom connectivity.
         **kwargs
+            ``edges`` is the former name of ``atom_edges`` and is still accepted.
             Passed on to ``generate_CLPO_molecule_edges``.
 
         Returns
@@ -1333,6 +1344,11 @@ class QuantumChemistryBase:
         edges : list of tuple of int
             Orbital pairs of each bond, to use as SPA edges.
 
+        Raises
+        ------
+        TypeError
+            If both ``atom_edges`` and ``edges`` are given.
+
         Examples
         --------
         >>> mol, edges = mol.use_CLPO_orbitals_and_edges()
@@ -1340,7 +1356,7 @@ class QuantumChemistryBase:
         from sunrise.orbital_transformations.CLPO import generate_CLPO_molecule_edges
 
         clpo_mol, clpo_edges = generate_CLPO_molecule_edges(
-            self, edges=edges, use_active=use_active, silent=True, **kwargs
+            self, atom_edges=atom_edges, use_active=use_active, silent=True, **kwargs
         )
 
         if inplace:
@@ -1424,8 +1440,8 @@ class QuantumChemistryBase:
             Name of the orbitals, not case sensitive: ``"loewdin"`` (or ``"native"``),
             ``"CLPO"``, ``"HAO"`` or ``"MEAO"``.
         **kwargs
-            Keyword arguments of the method, e.g. ``inplace``, ``core`` (``"loewdin"``), ``edges``
-            (``"CLPO"``) or ``minao`` (``"MEAO"``).
+            Keyword arguments of the method, e.g. ``inplace``, ``core`` (``"loewdin"``),
+            ``atom_edges`` (``"CLPO"``) or ``minao`` (``"MEAO"``).
 
         Returns
         -------
@@ -1802,6 +1818,15 @@ class QuantumChemistryBase:
     def n_electrons(self) -> int:
         """int : number of active electrons."""
         return 2 * len(self.integral_manager.active_reference_orbitals)
+
+    @property
+    def up_then_down(self) -> bool:
+        """Whether the qubits are ordered up then down, the flag of ``self.transformation``."""
+        return self.transformation.up_then_down
+
+    @up_then_down.setter
+    def up_then_down(self, up_then_down: bool):
+        self.transformation.up_then_down = up_then_down
 
     def make_annihilation_op(self, orbital, coefficient=1.0):
         """Return the annihilation operator of a spin orbital as qubit operator.

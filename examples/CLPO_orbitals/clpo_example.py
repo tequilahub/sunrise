@@ -27,7 +27,9 @@ sun.plot_MO(mol1, "1st_graph")
 # However, one can also generate custom orbitals by providing the desired molecule conectivity.
 # Please NOTE that the eddges you provide (based on the atom conectivity) and the ones returned
 # (based on orbital pairing) may be different
-mol2, edges = generate_CLPO_molecule_edges(mol, edges=[(1, 2), (0, 3)], silent=True)
+mol2, edges = generate_CLPO_molecule_edges(
+    mol, atom_edges=[(1, 2), (0, 3)], silent=True
+)
 print("Custom Edges: ", edges)
 sun.plot_MO(mol2, "2n_graph")
 
@@ -51,7 +53,7 @@ sun.plot_MO(mol3, filename="HAO", orbital=[2, 6, 10, 14])
 # One can also provide only part of the molecule, the rest will be autocomplete, similar as if
 # no edges are provided.
 mol1, edges = generate_CLPO_molecule_edges(
-    mol, edges=[(2, 3), (0, 1), (0, 1)], silent=True, use_active=True
+    mol, atom_edges=[(2, 3), (0, 1), (0, 1)], silent=True, use_active=True
 )
 sun.plot_MO(mol1, filename="CLPO", orbital=[4, 5, 14, 15])
 print("Edges ", edges)

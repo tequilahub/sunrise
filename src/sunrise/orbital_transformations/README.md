@@ -14,7 +14,7 @@ import sunrise as sun
 
 mol = sun.Molecule(geometry="H 0 0 0\nH 0 0 0.7", basis_set="sto-3g")
 mol = mol.use_orbitals("loewdin")  # same as mol.use_native_orbitals()
-mol = mol.use_orbitals("CLPO", edges=[(0, 1)])  # keywords go to use_CLPO_orbitals
+mol = mol.use_orbitals("CLPO", atom_edges=[(0, 1)])  # keywords go to use_CLPO_orbitals
 ```
 
 ## loewdin – native orbitals
@@ -57,7 +57,7 @@ Because each bond becomes an orbital *pair*, CLPOs also give a natural graph of 
 | `generate_HAO_molecule(mol)` | molecule in HAO basis |
 | `generate_HAO_molecule_edges(mol)` | molecule in HAO basis + the SPA edges on the HAOs: `(hybrid, H)` for each bond, `(hybrid,)` for each lone pair |
 | `generate_CLPO_molecule(mol)` | molecule in CLPO basis |
-| `generate_CLPO_molecule_edges(mol, edges=None)` | molecule in CLPO basis + the orbital pairs of each bond, to use as SPA edges (`edges` imposes bonds between atoms, the others come from the atom connectivity) |
+| `generate_CLPO_molecule_edges(mol, atom_edges=None)` | molecule in CLPO basis + the orbital pairs of each bond, to use as SPA edges (`atom_edges` imposes bonds between atoms, the others come from the atom connectivity) |
 
 The same is available as molecule methods for all natures: `mol.use_HAO_orbitals()`, `mol.use_HAO_orbitals_and_edges()`, `mol.use_CLPO_orbitals()`, `mol.use_CLPO_orbitals_and_edges()` and `mol.get_spa_edges()`.
 
