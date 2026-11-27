@@ -4,11 +4,12 @@ Most are interfaces to OpenFermion. ``known_encodings`` maps names to classes.
 """
 
 import abc
+import warnings
 
 import numpy
 import openfermion
 from openfermion.transforms.opconversions import bksf
-from tequila import BitString, TequilaException
+from tequila import BitString, TequilaException, TequilaWarning
 from tequila.circuit.circuit import QCircuit
 from tequila.circuit.gates import CNOT, H, Phase, X, Y, Z
 from tequila.hamiltonian.qubit_hamiltonian import QubitHamiltonian
@@ -395,9 +396,10 @@ class BravyiKitaevFast(EncodingBase):
     _ucc_support = True
 
     def __init__(self, n_electrons, n_orbitals, *args, **kwargs):
-        if "up_then_down" in kwargs:
-            raise TequilaException(
-                f"{type(self).__name__} has no up_then_down option: its qubits are the edges between spin orbitals"
+        if kwargs.pop("up_then_down", False):
+            warnings.warn(
+                f"{type(self).__name__} has no up_then_down option: its qubits are the edges between spin orbitals, it is ignored",
+                TequilaWarning,
             )
         super().__init__(
             *args,
@@ -540,9 +542,10 @@ class TaperedBravyiKitaev(EncodingBase):
         else:
             self.active_orbitals = active_orbitals
 
-        if "up_then_down" in kwargs:
-            raise TequilaException(
-                f"{type(self).__name__} has no up_then_down option: openfermion's symmetry_conserving_bravyi_kitaev orders the spin orbitals itself"
+        if kwargs.pop("up_then_down", False):
+            warnings.warn(
+                f"{type(self).__name__} has no up_then_down option: openfermion's symmetry_conserving_bravyi_kitaev orders the spin orbitals itself, it is ignored",
+                TequilaWarning,
             )
         super().__init__(
             *args,

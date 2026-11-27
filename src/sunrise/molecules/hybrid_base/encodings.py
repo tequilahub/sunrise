@@ -7,11 +7,12 @@ F. J. del Arco Santos et al., Quantum Sci. Technol. (2025), doi:10.1088/2058-956
 
 from __future__ import annotations
 
+import warnings
 from copy import deepcopy
 
 import numpy
 import openfermion
-from tequila import QubitHamiltonian, TequilaException
+from tequila import QubitHamiltonian, TequilaException, TequilaWarning
 from tequila.circuit.circuit import QCircuit
 from tequila.circuit.gates import X
 from tequila.hamiltonian.paulis import Sm, Sp, Z
@@ -497,9 +498,10 @@ class BravyiKitaevFast(JordanWigner):
     """
 
     def __init__(self, n_electrons, n_orbitals, select: dict, *args, **kwargs):
-        if "up_then_down" in kwargs:
-            raise TequilaException(
-                f"{type(self).__name__} has no up_then_down option: its qubits are the edges between spin orbitals"
+        if kwargs.pop("up_then_down", False):
+            warnings.warn(
+                f"{type(self).__name__} has no up_then_down option: its qubits are the edges between spin orbitals, it is ignored",
+                TequilaWarning,
             )
         super().__init__(n_electrons, n_orbitals, select, False, *args, **kwargs)
 
