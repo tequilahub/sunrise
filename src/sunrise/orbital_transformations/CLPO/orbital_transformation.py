@@ -85,7 +85,7 @@ def generate_CLPO_molecule_edges(
         (JANPA only considers HF or MP2 references). Psi4: a custom ``wfn`` is currently not
         supported.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -188,7 +188,7 @@ def generate_HAO_molecule(
         (JANPA only considers HF or MP2 references). Psi4: a custom ``wfn`` is currently not
         supported.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -357,7 +357,7 @@ def generate_CLPO_molecule(
         (JANPA only considers HF or MP2 references). Psi4: a custom ``wfn`` is currently not
         supported.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------

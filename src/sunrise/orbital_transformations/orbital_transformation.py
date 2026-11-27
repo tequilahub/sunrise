@@ -1,4 +1,4 @@
-"""Orthogonalization and active-space matching of orbital coefficient matrices."""
+"""Orthogonalization and active-space matching of orbital coefficient matrices, shared by all orbital bases."""
 
 from __future__ import annotations
 

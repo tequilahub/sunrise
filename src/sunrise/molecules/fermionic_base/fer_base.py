@@ -159,7 +159,11 @@ class FermionicBase(QuantumChemistryBase):
             )
 
         if orbital_type is not None and orbital_type.lower() == "native":
-            self.integral_manager.transform_to_native_orbitals()
+            from sunrise.orbital_transformations.loewdin import (
+                transform_to_native_orbitals,
+            )
+
+            transform_to_native_orbitals(self.integral_manager)
 
         self._rdm1 = None
         self._rdm2 = None
@@ -583,136 +587,39 @@ class FermionicBase(QuantumChemistryBase):
         Parameters
         ----------
         inplace : bool, optional
-            If True update this molecule, otherwise return a new one.
+            Update the current molecule instead of returning a new one. Default is False.
         core : list of int, optional
-            Orbitals of the current basis that are frozen and doubly occupied. The active native orbitals are
-            then chosen as the ones with the smallest overlap with the core orbitals. Default is inherited from the current active space.
+            Core orbitals (frozen, doubly occupied), given in the currently used orbitals
+            of the molecule (see ``print_basis_info``). Default is inherited from the
+            active space of the integral manager. If given, the active native orbitals
+            are chosen by their smallest overlap with the core orbitals.
         active : list of int, optional
-            (keyword) Active native orbitals. Default is all, or those chosen through ``core``.
-            Example: for H, He, H ``active=[0, 1, 2]`` are the 1s orbitals of left H, He, right H;
-            with ``core=[0]`` and no ``active``, ``active=[0, 2]`` is selected (He 1s overlaps most with the lowest HF orbital).
+            Keyword argument. Active orbitals in the native orbital basis. Default is all
+            orbitals, or the ``N-len(core)`` orbitals with smallest overlap with ``core``
+            if ``core`` is given. For H, He, H, ``active=[0, 1, 2]`` selects the three
+            atomic 1s orbitals; with ``core=[0]`` and no ``active``, ``active=[0, 2]`` is
+            selected, since the He 1s orbital overlaps most with the lowest HF orbital.
         reference_orbitals : list of int, optional
-            (keyword) Occupied orbitals, ``n_electrons // 2`` of them, which set the number of
-            electrons in the active space. Default is the current ones.
+            Keyword argument. Doubly occupied orbitals, ``N//2`` entries (N = total
+            number of electrons). Sets the number of electrons in the active space.
 
         Returns
         -------
         FermionicBase
-            The molecule in the native basis (``self`` if ``inplace``).
+            Molecule in the native basis (``self`` if ``inplace``).
+
+        See Also
+        --------
+        sunrise.orbital_transformations.loewdin.generate_loewdin_molecule : The implementation.
+        use_orbitals : Pick any of the orbital bases by name.
 
         Examples
         --------
         >>> mol = sun.Molecule(geometry=geom, basis_set="sto-3g", nature="fermionic").use_native_orbitals()
         """
-        from sunrise.utils.orbital_transformation import (
-            get_active,
-            get_core,
-            orthogonalize_active_space,
-        )
+        from sunrise.orbital_transformations.loewdin import generate_loewdin_molecule
 
-        c = self.integral_manager.orbital_coefficients.copy()
-        s = self.integral_manager.overlap_integrals.copy()
-        d = self.integral_manager.get_orthonormalized_orbital_coefficients().copy()
-
-        active = None
-        if not self.integral_manager.active_space_is_trivial() and core is None:
-            core = [
-                i.idx_total for i in self.integral_manager.orbitals if i.idx is None
-            ]
-        if "active" in kwargs:
-            active = kwargs["active"]
-            kwargs.pop("active")
-            if core is None:
-                core = get_core(c, d, s, active)
-        else:
-            if active is None:
-                if core is None:
-                    core = []
-                    active = [i for i in range(len(self.integral_manager.orbitals))]
-                else:
-                    if isinstance(core, int):
-                        core = [core]
-                    active = get_active(
-                        c,
-                        d,
-                        s,
-                        [
-                            i
-                            for i in range(len(self.integral_manager.orbitals))
-                            if i not in core
-                        ],
-                    )
-        assert len(active) + len(core) == len(self.integral_manager.orbitals)
-        if "reference_orbitals" in kwargs:
-            reference_orbitals = kwargs["reference_orbitals"]
-            kwargs.pop("reference_orbitals")
-            assert len(reference_orbitals) == self.parameters.total_n_electrons // 2, (
-                f"Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons // 2}, received {len(reference_orbitals)}"
-            )
-        else:
-            reference_orbitals = [
-                i.idx_total for i in self.integral_manager.reference_orbitals
-            ]
-        to_active = [
-            i for i in range(len(self.integral_manager.orbitals)) if i not in core
-        ]
-        to_active = {active[i]: to_active[i] for i in range(len(active))}
-        if len(core):
-            # keep the core orbitals at their own indices (`core` is passed as
-            # frozen_idx below) and only replace the active columns
-            c_combined = c.copy()
-            for act_idx in active:
-                c_combined[:, to_active[act_idx]] = d[:, act_idx]
-            coeff = orthogonalize_active_space(
-                c_combined, s, core, [*to_active.values()]
-            )
-            if inplace:
-                self.integral_manager = self.initialize_integral_manager(
-                    one_body_integrals=self.integral_manager.one_body_integrals,
-                    two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term,
-                    active_orbitals=[*to_active.values()],
-                    reference_orbitals=reference_orbitals,
-                    frozen_orbitals=core,
-                    orbital_coefficients=coeff,
-                    overlap_integrals=s,
-                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
-                )
-                return self
-            else:
-                integral_manager = self.initialize_integral_manager(
-                    one_body_integrals=self.integral_manager.one_body_integrals,
-                    two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term,
-                    active_orbitals=[*to_active.values()],
-                    reference_orbitals=[
-                        i.idx_total for i in self.integral_manager.reference_orbitals
-                    ],
-                    frozen_orbitals=core,
-                    orbital_coefficients=coeff,
-                    overlap_integrals=s,
-                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
-                )
-                parameters = copy.deepcopy(self.parameters)
-                result = FermionicBase(
-                    parameters=parameters,
-                    integral_manager=integral_manager,
-                    active_orbitals=[*to_active.values()],
-                )
-                return result
-        # can not be an instance of a specific backend (otherwise we get inconsistencies with classical methods in the backend)
-        if inplace:
-            self.integral_manager.transform_to_native_orbitals()
-            return self
-        else:
-            integral_manager = copy.deepcopy(self.integral_manager)
-            integral_manager.transform_to_native_orbitals()
-            result = FermionicBase(
-                parameters=self.parameters,
-                integral_manager=integral_manager,
-                fermionic_backend=self.fermionic_backend,
-            )
-            return result
+        return generate_loewdin_molecule(self, inplace=inplace, core=core, **kwargs)
 
     def make_annihilation_op(self, orbital, coefficient=1.0) -> OFFermionOperator:
         """Return the annihilation operator of a spin orbital as fermion operator.

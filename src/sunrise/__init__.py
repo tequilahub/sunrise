@@ -51,14 +51,14 @@ from sunrise.expval import (
     RealBraKet,
     ImagBraKet,
 )
-from sunrise import CLPO
-from sunrise.CLPO.orbital_transformation import (
+from sunrise import orbital_transformations
+from sunrise.orbital_transformations import CLPO, MEAO
+from sunrise.orbital_transformations.CLPO import (
     generate_CLPO_molecule_edges,
     generate_HAO_molecule,
     generate_HAO_molecule_edges,
 )
-from sunrise import MEAO
-from sunrise.MEAO import generate_MEAO_molecule
+from sunrise.orbital_transformations.MEAO import generate_MEAO_molecule
 from sunrise.MCVBT.gnm import mcvbt
 from sunrise import spafastprototype as SPAFP
 from sunrise import ADAPT
@@ -110,6 +110,7 @@ __all__ = [
     "molecules",
     "open_molecule",
     "optimize_orbitals",
+    "orbital_transformations",
     "pick_backend",
     "plot_MO",
     "qpic_to_pdf",

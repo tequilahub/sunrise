@@ -1713,7 +1713,9 @@ def test_clpo_pyscf_ao_order():
     # cc-pVDZ has d shells, whose MOLDEN order (used by janpa) differs from the pyscf one
     from pyscf import scf
 
-    from sunrise.CLPO.pyscf_janpa_interface import _run_janpa_pipeline
+    from sunrise.orbital_transformations.CLPO.pyscf_janpa_interface import (
+        _run_janpa_pipeline,
+    )
 
     mol = sun.Molecule(
         geometry="O 0.0 0.0 0.0\nH 0.757 0.586 0.0\nH -0.757 0.586 0.0",
@@ -1804,6 +1806,23 @@ def test_meao_orbitals_complement():
     s = mol.integral_manager.overlap_integrals
     assert c.shape == (13, 13)
     assert numpy.allclose(c.T @ s @ c, numpy.eye(13), atol=1.0e-8)
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
+def test_use_orbitals():
+    mol = sun.Molecule(
+        geometry="H 0 0 0\nH 0 0 0.7\nH 0 0 1.4\nH 0 0 2.1", basis_set="sto-3g"
+    )
+    native = mol.use_native_orbitals().integral_manager.orbital_coefficients
+    for name in ("loewdin", "Native"):
+        c = mol.use_orbitals(name).integral_manager.orbital_coefficients
+        assert numpy.allclose(c, native)
+    c = mol.use_orbitals("CLPO").integral_manager.orbital_coefficients
+    c_clpo = mol.use_CLPO_orbitals().integral_manager.orbital_coefficients
+    assert numpy.allclose(c, c_clpo)
+    assert sun.CLPO is sun.orbital_transformations.CLPO
+    with pytest.raises(ValueError, match="Unknown orbitals"):
+        mol.use_orbitals("foo")
 
 
 def save_and_load(mol, tmp_path, monkeypatch):

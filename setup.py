@@ -43,6 +43,5 @@ setup(
     include_package_data=True,
     package_data={
         "": [os.path.join("src")],
-        "sunrise.CLPO.bin": ["*"],
     },
 )

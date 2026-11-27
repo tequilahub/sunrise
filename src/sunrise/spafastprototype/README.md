@@ -29,6 +29,6 @@ opt = sun.SPAFP.run_spa(mol, edges, initial_guess=initial_guess.T, silent=True)
 print(opt.energy)  # -4.2620 (Hartree)
 ```
 
-For larger molecules, combine it with the CLPO orbitals and edges (see [`CLPO`](../CLPO)).
+For larger molecules, combine it with the CLPO orbitals and edges (see [`orbital_transformations`](../orbital_transformations)).
 
 **See also:** [example](../../../examples/spafastprototype/spafastprotoype.py) · [VB embedding example](../../../examples/VB_embedding/embedding.py) · [tests](../../../tests/test_fastspa.py)

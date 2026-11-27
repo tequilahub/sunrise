@@ -21,7 +21,10 @@ from sunrise import MoleculeFromPyscf, MoleculeToPyscf
 from sunrise.molecules.fermionic_base import FermionicBase
 from sunrise.molecules.hybrid_base import HybridBase
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.utils.orbital_transformation import orthogonalize, transform
+from sunrise.orbital_transformations.orbital_transformation import (
+    orthogonalize,
+    transform,
+)
 
 try:
     from MEAO.meao import MEAO
@@ -73,7 +76,7 @@ def generate_MEAO_molecule(
 
     See Also
     --------
-    sunrise.CLPO.generate_HAO_molecule : Hybrid atomic orbitals from JANPA.
+    sunrise.orbital_transformations.CLPO.generate_HAO_molecule : Hybrid atomic orbitals from JANPA.
 
     Notes
     -----

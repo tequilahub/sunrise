@@ -1,4 +1,4 @@
-"""Generation of CLPO and HAO orbitals with JANPA on top of Psi4."""
+"""Generation of CLPO and HAO orbitals with JANPA on top of PySCF."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import contextlib
 import os
 import tempfile
 from copy import deepcopy
+from dataclasses import dataclass
 from numbers import Number
 from warnings import warn
 
@@ -14,14 +15,24 @@ from janpa.clpo.lodesc import LO_TYPE_BD, LO_TYPE_LP, LO_TYPE_NB, LO_TYPE_RY
 from janpa.clpo.lpo import CLPOOptions, create_clpos
 from janpa.io.molden import MoldenFile
 from janpa.npa.npa import run_npa
+from pyscf import mp, scf
+from pyscf.tools import molden as pyscf_molden
 
+from sunrise import MoleculeFromPyscf, MoleculeToPyscf
+from sunrise.molecules.fermionic_base import FermionicBase
+from sunrise.molecules.hybrid_base import HybridBase
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.utils.orbital_transformation import orthogonalize, transform
+from sunrise.orbital_transformations.orbital_transformation import (
+    orthogonalize,
+    transform,
+)
 
-try:
-    import psi4
-except ImportError:
-    pass
+
+@dataclass
+class __custom_mf_conteiner:
+    mo_coeff: np.ndarray = None
+    mo_occ: list[Number] = None
+    mo_energy: list[Number] = None
 
 
 def extract_clpo_graph(
@@ -88,65 +99,38 @@ def extract_clpo_graph(
     return nodes, aviso
 
 
-def _molden_to_psi4_ao_order(wfn) -> np.ndarray:
-    """Return ``perm`` where ``perm[k]`` is the Psi4 AO index of the k-th MOLDEN basis function (p shells differ: x, y, z vs z, x, y)."""
-    bs = wfn.basisset()
-    perm = []
-    for sh in range(bs.nshell()):
-        shell = bs.shell(sh)
-        order = (
-            [1, 2, 0] if shell.am == 1 and bs.has_puream() else range(shell.nfunction)
-        )
-        perm += [shell.function_index + i for i in order]
-    return np.array(perm)
-
-
 def _run_janpa_pipeline(
-    wfn,
-    thres: Number = 1e-9,
+    pfmol,
+    mo_coeff,
+    mo_occ,
+    mo_energy,
+    thres=1e-9,
     silent=True,
     custom_edges=None,
     avisar: bool = True,
 ):
-    """Run JANPA (NPA and CLPO) on a Psi4 wavefunction through a MOLDEN file and return the AHO and CLPO coefficients (n_ao, n_orb) in the Psi4 AO order, the graph and the aviso list."""
-    bs = wfn.basisset()
-    if not bs.has_puream() and bs.max_am() >= 2:
-        raise ValueError(
-            "JANPA needs spherical basis functions, set the psi4 option 'puream' to True"
+    """Run JANPA (NPA and CLPO) on PySCF orbitals through a temporary MOLDEN file and return the AHO and CLPO coefficients (n_ao, n_orb), the graph and the aviso list."""
+    with tempfile.TemporaryDirectory() as tmpdir, open(os.devnull, "w") as devnull:
+        molden_in = os.path.join(tmpdir, "temp.molden")
+        ctx = (
+            contextlib.redirect_stdout(devnull) if silent else contextlib.nullcontext()
         )
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        molden_in = os.path.join(tmpdir, "temp.molden")
-
-        with contextlib.ExitStack() as stack:
-            if silent:
-                devnull = stack.enter_context(open(os.devnull, "w"))
-                stack.enter_context(contextlib.redirect_stdout(devnull))
-
-            # 1. Export initial MOLDEN
-            psi4.molden(wfn, molden_in)
-
-            # 2. Load and prepare. psi4 writes the raw contraction coefs, which are not normalized for general
-            # contractions (e.g. cc-pVXZ), while its MO coefs refer to normalized basis functions
+        with ctx:
+            pyscf_molden.from_mo(pfmol, molden_in, mo_coeff, occ=mo_occ, ene=mo_energy)
             molden_file = MoldenFile.load(molden_in)
             molden_file.coords_to_au()
             molden_file.to_unnormalized_primitive_coefs()
-            molden_file.normalize_contractions()
 
-            # 3. NPA
             npa_res = run_npa(molden_file)
 
-            # 4. CLPO
             clpo_opts = CLPOOptions(hybr_opt_conv_thresh=thres, hybr_opt_max_iter=1000)
             if custom_edges is not None:
-                # Bonds between 0-based atoms, a string like "[(1, 2), (1, 2)]"
                 clpo_opts.edges = str(custom_edges)
 
             clpo_res = create_clpos(
                 npa_res.sds_nao, npa_res.nao, molden_file.centers, clpo_opts
             )
-
-            # 5. Extract Graph
             graph, aviso = extract_clpo_graph(npa_res, clpo_res, avisar)
             # the same graph on the hybrids: each CLPO is made of the hybrids with non zero weight
             hao_graph = [
@@ -159,20 +143,24 @@ def _run_janpa_pipeline(
                 for node in graph
             ]
 
-            # 6. Get Transformation Matrices
+            # CRITICAL: These matrices have shape (n_orb, n_ao) where ROWS are orbitals.
+            # Tequila expects (n_ao, n_orb) where COLUMNS are orbitals.
+            # We transpose here so callers can assign directly to integral_manager.
             aho_to_ao = clpo_res.clpo.nao_to_hybrids.T @ npa_res.nao_to_ao
+            # janpa keeps the MOLDEN AO order of the file, which differs from the pyscf one for d, f and g shells:
+            # MOLDEN position k holds the pyscf AO ao_order[k]
+            ao_order = pyscf_molden.order_ao_index(pfmol)
+            aho_to_ao = aho_to_ao[:, np.argsort(ao_order)]
             clpo_to_ao = clpo_res.clpo.lo_to_hybrids @ aho_to_ao
 
-    perm = _molden_to_psi4_ao_order(wfn)
-    aho_psi4 = np.zeros_like(aho_to_ao)
-    aho_psi4[:, perm] = aho_to_ao
-    clpo_psi4 = np.zeros_like(clpo_to_ao)
-    clpo_psi4[:, perm] = clpo_to_ao
-    # (n_orb, n_ao) -> (n_ao, n_orb), columns are orbitals
-    return aho_psi4.T, clpo_psi4.T, graph, aviso, hao_graph
+            # Transpose: (n_orb, n_ao) -> (n_ao, n_orb) to match Tequila/PySCF convention
+            aho_to_ao = aho_to_ao.T
+            clpo_to_ao = clpo_to_ao.T
+
+    return aho_to_ao, clpo_to_ao, graph, aviso, hao_graph
 
 
-def generate_CLPO_molecule_edges_psi4(
+def generate_CLPO_molecule_edges_pyscf(
     mol: QuantumChemistryBase,
     atom_edges: list[tuple[int]] | None = None,
     thres: Number = 1.0e-12,
@@ -182,7 +170,7 @@ def generate_CLPO_molecule_edges_psi4(
     use_mp2: bool = False,
     **kwargs,
 ) -> tuple[QuantumChemistryBase, list]:
-    """Generate a molecule with CLPO orbitals and the corresponding graph edges via Psi4.
+    """Generate a molecule with CLPO orbitals and the corresponding graph edges via PySCF.
 
     CLPOs (Chemist's Localized Property-optimized Orbitals) are built with JANPA from a natural population analysis; they
     are bonds, lone pairs and their antibonding partners, and define the graph used by SPA.
@@ -207,12 +195,14 @@ def generate_CLPO_molecule_edges_psi4(
         If True, also return the orbitals that do not have the expected double occupancy
         (the same information as the emitted warnings).
     use_mp2 : bool
-        If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
+        If True, use the MP2 density to initialize JANPA, otherwise the Hartree-Fock one.
     **kwargs
         ``edges`` is the former name of ``atom_edges`` and is still accepted.
-        ``wfn`` (custom Psi4 wavefunction) is currently not supported: it fails for Psi4 molecules and is ignored for others.
+        ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
+        and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
+        the responsibility of the user, JANPA only considers HF or MP2 references.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -239,36 +229,60 @@ def generate_CLPO_molecule_edges_psi4(
     the frozen core), otherwise the index in the full CLPO list.
     """
 
-    # TODO: support a custom wfn (check kwargs.pop("wfn") first) and fix use_mp2 on psi4 molecules
-    # (psi4mol is undefined there, use molecule=wfn.molecule())
     legacy_edges = kwargs.pop("edges", None)  # former name of atom_edges
     if legacy_edges is not None:
         if atom_edges is not None:
             raise TypeError("pass atom_edges or edges, not both")
         atom_edges = legacy_edges
 
-    if not hasattr(mol, "ref_wfn"):  # its not a psi4 base
-        psi4mol = psi4.geometry(mol.parameters.get_geometry_string(ghost="psi4"))
-        psi4mol.set_multiplicity(mol.parameters.multiplicity)
-        psi4mol.set_molecular_charge(mol.parameters.charge)
-        psi4.activate(psi4mol)
-        _, wfn = psi4.energy(name="scf", return_wfn=True, molecule=psi4mol)
-    elif "wfn" in kwargs:
-        wfn = getattr(kwargs, "wfn", None)
-    else:
-        wfn = getattr(mol, "ref_wfn", None)
-
-    if use_mp2:
-        _, wfn = psi4.energy(
-            name="mp2", return_wfn=True, molecule=psi4mol, guess_wfn=wfn
+    pfmol = MoleculeToPyscf(mol)
+    if "pyscf_object" in kwargs:
+        mf = kwargs.pop("pyscf_object")
+    elif "mo_coeff" in kwargs and "mo_occ" in kwargs and "mo_energy" in kwargs:
+        mf = __custom_mf_conteiner(
+            kwargs["mo_coeff"], kwargs["mo_occ"], kwargs["mo_energy"]
         )
-
+        kwargs.pop("mo_coeff")
+        kwargs.pop("mo_occ")
+        kwargs.pop("mo_energy")
+    else:
+        mf = scf.RHF(pfmol).run()
+        if use_mp2:
+            fr = [2 for _ in range(mol.parameters.get_number_of_core_electrons() // 2)]
+            rdm1 = mp.MP2(mf).run().make_rdm1()
+            mf = __custom_mf_conteiner(
+                mf.mo_coeff, fr + np.diag(rdm1).tolist(), mf.mo_energy
+            )
+    # the CLPOs come in the AOs of pfmol. Other backends (e.g. psi4) order and orient their AOs differently, then the
+    # molecule is built again on the pyscf AOs, keeping its active space
+    s = mol.integral_manager.overlap_integrals
+    if s.shape != (pfmol.nao, pfmol.nao) or not np.allclose(
+        s, pfmol.intor("int1e_ovlp")
+    ):
+        mol = MoleculeFromPyscf(
+            pfmol,
+            mo_coeff=mf.mo_coeff,
+            transformation=mol.transformation,
+            active_orbitals=[o.idx_total for o in mol.integral_manager.active_orbitals],
+            nature="fermionic"
+            if isinstance(mol, FermionicBase)
+            else "hybrid"
+            if isinstance(mol, HybridBase)
+            else "qubit",
+        )
+    # atom_edges are bonds imposed on the CLPOs between 0-based atoms, e.g. [(1, 2), (1, 2)] for a double bond between atoms 1
+    # and 2; the bonds between the other atom pairs are found automatically. Atoms do not depend on the active space,
+    # so they are passed as given. Cast to native int to avoid np.int64 string representation issues
     custom_edges = None
     if atom_edges is not None:
         custom_edges = [tuple([int(e) for e in edge]) for edge in atom_edges]
 
+    # clpo_to_ao is now (n_ao, n_clpo) after the transpose fix in _run_janpa_pipeline
     _, clpo_to_ao_full, graph_full, aviso, _ = _run_janpa_pipeline(
-        wfn,
+        pfmol,
+        mf.mo_coeff,
+        mf.mo_occ,
+        mf.mo_energy,
         thres=thres,
         silent=silent,
         custom_edges=custom_edges,
@@ -311,7 +325,7 @@ def generate_CLPO_molecule_edges_psi4(
     return mol_out, graph
 
 
-def generate_HAO_molecule_psi4(
+def generate_HAO_molecule_pyscf(
     mol: QuantumChemistryBase,
     thres: Number = 1.0e-9,
     silent: bool = True,
@@ -321,7 +335,7 @@ def generate_HAO_molecule_psi4(
     return_edges: bool = False,
     **kwargs,
 ) -> QuantumChemistryBase:
-    """Generate a molecule with HAO (hybrid atomic orbital) orbitals via Psi4.
+    """Generate a molecule with HAO (hybrid atomic orbital) orbitals via PySCF.
 
     HAOs are the atom-centered hybrids that JANPA builds before combining them into CLPOs.
 
@@ -340,15 +354,17 @@ def generate_HAO_molecule_psi4(
         If True and ``use_active`` is True, also return the dictionary mapping the HAO index
         in the full list to its index after the active-space transformation.
     use_mp2 : bool
-        If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
+        If True, use the MP2 density to initialize JANPA, otherwise the Hartree-Fock one.
     return_edges : bool
         If True, also return the edges of the CLPO graph on the HAOs (SPA format): ``(hybrid, H)``
         for each bond and ``(hybrid,)`` for each lone pair. With ``use_active`` the indices are
         those of the active space, otherwise those of the full HAO list.
     **kwargs
-        ``wfn`` (custom Psi4 wavefunction) is currently not supported and is ignored.
+        ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
+        and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
+        the responsibility of the user, JANPA only considers HF or MP2 references.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -360,24 +376,53 @@ def generate_HAO_molecule_psi4(
         Only if ``return_edges`` is True.
     """
 
-    # TODO: support a custom wfn (check kwargs.pop("wfn") first) and fix use_mp2 on psi4 molecules
-    # (psi4mol is undefined there, use molecule=wfn.molecule())
-    if not hasattr(mol, "ref_wfn"):  # its not a psi4 base
-        psi4mol = psi4.geometry(mol.parameters.get_geometry_string(ghost="psi4"))
-        psi4mol.set_multiplicity(mol.parameters.multiplicity)
-        psi4mol.set_molecular_charge(mol.parameters.charge)
-        psi4.activate(psi4mol)
-        _, wfn = psi4.energy(name="scf", return_wfn=True, molecule=psi4mol)
+    pfmol = MoleculeToPyscf(mol)
+    if "pyscf_object" in kwargs:
+        mf = kwargs.pop("pyscf_object")
+    elif "mo_coeff" in kwargs and "mo_occ" in kwargs and "mo_energy" in kwargs:
+        mf = __custom_mf_conteiner(
+            mo_coeff=kwargs["mo_coeff"],
+            mo_occ=kwargs["mo_occ"],
+            mo_energy=kwargs["mo_energy"],
+        )
+        kwargs.pop("mo_coeff")
+        kwargs.pop("mo_occ")
+        kwargs.pop("mo_energy")
     else:
-        wfn = getattr(mol, "ref_wfn", None)
-
-    if use_mp2:
-        _, wfn = psi4.energy(
-            name="mp2", return_wfn=True, molecule=psi4mol, guess_wfn=wfn
+        mf = scf.RHF(pfmol).run()
+        if use_mp2:
+            fr = [2 for _ in range(mol.parameters.get_number_of_core_electrons() // 2)]
+            rdm1 = mp.MP2(mf).run().make_rdm1()
+            mf = __custom_mf_conteiner(
+                mo_coeff=mf.mo_coeff,
+                mo_occ=fr + np.diag(rdm1).tolist(),
+                mo_energy=mf.mo_energy,
+            )
+    # the HAOs come in the AOs of pfmol. Other backends (e.g. psi4) order and orient their AOs differently, then the
+    # molecule is built again on the pyscf AOs, keeping its active space
+    s = mol.integral_manager.overlap_integrals
+    if s.shape != (pfmol.nao, pfmol.nao) or not np.allclose(
+        s, pfmol.intor("int1e_ovlp")
+    ):
+        mol = MoleculeFromPyscf(
+            pfmol,
+            mo_coeff=mf.mo_coeff,
+            transformation=mol.transformation,
+            active_orbitals=[o.idx_total for o in mol.integral_manager.active_orbitals],
+            nature="fermionic"
+            if isinstance(mol, FermionicBase)
+            else "hybrid"
+            if isinstance(mol, HybridBase)
+            else "qubit",
         )
 
+    # aho_to_ao_full is now (n_ao, n_hyb) after the transpose fix in _run_janpa_pipeline
+    # aviso indexes the CLPOs, not the HAOs returned here, so it is warned and returned in full CLPO indices
     aho_to_ao_full, _, _, _, hao_edges = _run_janpa_pipeline(
-        wfn,
+        pfmol,
+        mf.mo_coeff,
+        mf.mo_occ,
+        mf.mo_energy,
         thres=thres,
         silent=silent,
         avisar=True,
@@ -417,7 +462,7 @@ def generate_HAO_molecule_psi4(
         return mol_out
 
 
-def generate_HAO_molecule_edges_psi4(
+def generate_HAO_molecule_edges_pyscf(
     mol: QuantumChemistryBase,
     thres: Number = 1.0e-9,
     silent: bool = True,
@@ -426,9 +471,9 @@ def generate_HAO_molecule_edges_psi4(
     use_mp2: bool = False,
     **kwargs,
 ) -> tuple[QuantumChemistryBase, list]:
-    """Generate a molecule with HAO orbitals and the SPA edges on the HAOs via Psi4.
+    """Generate a molecule with HAO orbitals and the SPA edges on the HAOs via PySCF.
 
-    Same as ``generate_HAO_molecule_psi4`` with ``return_edges=True``: JANPA runs only once.
+    Same as ``generate_HAO_molecule_pyscf`` with ``return_edges=True``: JANPA runs only once.
 
     Returns
     -------
@@ -439,12 +484,12 @@ def generate_HAO_molecule_edges_psi4(
     edges : list of tuple of int
         SPA edges on the HAOs.
     """
-    return generate_HAO_molecule_psi4(
+    return generate_HAO_molecule_pyscf(
         mol, thres, silent, use_active, ret2act, use_mp2, return_edges=True, **kwargs
     )
 
 
-def generate_CLPO_molecule_psi4(
+def generate_CLPO_molecule_pyscf(
     mol: QuantumChemistryBase,
     atom_edges: list | None = None,
     thres: Number = 1.0e-12,
@@ -454,7 +499,7 @@ def generate_CLPO_molecule_psi4(
     use_mp2: bool = False,
     **kwargs,
 ) -> QuantumChemistryBase:
-    """Generate a molecule with CLPO orbitals via Psi4.
+    """Generate a molecule with CLPO orbitals via PySCF.
 
     Same as ``generate_CLPO_molecule_edges`` but the graph edges are not returned.
 
@@ -478,12 +523,14 @@ def generate_CLPO_molecule_psi4(
         If True, also return the orbitals that do not have the expected double occupancy
         (the same information as the emitted warnings).
     use_mp2 : bool
-        If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
+        If True, use the MP2 density to initialize JANPA, otherwise the Hartree-Fock one.
     **kwargs
         ``edges`` is the former name of ``atom_edges`` and is still accepted.
-        ``wfn`` (custom Psi4 wavefunction) is currently not supported: it fails for Psi4 molecules and is ignored for others.
+        ``pyscf_object`` (a PySCF mean-field object) or the three of ``mo_coeff``, ``mo_occ``
+        and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
+        the responsibility of the user, JANPA only considers HF or MP2 references.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -507,12 +554,12 @@ def generate_CLPO_molecule_psi4(
     the frozen core), otherwise the index in the full CLPO list.
     """
     if return_aviso:
-        mol_out, _, aviso = generate_CLPO_molecule_edges_psi4(
+        mol_out, _, aviso = generate_CLPO_molecule_edges_pyscf(
             mol, atom_edges, thres, silent, use_active, return_aviso, use_mp2, **kwargs
         )
         return mol_out, aviso
     else:
-        mol_out, _ = generate_CLPO_molecule_edges_psi4(
+        mol_out, _ = generate_CLPO_molecule_edges_pyscf(
             mol, atom_edges, thres, silent, use_active, return_aviso, use_mp2, **kwargs
         )
         return mol_out

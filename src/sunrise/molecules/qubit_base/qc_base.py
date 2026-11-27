@@ -156,7 +156,11 @@ class QuantumChemistryBase:
             )
 
         if orbital_type is not None and orbital_type.lower() == "native":
-            self.integral_manager.transform_to_native_orbitals()
+            from sunrise.orbital_transformations.loewdin import (
+                transform_to_native_orbitals,
+            )
+
+            transform_to_native_orbitals(self.integral_manager)
 
         self.transformation = self._initialize_transformation(
             *args, transformation=transformation, **kwargs
@@ -1080,7 +1084,7 @@ class QuantumChemistryBase:
     ):
         """Return the molecule in the native (orthonormalized atomic) orbital basis.
 
-        For standard basis sets these are orthonormalized Gaussian basis functions.
+        For standard basis sets these are the orthonormalized Gaussian basis functions.
 
         Parameters
         ----------
@@ -1104,120 +1108,20 @@ class QuantumChemistryBase:
         Returns
         -------
         QuantumChemistryBase
-            Molecule in the native basis.
+            Molecule in the native basis (``self`` if ``inplace``).
+
+        See Also
+        --------
+        sunrise.orbital_transformations.loewdin.generate_loewdin_molecule : The implementation.
+        use_orbitals : Pick any of the orbital bases by name.
 
         Examples
         --------
         >>> mol = sun.Molecule(geometry=geometry, basis_set="sto-3g").use_native_orbitals()
         """
-        from sunrise.utils.orbital_transformation import (
-            get_active,
-            get_core,
-            orthogonalize_active_space,
-        )
+        from sunrise.orbital_transformations.loewdin import generate_loewdin_molecule
 
-        c = self.integral_manager.orbital_coefficients.copy()
-        s = self.integral_manager.overlap_integrals.copy()
-        d = self.integral_manager.get_orthonormalized_orbital_coefficients().copy()
-
-        active = None
-        if not self.integral_manager.active_space_is_trivial() and core is None:
-            core = [
-                i.idx_total for i in self.integral_manager.orbitals if i.idx is None
-            ]
-        if "active" in kwargs:
-            active = kwargs["active"]
-            kwargs.pop("active")
-            if core is None:
-                core = get_core(c, d, s, active)
-        else:
-            if active is None:
-                if core is None:
-                    core = []
-                    active = [i for i in range(len(self.integral_manager.orbitals))]
-                else:
-                    if isinstance(core, int):
-                        core = [core]
-                    active = get_active(
-                        c,
-                        d,
-                        s,
-                        [
-                            i
-                            for i in range(len(self.integral_manager.orbitals))
-                            if i not in core
-                        ],
-                    )
-        assert len(active) + len(core) == len(self.integral_manager.orbitals)
-        if "reference_orbitals" in kwargs:
-            reference_orbitals = kwargs["reference_orbitals"]
-            kwargs.pop("reference_orbitals")
-            assert len(reference_orbitals) == self.parameters.total_n_electrons // 2, (
-                f"Number of  provided reference_orbitals incorrect. Expected {self.parameters.total_n_electrons // 2}, received {len(reference_orbitals)}"
-            )
-        else:
-            reference_orbitals = [
-                i.idx_total for i in self.integral_manager.reference_orbitals
-            ]
-        to_active = [
-            i for i in range(len(self.integral_manager.orbitals)) if i not in core
-        ]
-        to_active = {active[i]: to_active[i] for i in range(len(active))}
-        if len(core):
-            # keep the core orbitals at their own indices (`core` is passed as
-            # frozen_idx below) and only replace the active columns
-            c_combined = c.copy()
-            for act_idx in active:
-                c_combined[:, to_active[act_idx]] = d[:, act_idx]
-            coeff = orthogonalize_active_space(
-                c_combined, s, core, [*to_active.values()]
-            )
-            if inplace:
-                self.integral_manager = self.initialize_integral_manager(
-                    one_body_integrals=self.integral_manager.one_body_integrals,
-                    two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term,
-                    active_orbitals=[*to_active.values()],
-                    reference_orbitals=reference_orbitals,
-                    frozen_orbitals=core,
-                    orbital_coefficients=coeff,
-                    overlap_integrals=s,
-                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
-                )
-                return self
-            else:
-                integral_manager = self.initialize_integral_manager(
-                    one_body_integrals=self.integral_manager.one_body_integrals,
-                    two_body_integrals=self.integral_manager.two_body_integrals,
-                    constant_term=self.integral_manager.constant_term,
-                    active_orbitals=[*to_active.values()],
-                    reference_orbitals=reference_orbitals,
-                    frozen_orbitals=core,
-                    orbital_coefficients=coeff,
-                    overlap_integrals=s,
-                    orbital_type=f"orthonormalized-{self.integral_manager._basis_name}-basis",
-                )
-                parameters = copy.deepcopy(self.parameters)
-                result = QuantumChemistryBase(
-                    parameters=parameters,
-                    integral_manager=integral_manager,
-                    transformation=self.transformation,
-                    active_orbitals=[*to_active.values()],
-                )
-                return result
-        # can not be an instance of a specific backend (otherwise we get inconsistencies with classical methods in the backend)
-        if inplace:
-            self.integral_manager.transform_to_native_orbitals()
-            return self
-        else:
-            integral_manager = copy.deepcopy(self.integral_manager)
-            integral_manager.transform_to_native_orbitals()
-            result = QuantumChemistryBase(
-                parameters=self.parameters,
-                integral_manager=integral_manager,
-                transformation=self.transformation,
-            )
-            return result
+        return generate_loewdin_molecule(self, inplace=inplace, core=core, **kwargs)
 
     def get_xyz(self) -> str:
         """Return the geometry as a string in xyz format."""
@@ -1252,7 +1156,7 @@ class QuantumChemistryBase:
         >>> edges = mol.get_spa_edges()
         >>> U = mol.make_spa_ansatz(edges=edges)
         """
-        from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
+        from sunrise.orbital_transformations.CLPO import generate_CLPO_molecule_edges
 
         _, edges = generate_CLPO_molecule_edges(
             self, use_active=use_active, silent=True, **kwargs
@@ -1285,7 +1189,7 @@ class QuantumChemistryBase:
         --------
         use_HAO_orbitals_and_edges : The same, together with the SPA edges.
         """
-        from sunrise.CLPO.orbital_transformation import generate_HAO_molecule
+        from sunrise.orbital_transformations.CLPO import generate_HAO_molecule
 
         hao_mol = generate_HAO_molecule(
             self, use_active=use_active, silent=True, **kwargs
@@ -1336,7 +1240,7 @@ class QuantumChemistryBase:
         >>> mol, edges = mol.use_HAO_orbitals_and_edges()
         >>> U = mol.make_ansatz("SPA", edges=edges)
         """
-        from sunrise.CLPO.orbital_transformation import generate_HAO_molecule_edges
+        from sunrise.orbital_transformations.CLPO import generate_HAO_molecule_edges
 
         hao_mol, hao_edges = generate_HAO_molecule_edges(
             self, use_active=use_active, silent=True, **kwargs
@@ -1449,7 +1353,7 @@ class QuantumChemistryBase:
         --------
         >>> mol, edges = mol.use_CLPO_orbitals_and_edges()
         """
-        from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
+        from sunrise.orbital_transformations.CLPO import generate_CLPO_molecule_edges
 
         clpo_mol, clpo_edges = generate_CLPO_molecule_edges(
             self, atom_edges=atom_edges, use_active=use_active, silent=True, **kwargs
@@ -1475,7 +1379,7 @@ class QuantumChemistryBase:
         """Return the molecule in Maximally Entangled Atomic Orbitals (MEAO).
 
         The orbitals come from the original MEAO code (installed separately, see the README),
-        through ``sunrise.MEAO.generate_MEAO_molecule``.
+        through ``sunrise.orbital_transformations.MEAO.generate_MEAO_molecule``.
 
         Parameters
         ----------
@@ -1503,7 +1407,7 @@ class QuantumChemistryBase:
         --------
         >>> mol = mol.use_MEAO_orbitals()
         """
-        from sunrise.MEAO import generate_MEAO_molecule
+        from sunrise.orbital_transformations.MEAO import generate_MEAO_molecule
 
         meao_mol = generate_MEAO_molecule(
             self, use_active=use_active, silent=True, **kwargs
@@ -1522,6 +1426,58 @@ class QuantumChemistryBase:
             return self
         else:
             return meao_mol
+
+    def use_orbitals(self, name: str, **kwargs):
+        """Return the molecule in the orbitals called ``name``.
+
+        One entry point for the molecule methods ``use_native_orbitals``, ``use_CLPO_orbitals``,
+        ``use_HAO_orbitals`` and ``use_MEAO_orbitals``, which are called as they are
+        (subclass variants included).
+
+        Parameters
+        ----------
+        name : str
+            Name of the orbitals, not case sensitive: ``"loewdin"`` (or ``"native"``),
+            ``"CLPO"``, ``"HAO"`` or ``"MEAO"``.
+        **kwargs
+            Keyword arguments of the method, e.g. ``inplace``, ``core`` (``"loewdin"``),
+            ``atom_edges`` (``"CLPO"``) or ``minao`` (``"MEAO"``).
+
+        Returns
+        -------
+        QuantumChemistryBase
+            Molecule in the orbitals ``name``.
+
+        Raises
+        ------
+        ValueError
+            If ``name`` is none of the names above.
+
+        See Also
+        --------
+        use_native_orbitals : Löwdin (native) orbitals.
+        use_CLPO_orbitals : Chemist's Localized Property-optimized Orbitals.
+        use_HAO_orbitals : Hybrid Atomic Orbitals.
+        use_MEAO_orbitals : Maximally Entangled Atomic Orbitals.
+
+        Examples
+        --------
+        >>> import sunrise as sun
+        >>> mol = sun.Molecule(geometry="H 0 0 0\\nH 0 0 0.7", basis_set="sto-3g")
+        >>> mol = mol.use_orbitals("loewdin")
+        """
+        methods = {
+            "loewdin": "use_native_orbitals",
+            "native": "use_native_orbitals",
+            "clpo": "use_CLPO_orbitals",
+            "hao": "use_HAO_orbitals",
+            "meao": "use_MEAO_orbitals",
+        }
+        if name.lower() not in methods:
+            raise ValueError(
+                f"Unknown orbitals {name!r}, choose one of loewdin (or native), CLPO, HAO, MEAO"
+            )
+        return getattr(self, methods[name.lower()])(**kwargs)
 
     @property
     def point_group(self):

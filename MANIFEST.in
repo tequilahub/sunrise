@@ -1,4 +1,2 @@
 include requirements.txt
 include LICENSE
-recursive-include sunrise/src/sunrise/CLPO/bin *
-include sunrise/src/sunrise/CLPO/bin/*
