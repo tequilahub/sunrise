@@ -11,7 +11,7 @@ from openfermion.ops.operators.fermion_operator import FermionOperator
 from tequila import BraKet as tq_BraKet
 from tequila import ExpectationValue as tq_ExpectationValue
 from tequila import Fidelity as tq_Fidelity
-from tequila import Objective, QCircuit, TequilaException
+from tequila import Objective, QCircuit, QTensor, TequilaException
 from tequila.objective.objective import identity
 
 from sunrise.fermionic_operations.circuit import FCircuit
@@ -71,20 +71,20 @@ def pick_backend(
 ) -> str:
     """Choose or verify a fermionic backend.
 
-    Only the "tequila" backend, which simulates through the tequila qubit
-    simulators, supports samples, noise and devices.
+    Every fermionic backend supports sampling. Only the "tequila" backend, which simulates through the
+    tequila qubit simulators, supports noise and devices.
 
     Parameters
     ----------
     backend : str, optional
         Backend to verify. If None, the first installed backend in
-        ``SUPPORTED_FERMIONIC_BACKENDS`` is chosen.
+        ``SUPPORTED_FERMIONIC_BACKENDS`` is chosen, or "tequila" if noise or a device is given.
     samples : int, optional
-        If given, only a backend supporting sampling is accepted.
+        Number of measurements.
     noise : str or NoiseModel, optional
-        If given, only a backend supporting noise is accepted.
+        If given, only the tequila backend is accepted.
     device : optional
-        If given, only a backend supporting devices is accepted.
+        If given, only the tequila backend is accepted.
 
     Returns
     -------
@@ -95,12 +95,7 @@ def pick_backend(
     ------
     TequilaException
         If no backend is installed, the requested one is unknown, not installed,
-        or cannot handle samples, noise or devices.
-
-    Notes
-    -----
-    Only the tequila backend, which simulates with the tequila qubit simulators, supports
-    samples, noise and devices.
+        or cannot handle noise or devices.
 
     Examples
     --------
@@ -110,8 +105,9 @@ def pick_backend(
     if len(INSTALLED_FERMIONIC_BACKENDS) == 0:
         raise TequilaException("No fermionic backends installed on your system")
 
-    # the fermionic simulators only compute wavefunctions
-    needs_tequila = samples is not None or noise is not None or device is not None
+    # noise models and devices act on qubit gates
+    # TODO: noise and devices for the fermionic backends, they apply whole fermionic excitations
+    needs_tequila = noise is not None or device is not None
 
     if backend is None:
         if needs_tequila:
@@ -129,7 +125,7 @@ def pick_backend(
         raise TequilaException(f"Fermionic backend {backend} not installed")
     elif needs_tequila and backend != "tequila":
         raise TequilaException(
-            f"Fermionic backend {backend} does not support samples, noise or devices, use the tequila backend"
+            f"Fermionic backend {backend} does not support noise or devices, use the tequila backend"
         )
 
     return backend
@@ -233,7 +229,7 @@ def Braket(
     mol: QuantumChemistryBase | None = None,
     *args,
     **kwargs,
-) -> Objective:
+) -> Objective | QTensor:
     """Create an Objective for an overlap, expectation value or transition element.
 
     The result depends on which arguments are given:
@@ -256,16 +252,18 @@ def Braket(
         Operator to evaluate. A string is one of "H" (molecular Hamiltonian),
         "HCB" (hard-core boson Hamiltonian), "I" (identity) or a tequila
         Pauli string. If None, it defaults to "H" when ``mol`` is given. A list
-        returns a list of Objectives, one per operator.
+        returns a QTensor of Objectives, one per operator.
     mol : QuantumChemistryBase, optional
         Sunrise molecule providing the integrals and number of electrons.
         May also be passed as the keyword ``molecule``.
+    shape : tuple, optional
+        Keyword argument, shape of the QTensor for a list of operators. Default is ``(len(operator),)``.
     *args, **kwargs
         Passed on to the backend braket.
 
     Returns
     -------
-    tq.Objective or list of tq.Objective
+    tq.Objective or tq.QTensor
         Objective to be compiled or simulated with ``sunrise.simulate`` or
         ``sunrise.minimize``.
 
@@ -300,11 +298,14 @@ def Braket(
         ket = bra
         bra = None
     if isinstance(operator, list):
-        return [
-            Braket(*args, ket=ket, bra=bra, operator=op, mol=mol, **kwargs)
-            for op in operator
-        ]
-        # return QTensor(objective_list=arglist, shape=len(operator)) # TODO: create multidimensional
+        shape = kwargs.pop("shape", None) or (len(operator),)
+        return QTensor(
+            objective_list=[
+                Braket(*args, ket=ket, bra=bra, operator=op, mol=mol, **kwargs)
+                for op in operator
+            ],
+            shape=shape,
+        )
     if bra is None and operator is None:
         return Objective() + 1.0
     if isinstance(ket, QCircuit):
