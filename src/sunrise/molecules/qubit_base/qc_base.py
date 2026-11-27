@@ -17,7 +17,7 @@ import pyscf
 import tequila
 import tequila.grouping.fermionic_functions as ff
 from scipy.spatial.transform import Rotation
-from tequila import BitString, QTensor, TequilaException, TequilaWarning
+from tequila import QTensor, TequilaException, TequilaWarning
 from tequila.circuit import QCircuit, gates
 from tequila.hamiltonian import QubitHamiltonian
 from tequila.hamiltonian.paulis import I, Sm, Sp, Z, Zero
@@ -38,7 +38,6 @@ from .chemistry_tools import (
     IntegralManager,
     NBodyTensor,
     ParametersQC,
-    prepare_product_state,
     to_json_data,
 )
 from .encodings import EncodingBase, known_encodings
@@ -1875,9 +1874,10 @@ class QuantumChemistryBase:
     def make_number_op(self, orbital):
         """Return the number operator of a spin orbital as qubit operator.
 
-        Spin orbitals are labeled ``2i`` (up) and ``2i+1`` (down) in every encoding. Supported:
-        Jordan-Wigner and (tree) Bravyi-Kitaev, also reordered, and fully fermionic hybrid
-        molecules. Not supported: ``BravyiKitaevFast``, the tapered encodings and bosonic orbitals.
+        Spin orbitals are labeled ``2i`` (up) and ``2i+1`` (down) in every encoding. The number
+        operator is transformed as a whole, so it also works for ``BravyiKitaevFast``,
+        which maps only parity-preserving operators, and ``TaperedBinary``. Not supported: the
+        qubit ``TaperedBravyiKitaev`` and bosonic orbitals.
 
         Parameters
         ----------
@@ -1888,49 +1888,47 @@ class QuantumChemistryBase:
         -------
         QubitHamiltonian
         """
-        num_op = self.make_creation_op(orbital) * self.make_annihilation_op(orbital)
-        return num_op
+        # transformed as a whole: BravyiKitaevFast maps parity-preserving operators only, not a^dagger and a alone
+        return self.transformation(
+            openfermion.ops.FermionOperator(f"{orbital}^ {orbital}")
+        )
 
     def make_sz_op(self):
         """Return the total :math:`S_z` operator of the molecule as qubit operator.
 
-        Built from ``make_creation_op`` and ``make_annihilation_op``, so it works for the same
-        encodings (see there).
+        Transformed as a whole, so it works for the same encodings as ``make_number_op``.
         """
-        sz = QubitHamiltonian()
+        sz = openfermion.ops.FermionOperator()
         for i in range(0, self.n_orbitals * 2, 2):
-            one = 0.5 * self.make_creation_op(i) * self.make_annihilation_op(i)
-            two = 0.5 * self.make_creation_op(i + 1) * self.make_annihilation_op(i + 1)
-            sz += one - two
-        return sz
+            sz += openfermion.ops.FermionOperator(f"{i}^ {i}", 0.5)
+            sz += openfermion.ops.FermionOperator(f"{i + 1}^ {i + 1}", -0.5)
+        return self.transformation(sz)
 
     def make_sp_op(self):
         """Return the total :math:`S_+` operator of the molecule as qubit operator.
 
-        Built from ``make_creation_op`` and ``make_annihilation_op``, so it works for the same
-        encodings (see there).
+        Transformed as a whole, so it works for the same encodings as ``make_number_op``.
         """
-        sp = QubitHamiltonian()
+        sp = openfermion.ops.FermionOperator()
         for i in range(self.n_orbitals):
-            sp += self.make_creation_op(i * 2) * self.make_annihilation_op(i * 2 + 1)
-        return sp
+            sp += openfermion.ops.FermionOperator(f"{i * 2}^ {i * 2 + 1}")
+        return self.transformation(sp)
 
     def make_sm_op(self):
         """Return the total :math:`S_-` operator of the molecule as qubit operator.
 
-        Built from ``make_creation_op`` and ``make_annihilation_op``, so it works for the same
-        encodings (see there).
+        Transformed as a whole, so it works for the same encodings as ``make_number_op``.
         """
-        sm = QubitHamiltonian()
+        sm = openfermion.ops.FermionOperator()
         for i in range(self.n_orbitals):
-            sm += self.make_creation_op(i * 2 + 1) * self.make_annihilation_op(i * 2)
-        return sm
+            sm += openfermion.ops.FermionOperator(f"{i * 2 + 1}^ {i * 2}")
+        return self.transformation(sm)
 
     def make_s2_op(self):
         """Return the total :math:`S^2` operator of the molecule as qubit operator.
 
-        Built from ``make_creation_op`` and ``make_annihilation_op``, so it works for the same
-        encodings (see there).
+        Built from ``make_sp_op``, ``make_sm_op`` and ``make_sz_op``, so it works for the same
+        encodings as ``make_number_op``.
         """
         s2_op = self.make_sm_op() * self.make_sp_op() + self.make_sz_op() * (
             self.make_sz_op() + 1
@@ -2133,12 +2131,9 @@ class QuantumChemistryBase:
         if state is None:
             state = self._reference_state()
 
-        reference_state = BitString.from_array(
-            self.transformation.map_state(state=state)
-        )
-        U = prepare_product_state(reference_state)
-        # prevent trace out in direct wfn simulation
-        U.n_qubits = self.n_orbitals * 2  # adapt when tapered transformations work
+        U = self.transformation.prepare_state(state=state)
+        # prevent trace out in direct wfn simulation (adapt when tapered transformations work)
+        U.n_qubits = self.transformation.n_qubits
         return U
 
     def prepare_hardcore_boson_reference(self):
@@ -3556,7 +3551,7 @@ class QuantumChemistryBase:
         Raises
         ------
         TequilaException
-            If ``U`` is None or the encoding is BravyiKitaevFast.
+            If ``U`` is None.
 
         Examples
         --------
@@ -3565,14 +3560,6 @@ class QuantumChemistryBase:
         # Check whether unitary circuit is not 0
         if U is None:
             raise TequilaException("Need to specify a Quantum Circuit.")
-        # Check whether transformation is BKSF.
-        # Issue here: when a single operator acts only on a subset of qubits, BKSF might not yield the correct
-        # transformation, because it computes the number of qubits incorrectly in this case.
-        # A hotfix such as for symmetry_conserving_bravyi_kitaev would require deeper changes, thus omitted for now
-        if type(self.transformation).__name__ == "BravyiKitaevFast":
-            raise TequilaException(
-                "The Bravyi-Kitaev-Superfast transformation does not support general FermionOperators yet."
-            )
         # Set up number of spin-orbitals and molecular orbitals respectively
         n_SOs = 2 * self.n_orbitals
         n_MOs = self.n_orbitals
