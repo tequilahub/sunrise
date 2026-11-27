@@ -499,7 +499,7 @@ class BravyiKitaevFast(JordanWigner):
     def __init__(self, n_electrons, n_orbitals, select: dict, *args, **kwargs):
         if "up_then_down" in kwargs:
             raise TequilaException(
-                f"Don't pass up_then_down argument to {type(self).__name__}, it can't be changed"
+                f"{type(self).__name__} has no up_then_down option: its qubits are the edges between spin orbitals"
             )
         super().__init__(n_electrons, n_orbitals, select, False, *args, **kwargs)
 
