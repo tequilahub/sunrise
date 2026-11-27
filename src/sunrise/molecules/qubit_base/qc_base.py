@@ -1109,7 +1109,7 @@ class QuantumChemistryBase:
         See Also
         --------
         sunrise.orbital_transformations.loewdin.generate_loewdin_molecule : The implementation.
-        use_orbs : Pick any of the orbital bases by name.
+        use_orbitals : Pick any of the orbital bases by name.
 
         Examples
         --------
@@ -1407,8 +1407,8 @@ class QuantumChemistryBase:
         else:
             return meao_mol
 
-    def use_orbs(self, orbs, **kwargs):
-        """Return the molecule in the orbitals ``orbs``.
+    def use_orbitals(self, name: str, **kwargs):
+        """Return the molecule in the orbitals called ``name``.
 
         One entry point for the molecule methods ``use_native_orbitals``, ``use_CLPO_orbitals``,
         ``use_HAO_orbitals`` and ``use_MEAO_orbitals``, which are called as they are
@@ -1416,10 +1416,9 @@ class QuantumChemistryBase:
 
         Parameters
         ----------
-        orbs : str or module
-            The orbitals, by name (not case sensitive) or as the subpackage of
-            ``sunrise.orbital_transformations``: ``"loewdin"`` (or ``"native"``), ``"CLPO"``,
-            ``"HAO"`` or ``"MEAO"``.
+        name : str
+            Name of the orbitals, not case sensitive: ``"loewdin"`` (or ``"native"``),
+            ``"CLPO"``, ``"HAO"`` or ``"MEAO"``.
         **kwargs
             Keyword arguments of the method, e.g. ``inplace``, ``core`` (``"loewdin"``), ``edges``
             (``"CLPO"``) or ``minao`` (``"MEAO"``).
@@ -1427,12 +1426,12 @@ class QuantumChemistryBase:
         Returns
         -------
         QuantumChemistryBase
-            Molecule in the orbitals ``orbs``.
+            Molecule in the orbitals ``name``.
 
         Raises
         ------
         ValueError
-            If ``orbs`` is none of the names above.
+            If ``name`` is none of the names above.
 
         See Also
         --------
@@ -1445,8 +1444,7 @@ class QuantumChemistryBase:
         --------
         >>> import sunrise as sun
         >>> mol = sun.Molecule(geometry="H 0 0 0\\nH 0 0 0.7", basis_set="sto-3g")
-        >>> mol = mol.use_orbs("loewdin")
-        >>> mol = mol.use_orbs(sun.orbital_transformations.loewdin)
+        >>> mol = mol.use_orbitals("loewdin")
         """
         methods = {
             "loewdin": "use_native_orbitals",
@@ -1455,12 +1453,11 @@ class QuantumChemistryBase:
             "hao": "use_HAO_orbitals",
             "meao": "use_MEAO_orbitals",
         }
-        name = str(getattr(orbs, "__name__", orbs)).rsplit(".", 1)[-1].lower()
-        if name not in methods:
+        if name.lower() not in methods:
             raise ValueError(
-                f"Unknown orbitals {orbs!r}, choose one of loewdin (or native), CLPO, HAO, MEAO"
+                f"Unknown orbitals {name!r}, choose one of loewdin (or native), CLPO, HAO, MEAO"
             )
-        return getattr(self, methods[name])(**kwargs)
+        return getattr(self, methods[name.lower()])(**kwargs)
 
     @property
     def point_group(self):

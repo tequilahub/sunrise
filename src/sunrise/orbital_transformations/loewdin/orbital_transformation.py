@@ -347,7 +347,7 @@ def generate_loewdin_molecule(
 
     See Also
     --------
-    sunrise.molecules.qubit_base.qc_base.QuantumChemistryBase.use_orbs : Pick any of the orbital bases by name.
+    sunrise.molecules.qubit_base.qc_base.QuantumChemistryBase.use_orbitals : Pick any of the orbital bases by name.
 
     Examples
     --------

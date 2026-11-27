@@ -596,7 +596,7 @@ class FermionicBase(QuantumChemistryBase):
         See Also
         --------
         sunrise.orbital_transformations.loewdin.generate_loewdin_molecule : The implementation.
-        use_orbs : Pick any of the orbital bases by name.
+        use_orbitals : Pick any of the orbital bases by name.
 
         Examples
         --------

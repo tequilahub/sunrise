@@ -1784,20 +1784,20 @@ def test_meao_orbitals_complement():
 
 
 @pytest.mark.skipif(condition=not HAS_PYSCF, reason="you don't have pyscf")
-def test_use_orbs():
+def test_use_orbitals():
     mol = sun.Molecule(
         geometry="H 0 0 0\nH 0 0 0.7\nH 0 0 1.4\nH 0 0 2.1", basis_set="sto-3g"
     )
     native = mol.use_native_orbitals().integral_manager.orbital_coefficients
-    for orbs in ("loewdin", "Native", sun.orbital_transformations.loewdin):
-        c = mol.use_orbs(orbs).integral_manager.orbital_coefficients
+    for name in ("loewdin", "Native"):
+        c = mol.use_orbitals(name).integral_manager.orbital_coefficients
         assert numpy.allclose(c, native)
-    c = mol.use_orbs("CLPO").integral_manager.orbital_coefficients
+    c = mol.use_orbitals("CLPO").integral_manager.orbital_coefficients
     c_clpo = mol.use_CLPO_orbitals().integral_manager.orbital_coefficients
     assert numpy.allclose(c, c_clpo)
     assert sun.CLPO is sun.orbital_transformations.CLPO
     with pytest.raises(ValueError, match="Unknown orbitals"):
-        mol.use_orbs("foo")
+        mol.use_orbitals("foo")
 
 
 def save_and_load(mol, tmp_path, monkeypatch):

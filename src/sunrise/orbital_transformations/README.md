@@ -1,20 +1,20 @@
 # orbital_transformations – orbital bases of a molecule
 
-Builds molecules in other orbital bases than the canonical Hartree-Fock ones. Each basis lives in its own subpackage and is available as a molecule method for all natures, and by name through `mol.use_orbs`:
+Builds molecules in other orbital bases than the canonical Hartree-Fock ones. Each basis lives in its own subpackage and is available as a molecule method for all natures, and by name through `mol.use_orbitals`:
 
-| Subpackage | Orbitals | Molecule method | `use_orbs` name |
+| Subpackage | Orbitals | Molecule method | `use_orbitals` name |
 |---|---|---|---|
 | `loewdin` | native (Löwdin, orthonormalized atomic) orbitals | `use_native_orbitals()` | `"loewdin"` or `"native"` |
 | `CLPO` | Chemist's Localized Property-optimized Orbitals and hybrid atomic orbitals | `use_CLPO_orbitals()`, `use_HAO_orbitals()` | `"CLPO"`, `"HAO"` |
 | `MEAO` | maximally entangled atomic orbitals | `use_MEAO_orbitals()` | `"MEAO"` |
 
-`use_orbs` also takes the subpackage itself and passes keyword arguments on to the method:
+`use_orbitals` passes keyword arguments on to the method:
 ```python
 import sunrise as sun
 
 mol = sun.Molecule(geometry="H 0 0 0\nH 0 0 0.7", basis_set="sto-3g")
-mol = mol.use_orbs("loewdin")  # same as mol.use_native_orbitals()
-mol = mol.use_orbs(sun.orbital_transformations.CLPO)  # same as mol.use_CLPO_orbitals()
+mol = mol.use_orbitals("loewdin")  # same as mol.use_native_orbitals()
+mol = mol.use_orbitals("CLPO", edges=[(0, 1)])  # keywords go to use_CLPO_orbitals
 ```
 
 ## loewdin – native orbitals

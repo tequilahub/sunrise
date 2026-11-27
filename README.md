@@ -86,7 +86,7 @@ Each module in [`src/sunrise`](src/sunrise) has a short README with an introduct
 | [fermionic_operations](src/sunrise/fermionic_operations) | fermionic gates and circuits (`FCircuit`) |
 | [expval](src/sunrise/expval) | expectation values, fermionic backends, orbital optimization |
 | [ADAPT](src/sunrise/ADAPT) | adaptive circuit construction (ADAPT-VQE) |
-| [orbital_transformations](src/sunrise/orbital_transformations) | orbital bases, also by name with `mol.use_orbs`: native (Löwdin) orbitals, CLPO and HAO, MEAO |
+| [orbital_transformations](src/sunrise/orbital_transformations) | orbital bases, also by name with `mol.use_orbitals`: native (Löwdin) orbitals, CLPO and HAO, MEAO |
 | [graph_selection](src/sunrise/graph_selection) | choosing SPA edges |
 | [spafastprototype](src/sunrise/spafastprototype) | splits (HCB) expectation values into smaller pieces to speed up SPA |
 | [MCVBT](src/sunrise/MCVBT) | multi-configurational valence bond theory |
