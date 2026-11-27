@@ -170,13 +170,14 @@ class PySCFMixin:
         Parameters
         ----------
         get_wfn : bool, optional
-            If True, also return the FCI wavefunction(s) as ``QubitWaveFunction``.
+            If True, also return the FCI wavefunction(s) as sparse ``QubitWaveFunction``,
+            holding only the CI amplitudes.
         ci0 : numpy.ndarray or tq.QubitWaveFunction, optional
             Initial guess (full Fock space vector, Jordan-Wigner encoding),
             converted with ``create_ci_vector``.
         use_hcb : bool, optional
-            Use the hard-core boson (paired) representation with 2**n_orbitals
-            amplitudes instead of the full 2**(2*n_orbitals) space.
+            Use the hard-core boson (paired) representation on ``n_orbitals`` qubits
+            instead of the full space on ``2 * n_orbitals`` qubits.
         **kwargs
             Passed to the PySCF FCI kernel, e.g. ``nroots``.
 
@@ -212,8 +213,8 @@ class PySCFMixin:
             for fcivec in fcivecs:
                 if use_hcb:
                     alpha_strs = fci.cistring.make_strings(range(norb), nelec // 2)
-                    wfn_dim = 2**norb
-                    wfn = numpy.zeros(wfn_dim)
+                    # sparse: a dense 2**n array runs out of memory for larger active spaces
+                    wfn = QubitWaveFunction(norb, numbering=BitNumbering.LSB)
                     for i, alpha_str in enumerate(alpha_strs):
                         alpha_str_b = bin(alpha_str)[2:].zfill(norb)
                         merged_str = int(alpha_str_b, 2)
@@ -221,8 +222,7 @@ class PySCFMixin:
                 else:
                     alpha_strs = fci.cistring.make_strings(range(norb), nelec // 2)
                     beta_strs = alpha_strs.copy()
-                    wfn_dim = 2 ** (2 * norb)
-                    wfn = numpy.zeros(wfn_dim)
+                    wfn = QubitWaveFunction(2 * norb, numbering=BitNumbering.LSB)
                     for i, alpha_str in enumerate(alpha_strs):
                         for j, beta_str in enumerate(beta_strs):
                             if not self._up_then_down:
@@ -236,9 +236,7 @@ class PySCFMixin:
                                 merged_str_b = alpha_str_b + beta_str_b
                                 merged_str = int(merged_str_b, 2)
                                 wfn[merged_str] = fcivec[i, j]
-                wfns.append(
-                    QubitWaveFunction.from_array(wfn, numbering=BitNumbering.LSB)
-                )
+                wfns.append(wfn)
             if not ("nroots" in kwargs and kwargs["nroots"] > 1):
                 return energies[0], wfns[0]
             return energies, wfns

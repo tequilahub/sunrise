@@ -570,7 +570,7 @@ class ParametersQC:
             return element.number
         except Exception:  # noqa: BLE001
             raise TequilaException(
-                f"can not assign atomic number to element {atom}\npip install periodictable will fix it"
+                f"can not assign atomic number to element {name}\npip install periodictable will fix it"
             )
 
     def get_atoms(self, ghost="of"):
@@ -651,8 +651,10 @@ class ParametersQC:
     def format_element_name(string, ghost="of"):
         """Format an element name as expected by the backends, e.g. "li" -> "Li".
 
-        OpenFermion needs capitalized element names. Ghost atoms (e.g. "ghost:H", "@H",
-        "gh(H)") are converted to the ghost syntax of the backend.
+        OpenFermion needs capitalized element names. Ghost atoms can be given with any of the
+        (case insensitive) prefixes ``ghost:``, ``ghost-``, ``ghost_``, ``ghost``, ``x:``, ``x-``,
+        ``x_``, ``gh(`` or ``@`` (e.g. "ghost:H", "@H", "Gh(H)"). They are always returned in one
+        format per backend: ``ghost:H`` for pyscf, ``@H`` for psi4 and ``H`` for openfermion.
 
         Parameters
         ----------
@@ -685,12 +687,10 @@ class ParametersQC:
                 "@",
             ]
 
-            detected_prefix = None
             atom_name = string
 
             for p in prefixes:
                 if string.lower().startswith(p):
-                    detected_prefix = p
                     atom_name = string[len(p) :]
                     break
 
@@ -698,42 +698,17 @@ class ParametersQC:
             atom_name = atom_name.capitalize()
             ghost_backend = ghost.lower()
 
+            if ")" in atom_name:
+                atom_name = atom_name[: atom_name.find(")")]
+
+            # every ghost input is accepted, the output is always the format of the desired backend
             if ghost_backend in ["openfermion", "of"]:
                 # OpenFermion supports the pure atom name, since we provide the integrals it doesn't matter
-                if ")" in atom_name:
-                    atom_name = atom_name[: atom_name.find(")")]
                 return atom_name
             elif ghost_backend == "pyscf":
-                pyscf_valid = [
-                    "ghost:",
-                    "ghost-",
-                    "ghost_",
-                    "ghost",
-                    "x:",
-                    "x-",
-                    "x_",
-                    "gh(",
-                    "@",
-                ]
-                if detected_prefix in pyscf_valid:
-                    orig_prefix = string[: len(detected_prefix)]
-                    return orig_prefix + atom_name
-                else:
-                    if ")" in atom_name:
-                        atom_name = atom_name[: atom_name.find(")")]
-                    return f"ghost:{atom_name}"
-
+                return f"ghost:{atom_name}"
             elif ghost_backend == "psi4":
-                psi4_valid = ["gh(", "@"]  # gh(atom_name) or @atom_name
-                if detected_prefix in psi4_valid:
-                    # Keep the original valid prefix
-                    orig_prefix = string[: len(detected_prefix)]
-                    return orig_prefix + atom_name
-                else:
-                    if ")" in atom_name:
-                        atom_name = atom_name[: atom_name.find(")")]
-                    return f"@{atom_name}"
-
+                return f"@{atom_name}"
             else:
                 raise NotImplementedError(
                     f"ghost format '{ghost}' not implemented (yet). Supported: ['openfermion', 'pyscf', 'psi4']"
