@@ -174,7 +174,7 @@ def _run_janpa_pipeline(
 
 def generate_CLPO_molecule_edges_psi4(
     mol: QuantumChemistryBase,
-    edges: list[tuple[int]] | None = None,
+    atom_edges: list[tuple[int]] | None = None,
     thres: Number = 1.0e-12,
     silent: bool = True,
     use_active: bool = True,
@@ -191,7 +191,7 @@ def generate_CLPO_molecule_edges_psi4(
     ----------
     mol : QuantumChemistryBase
         Any sunrise molecule.
-    edges : list of tuple of int, optional
+    atom_edges : list of tuple of int, optional
         Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
         for linear H4 (repeat a pair for a double bond). The bonds
         between the other atom pairs are found automatically from the Hartree-Fock density
@@ -209,6 +209,7 @@ def generate_CLPO_molecule_edges_psi4(
     use_mp2 : bool
         If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
     **kwargs
+        ``edges`` is the former name of ``atom_edges`` and is still accepted.
         ``wfn`` (custom Psi4 wavefunction) is currently not supported: it fails for Psi4 molecules and is ignored for others.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
         on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
@@ -223,6 +224,11 @@ def generate_CLPO_molecule_edges_psi4(
     aviso : list of tuple, optional
         Only if ``return_aviso`` is True. See Notes.
 
+    Raises
+    ------
+    TypeError
+        If both ``atom_edges`` and ``edges`` are given.
+
     Notes
     -----
     Each aviso entry is ``(mo_type, orb_idx, occupation)``. It lists the orbitals that do not have
@@ -235,6 +241,12 @@ def generate_CLPO_molecule_edges_psi4(
 
     # TODO: support a custom wfn (check kwargs.pop("wfn") first) and fix use_mp2 on psi4 molecules
     # (psi4mol is undefined there, use molecule=wfn.molecule())
+    legacy_edges = kwargs.pop("edges", None)  # former name of atom_edges
+    if legacy_edges is not None:
+        if atom_edges is not None:
+            raise TypeError("pass atom_edges or edges, not both")
+        atom_edges = legacy_edges
+
     if not hasattr(mol, "ref_wfn"):  # its not a psi4 base
         psi4mol = psi4.geometry(mol.parameters.get_geometry_string(ghost="psi4"))
         psi4mol.set_multiplicity(mol.parameters.multiplicity)
@@ -252,8 +264,8 @@ def generate_CLPO_molecule_edges_psi4(
         )
 
     custom_edges = None
-    if edges is not None:
-        custom_edges = [tuple([int(e) for e in edge]) for edge in edges]
+    if atom_edges is not None:
+        custom_edges = [tuple([int(e) for e in edge]) for edge in atom_edges]
 
     _, clpo_to_ao_full, graph_full, aviso, _ = _run_janpa_pipeline(
         wfn,
@@ -434,7 +446,7 @@ def generate_HAO_molecule_edges_psi4(
 
 def generate_CLPO_molecule_psi4(
     mol: QuantumChemistryBase,
-    edges: list | None = None,
+    atom_edges: list | None = None,
     thres: Number = 1.0e-12,
     silent: bool = True,
     use_active: bool = True,
@@ -450,7 +462,7 @@ def generate_CLPO_molecule_psi4(
     ----------
     mol : QuantumChemistryBase
         Any sunrise molecule.
-    edges : list of tuple of int, optional
+    atom_edges : list of tuple of int, optional
         Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
         for linear H4 (repeat a pair for a double bond). The bonds
         between the other atom pairs are found automatically from the Hartree-Fock density
@@ -468,6 +480,7 @@ def generate_CLPO_molecule_psi4(
     use_mp2 : bool
         If True, run MP2 to initialize JANPA, otherwise use the Hartree-Fock wavefunction.
     **kwargs
+        ``edges`` is the former name of ``atom_edges`` and is still accepted.
         ``wfn`` (custom Psi4 wavefunction) is currently not supported: it fails for Psi4 molecules and is ignored for others.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
         on to the orbital transformation, see ``sunrise.utils.orbital_transformation.transform``.
@@ -478,6 +491,11 @@ def generate_CLPO_molecule_psi4(
         Molecule with CLPO orbitals.
     aviso : list of tuple, optional
         Only if ``return_aviso`` is True. See Notes.
+
+    Raises
+    ------
+    TypeError
+        If both ``atom_edges`` and ``edges`` are given.
 
     Notes
     -----
@@ -490,12 +508,12 @@ def generate_CLPO_molecule_psi4(
     """
     if return_aviso:
         mol_out, _, aviso = generate_CLPO_molecule_edges_psi4(
-            mol, edges, thres, silent, use_active, return_aviso, use_mp2, **kwargs
+            mol, atom_edges, thres, silent, use_active, return_aviso, use_mp2, **kwargs
         )
         return mol_out, aviso
     else:
         mol_out, _ = generate_CLPO_molecule_edges_psi4(
-            mol, edges, thres, silent, use_active, return_aviso, use_mp2, **kwargs
+            mol, atom_edges, thres, silent, use_active, return_aviso, use_mp2, **kwargs
         )
         return mol_out
 

@@ -1360,7 +1360,7 @@ class QuantumChemistryBase:
         self,
         use_active: bool = True,
         inplace: bool = False,
-        edges: list | None = None,
+        atom_edges: list | None = None,
         *args,
         **kwargs,
     ):
@@ -1376,10 +1376,11 @@ class QuantumChemistryBase:
             it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
-        edges : list of tuple of int, optional
+        atom_edges : list of tuple of int, optional
             Bonds imposed on the CLPOs, as 0-based atom indices (see ``generate_CLPO_molecule_edges``);
             the other bonds come from the atom connectivity.
         **kwargs
+            ``edges`` is the former name of ``atom_edges`` and is still accepted.
             Passed on to ``generate_CLPO_molecule_edges``.
 
         Returns
@@ -1387,12 +1388,21 @@ class QuantumChemistryBase:
         QuantumChemistryBase
             Molecule in the CLPO basis.
 
+        Raises
+        ------
+        TypeError
+            If both ``atom_edges`` and ``edges`` are given.
+
         See Also
         --------
         use_CLPO_orbitals_and_edges : The same, together with the SPA edges.
         """
         clpo_mol, _ = self.use_CLPO_orbitals_and_edges(
-            *args, use_active=use_active, inplace=inplace, edges=edges, **kwargs
+            *args,
+            use_active=use_active,
+            inplace=inplace,
+            atom_edges=atom_edges,
+            **kwargs,
         )
         return clpo_mol
 
@@ -1400,7 +1410,7 @@ class QuantumChemistryBase:
         self,
         use_active: bool = True,
         inplace=False,
-        edges: list | None = None,
+        atom_edges: list | None = None,
         *args,
         **kwargs,
     ):
@@ -1416,10 +1426,11 @@ class QuantumChemistryBase:
             it). Default is True.
         inplace : bool, optional
             Update the current molecule instead of returning a new one. Default is False.
-        edges : list of tuple of int, optional
+        atom_edges : list of tuple of int, optional
             Bonds imposed on the CLPOs, as 0-based atom indices (see ``generate_CLPO_molecule_edges``);
             the other bonds come from the atom connectivity.
         **kwargs
+            ``edges`` is the former name of ``atom_edges`` and is still accepted.
             Passed on to ``generate_CLPO_molecule_edges``.
 
         Returns
@@ -1429,6 +1440,11 @@ class QuantumChemistryBase:
         edges : list of tuple of int
             Orbital pairs of each bond, to use as SPA edges.
 
+        Raises
+        ------
+        TypeError
+            If both ``atom_edges`` and ``edges`` are given.
+
         Examples
         --------
         >>> mol, edges = mol.use_CLPO_orbitals_and_edges()
@@ -1436,7 +1452,7 @@ class QuantumChemistryBase:
         from sunrise.CLPO.orbital_transformation import generate_CLPO_molecule_edges
 
         clpo_mol, clpo_edges = generate_CLPO_molecule_edges(
-            self, edges=edges, use_active=use_active, silent=True, **kwargs
+            self, atom_edges=atom_edges, use_active=use_active, silent=True, **kwargs
         )
 
         if inplace:

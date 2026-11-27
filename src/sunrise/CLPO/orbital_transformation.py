@@ -40,7 +40,7 @@ HAS_PSI4 = "psi4" in INSTALLED_QCHEMISTRY_BACKENDS
 
 def generate_CLPO_molecule_edges(
     mol: QuantumChemistryBase,
-    edges: list[tuple[int]] | None = None,
+    atom_edges: list[tuple[int]] | None = None,
     thres: Number = 1.0e-12,
     silent: bool = True,
     use_active: bool = True,
@@ -58,7 +58,7 @@ def generate_CLPO_molecule_edges(
     ----------
     mol : QuantumChemistryBase
         Any sunrise molecule.
-    edges : list of tuple of int, optional
+    atom_edges : list of tuple of int, optional
         Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
         for linear H4 (repeat a pair for a double bond). The bonds
         between the other atom pairs are found automatically from the Hartree-Fock density
@@ -79,6 +79,7 @@ def generate_CLPO_molecule_edges(
         Chemistry backend for the HF/MP2 calculation and the MOLDEN file. If None it is guessed
         from the molecule type, the kwargs or the installed backends.
     **kwargs
+        ``edges`` is the former name of ``atom_edges`` and is still accepted.
         Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``
         replace the internal Hartree-Fock run, the result is then the responsibility of the user
         (JANPA only considers HF or MP2 references). Psi4: a custom ``wfn`` is currently not
@@ -95,6 +96,11 @@ def generate_CLPO_molecule_edges(
         lone pairs), ready for SPA.
     aviso : list of tuple, optional
         Only if ``return_aviso`` is True. See Notes.
+
+    Raises
+    ------
+    TypeError
+        If both ``atom_edges`` and ``edges`` are given.
 
     See Also
     --------
@@ -122,7 +128,7 @@ def generate_CLPO_molecule_edges(
     if backend.lower() == "psi4":
         return generate_CLPO_molecule_edges_psi4(
             mol=mol,
-            edges=edges,
+            atom_edges=atom_edges,
             thres=thres,
             silent=silent,
             use_active=use_active,
@@ -133,7 +139,7 @@ def generate_CLPO_molecule_edges(
     else:
         return generate_CLPO_molecule_edges_pyscf(
             mol=mol,
-            edges=edges,
+            atom_edges=atom_edges,
             thres=thres,
             silent=silent,
             use_active=use_active,
@@ -307,7 +313,7 @@ def generate_HAO_molecule_edges(
 
 def generate_CLPO_molecule(
     mol: QuantumChemistryBase,
-    edges: list | None = None,
+    atom_edges: list | None = None,
     thres: Number = 1.0e-12,
     silent: bool = True,
     use_active: bool = True,
@@ -324,7 +330,7 @@ def generate_CLPO_molecule(
     ----------
     mol : QuantumChemistryBase
         Any sunrise molecule.
-    edges : list of tuple of int, optional
+    atom_edges : list of tuple of int, optional
         Bonds imposed on the CLPOs, given as 0-based atom indices, e.g. ``[(0, 3), (1, 2)]``
         for linear H4 (repeat a pair for a double bond). The bonds
         between the other atom pairs are found automatically from the Hartree-Fock density
@@ -345,6 +351,7 @@ def generate_CLPO_molecule(
         Chemistry backend for the HF/MP2 calculation and the MOLDEN file. If None it is guessed
         from the molecule type, the kwargs or the installed backends.
     **kwargs
+        ``edges`` is the former name of ``atom_edges`` and is still accepted.
         Passed to the backend. PySCF: ``pyscf_object`` or ``mo_coeff`` + ``mo_occ`` + ``mo_energy``
         replace the internal Hartree-Fock run, the result is then the responsibility of the user
         (JANPA only considers HF or MP2 references). Psi4: a custom ``wfn`` is currently not
@@ -358,6 +365,11 @@ def generate_CLPO_molecule(
         Molecule with CLPO orbitals.
     aviso : list of tuple, optional
         Only if ``return_aviso`` is True. See Notes.
+
+    Raises
+    ------
+    TypeError
+        If both ``atom_edges`` and ``edges`` are given.
 
     See Also
     --------
@@ -382,7 +394,7 @@ def generate_CLPO_molecule(
     if backend.lower() == "psi4":
         return generate_CLPO_molecule_psi4(
             mol=mol,
-            edges=edges,
+            atom_edges=atom_edges,
             thres=thres,
             silent=silent,
             use_active=use_active,
@@ -393,7 +405,7 @@ def generate_CLPO_molecule(
     else:
         return generate_CLPO_molecule_pyscf(
             mol=mol,
-            edges=edges,
+            atom_edges=atom_edges,
             thres=thres,
             silent=silent,
             use_active=use_active,
