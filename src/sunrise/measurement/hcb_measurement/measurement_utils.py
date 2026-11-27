@@ -1,9 +1,16 @@
 """Tools to measure a molecular Hamiltonian efficiently: rotate the orbitals, split off the hard-core boson (HCB) part, and estimate the number of measurements."""
 
+import copy
+
 import numpy as np
 import tequila as tq
 
-from sunrise.molecules.qubit_base import Molecule as QubitMolecule
+from sunrise.expval import ExpectationValue
+from sunrise.expval.minimize import simulate
+from sunrise.fermionic_operations.circuit import FCircuit
+from sunrise.molecules import Molecule
+from sunrise.molecules.fermionic_base.fer_base import FermionicBase
+from sunrise.molecules.hybrid_base.hybridbase import HybridBase
 
 
 class input_state:
@@ -11,7 +18,7 @@ class input_state:
 
     Parameters
     ----------
-    circuit : tq.QCircuit, optional
+    circuit : tq.QCircuit or FCircuit, optional
         Circuit preparing the state.
     variables : dict, optional
         Values of the circuit variables.
@@ -62,12 +69,14 @@ def gates_to_orb_rot(
 
     Parameters
     ----------
-    rotation_circuit : tq.QCircuit
-        Circuit containing only ``UR`` gates (each acts on spin up and down; only one of the pair is used).
+    rotation_circuit : tq.QCircuit or FCircuit
+        Circuit containing only ``UR`` gates. In a ``tq.QCircuit`` each ``UR`` is a pair of gates (spin up and
+        down) and only one of the pair is used; in an ``FCircuit`` it is a single gate on both spins.
     dim : int
         Number of spatial orbitals, including core orbitals.
     isReordered : bool, optional
-        True if the circuit uses up-then-down qubit ordering. Default is False.
+        True if the circuit uses up-then-down qubit ordering. Default is False. Ignored for an ``FCircuit``,
+        whose indices are always (up, down, up, down, ...).
     core : int, optional
         Number of core orbitals; they are counted in ``dim`` but not in the circuit qubits. Default is 0.
 
@@ -81,20 +90,26 @@ def gates_to_orb_rot(
     >>> rot = sun.measurement.gates_to_orb_rot(UR, mol.n_orbitals)
     """
 
+    # an FCircuit UR is one gate on both spins, indexed (up, down, up, down, ...) like in rotate_molecule
+    is_fcircuit = isinstance(rotation_circuit, FCircuit)
+    if is_fcircuit:
+        isReordered = False
+
     # Extract parameters and indices from gates
     params = []
     indices = []
     for gate in reversed(rotation_circuit.gates):
-        params.append(gate.parameter)
+        params.append(gate.variables if is_fcircuit else gate.parameter)
         g = []
-        for idx in gate.indices:
+        for idx in gate.indices[0] if is_fcircuit else gate.indices:
             g.append(tuple([i + core + core * (not isReordered) for i in idx]))
         indices.append(g)
 
     # Select only odd values
     # Because UR gates rotate molecular orbitals
-    params = params[1::2]
-    indices = indices[1::2]
+    if not is_fcircuit:
+        params = params[1::2]
+        indices = indices[1::2]
 
     # Refactor as a list
     tmp = []
@@ -133,16 +148,17 @@ def fold_rotators(mol, UR, *args, **kwargs):
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule to rotate.
-    UR : tq.QCircuit
+        Qubit, fermionic or hybrid molecule to rotate. It is not modified.
+    UR : tq.QCircuit or FCircuit
         Circuit with only ``UR`` gates.
     *args, **kwargs
         Passed to ``gates_to_orb_rot`` (e.g. ``isReordered``, ``core``).
 
     Returns
     -------
-    QubitMolecule
-        Molecule with transformed one- and two-body integrals.
+    QuantumChemistryBase
+        Molecule of the same nature as ``mol`` (and the same ``select`` for a hybrid molecule) with
+        transformed one- and two-body integrals.
 
     Examples
     --------
@@ -164,14 +180,21 @@ def fold_rotators(mol, UR, *args, **kwargs):
     tg = np.einsum("ixkl, jx -> ijkl", tg, UR_matrix, optimize="greedy")
     tg = np.einsum("xjkl, ix -> ijkl", tg, UR_matrix, optimize="greedy")
 
-    tmol = QubitMolecule(
-        parameters=mol.parameters,
+    # rebuild a molecule of the same nature (and select, for hybrid molecules)
+    nature = {"nature": "qubit"}
+    if isinstance(mol, FermionicBase):
+        nature = {"nature": "fermionic"}
+    elif isinstance(mol, HybridBase):
+        nature = {"nature": "hybrid", "select": mol.select}
+    tmol = Molecule(
+        parameters=copy.deepcopy(mol.parameters),
         transformation=mol.transformation,
         n_electrons=mol.n_electrons,
         nuclear_repulsion=c,
         one_body_integrals=th,
         two_body_integrals=tg,
         ordering="openfermion",
+        **nature,
     )
 
     return tmol
@@ -187,14 +210,14 @@ def get_hcb_part(mol):
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule to split.
+        Qubit, fermionic or hybrid molecule to split. It is not modified.
 
     Returns
     -------
-    hcb_mol : QubitMolecule
-        Molecule with the HCB integrals (includes the nuclear repulsion).
-    res_mol : QubitMolecule
-        Molecule with the remaining integrals (zero nuclear repulsion).
+    hcb_mol : QuantumChemistryBase
+        Molecule of the same nature as ``mol`` with the HCB integrals (includes the nuclear repulsion).
+    res_mol : QuantumChemistryBase
+        Molecule of the same nature as ``mol`` with the remaining integrals (zero nuclear repulsion).
 
     Examples
     --------
@@ -228,24 +251,32 @@ def get_hcb_part(mol):
                     else:
                         res_g[i][j][k][l] = g.elems[i][j][k][l]
 
+    # rebuild a molecule of the same nature (and select, for hybrid molecules)
+    nature = {"nature": "qubit"}
+    if isinstance(mol, FermionicBase):
+        nature = {"nature": "fermionic"}
+    elif isinstance(mol, HybridBase):
+        nature = {"nature": "hybrid", "select": mol.select}
     # Create the HCB and residual molecule
-    hcb_mol = QubitMolecule(
-        parameters=mol.parameters,
+    hcb_mol = Molecule(
+        parameters=copy.deepcopy(mol.parameters),
         transformation=mol.transformation,
         n_electrons=mol.n_electrons,
         nuclear_repulsion=c,
         one_body_integrals=hcb_h,
         two_body_integrals=hcb_g,
         ordering="openfermion",
+        **nature,
     )
-    res_mol = QubitMolecule(
-        parameters=mol.parameters,
+    res_mol = Molecule(
+        parameters=copy.deepcopy(mol.parameters),
         transformation=mol.transformation,
         n_electrons=mol.n_electrons,
         nuclear_repulsion=0,
         one_body_integrals=res_h,
         two_body_integrals=res_g,
         ordering="openfermion",
+        **nature,
     )
 
     return hcb_mol, res_mol
@@ -266,15 +297,16 @@ def rotate_and_hcb(
 
     For each rotator the current residual molecule is rotated, its HCB part is stored and the
     remainder is passed on to the next rotator. Measuring each HCB molecule on the state
-    followed by the corresponding rotator reconstructs the energy.
+    followed by the corresponding rotator, plus the residual on the state itself, reconstructs
+    the energy.
 
     Parameters
     ----------
     molecule : QuantumChemistryBase
-        Molecule holding the Hamiltonian.
-    rotators : list of tq.QCircuit
+        Qubit, fermionic or hybrid molecule holding the Hamiltonian.
+    rotators : list of tq.QCircuit or list of FCircuit
         Circuits of ``UR`` gates, one per step.
-    circuit : tq.QCircuit, optional
+    circuit : tq.QCircuit or FCircuit, optional
         Circuit preparing the state.
     variables : dict, optional
         Variables of the circuit.
@@ -286,14 +318,19 @@ def rotate_and_hcb(
         If False, print the running approximation of the energy at each step (requires
         ``target``). Default is True.
     *args, **kwargs
-        Passed to ``fold_rotators`` and, when not silent, to ``tq.simulate``.
+        Passed to ``fold_rotators`` and, when not silent, to ``simulate``.
 
     Returns
     -------
-    hcb_mols : list of QubitMolecule
-        One HCB molecule per rotator.
-    res_mol : QubitMolecule
-        Residual molecule after the last rotator, rotated back to the frame of ``molecule``.
+    hcb_mols : list of QuantumChemistryBase
+        One HCB molecule per rotator, of the same nature as ``molecule``, in the orbitals rotated
+        by that rotator.
+    res_mol : QuantumChemistryBase
+        Residual molecule after the last rotator, rotated back to the orbitals of ``molecule``, so
+        it is measured with ``circuit``.
+    circuits : list of tq.QCircuit or list of FCircuit
+        ``circuit + rotators[i]``, the circuit to measure ``hcb_mols[i]`` with. With
+        ``initial_state`` they start from an empty circuit and are simulated from that state.
 
     Raises
     ------
@@ -306,7 +343,7 @@ def rotate_and_hcb(
 
     Examples
     --------
-    >>> hcb_mols, res = sun.measurement.rotate_and_hcb(
+    >>> hcb_mols, res_mol, circuits = sun.measurement.rotate_and_hcb(
     ...     molecule=mol, rotators=rotators, circuit=U, variables=variables
     ... )
     """
@@ -323,8 +360,9 @@ def rotate_and_hcb(
 
     # General procedure, loop over the list of rotators
     hcb_mols = []
+    circuits = []
     approx = 0.0
-    old_UR = tq.QCircuit()
+    old_UR = FCircuit() if isinstance(rotators[0], FCircuit) else tq.QCircuit()
     for i, UR in enumerate(rotators):
         # Rotate the two body part
         tmol = fold_rotators(molecule, old_UR.dagger() + UR, *args, **kwargs)
@@ -335,8 +373,8 @@ def rotate_and_hcb(
 
         if not silent:
             # Compute expectation values and error
-            EX = tq.ExpectationValue(U=tcircuit, H=hcb_mol.make_hamiltonian())
-            incr = tq.simulate(
+            EX = ExpectationValue(U=tcircuit, mol=hcb_mol)
+            incr = simulate(
                 EX,
                 *args,
                 variables=variables,
@@ -354,10 +392,11 @@ def rotate_and_hcb(
 
         # Update values
         hcb_mols.append(hcb_mol)
+        circuits.append(tcircuit)
         molecule = res_mol
         old_UR = UR
     res_mol = fold_rotators(molecule, old_UR.dagger(), *args, **kwargs)
-    return hcb_mols, res_mol
+    return hcb_mols, res_mol, circuits
 
 
 def compute_num_meas(
@@ -386,9 +425,9 @@ def compute_num_meas(
         State given as a wavefunction instead of a circuit.
     is_hcb : bool, optional
         If True, ``hcb_mol`` is split into its three measurement groups
-        (diagonal, XX/YY, and the rest). Default is False.
-    hcb_mol : QubitMolecule, optional
-        Molecule with the HCB Hamiltonian (used if ``is_hcb``).
+        (diagonal, XX/YY, and the rest); groups without terms are skipped. Default is False.
+    hcb_mol : QuantumChemistryBase, optional
+        Qubit or hybrid molecule with the HCB Hamiltonian (used if ``is_hcb``).
     meas_groups : list of tq.QubitHamiltonian, optional
         Measurement groups of commuting terms (used if not ``is_hcb``).
     transformations : list of tq.QCircuit, optional
@@ -405,6 +444,11 @@ def compute_num_meas(
     ------
     ValueError
         If neither ``circuit`` nor ``initial_state`` is given.
+
+    Notes
+    -----
+    The counts are for Pauli strings measured on qubits, so ``hcb_mol`` needs a qubit Hamiltonian:
+    fermionic molecules are not supported.
     """
 
     # Initialize the input state in a wrapper class
@@ -433,7 +477,8 @@ def compute_num_meas(
                     H2 += tq.QubitHamiltonian().from_paulistrings(p)
                 else:
                     H3 += tq.QubitHamiltonian().from_paulistrings(p)
-        meas_groups = [H1, H2, H3]
+        # skip groups without qubits, e.g. hard-core boson qubits have no H3 terms
+        meas_groups = [H for H in [H1, H2, H3] if H.qubits]
 
     # Compute group number of measurements
     M_tot = 0

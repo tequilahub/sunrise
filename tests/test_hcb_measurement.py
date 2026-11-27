@@ -5,6 +5,8 @@ import scipy
 import tequila as tq
 
 import sunrise as sun
+from sunrise.molecules.fermionic_base.fer_base import FermionicBase
+from sunrise.molecules.hybrid_base.hybridbase import HybridBase
 
 HAS_PYSCF = "pyscf" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
 HAS_PSI4 = "psi4" in sun.chemistry.INSTALLED_QCHEMISTRY_BACKENDS
@@ -104,15 +106,16 @@ def test_hcb_measurement_linearH4_scenario2(backend):
         silent=True,
     )
 
+    hcb_mols, res_mol, circuits = result
     test_energy = 0
-    for i, molecule in enumerate(result[0]):
-        E = tq.ExpectationValue(H=molecule.make_hamiltonian(), U=U + rotators[i])
+    for molecule, circuit in zip(hcb_mols, circuits):
+        E = tq.ExpectationValue(H=molecule.make_hamiltonian(), U=circuit)
         test_energy += tq.simulate(E, variables=variables)
     assert np.isclose(test_energy, energy, 10**-3)
 
     # Test test_energy + residual expectation value = fci
     wfn = tq.simulate(U, variables=variables)
-    H_res = result[1].make_hamiltonian()
+    H_res = res_mol.make_hamiltonian()
     assert np.isclose(test_energy + wfn.inner(H_res * wfn).real, energy, 10**-7)
 
 
@@ -162,3 +165,48 @@ def test_hcb_measurement_linearH4_scenario1(backend):
     # Test test_energy + residual expectation value = fci
     H_res = result[1].make_hamiltonian()
     assert np.isclose(test_energy + wfn.inner(H_res * wfn).real, energy, 10**-7)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("nature, select", [("fermionic", None), ("hybrid", "FBBF")])
+def test_fold_rotators_fcircuit(backend, nature, select):
+    geometry = "h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5"
+    qmol = sun.Molecule(geometry=geometry, basis_set="sto-3g", backend=backend)
+    kwargs = {"select": select} if select else {}
+    mol = sun.Molecule(
+        geometry=geometry, basis_set="sto-3g", backend=backend, nature=nature, **kwargs
+    )
+    fmol = sun.Molecule(
+        geometry=geometry, basis_set="sto-3g", backend=backend, nature="fermionic"
+    )
+    URq = qmol.UR(0, 1, angle=0.3) + qmol.UR(2, 3, angle=-0.2)
+    URf = fmol.UR(0, 1, angle=0.3) + fmol.UR(2, 3, angle=-0.2)
+
+    # the FCircuit rotation gives the same integrals and keeps the nature of the molecule
+    tqmol = sun.measurement.fold_rotators(qmol, URq)
+    tmol = sun.measurement.fold_rotators(mol, URf)
+    assert isinstance(tmol, FermionicBase if nature == "fermionic" else HybridBase)
+    assert np.allclose(tmol.get_integrals()[1], tqmol.get_integrals()[1])
+    assert np.allclose(tmol.get_integrals()[2].elems, tqmol.get_integrals()[2].elems)
+    hcb_mol, _ = sun.measurement.get_hcb_part(mol)
+    assert getattr(hcb_mol, "select", None) == getattr(mol, "select", None)
+    # the original molecule is left untouched
+    assert mol.parameters.basis_set == "sto-3g"
+
+
+@pytest.mark.skipif(condition=not HAS_PYSCF, reason="pyscf not found")
+def test_num_meas_hybrid():
+    # hard-core boson qubits have no terms in the third measurement group
+    mol = sun.Molecule(
+        geometry="h 0.0 0.0 0.0\nh 0.0 0.0 1.5\nh 0.0 0.0 3.0\nh 0.0 0.0 4.5",
+        basis_set="sto-3g",
+        backend="pyscf",
+        nature="hybrid",
+    )
+    U = mol.make_ansatz("HCB-UpCCGD")
+    variables = {k: 0.1 for k in U.extract_variables()}
+    hcb_mol, _ = sun.measurement.get_hcb_part(mol)
+    M = sun.measurement.compute_num_meas(
+        circuit=U, variables=variables, is_hcb=True, hcb_mol=hcb_mol
+    )
+    assert np.isfinite(M) and M > 0

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import numpy
 import pandas as pd
 import tequila
+from openfermion import jordan_wigner, s_squared_operator, sz_operator
 from scipy.sparse.csgraph import connected_components
 from sympy import Rational
 from sympy.physics.wigner import clebsch_gordan
@@ -106,7 +107,10 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
         # operator, which is built once for all of them
         # an additional grouping by mo_occ could be added however mo_occ does not always exist
         n_qubits = 2 * self.mol.n_orbitals
-        sz_op = self.mol.make_sz_op()
+        # the bitstrings are spin-orbital occupations (up, down, ...), i.e. Jordan-Wigner for every molecule nature
+        sz_op = tequila.QubitHamiltonian.from_openfermion(
+            jordan_wigner(sz_operator(self.mol.n_orbitals))
+        )
         m_s_values = []
         for state in state_list:
             terms = list(state.wavefunction.items())
@@ -128,7 +132,9 @@ class SpinSymmetrizationProcedure(SymmetrizationProcedure):
         grouped = groupby(order, key=lambda k: m_s_values[k])
 
         # Iterate over each group
-        s2_op = self.mol.make_s2_op()
+        s2_op = tequila.QubitHamiltonian.from_openfermion(
+            jordan_wigner(s_squared_operator(self.mol.n_orbitals))
+        )
         for ms_val, group in grouped:
             sub_states: list[FockSpaceState] = [state_list[k] for k in group]
             mini_matrix = numpy.zeros((len(sub_states), len(sub_states)), dtype=complex)
@@ -258,7 +264,9 @@ class SymmetryAdaptedLinearCombinationSymmetrization(SymmetrizationProcedure):
         blocks = {}
 
         # the spin operator is built once for all seeds
-        s2_op = self.mol.make_s2_op()
+        s2_op = tequila.QubitHamiltonian.from_openfermion(
+            jordan_wigner(s_squared_operator(self.mol.n_orbitals))
+        )
 
         # Group projected SALCs by (irrep, S2, m_s, block) to preserve spin purity!
         SALC_by_sector: dict[tuple, list[numpy.ndarray]] = {}

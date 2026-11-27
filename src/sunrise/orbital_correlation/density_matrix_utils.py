@@ -4,9 +4,13 @@ plus utilities to build and classify bipartite density matrices.
 
 import numpy as np
 import tequila as tq
-from tequila import QCircuit, QubitWaveFunction
+from openfermion import FermionOperator, hermitian_conjugated
+from tequila import QCircuit, QubitWaveFunction, TequilaException
 from tequila.objective.objective import Variables
 
+from sunrise.expval import ExpectationValue
+from sunrise.expval.minimize import simulate
+from sunrise.fermionic_operations.circuit import FCircuit
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase as tqMolecule
 
 
@@ -15,7 +19,7 @@ class Input_State:
 
     Parameters
     ----------
-    circuit : tequila.QCircuit, optional
+    circuit : tequila.QCircuit or FCircuit, optional
     variables : tequila.objective.objective.Variables, optional
     wavefunction : tequila.QubitWaveFunction, optional
 
@@ -72,8 +76,9 @@ def compute_one_orb_rdm(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -91,6 +96,15 @@ def compute_one_orb_rdm(
     ------
     ValueError
         If neither a circuit nor a wavefunction is given.
+    TequilaException
+        If an orbital is a hard-core boson orbital (``select`` 'B') of a hybrid molecule and
+        ``circuit`` is not an ``FCircuit``.
+
+    Notes
+    -----
+    With an ``FCircuit`` the fermionic operators are measured directly on ``mol.fermionic_backend``
+    (the default fermionic backend if it is not set). A wavefunction without a circuit is measured
+    through the qubit encoding, so it does not work with fermionic molecules.
 
     Examples
     --------
@@ -107,16 +121,24 @@ def compute_one_orb_rdm(
         initial_state = state.get_wavefunction()
     elif circuit is None and initial_state is None:
         raise ValueError("Either a circuit or a wavefunction must be provided")
-    up = mol.transformation.up(one_orb)
-    down = mol.transformation.down(one_orb)
+    # the hybrid encoding drops the spin-down operators of hard-core boson orbitals, single fermions are not encoded
+    if not isinstance(circuit, FCircuit) and any(
+        getattr(mol, "select", {}).get(o) == "B" for o in [one_orb]
+    ):
+        raise TequilaException(
+            "Orbital RDMs of hard-core boson orbitals (select 'B') need an FCircuit"
+        )
+    # spin-orbitals are ordered (up, down, up, down, ...) for every molecule nature
+    up = 2 * one_orb
+    down = 2 * one_orb + 1
     ops = {
-        "vacuum": tq.paulis.I(),
-        "a_pu_dag": mol.make_creation_op(up),
-        "a_pu": mol.make_annihilation_op(up),
-        "n_pu": mol.make_number_op(up),
-        "a_pd_dag": mol.make_creation_op(down),
-        "a_pd": mol.make_annihilation_op(down),
-        "n_pd": mol.make_number_op(down),
+        "vacuum": FermionOperator(""),
+        "a_pu_dag": FermionOperator(f"{up}^"),
+        "a_pu": FermionOperator(f"{up}"),
+        "n_pu": FermionOperator(f"{up}^ {up}"),
+        "a_pd_dag": FermionOperator(f"{down}^"),
+        "a_pd": FermionOperator(f"{down}"),
+        "n_pd": FermionOperator(f"{down}^ {down}"),
     }
 
     row = [
@@ -148,15 +170,26 @@ def compute_one_orb_rdm(
                 # but the order is spin-down first and then spin-up
 
                 # for convenience we multiply individual operators before
-                op_i = tq.paulis.I()
+                op_i = FermionOperator("")
                 for v in state_i:
                     op_i *= ops[v]
-                op_j = tq.paulis.I()
+                op_j = FermionOperator("")
                 for v in state_j:
                     op_j *= ops[v]
 
                 P = op_i * (1 - ops["n_pu"]) * (1 - ops["n_pd"]) * op_j
 
+                if isinstance(circuit, FCircuit):
+                    # the fermionic backends measure the Hermitian part, as FermionicBase.compute_rdms
+                    rho[i][j] = simulate(
+                        ExpectationValue(
+                            circuit, 0.5 * (P + hermitian_conjugated(P)), mol=mol
+                        ),
+                        variables=variables,
+                        backend=getattr(mol, "fermionic_backend", None),
+                    )
+                    continue
+                P = mol.transformation(P)
                 if P.is_hermitian():
                     rho[i][j] = tq.simulate(
                         tq.ExpectationValue(circuit, P),
@@ -198,8 +231,9 @@ def compute_two_orb_rdm(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -223,6 +257,15 @@ def compute_two_orb_rdm(
     ------
     ValueError
         If neither a circuit nor a wavefunction is given.
+    TequilaException
+        If an orbital is a hard-core boson orbital (``select`` 'B') of a hybrid molecule and
+        ``circuit`` is not an ``FCircuit``.
+
+    Notes
+    -----
+    With an ``FCircuit`` the fermionic operators are measured directly on ``mol.fermionic_backend``
+    (the default fermionic backend if it is not set). A wavefunction without a circuit is measured
+    through the qubit encoding, so it does not work with fermionic molecules.
 
     Examples
     --------
@@ -240,25 +283,33 @@ def compute_two_orb_rdm(
     elif circuit is None and initial_state is None:
         raise ValueError("Either a circuit or a wavefunction must be provided")
 
-    pup = mol.transformation.up(p_orb)
-    pdown = mol.transformation.down(p_orb)
-    qup = mol.transformation.up(q_orb)
-    qdown = mol.transformation.down(q_orb)
+    # the hybrid encoding drops the spin-down operators of hard-core boson orbitals, single fermions are not encoded
+    if not isinstance(circuit, FCircuit) and any(
+        getattr(mol, "select", {}).get(o) == "B" for o in [p_orb, q_orb]
+    ):
+        raise TequilaException(
+            "Orbital RDMs of hard-core boson orbitals (select 'B') need an FCircuit"
+        )
+    # spin-orbitals are ordered (up, down, up, down, ...) for every molecule nature
+    pup = 2 * p_orb
+    pdown = 2 * p_orb + 1
+    qup = 2 * q_orb
+    qdown = 2 * q_orb + 1
 
     ops = {
-        "vacuum": tq.paulis.I(),
-        "a_pu_dag": mol.make_creation_op(pup),
-        "a_pu": mol.make_annihilation_op(pup),
-        "n_pu": mol.make_number_op(pup),
-        "a_pd_dag": mol.make_creation_op(pdown),
-        "a_pd": mol.make_annihilation_op(pdown),
-        "n_pd": mol.make_number_op(pdown),
-        "a_qu_dag": mol.make_creation_op(qup),
-        "a_qu": mol.make_annihilation_op(qup),
-        "n_qu": mol.make_number_op(qup),
-        "a_qd_dag": mol.make_creation_op(qdown),
-        "a_qd": mol.make_annihilation_op(qdown),
-        "n_qd": mol.make_number_op(qdown),
+        "vacuum": FermionOperator(""),
+        "a_pu_dag": FermionOperator(f"{pup}^"),
+        "a_pu": FermionOperator(f"{pup}"),
+        "n_pu": FermionOperator(f"{pup}^ {pup}"),
+        "a_pd_dag": FermionOperator(f"{pdown}^"),
+        "a_pd": FermionOperator(f"{pdown}"),
+        "n_pd": FermionOperator(f"{pdown}^ {pdown}"),
+        "a_qu_dag": FermionOperator(f"{qup}^"),
+        "a_qu": FermionOperator(f"{qup}"),
+        "n_qu": FermionOperator(f"{qup}^ {qup}"),
+        "a_qd_dag": FermionOperator(f"{qdown}^"),
+        "a_qd": FermionOperator(f"{qdown}"),
+        "n_qd": FermionOperator(f"{qdown}^ {qdown}"),
     }
 
     # For row and column order refer to https://pubs.acs.org/doi/10.1021/acs.jctc.0c00559 Figure 4
@@ -323,10 +374,10 @@ def compute_two_orb_rdm(
                     continue
 
                 # for convenience we multiply individual operators before
-                op_i = tq.paulis.I()
+                op_i = FermionOperator("")
                 for v in state_i:
                     op_i *= ops[v]
-                op_j = tq.paulis.I()
+                op_j = FermionOperator("")
                 for v in state_j:
                     op_j *= ops[v]
 
@@ -338,6 +389,17 @@ def compute_two_orb_rdm(
                     * (1 - ops["n_qd"])
                     * op_j
                 )
+                if isinstance(circuit, FCircuit):
+                    # the fermionic backends measure the Hermitian part, as FermionicBase.compute_rdms
+                    rho[i][j] = simulate(
+                        ExpectationValue(
+                            circuit, 0.5 * (P + hermitian_conjugated(P)), mol=mol
+                        ),
+                        variables=variables,
+                        backend=getattr(mol, "fermionic_backend", None),
+                    )
+                    continue
+                P = mol.transformation(P)
                 if P.is_hermitian():
                     rho[i][j] = tq.simulate(
                         tq.ExpectationValue(circuit, P),
@@ -372,8 +434,9 @@ def compute_one_spin_rdm(
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals and the fermion-to-qubit encoding.
-    circuit : tequila.QCircuit, optional
+        Qubit, fermionic or hybrid molecule defining the orbitals. Its fermion-to-qubit encoding is used
+        with a ``tequila.QCircuit``, its ``fermionic_backend`` with an ``FCircuit``.
+    circuit : tequila.QCircuit or FCircuit, optional
         Circuit preparing the state. Provide it or ``initial_state``.
     variables : tequila.objective.objective.Variables, optional
         Values of the circuit variables.
@@ -393,6 +456,15 @@ def compute_one_spin_rdm(
     ------
     ValueError
         If ``spin`` is not "up" or "down", or if neither a circuit nor a wavefunction is given.
+    TequilaException
+        If an orbital is a hard-core boson orbital (``select`` 'B') of a hybrid molecule and
+        ``circuit`` is not an ``FCircuit``.
+
+    Notes
+    -----
+    With an ``FCircuit`` the fermionic operators are measured directly on ``mol.fermionic_backend``
+    (the default fermionic backend if it is not set). A wavefunction without a circuit is measured
+    through the qubit encoding, so it does not work with fermionic molecules.
     """
 
     # Initialize the input state in a wrapper class
@@ -405,18 +477,25 @@ def compute_one_spin_rdm(
     elif circuit is None and initial_state is None:
         raise ValueError("Either a circuit or a wavefunction must be provided")
 
+    # the hybrid encoding drops the spin-down operators of hard-core boson orbitals, single fermions are not encoded
+    if not isinstance(circuit, FCircuit) and any(
+        getattr(mol, "select", {}).get(o) == "B" for o in [one_orb]
+    ):
+        raise TequilaException(
+            "Orbital RDMs of hard-core boson orbitals (select 'B') need an FCircuit"
+        )
     if spin == "up":
-        target_qubit = mol.transformation.up(one_orb)
+        target_qubit = 2 * one_orb
     elif spin == "down":
-        target_qubit = mol.transformation.down(one_orb)
+        target_qubit = 2 * one_orb + 1
     else:
         raise ValueError("Spin must be 'up' or 'down'")
 
     ops = {
-        "vacuum": tq.paulis.I(),
-        "a": mol.make_annihilation_op(target_qubit),
-        "a_dag": mol.make_creation_op(target_qubit),
-        "n": mol.make_number_op(target_qubit),
+        "vacuum": FermionOperator(""),
+        "a": FermionOperator(f"{target_qubit}"),
+        "a_dag": FermionOperator(f"{target_qubit}^"),
+        "n": FermionOperator(f"{target_qubit}^ {target_qubit}"),
     }
 
     row = [
@@ -441,14 +520,28 @@ def compute_one_spin_rdm(
     for i, state_i in enumerate(row):
         for j, state_j in enumerate(column):
             # for convenience we multiply individual operators before
-            op_i = tq.paulis.I()
+            op_i = FermionOperator("")
             for v in state_i:
                 op_i *= ops[v]
-            op_j = tq.paulis.I()
+            op_j = FermionOperator("")
             for v in state_j:
                 op_j *= ops[v]
 
             P = op_i * (1 - ops["n"]) * op_j
+            if isinstance(circuit, FCircuit):
+                # FCircuits keep the particle number, the odd terms (i != j) vanish and fqe/ffsim reject them
+                if i != j:
+                    continue
+                # the fermionic backends measure the Hermitian part, as FermionicBase.compute_rdms
+                rho[i][j] = simulate(
+                    ExpectationValue(
+                        circuit, 0.5 * (P + hermitian_conjugated(P)), mol=mol
+                    ),
+                    variables=variables,
+                    backend=getattr(mol, "fermionic_backend", None),
+                )
+                continue
+            P = mol.transformation(P)
             if P.is_hermitian():
                 rho[i][j] = tq.simulate(
                     tq.ExpectationValue(circuit, P),

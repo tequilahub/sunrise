@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy
 import tequila
+from openfermion import jordan_wigner, s_squared_operator, sz_operator
 from pandas import DataFrame
 
 from sunrise.symmetry_adaptation.irrep_assigner import IrrepAssignerBase
@@ -30,7 +31,8 @@ class FockSpaceState:
     Parameters
     ----------
     mol : QuantumChemistryBase
-        Molecule defining the orbitals.
+        Qubit, fermionic or hybrid molecule defining the orbitals. The bitstrings do not depend on its
+        fermion-to-qubit encoding.
     wavefunction : str or tequila.QubitWaveFunction
         State to describe. A string is read as a bitstring, e.g. ``"1100"``.
     assigner : IrrepAssignerBase
@@ -116,11 +118,15 @@ class FockSpaceState:
 
     @cached_property
     def m_s(self) -> numpy.float64:
-        r"""float : spin projection :math:`\langle :math:`S_z` \rangle` of the state (as given at construction, or computed and rounded to 10 decimals)."""
+        r"""float : spin projection :math:`\langle S_z \rangle` of the state (as given at construction, or computed and rounded to 10 decimals)."""
         if self._m_s is not None:
             return self._m_s
+        # the bitstrings are spin-orbital occupations (up, down, ...), i.e. Jordan-Wigner for every molecule nature
+        sz_op = tequila.QubitHamiltonian.from_openfermion(
+            jordan_wigner(sz_operator(self.mol.n_orbitals))
+        )
         return numpy.round(
-            self.wavefunction.inner(self.mol.make_sz_op()(self.wavefunction)).real,
+            self.wavefunction.inner(sz_op(self.wavefunction)).real,
             decimals=10,
         )
 
@@ -129,8 +135,11 @@ class FockSpaceState:
         """float : expectation value of :math:`S^2` (as given at construction, or computed and rounded to 10 decimals)."""
         if self._S2 is not None:
             return self._S2
+        s2_op = tequila.QubitHamiltonian.from_openfermion(
+            jordan_wigner(s_squared_operator(self.mol.n_orbitals))
+        )
         return numpy.round(
-            self.wavefunction.inner(self.mol.make_s2_op()(self.wavefunction)).real,
+            self.wavefunction.inner(s2_op(self.wavefunction)).real,
             decimals=10,
         )
 
