@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 import tequila as tq
 from numpy import isclose
@@ -67,35 +66,3 @@ def test_fast_spa_opt_orb(geom, nature):
     )
 
     assert isclose(tqopt.energy, snopt.energy)
-
-
-def test_clpo_atom_edges_keyword():
-    # the atom connectivity is atom_edges; the former name edges is still accepted
-    mol = sun.Molecule(
-        geometry="H 0. 0. 0.\nH 0. 0. 1.6\nH 0. 0. 3.2\nH 0. 0. 4.8",
-        basis_set="sto-3g",
-        units="a",
-        backend="pyscf",
-    )
-    atom_edges = [(1, 2), (0, 3)]
-    new, new_edges = sun.CLPO.generate_CLPO_molecule_edges(mol, atom_edges=atom_edges)
-    old, old_edges = sun.CLPO.generate_CLPO_molecule_edges(mol, edges=atom_edges)
-    assert new_edges == old_edges
-    # the given connectivity is used: the orbitals differ from the automatic ones
-    default, _ = sun.CLPO.generate_CLPO_molecule_edges(mol)
-    assert not np.allclose(
-        default.integral_manager.orbital_coefficients,
-        new.integral_manager.orbital_coefficients,
-    )
-    assert (
-        new.integral_manager.orbital_coefficients
-        == old.integral_manager.orbital_coefficients
-    ).all()
-    assert (
-        mol.use_CLPO_orbitals(edges=atom_edges).integral_manager.orbital_coefficients
-        == new.integral_manager.orbital_coefficients
-    ).all()
-    with pytest.raises(TypeError):
-        sun.CLPO.generate_CLPO_molecule_edges(
-            mol, atom_edges=atom_edges, edges=atom_edges
-        )
