@@ -16,7 +16,10 @@ from janpa.io.molden import MoldenFile
 from janpa.npa.npa import run_npa
 
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.orbital_transformations.loewdin import orthogonalize, transform
+from sunrise.orbital_transformations.orbital_transformation import (
+    orthogonalize,
+    transform,
+)
 
 try:
     import psi4
@@ -212,7 +215,7 @@ def generate_CLPO_molecule_edges_psi4(
         ``edges`` is the former name of ``atom_edges`` and is still accepted.
         ``wfn`` (custom Psi4 wavefunction) is currently not supported: it fails for Psi4 molecules and is ignored for others.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.orbital_transformations.loewdin.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -348,7 +351,7 @@ def generate_HAO_molecule_psi4(
     **kwargs
         ``wfn`` (custom Psi4 wavefunction) is currently not supported and is ignored.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.orbital_transformations.loewdin.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -483,7 +486,7 @@ def generate_CLPO_molecule_psi4(
         ``edges`` is the former name of ``atom_edges`` and is still accepted.
         ``wfn`` (custom Psi4 wavefunction) is currently not supported: it fails for Psi4 molecules and is ignored for others.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.orbital_transformations.loewdin.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------

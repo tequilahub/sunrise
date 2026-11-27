@@ -17,6 +17,17 @@ mol = mol.use_orbitals("loewdin")  # same as mol.use_native_orbitals()
 mol = mol.use_orbitals("CLPO", atom_edges=[(0, 1)])  # keywords go to use_CLPO_orbitals
 ```
 
+## Shared functions
+
+Orthogonalization and active-space matching of orbital coefficients, used by all the orbital bases. They live in `orbital_transformation.py` and are imported from the package, e.g. `from sunrise.orbital_transformations import transform`.
+
+| Function | Returns |
+|---|---|
+| `orthogonalize(c, s)` | Löwdin-orthonormalized orbital coefficients |
+| `orthogonalize_active_space(c, s, frozen_idx, active_idx)` | coefficients with the active orbitals orthonormalized against the frozen ones |
+| `get_active`, `get_core` | the orbitals of a new basis that best span the active space of the old one, or the old orbitals to freeze |
+| `transform(modified, original)` | molecule with the orbitals of `modified` as active space and those of `original` as core, + the map of the active orbitals |
+
 ## loewdin – native orbitals
 
 The **native orbitals** are the atomic basis functions, symmetrically (Löwdin) orthonormalized. For standard basis sets these are the orthonormalized Gaussian basis functions, so each orbital stays centered on its atom. With a frozen core, the active native orbitals are those with the smallest overlap with the core orbitals. For hybrid molecules the F/B selection is carried over to the new orbitals, so check that it is still what you want.
@@ -30,10 +41,6 @@ The **native orbitals** are the atomic basis functions, symmetrically (Löwdin) 
 | `generate_loewdin_molecule(mol, core=None, active=None)` | molecule in native basis, of the same nature as `mol` |
 | `get_native_coefficients(integral_manager)` | coefficients of the native orbitals, $S^{-1/2}$ |
 | `transform_to_native_orbitals(integral_manager)` | nothing, puts the native orbitals into the integral manager (no core or active space) |
-| `orthogonalize(c, s)` | Löwdin-orthonormalized orbital coefficients |
-| `orthogonalize_active_space(c, s, frozen_idx, active_idx)` | coefficients with the active orbitals orthonormalized against the frozen ones |
-| `get_active`, `get_core` | the native orbitals that best span the active space, or the orbitals to freeze |
-| `transform(modified, original)` | molecule with the orbitals of `modified` as active space and those of `original` as core, + the map of the active orbitals |
 
 ```python
 mol = sun.Molecule(geometry="H 0 0 0\nHe 0 0 1.5\nH 0 0 3.0", basis_set="sto-3g")

@@ -22,7 +22,10 @@ from sunrise import MoleculeFromPyscf, MoleculeToPyscf
 from sunrise.molecules.fermionic_base import FermionicBase
 from sunrise.molecules.hybrid_base import HybridBase
 from sunrise.molecules.qubit_base.qc_base import QuantumChemistryBase
-from sunrise.orbital_transformations.loewdin import orthogonalize, transform
+from sunrise.orbital_transformations.orbital_transformation import (
+    orthogonalize,
+    transform,
+)
 
 
 @dataclass
@@ -199,7 +202,7 @@ def generate_CLPO_molecule_edges_pyscf(
         and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
         the responsibility of the user, JANPA only considers HF or MP2 references.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.orbital_transformations.loewdin.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -361,7 +364,7 @@ def generate_HAO_molecule_pyscf(
         and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
         the responsibility of the user, JANPA only considers HF or MP2 references.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.orbital_transformations.loewdin.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
@@ -527,7 +530,7 @@ def generate_CLPO_molecule_pyscf(
         and ``mo_energy`` replace the internal PySCF Hartree-Fock run. The result is then
         the responsibility of the user, JANPA only considers HF or MP2 references.
         With ``use_active``, ``core`` and ``active`` (orbital indices in the full space) are passed
-        on to the orbital transformation, see ``sunrise.orbital_transformations.loewdin.transform``.
+        on to the orbital transformation, see ``sunrise.orbital_transformations.transform``.
 
     Returns
     -------
